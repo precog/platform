@@ -23,7 +23,7 @@ package ragnarok
 import common.Path
 import common.security._
 
-import daze.{ Evaluator, EvaluationContext }
+import daze.{ EvaluatorModule, EvaluationContext }
 
 import yggdrasil._
 import yggdrasil.table.ColumnarTableModuleConfig
@@ -50,27 +50,30 @@ trait PerfTestRunnerConfig extends BaseConfig
   def apiKey: APIKey
 }
 
-trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
-    with ParseEvalStack[M]
+trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
+
+  // TODO Get configuration from somewhere...
+  val config = Configuration parse ""
+
+  val maxEvalDuration: Duration = Duration(30, "seconds")
+  
+  val maxSliceSize = 10000
+  val smallSliceSize = 8
+
+  val idSource = new FreshAtomicIdSource
+}
+
+
+trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
     with StorageModule[M]
-    with IdSourceScannerModule[M] {
+    with IdSourceScannerModule
+    with PerfTestRunner[M, T] {
 
   type Result = Int
 
   type YggConfig <: PerfTestRunnerConfig
 
-  trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
-
-    // TODO Get configuration from somewhere...
-    val config = Configuration parse ""
-
-    val maxEvalDuration: Duration = Duration(30, "seconds")
-    
-    val maxSliceSize = 10000
-    val smallSliceSize = 8
-
-    val idSource = new FreshAtomicIdSource
-  }
+  private implicit val nt = NaturalTransformation.refl[M]
 
   def eval(query: String): M[Result] = try {
     val forest = compile(query)
@@ -90,7 +93,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
 
       case Right(dag) =>
         for {
-          table <- eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
+          table <- Evaluator(M).eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
           size <- countStream(table.renderJson(','))
         } yield size
     }

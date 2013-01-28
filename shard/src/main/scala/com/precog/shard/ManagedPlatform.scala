@@ -25,6 +25,7 @@ import com.precog.util._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.muspelheim._
 
 import akka.dispatch.{ Future, ExecutionContext }
 
@@ -40,47 +41,39 @@ import blueeyes.core.http.MimeTypes
 import scalaz._
 
 /**
- * A `ManagedQueryExecutorFactory` extends `QueryExecutorFactory` by allowing the
+ * A `ManagedPlatform` extends `Platform` by allowing the
  * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
  * managed) queries and asynchronous queries.
  */
-trait ManagedQueryExecutorFactory extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ManagedQueryModule { self =>
+trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with ManagedQueryModule { self =>
 
   /**
-   * Returns an `QueryExecutorFactory` whose execution returns a `JobId` rather
+   * Returns an `Platform` whose execution returns a `JobId` rather
    * than a `StreamT[Future, CharBuffer]`.
    */
-  def asynchronous: AsyncQueryExecutorFactory[Future] = {
-    new AsyncQueryExecutorFactory[Future] {
-      def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
-      def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
+  def asynchronous: AsyncPlatform[Future] = {
+    new AsyncPlatform[Future] {
       def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
-      def status() = self.status()
-      def startup() = self.startup()
-      def shutdown() = self.shutdown()
+      def metadataClient = self.metadataClient
     }
   }
 
   /**
-   * Returns a `QueryExecutorFactory` whose execution returns both the
+   * Returns a `Platform` whose execution returns both the
    * streaming results and its `JobId`. Note that the reults will not be saved
    * to job.
    */
-  def synchronous: SyncQueryExecutorFactory[Future] = {
-    new SyncQueryExecutorFactory[Future] {
-      def browse(apiKey: APIKey, path: Path) = self.browse(apiKey, path)
-      def structure(apiKey: APIKey, path: Path) = self.structure(apiKey, path)
+  def synchronous: SyncPlatform[Future] = {
+    new SyncPlatform[Future] {
       def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)
-      def status() = self.status()
-      def startup() = self.startup()
-      def shutdown() = self.shutdown()
+      def metadataClient = self.metadataClient
     }
   }
 
   def errorReport[A](implicit shardQueryMonad: ShardQueryMonad, decomposer0: Decomposer[A]): QueryLogger[ShardQuery, A] = {
     import scalaz.syntax.monad._
 
-    implicit val M0 = shardQueryMonad.M
+    implicit val M = shardQueryMonad.M
 
     shardQueryMonad.jobId map { jobId0 =>
       val lift = new (Future ~> ShardQuery) {

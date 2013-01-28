@@ -24,10 +24,13 @@ import bytecode.RandomLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary with FNDummyModule {
+object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyModule {
   import dag._
   import instructions._
   import bytecode._
+
+  type Lib = RandomLibrary
+  object library extends RandomLibrary
 
   "pretty printing" should {
     "format a trivial DAG" in {
@@ -143,7 +146,7 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
            |        Const(CString("column1"))(line)
            |      )(line),
            |      Join(DerefObject, CrossLeftSort,
-           |        SplitParam(1, Vector(LoadIds("/file")))(input)(line),
+           |        SplitGroup(1, Vector(LoadIds("/file")))(input)(line),
            |        Const(CString("column2"))(line)
            |      )(line)
            |    )(line)

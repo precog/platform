@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor 
 
 import com.precog.common._
+import com.precog.common.json._
 
 import akka.actor.{Actor,ActorRef,Props,Scheduler}
 import akka.dispatch.Await
@@ -66,21 +67,23 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projectionsActor: ActorRef, routingTable: RoutingTable, 
-                                idleDelay: Duration,
-                                scheduler: Scheduler,
-                                shutdownCheck: Duration) extends Actor {
+class IngestSupervisor( ingestActor: Option[ActorRef], 
+                        metadataActor: ActorRef,
+                        projectionsActor: ActorRef,
+                        scheduler: Scheduler,
+                        metadataTimeout: Timeout,
+                        idleDelay: Duration,
+                        shutdownCheck: Duration) extends Actor {
 
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
-  private[this] var ingestActor: Option[ActorRef] = None
+  private val routingTable = new SingleColumnProjectionRoutingTable
 
   private var initiated = 0
   private var processed = 0
   private var errors = 0
 
   override def preStart() = {
-    ingestActor = ingestActorInit.map { actorInit => context.actorOf(Props(actorInit, "ingestActor")) }
     logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
     ingestActor.foreach { actor =>
       scheduler.schedule(idleDelay, idleDelay) {
@@ -126,7 +129,40 @@ abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projecti
    * with ProjectionInsertsExpected to set the count, then sending either InsertMetadata or
    * InsertNoMetadata messages after processing each message.
    */
-  protected def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit 
+  def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+    logger.debug("Beginning processing of %d messages".format(messages.size))
+    implicit val to = metadataTimeout
+    implicit val executor = context.dispatcher
+    
+    val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
+
+    if (archivePaths.nonEmpty) {
+      logger.debug("Processing archive paths: " + archivePaths)
+    } else {
+      logger.debug("No archive paths")
+    }
+
+    Future.sequence {
+      archivePaths map { path =>
+        (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
+      }
+    } onSuccess {
+      case descMaps : Seq[Set[ProjectionDescriptor]] => 
+        val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
+          descMap <- descMaps
+          desc    <- descMap
+          column  <- desc.columns
+        } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
+
+        projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
+      
+        val updates = routingTable.batchMessages(messages, projectionMap)
+
+        logger.debug("Sending " + updates.size + " update message(s)")
+        batchCoordinator ! ProjectionUpdatesExpected(updates.size)
+        for (update <- updates) projectionsActor.tell(update, batchCoordinator)
+    }
+  }
 
   private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
     initiated += 1

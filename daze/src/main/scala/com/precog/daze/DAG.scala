@@ -40,8 +40,11 @@ import scalaz.syntax.traverse._
 
 import java.math.MathContext
 
-trait DAG extends Instructions with TransSpecModule {
+trait DAG extends Instructions {
+  type TS1
+
   import instructions._
+  import library._
   
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
     import dag._
@@ -774,7 +777,7 @@ trait DAG extends Instructions with TransSpecModule {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(reds: List[(trans.TransSpec1, List[Reduction])], parent: DepGraph) extends DepGraph with StagingPoint {
+    case class MegaReduce(reds: List[(TS1, List[Reduction])], parent: DepGraph) extends DepGraph with StagingPoint {
       val loc = parent.loc
       
       lazy val identities = Identities.Specs.empty

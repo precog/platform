@@ -34,6 +34,7 @@ import com.weiglewilczek.slf4s.Logging
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.muspelheim._
 
 import scalaz._
 import scalaz.std.string._

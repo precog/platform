@@ -43,7 +43,7 @@ import com.weiglewilczek.slf4s.Logging
 trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
   import scalaz.syntax.copointed._
 
-  implicit def coM: Copointed[M]
+  implicit def M: Monad[M] with Copointed[M]
 
   private val pid = System.currentTimeMillis.toInt & 0x7fffffff
   private val sid = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -75,7 +75,7 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
           line = buf.readLine
         }
         val str = sb.toString
-        val rows = JParser.parse(str).children.toIterator
+        val rows = JParser.parseUnsafe(str).children.toIterator
         reader.close()
         rows
       }

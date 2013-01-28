@@ -26,13 +26,13 @@ import com.precog.common.Path
 
 import scalaz._
 
-trait TypeLibSpec[M[+_]] extends Specification
+trait TypeLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with TypeLib[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
 
   import dag._
   import instructions._
+  import library._
   
   val testAPIKey = "testAPIKey"
   
@@ -166,4 +166,4 @@ trait TypeLibSpec[M[+_]] extends Specification
   }
 }
 
-object TypeLibSpec extends TypeLibSpec[test.YId] with test.YIdInstances
+object TypeLibSpecs extends TypeLibSpecs[test.YId] with test.YIdInstances

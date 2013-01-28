@@ -49,8 +49,8 @@ trait FNDummyModule extends FNModule {
   }
 
   implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = table.CF1(CFId("liftF2Dummyapplyl")) { f(table.Column.const(cv), _) }
-    def applyr(cv: CValue) = table.CF1(CFId("liftF2Dummyapplyr")) { f(_, table.Column.const(cv)) }
+    def applyl(cv: CValue) = f.partialLeft(cv)
+    def applyr(cv: CValue) = f.partialRight(cv)
 
     def andThen(f1: F1) = table.CF2(CFId("liftF2DummyandThen")) { (c1, c2) => f(c1, c2) flatMap f1.apply }
   }

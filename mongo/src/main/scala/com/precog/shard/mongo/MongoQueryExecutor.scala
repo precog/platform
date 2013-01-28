@@ -39,7 +39,7 @@ import com.precog.yggdrasil.table.mongo._
 import com.precog.yggdrasil.util._
 
 import com.precog.daze._
-import com.precog.muspelheim.ParseEvalStack
+import com.precog.muspelheim._
 
 import com.precog.common._
 import com.precog.util.FilesystemFileOps
@@ -96,13 +96,13 @@ class MongoQueryExecutorConfig(val config: Configuration)
 }
 
 object MongoQueryExecutor {
-  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
 
 class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends QueryExecutorFactory[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
+    extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
   type YggConfig = MongoQueryExecutorConfig
 
   trait TableCompanion extends MongoColumnarTableCompanion
@@ -112,6 +112,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   }
 
   lazy val storage = new MongoStorageMetadataSource(Table.mongo)
+  def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
   // to satisfy abstract defines in parent traits
   val asyncContext = extAsyncContext
@@ -129,39 +130,56 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     true
   }
 
+  implicit val nt = NaturalTransformation.refl[Future]
+  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
+    val M = platform.M
+    type YggConfig = platform.YggConfig
+    val yggConfig = platform.yggConfig
+    val report = LoggingQueryLogger(M)
+  }
+
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(this))
+    Future(Success(executor))
+  }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
+      val yggConfig = platform.yggConfig
+      val report = LoggingQueryLogger[N](N0)
+    }
   }
 
   def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
 
-  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-    Future {
-      path.elements.toList match {
-        case Nil => 
-          val dbs = Table.mongo.getDatabaseNames.asScala.toList
-          // TODO: Poor behavior on Mongo's part, returning database+collection names
-          // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
-          
-          val finalNames = dbs.foldLeft(dbs.toSet) {
-            case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
-          }.toList.sorted
-          Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
+  val metadataClient = new MetadataClient[Future] {
+    def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+      Future {
+        path.elements.toList match {
+          case Nil => 
+            val dbs = Table.mongo.getDatabaseNames.asScala.toList
+            // TODO: Poor behavior on Mongo's part, returning database+collection names
+            // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
+            
+            val finalNames = dbs.foldLeft(dbs.toSet) {
+              case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
+            }.toList.sorted
+            Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
-        case dbName :: Nil => 
-          val db = Table.mongo.getDB(dbName)
-          Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
+          case dbName :: Nil => 
+            val db = Table.mongo.getDB(dbName)
+            Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
-        case _ => 
-          Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
+          case _ => 
+            Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
+        }
       }
     }
+
+    def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
+      Success(JObject.empty) // TODO: Implement somehow?
+    )
   }
-
-  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
-    Success(JObject.empty) // TODO: Implement somehow?
-  )
 }
-
 
 // vim: set ts=4 sw=4 et:
