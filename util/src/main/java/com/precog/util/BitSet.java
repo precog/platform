@@ -55,7 +55,10 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
 
     public void setBits(long[] arr) {
         bits = arr;
-        _length = arr.length;
+        _length = arr.length << 6;
+        if (_length < 0) {
+            throw new IllegalArgumentException("array too long");
+        }
     }
 
     /**
