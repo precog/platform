@@ -19,8 +19,6 @@
  */
 package com.precog.quirrel
 
-import com.precog.bytecode.RandomLibrary
-
 import com.codecommit.gll.LineStream
 import com.codecommit.gll.ast.Node
 
@@ -30,7 +28,7 @@ object SolverSpecs extends Specification
     with parser.Parser
     with StubPhases
     with Solver
-    with RandomLibrary {
+    with RandomLibrarySpec {
       
   import ast._
 

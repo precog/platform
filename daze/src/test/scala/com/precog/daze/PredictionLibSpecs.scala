@@ -28,11 +28,11 @@ import scalaz._
 
 trait PredictionLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with PredictionLib[M]
     with LongIdMemoryDatasetConsumer[M]{ self =>
 
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 

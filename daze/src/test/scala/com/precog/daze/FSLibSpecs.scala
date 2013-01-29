@@ -37,11 +37,12 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-trait FSLibSpec[M[+_]] extends Specification 
-  with FSLib[M]
-  with TestColumnarTableModule[M] {
+trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColumnarTableModule[M] {
   import trans._
   import constants._
+
+  val library = new FSLib {}
+  import library._
 
   implicit def M: Monad[M] with Copointed[M]
 
@@ -103,4 +104,4 @@ trait FSLibSpec[M[+_]] extends Specification
   }
 }
 
-class FSLibSpecX extends FSLibSpec[test.YId] with test.YIdInstances
+object FSLibSpecs extends FSLibSpecs[test.YId] with test.YIdInstances

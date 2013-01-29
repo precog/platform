@@ -25,6 +25,7 @@ import com.precog.accounts.InMemoryAccountManager
 
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
 import yggdrasil.actor._
+import yggdrasil.util._
 import yggdrasil.jdbm3._
 import yggdrasil.table._
 import yggdrasil.metadata.FileMetadataStorage
@@ -114,6 +115,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
       extends StandalonePerfTestRunnerConfig
       with JDBMProjectionModuleConfig
       with BlockStoreColumnarTableModuleConfig
+      with EvaluatorConfig
 
   type YggConfig = JDBMPerfTestRunnerConfig
   object yggConfig extends JDBMPerfTestRunnerConfig {
@@ -133,4 +135,12 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   val report = LoggingQueryLogger[Future]
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = self.YggConfig
+      val yggConfig = self.yggConfig
+      val report = LoggingQueryLogger[N](N0)
+    }
+  }
 }

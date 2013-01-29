@@ -23,22 +23,21 @@ import org.specs2.mutable._
 
 import com.precog.yggdrasil._
 import com.precog.common.Path
+
+import scala.Function._
+  
 import scalaz._
 import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-trait ReductionLibSpec[M[+_]] extends Specification
+trait ReductionLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with ReductionLib[M]
-    with StatsLib[M]
-    with InfixLib[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
       
-  import Function._
-  
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -740,4 +739,4 @@ trait ReductionLibSpec[M[+_]] extends Specification
   }
 }
 
-object ReductionLibSpec extends ReductionLibSpec[test.YId] with test.YIdInstances
+object ReductionLibSpecs extends ReductionLibSpecs[test.YId] with test.YIdInstances

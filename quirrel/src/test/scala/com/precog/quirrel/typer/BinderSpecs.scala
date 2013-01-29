@@ -21,7 +21,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
@@ -35,9 +34,10 @@ object BinderSpecs extends Specification
     with Parser
     with StubPhases
     with Binder
-    with StaticLibrary {
+    with StaticLibrarySpec {
       
   import ast._
+  import library._
   
   "let binding" should {
     "bind name in resulting scope" in {

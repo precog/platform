@@ -28,15 +28,16 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-trait ArrayLibSpec[M[+_]] extends Specification
+trait ArrayLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with ArrayLib[M] 
     with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
   import dag._
   import instructions._
+
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -88,4 +89,4 @@ trait ArrayLibSpec[M[+_]] extends Specification
   }
 }
 
-object ArrayLibSpec extends ArrayLibSpec[test.YId] with test.YIdInstances
+object ArrayLibSpecs extends ArrayLibSpecs[test.YId] with test.YIdInstances
