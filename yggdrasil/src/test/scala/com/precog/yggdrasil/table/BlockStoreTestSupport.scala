@@ -64,6 +64,7 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
     val idSource = new FreshAtomicIdSource
 
     val maxSliceSize = 10
+    val smallSliceSize = 3
   }
 
   val yggConfig = new YggConfig
@@ -74,83 +75,78 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
 }
 
 trait BaseBlockStoreTestModule[M[+_]] extends 
-  JDBMColumnarTableModule[M] with
-  ColumnarTableModuleTestSupport[M] with 
-  StubStorageModule[M] {
+    ColumnarTableModuleTestSupport[M] with 
+    SliceColumnarTableModule[M, JArray] with
+    StubProjectionModule[M, JArray, Slice] {
 
-    import trans._
-    import CValueGenerators._
+  import trans._
+  import CValueGenerators._
 
-    type Key = JArray
+  implicit def M: Monad[M] with Copointed[M]
 
-    implicit def M: Monad[M] with Copointed[M]
+  object Projection extends ProjectionCompanion
 
-    object storage extends Storage
+  case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends ProjectionLike[M, JArray, Slice] {
+    private val slices = fromJson(data).slices.toStream.copoint
 
-    case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
-      val slices = fromJson(data).slices.toStream.copoint
+    private implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 
-      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = sys.error("Insert not supported.")
-      def commit(): IO[PrecogUnit] = sys.error("Commit not supported.")
+    def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set())(implicit M: Monad[M]) = M.point {
+      @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
+        blocks.filterNot(_.isEmpty) match {
+          case x #:: xs =>
+            if ((x.toJson(x.size - 1).getOrElse(JUndefined) \ "key") > id) Some(x) else findBlockAfter(id, xs)
 
-      implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
-
-      def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[JArray, Slice]] = {
-        @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
-          blocks.filterNot(_.isEmpty) match {
-            case x #:: xs =>
-              if ((x.toJson(x.size - 1).getOrElse(JUndefined) \ "key") > id) Some(x) else findBlockAfter(id, xs)
-
-            case _ => None
-          }
-        }
-
-        val slice = id map { key =>
-          findBlockAfter(key, slices)
-        } getOrElse {
-          slices.headOption
-        }
-        
-        slice map { s => 
-          val s0 = new Slice {
-            val size = s.size
-            val columns = s.columns filter {
-              case (ColumnRef(jpath, ctype), _) =>
-                colSelection.isEmpty || 
-                jpath.nodes.head == CPathField("key") ||
-                colSelection.exists { desc => (CPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
-            }
-          }
-
-          BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0)
+          case _ => None
         }
       }
-    }
 
-    trait BaseBlockStoreTestTableCompanion extends JDBMColumnarTableCompanion {
-      implicit val geq: scalaz.Equal[Int] = intInstance
-    }
+      val slice = id map { key =>
+        findBlockAfter(key, slices)
+      } getOrElse {
+        slices.headOption
+      }
+      
+      slice map { s => 
+        val s0 = new Slice {
+          val size = s.size
+          val columns = s.columns filter {
+            case (ColumnRef(jpath, ctype), _) =>
+              colSelection.isEmpty || 
+              jpath.nodes.head == CPathField("key") ||
+              colSelection.exists { desc => (CPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
+          }
+        }
 
-    def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
-      case (_: JNum, CNum | CLong | CDouble) => true
-      case (JUndefined, CUndefined) => true
-      case (JNull, CNull) => true
-      case (_: JBool, CBoolean) => true
-      case (_: JString, CString) => true
-      case (JObject(fields), CEmptyObject) if fields.isEmpty => true
-      case (JArray(Nil), CEmptyArray) => true
-      case _ => false
+        BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0)
+      }
     }
+  }
 
-    def sortTransspec(sortKeys: CPath*): TransSpec1 = InnerObjectConcat(sortKeys.zipWithIndex.map {
-      case (sortKey, idx) => WrapObject(
-        sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), CPathField("value"))) {
-          case (innerSpec, field: CPathField) => DerefObjectStatic(innerSpec, field)
-          case (innerSpec, index: CPathIndex) => DerefArrayStatic(innerSpec, index)
-        },
-        "%09d".format(idx)
-      )
-    }: _*)
+  trait BaseBlockStoreTestTableCompanion extends SliceColumnarTableCompanion {
+    implicit val geq: scalaz.Equal[Int] = intInstance
+  }
+
+  def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
+    case (_: JNum, CNum | CLong | CDouble) => true
+    case (JUndefined, CUndefined) => true
+    case (JNull, CNull) => true
+    case (_: JBool, CBoolean) => true
+    case (_: JString, CString) => true
+    case (JObject(fields), CEmptyObject) if fields.isEmpty => true
+    case (JArray(Nil), CEmptyArray) => true
+    case _ => false
+  }
+
+  def sortTransspec(sortKeys: CPath*): TransSpec1 = InnerObjectConcat(sortKeys.zipWithIndex.map {
+    case (sortKey, idx) => WrapObject(
+      sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), CPathField("value"))) {
+        case (innerSpec, field: CPathField) => DerefObjectStatic(innerSpec, field)
+        case (innerSpec, index: CPathIndex) => DerefArrayStatic(innerSpec, index)
+      },
+      "%09d".format(idx)
+    )
+  }: _*)
 }
 
 object BlockStoreTestModule {

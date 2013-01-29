@@ -39,19 +39,23 @@ trait RenderStackSpecs extends EvalStackSpecs
 
   implicit val M: Monad[Future] with Copointed[Future]
 
+  implicit val ntFuture = NaturalTransformation.refl[Future]
+
   "full stack rendering" should {
     def evalTable(str: String, debug: Boolean = false): Table = {
       import trans._
       
       logger.debug("Beginning evaluation of query: " + str)
       
+      val evaluator = Evaluator[Future](M)
+
       val forest = compile(str) filter { _.errors.isEmpty }
       forest must haveSize(1)
       
       val tree = forest.head
       tree.errors must beEmpty
       val Right(dag) = decorate(emit(tree))
-      val tableM = eval(dag, EvaluationContext("dummyAPIKey", Path.Root, new org.joda.time.DateTime()), true)
+      val tableM = evaluator.eval(dag, EvaluationContext("dummyAPIKey", Path.Root, new org.joda.time.DateTime()), true)
       tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
     }
     

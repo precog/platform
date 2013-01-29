@@ -26,6 +26,7 @@ import com.precog.common.security._
 import com.precog.common.jobs._
 
 import akka.dispatch.Future
+import akka.dispatch.Promise
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -36,11 +37,10 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 object JDBMShardServer extends BlueEyesServer 
-    with AsyncShardService 
+    with ShardService 
     with JDBMQueryExecutorComponent 
     with MongoAPIKeyManagerComponent 
-    with AccountManagerClientComponent
-{
+    with AccountManagerClientComponent {
   import WebJobManager._
   
   val clock = Clock.System
@@ -48,5 +48,25 @@ object JDBMShardServer extends BlueEyesServer
   implicit val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  def jobManagerFactory(config: Configuration): JobManager[Future] = WebJobManager(config).withM[Future]
+  override def configureShardState(config: Configuration) = M.point {
+    val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
+    val accountManager = accountManagerFactory(config.detach("accounts"))
+    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
+
+    val stoppable = Stoppable.fromFuture {
+      for {
+        _ <- apiKeyManager.close
+        _ <- accountManager.close
+        _ <- platform.shutdown
+      } yield ()
+    }
+
+    ManagedQueryShardState(platform, apiKeyManager, accountManager, jobManager, clock, stoppable)
+  } recoverWith {
+    case ex: Throwable =>
+      System.err.println("Could not start JDBM Shard server!!!")
+      ex.printStackTrace
+      Promise.failed(ex)
+  }
 }

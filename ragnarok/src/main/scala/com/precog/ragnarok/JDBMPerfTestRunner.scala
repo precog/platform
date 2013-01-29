@@ -20,13 +20,14 @@
 package com.precog
 package ragnarok
 
+import com.precog.daze._
 import com.precog.accounts.InMemoryAccountManager
 
 import yggdrasil.{ ProjectionDescriptor, BaseConfig }
-import yggdrasil.jdbm3._
 import yggdrasil.actor._
-import yggdrasil.table.jdbm3.JDBMColumnarTableModule
-import yggdrasil.table.BlockStoreColumnarTableModuleConfig
+import yggdrasil.util._
+import yggdrasil.jdbm3._
+import yggdrasil.table._
 import yggdrasil.metadata.FileMetadataStorage
 
 import common.security._
@@ -35,65 +36,97 @@ import util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.dispatch.{ Future, Await, ExecutionContext }
+import akka.util.Duration
 
 import org.streum.configrity.Configuration
 
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 
 import scalaz._
 import scalaz.effect._
 import scalaz.std.anyVal._
 
+trait StandalonePerfTestRunnerConfig extends BaseConfig
+    with EvaluatingPerfTestRunnerConfig
+    with StandaloneShardSystemConfig
+    with JDBMProjectionModuleConfig
+    with ActorStorageModuleConfig
+    with ActorProjectionModuleConfig {
+  def ingestConfig = None
+}
 
-trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
-  with SystemActorStorageModule
-  with StandaloneShardSystemActorModule
-  with BatchJsonStorageModule[Future] {
 
-  type YggConfig <: StandalonePerfTestRunnerConfig 
-  
-  trait StandalonePerfTestRunnerConfig extends BaseConfig with EvaluatingPerfTestRunnerConfig with StandaloneShardSystemConfig
+abstract class StandalonePerfTestRunner[T](testTimeout: Duration) extends EvaluatingPerfTestRunner[Future, T]
+    with ActorStorageModule
+    with ActorProjectionModule[Array[Byte], Slice]
+    with StandaloneActorProjectionSystem
+    with BatchJsonStorageModule[Future] { self =>
 
-  class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-    val accessControl = new UnrestrictedAccessControl[Future]()
-    val accountManager = new InMemoryAccountManager[Future]()
+  type YggConfig <: StandalonePerfTestRunnerConfig
+
+  val ms = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+
+  val rawProjectionModule = new JDBMProjectionModule {
+    type YggConfig = StandalonePerfTestRunnerConfig
+    val yggConfig = self.yggConfig
+    val Projection = new ProjectionCompanion {
+      def fileOps = FilesystemFileOps
+      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
+      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
+      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
+    }
   }
+
+  implicit val actorSystem = ActorSystem("StandalonePerfTestRunner")
+  implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(defaultAsyncContext) with Copointed[Future] {
+    def copoint[A](p: Future[A]): A = Await.result(p, testTimeout)
+  }
+
+  val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+  val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
+    initShardActors(ms, new InMemoryAccountManager[Future](), projectionsActor)
+
+  object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
+
+  val accessControl = new UnrestrictedAccessControl[Future]()
+  class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
 
   val storage = new Storage
 
-  def startup() {
-    Await.result(storage.start(), yggConfig.maxEvalDuration)
-  }
+  def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
+
+  def startup() {}
 
   def shutdown() {
-    Await.result(storage.stop(), yggConfig.maxEvalDuration)
+    Await.result(Stoppable.stop(shardActors.stoppable), Duration(2, "minutes"))
+    actorSystem.shutdown()
   }
 }
 
-final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean,
-      val actorSystem: ActorSystem, _rootDir: Option[File])(implicit val M: Monad[Future], val coM: Copointed[Future])
-    extends StandalonePerfTestRunner[T]
-    with JDBMColumnarTableModule[Future]
-    with SystemActorStorageModule
-    with JDBMProjectionModule
-    with StandaloneShardSystemActorModule { self =>
+final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean, _rootDir: Option[File], testTimeout: Duration = Duration(120, "seconds"))
+    extends StandalonePerfTestRunner[T](testTimeout)
+    with SliceColumnarTableModule[Future, Array[Byte]]
+ { self =>
 
-  trait JDBMPerfTestRunnerConfig extends StandalonePerfTestRunnerConfig with JDBMProjectionModuleConfig
-    with BlockStoreColumnarTableModuleConfig
+  trait JDBMPerfTestRunnerConfig 
+      extends StandalonePerfTestRunnerConfig
+      with JDBMProjectionModuleConfig
+      with BlockStoreColumnarTableModuleConfig
+      with EvaluatorConfig
 
   type YggConfig = JDBMPerfTestRunnerConfig
-  object yggConfig extends YggConfig {
+  object yggConfig extends JDBMPerfTestRunnerConfig {
     val apiKey = self.apiKey
     val optimize = self.optimize
     val commandLineConfig = Configuration.parse(_rootDir map ("precog.storage.root = " + _) getOrElse "")
     override val config = (Configuration parse {
       Option(System.getProperty("precog.storage.root")) map ("precog.storage.root = " + _) getOrElse "" }) ++ commandLineConfig
-    val ingestConfig = None
   }
 
-  trait TableCompanion extends JDBMColumnarTableCompanion
+  trait TableCompanion extends SliceColumnarTableCompanion
   object Table extends TableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
   }
@@ -101,10 +134,13 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
   yggConfig.dataDir.mkdirs()
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-  object Projection extends JDBMProjectionCompanion {
-    def fileOps = FilesystemFileOps
-    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
-    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
-    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
+  val report = LoggingQueryLogger[Future]
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = self.YggConfig
+      val yggConfig = self.yggConfig
+      val report = LoggingQueryLogger[N](N0)
+    }
   }
 }

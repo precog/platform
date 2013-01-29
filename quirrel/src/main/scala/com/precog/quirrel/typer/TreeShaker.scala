@@ -24,6 +24,7 @@ import com.codecommit.gll.LineStream
 
 trait TreeShaker extends Phases with parser.AST with Binder {
   import ast._
+  import library._
 
   /**
    * @return The <em>root</em> of the shaken tree
@@ -81,6 +82,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     case Import(loc, spec, child) => {
       val (child2, names, vars, errors) = performShake(child)
       (Import(loc, spec, child2), names, vars, errors)
+    }
+    
+    case Assert(loc, pred, child) => {
+      val (pred2, predNames, predVars, predErrors) = performShake(pred)
+      val (child2, childNames, childVars, childErrors) = performShake(child)
+      
+      (Assert(loc, pred2, child2), predNames ++ childNames, predVars ++ childVars, predErrors ++ childErrors)
     }
     
     case New(loc, child) => {

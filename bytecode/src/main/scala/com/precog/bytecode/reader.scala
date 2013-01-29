@@ -32,6 +32,7 @@ trait Reader extends Instructions {
 trait BytecodeReader extends Reader {
   import instructions._
   import Function._
+  import library._
 
   private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism1] = libMorphism1.map(op => op.opcode -> BuiltInMorphism1(op))(collection.breakOut)
   private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism2] = libMorphism2.map(op => op.opcode -> BuiltInMorphism2(op))(collection.breakOut)
@@ -151,6 +152,8 @@ trait BytecodeReader extends Reader {
         case 0x09 => morphism1 map Morph1
         case 0x19 => morphism2 map Morph2
         
+        case 0x10 => Some(Assert)
+        
         case 0x12 => Some(IUnion)
         case 0x13 => Some(IIntersect)
 
@@ -207,10 +210,11 @@ trait BytecodeReader extends Reader {
     }
   }
   
-  private def readLineInfo(buffer: ByteBuffer): Option[(Int, String)] = {
+  private def readLineInfo(buffer: ByteBuffer): Option[(Int, Int, String)] = {
     try {
-      val number = buffer.getInt
-      readString(buffer) map { str => number -> str }
+      val line = buffer.getInt
+      val col = buffer.getInt
+      readString(buffer) map { str => (line, col, str) }
     } catch {
       case _ => None
     }

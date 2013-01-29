@@ -49,6 +49,7 @@ trait MergeSpec[M[+_]] extends
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
+  implicit val fid = NaturalTransformation.refl[M]
 
   class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
     import trans._
@@ -317,6 +318,7 @@ object MergeSpec extends MergeSpec[Free.Trampoline] {
 
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     
     val idSource = new FreshAtomicIdSource
   }

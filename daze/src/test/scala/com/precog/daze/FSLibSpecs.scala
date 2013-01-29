@@ -37,16 +37,20 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-trait FSLibSpec[M[+_]] extends Specification 
-  with FSLib[M]
+trait FSLibSpecs[M[+_]] extends Specification 
+  with FSLibModule[M]
   with TestColumnarTableModule[M] {
   import trans._
   import constants._
+
+  val library = new FSLib {}
+  import library._
 
   implicit def M: Monad[M] with Copointed[M]
 
   class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     val idSource = new FreshAtomicIdSource
   }
 
@@ -59,9 +63,7 @@ trait FSLibSpec[M[+_]] extends Specification
     ProjectionDescriptor(1, ColumnDescriptor(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty
   )
 
-  object storage extends StorageMetadataSource[M] {
-    def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
-  }
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(CString(path))).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
@@ -104,4 +106,4 @@ trait FSLibSpec[M[+_]] extends Specification
   }
 }
 
-class FSLibSpecX extends FSLibSpec[test.YId] with test.YIdInstances
+object FSLibSpecs extends FSLibSpecs[test.YId] with test.YIdInstances

@@ -22,7 +22,6 @@ package quirrel
 
 import org.specs2.mutable._
 
-import bytecode.RandomLibrary
 import parser._
 import typer._
 import emitter._
@@ -33,9 +32,9 @@ object PhasesSpecs extends Specification
     with Compiler
     with ProvenanceChecker
     with GroupSolver
-    with RawErrors 
-    with RandomLibrary {
-  
+    with RawErrors
+    with RandomLibrarySpec {
+
   "full compiler" should {
     "self-populate AST errors atom" in {
       val tree = compileSingle("fubar")

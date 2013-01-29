@@ -22,7 +22,6 @@ package quirrel
 
 import org.specs2.mutable._
 
-import bytecode.RandomLibrary
 import parser._
 import typer._
 import emitter._
@@ -31,8 +30,8 @@ object LineErrorsSpecs extends Specification
     with Parser
     with TreeShaker
     with GroupSolver
-    with LineErrors
-    with RandomLibrary {
+    with LineErrors 
+    with RandomLibrarySpec {
 
   "line errors" should {
     "be correct" in {

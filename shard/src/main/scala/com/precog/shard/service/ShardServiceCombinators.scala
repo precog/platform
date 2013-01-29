@@ -35,7 +35,7 @@ import com.precog.common.Path
 import com.precog.common.security._
 import com.precog.common.json._
 import com.precog.ingest.service._
-import com.precog.daze.QueryOptions
+import com.precog.daze.{QueryOptions, QueryOutput, JsonOutput, CsvOutput}
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._
 
@@ -44,6 +44,7 @@ import scalaz.ValidationNEL
 import scalaz.Validation._
 import scalaz.Monad
 import scalaz.syntax.traverse._
+import scalaz.syntax.bifunctor._
 import scalaz.std.option._
 
 trait ShardServiceCombinators extends EventServiceCombinators {
@@ -74,6 +75,19 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   private object Offset extends NonNegativeLong
   private object Millis extends NonNegativeLong
 
+  // XYZ
+  private def getOutputType(request: HttpRequest[_]): QueryOutput = {
+    import MimeTypes._
+    import HttpHeaders.Accept
+
+    val JSON = application/json
+    val CSV = text/csv
+    request.headers.header[Accept].map(_.mimeTypes).getOrElse(Nil).collect {
+      case JSON => JsonOutput
+      case CSV => CsvOutput
+    }.headOption.getOrElse(JsonOutput)
+  }
+
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
     request.parameters.get('timeout).filter(_ != null).map {
       case Millis(n) => Validation.success(n)
@@ -83,21 +97,17 @@ trait ShardServiceCombinators extends EventServiceCombinators {
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
-      try {
-        val jpaths = JParser.parse(paths)
-        jpaths match {
-          case JArray(elems) =>
-            Validation.success(elems collect { case JString(path) => CPath(path) })
-          case JString(path) =>
-            Validation.success(CPath(path) :: Nil)
-          case badJVal =>
-            Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
-        }
-      } catch {
-        case ex: ParseException =>
-          Validation.failure("Couldn't parse sortOn query parameter: " + ex.getMessage())
+      (((_: Throwable).getMessage) <-: JParser.parseFromString(paths)) flatMap {
+        case JArray(elems) =>
+          Validation.success(elems collect { case JString(path) => CPath(path) })
+        case JString(path) =>
+          Validation.success(CPath(path) :: Nil)
+        case badJVal =>
+          Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
       }
-    } getOrElse Validation.success[String, List[CPath]](Nil)
+    } getOrElse {
+      Validation.success[String, List[CPath]](Nil)
+    }
   }
 
   private def getSortOrder(request: HttpRequest[_]): Validation[String, DesiredSortOrder] = {
@@ -135,13 +145,15 @@ trait ShardServiceCombinators extends EventServiceCombinators {
         val sortOn = getSortOn(request).toValidationNEL
         val sortOrder = getSortOrder(request).toValidationNEL
         val timeout = getTimeout(request).toValidationNEL
+        val output = getOutputType(request)
 
         (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
           val opts = QueryOptions(
             page = offsetAndLimit,
             sortOn = sortOn,
             sortOrder = sortOrder,
-            timeout = timeout
+            timeout = timeout,
+            output = output
           )
 
           query map { q =>

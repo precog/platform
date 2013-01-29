@@ -52,7 +52,7 @@ trait PrettyPrinter extends DAG {
             prettyPrintAux(target, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintSpec(child, bindings, depth+1), ")")
         
         case UnfixedSolution(id, target) =>
-          wrap(depth, "UnfixedSolution(line, "+id+",\n", prettyPrintAux(target, bindings, depth+1), ")")
+          wrap(depth, "UnfixedSolution("+id+",\n", prettyPrintAux(target, bindings, depth+1), ")")
   
         case Extra(target) =>
           wrap(depth, "Target(line,\n", prettyPrintAux(target, bindings, depth+1), ")")
@@ -71,44 +71,44 @@ trait PrettyPrinter extends DAG {
         bindings(graph)
       else {
         graph match {
-          case Const(_, instr) => "Const(line, "+(instr match {
+          case Const(instr) => "Const("+(instr match {
             case CString(str) => "CString("+prettyString(str)+")"
             case other => other
-          })+")"
+          })+")(line)"
 
-          case Undefined(_) => "Undefined(line)"
+          case Undefined() => "Undefined(line)"
 
-          case New(_, parent) => wrap(depth, "New(line,\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case New(parent) => wrap(depth, "New(", prettyPrintAux(parent, bindings, depth+1), ")(line)")
   
-          case LoadLocal(_, parent, _) => wrap(depth, "LoadLocal(line,\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case LoadLocal(parent, _) => wrap(depth, "LoadLocal(\n", prettyPrintAux(parent, bindings, depth+1), ")(line)")
   
-          case Operate(_, op, parent) => wrap(depth, "Operate(line, "+op+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case Operate(op, parent) => wrap(depth, "Operate("+op+",\n", prettyPrintAux(parent, bindings, depth+1), ")(line)")
   
-          case Reduce(_, red, parent) => wrap(depth, "Reduce(line, "+red+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case Reduce(red, parent) => wrap(depth, "Reduce("+red+",\n", prettyPrintAux(parent, bindings, depth+1), ")(line)")
 
-          case MegaReduce(_, reds, parent) => wrap(depth, "MegaReduce(line, "+reds+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case MegaReduce(reds, parent) => wrap(depth, "MegaReduce("+reds+",\n", prettyPrintAux(parent, bindings, depth+1), ")(line)")
           
-          case Morph1(_, m, parent) => wrap(depth, "Morph1(line, "+m+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case Morph1(m, parent) => wrap(depth, "Morph1("+m+",\n", prettyPrintAux(parent, bindings, depth+1), ")(line)")
   
-          case Morph2(_, m, left, right) =>
-            wrap(depth, "Morph2(line, "+m+",\n",
-              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")")
+          case Morph2(m, left, right) =>
+            wrap(depth, "Morph2("+m+",\n",
+              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")(line)")
               
-          case Join(_, op, joinSort, left, right) =>
-            wrap(depth, "Join(line, "+op+", "+joinSort+",\n",
-              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")")
+          case Join(op, joinSort, left, right) =>
+            wrap(depth, "Join("+op+", "+joinSort+",\n",
+              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")(line)")
   
-          case IUI(_, union, left, right) =>
-            wrap(depth, "IUI(line, "+union+",\n",
-              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")")
+          case IUI(union, left, right) =>
+            wrap(depth, "IUI("+union+",\n",
+              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")(line)")
               
-          case Diff(_, left, right) =>
-            wrap(depth, "Diff(line,\n",
-              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")")
+          case Diff(left, right) =>
+            wrap(depth, "Diff(",
+              prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")(line)")
   
-          case Filter(_, filterSort, target, boolean) =>
-            wrap(depth, "Filter(line, "+filterSort+",\n",
-              prettyPrintAux(target, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(boolean, bindings, depth+1), ")")
+          case Filter(filterSort, target, boolean) =>
+            wrap(depth, "Filter("+filterSort+",\n",
+              prettyPrintAux(target, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(boolean, bindings, depth+1), ")(line)")
 
           case Sort(parent, indices) =>
             wrap(depth, "Sort(\n",
@@ -128,14 +128,16 @@ trait PrettyPrinter extends DAG {
             wrap(depth, "Memoize(\n",
               prettyPrintAux(parent, bindings, depth+1, suffixNL = false)+",\n"+mkIndent(depth+1)+priority+"\n", ")")
   
-          case Distinct(_, parent) => wrap(depth, "Distinct(line,\n", prettyPrintAux(parent, bindings, depth+1), ")")
+          case Distinct(parent) => wrap(depth, "Distinct(", prettyPrintAux(parent, bindings, depth+1), ")(line)")
           
-          case Split(_, spec, child) =>
-            wrap(depth, "Split(line,\n", prettyPrintSpec(spec, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(child, bindings, depth+1), ")")
+          case Split(spec, child) =>
+            wrap(depth, "Split(\n", prettyPrintSpec(spec, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(child, bindings, depth+1), ")(line)")
             
-          case sp @ SplitParam(_, id) => "SplitParam(line, "+id+")("+bindings(sp.parent)+")" 
+          // not using extractors due to bug
+          case sp: SplitParam => "SplitParam("+sp.id+")("+bindings(sp.parent)+")(line)" 
   
-          case sp @ SplitGroup(_, id, identities) => "SplitParam(line, "+id+", "+identities.fold(_.map(prettyPrintIdentitySpec), "UndefinedIdentity")+"("+bindings(sp.parent)+")" 
+          // not using extractors due to bug
+          case sp: SplitGroup => "SplitGroup("+sp.id+", "+sp.identities.fold(_.map(prettyPrintIdentitySpec), "UndefinedIdentity")+")("+bindings(sp.parent)+")(line)"
         }
       }) +
       (if(suffixNL) "\n" else "")
@@ -171,27 +173,27 @@ trait PrettyPrinter extends DAG {
         graph match {
           case _: Root => counts0
     
-          case New(_, parent) => collectBindings(parent, counts0)
+          case New(parent) => collectBindings(parent, counts0)
   
-          case LoadLocal(_, parent, _) => collectBindings(parent, counts0)
+          case LoadLocal(parent, _) => collectBindings(parent, counts0)
   
-          case Operate(_, _, parent) => collectBindings(parent, counts0)
+          case Operate(_, parent) => collectBindings(parent, counts0)
   
-          case Reduce(_, _, parent) => collectBindings(parent, counts0)
+          case Reduce(_, parent) => collectBindings(parent, counts0)
           
-          case MegaReduce(_, _, parent) => collectBindings(parent, counts0)
+          case MegaReduce(_, parent) => collectBindings(parent, counts0)
           
-          case Morph1(_, _, parent) => collectBindings(parent, counts0)
+          case Morph1(_, parent) => collectBindings(parent, counts0)
   
-          case Morph2(_, _, left, right) => collectBindings(right, collectBindings(left, counts0))
+          case Morph2(_, left, right) => collectBindings(right, collectBindings(left, counts0))
               
-          case Join(_, _, _, left, right) => collectBindings(right, collectBindings(left, counts0))
+          case Join(_, _, left, right) => collectBindings(right, collectBindings(left, counts0))
   
-          case IUI(_, _, left, right) => collectBindings(right, collectBindings(left, counts0))
+          case IUI(_, left, right) => collectBindings(right, collectBindings(left, counts0))
               
-          case Diff(_, left, right) => collectBindings(right, collectBindings(left, counts0))
+          case Diff(left, right) => collectBindings(right, collectBindings(left, counts0))
   
-          case Filter(_, _, target, boolean) => collectBindings(boolean, collectBindings(target, counts0))
+          case Filter(_, target, boolean) => collectBindings(boolean, collectBindings(target, counts0))
           
           case Sort(parent, _) => collectBindings(parent, counts0)
   
@@ -201,13 +203,15 @@ trait PrettyPrinter extends DAG {
               
           case Memoize(parent, _) => collectBindings(parent, counts0)
   
-          case Distinct(_, parent) => collectBindings(parent, counts0)
+          case Distinct(parent) => collectBindings(parent, counts0)
           
-          case Split(_, spec, child) => collectBindings(child, collectSpecBindings(spec, counts0))
+          case Split(spec, child) => collectBindings(child, collectSpecBindings(spec, counts0))
   
-          case sp @ SplitParam(_, _) => incrementValue(sp.parent, counts0)
+          // not using extractors due to bug
+          case sp: SplitParam => incrementValue(sp.parent, counts0)
 
-          case sg @ SplitGroup(_, _, _) => incrementValue(sg.parent, counts0)
+          // not using extractors due to bug
+          case sg: SplitGroup => incrementValue(sg.parent, counts0)
         }
       }
     }
@@ -229,7 +233,7 @@ trait PrettyPrinter extends DAG {
     
     val bindings = (splitBindings ++ sharedBindings) + (graph -> "input")
 
-    """val line = Line(0, "")"""+"\n\n"+
+    """val line = Line(1, 1, "")"""+"\n\n"+
     (splitBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
      sharedBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
      List(prettyPrintBinding(graph, bindings))).reduce(_+"\n"+_)

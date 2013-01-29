@@ -38,6 +38,7 @@ import scala.util.Random
 import scalaz._
 import scalaz.effect.IO 
 import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
 
@@ -49,6 +50,8 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
+
+import java.nio.CharBuffer
 
 import TableModule._
 import SampleData._
@@ -284,7 +287,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     "in cross" >> {
       "perform a simple cartesian" in testSimpleCross
       
-      "split a cross that would exceed slice boundaries" in {
+      "split a cross that would exceed maxSliceSize boundaries" in {
         val sample: List[JValue] = List(
           JObject(
             JField("key", JArray(JNum(-1L) :: JNum(0L) :: Nil)) ::
@@ -302,6 +305,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
           JObject(
             JField("key", JArray(JNum(-3918416808128018609l) :: JNum(-1L) :: Nil)) ::
             JField("value", JNum(-1.0)) :: Nil
+          ),
+          JObject(
+            JField("key", JArray(JNum(-3918416898128018609l) :: JNum(-2L) :: Nil)) ::
+            JField("value", JNum(-1.0)) :: Nil
+          ),
+          JObject(
+            JField("key", JArray(JNum(-3918426808128018609l) :: JNum(-3L) :: Nil)) ::
+            JField("value", JNum(-1.0)) :: Nil
           )
         )
         
@@ -309,7 +320,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
         val dataset2 = fromJson(sample.toStream, Some(3))
         
         dataset1.cross(dataset1)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight))).slices.uncons.copoint must beLike {
-          case Some((head, _)) => head.size must beLessThanOrEqualTo(3)
+          case Some((head, _)) => head.size must beLessThanOrEqualTo(yggConfig.maxSliceSize)
         }
       }
       
@@ -321,21 +332,26 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
+
       "perform a trivial map1" in testMap1IntLeaf
       "perform deepmap1 using numeric coercion" in testDeepMap1CoerceToDouble
       "perform map1 using numeric coercion" in testMap1CoerceToDouble
       "fail to map1 into array and object" in testMap1ArrayObject
       "perform a less trvial map1" in checkMap1
+
       //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
       "give a transformation for a big decimal and a long" in testMod2Filter
+      
       "perform an object dereference" in checkObjectDeref
       "perform an array dereference" in checkArrayDeref
       "perform metadata dereference on data without metadata" in checkMetaDeref
+
       "perform a trivial map2 add" in checkMap2Add
       "perform a trivial map2 eq" in checkMap2Eq
       "perform a map2 add over but not into arrays and objects" in testMap2ArrayObject
+
       "perform a trivial equality check" in checkEqualSelf
       "perform a trivial equality check on an array" in checkEqualSelfArray
       "perform a slightly less trivial equality check" in checkEqual
@@ -344,8 +360,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "perform another simple equality check" in testAnotherSimpleEqual
       "perform yet another simple equality check" in testYetAnotherSimpleEqual
       "perform a simple not-equal check" in testASimpleNonEqual
+
       "perform a equal-literal check" in checkEqualLiteral
       "perform a not-equal-literal check" in checkNotEqualLiteral
+
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
@@ -359,6 +377,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "test outer object concat with undefined" in testOuterObjectConcatUndefined
       "test inner object concat with empty" in testInnerObjectConcatLeftEmpty
       "test outer object concat with empty" in testOuterObjectConcatLeftEmpty
+
       "concatenate dissimilar arrays" in checkArrayConcat
       "inner concatenate arrays with undefineds" in testInnerArrayConcatUndefined
       "outer concatenate arrays with undefineds" in testOuterArrayConcatUndefined
@@ -392,6 +411,18 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
         results.copoint mustEqual expected.toStream
       }
+
+      "perform a basic IsType transformation" in testIsTypeTrivial
+      "perform an IsType transformation on numerics" in testIsTypeNumeric
+      "perform an IsType transformation on trivial union" in testIsTypeUnionTrivial
+      "perform an IsType transformation on union" in testIsTypeUnion
+      "perform an IsType transformation on nested unfixed types" in testIsTypeUnfixed
+      "perform an IsType transformation on objects" in testIsTypeObject
+      "perform an IsType transformation on unfixed objects" in testIsTypeObjectUnfixed
+      "perform an IsType transformation on unfixed arrays" in testIsTypeArrayUnfixed
+      "perform an IsType transformation on empty objects" in testIsTypeObjectEmpty
+      "perform an IsType transformation on empty arrays" in testIsTypeArrayEmpty
+      "perform a check on IsType" in checkIsType
 
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
@@ -456,6 +487,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
     "in canonicalize" >> {
       "return the correct slice sizes using scalacheck" in checkCanonicalize
+      "return the slice size in correct bound using scalacheck with range" in checkBoundedCanonicalize
       "return the correct slice sizes in a trivial case" in testCanonicalize
       "return the correct slice sizes given length zero" in testCanonicalizeZero
       "return the correct slice sizes along slice boundaries" in testCanonicalizeBoundary
@@ -543,6 +575,131 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
         t0.metrics.sliceTraversedCount must_== expectedSlices
       }
     }
+
+    def streamToString(stream: StreamT[M, CharBuffer]): String = {
+      def loop(stream: StreamT[M, CharBuffer], sb: StringBuilder): M[String] =
+        stream.uncons.flatMap {
+          case None =>
+            M.point(sb.toString)
+          case Some((cb, tail)) =>
+            sb.append(cb)
+            loop(tail, sb)
+        }
+      loop(stream, new StringBuilder).copoint
+    }
+
+
+    def testRenderCsv(json: String, maxSliceSize: Option[Int] = None): String = {
+      val t0 = System.currentTimeMillis()
+      val es = JParser.parseManyFromString(json).valueOr(throw _)
+      val table = fromJson(es.toStream, maxSliceSize)
+      val csv = streamToString(table.renderCsv())
+      val t = System.currentTimeMillis() - t0
+      // uncomment for timing info
+      //println("rendered csv (len=%d) in %d ms" format (csv.length, t))
+      csv
+    }
+
+    "render to CSV in a simple case" in {
+      val events = """
+{"a": 1, "b": {"bc": 999, "bd": "foooooo", "be": true, "bf": null, "bg": false}, "c": [1.999], "d": "dog"}
+{"a": 2, "b": {"bc": 998, "bd": "fooooo", "be": null, "bf": false, "bg": true}, "c": [2.999], "d": "dogg"}
+{"a": 3, "b": {"bc": 997, "bd": "foooo", "be": false, "bf": true, "bg": null}, "c": [3.999], "d": "doggg"}
+{"a": 4, "b": {"bc": 996, "bd": "fooo", "be": true, "bf": null, "bg": false}, "c": [4.999], "d": "dogggg"}
+""".trim
+
+      val expected = "" +
+      ".a,.b.bc,.b.bd,.b.be,.b.bf,.b.bg,.c[0],.d\r\n" +
+      "1,999,foooooo,true,null,false,1.999,dog\r\n" +
+      "2,998,fooooo,null,false,true,2.999,dogg\r\n" +
+      "3,997,foooo,false,true,null,3.999,doggg\r\n" +
+      "4,996,fooo,true,null,false,4.999,dogggg\r\n"
+
+      testRenderCsv(events) must_== expected
+    }
+
+    def renderLotsToCsv(lots: Int, maxSliceSize: Option[Int] = None) {
+      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+      val events = event * lots
+      val csv = testRenderCsv(events, maxSliceSize)
+      val expected = ".x,.y,.z.xx,.z.yy\r\n" + ("123,foobar,1,2\r\n" * lots)
+      csv must_== expected
+    }
+
+    def renderLotsToJson(lots: Int, maxSliceSize: Option[Int] = None) {
+      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+      val events = event * lots
+      testRenderJson(events, maxSliceSize)
+      def testRenderJson(json: String, maxSliceSize: Option[Int] = None): String = {
+        val t0 = System.currentTimeMillis()
+        val es = JParser.parseManyFromString(json).valueOr(throw _)
+        val table = fromJson(es.toStream, maxSliceSize)
+        val output = streamToString(table.renderJson(','))
+        val t = System.currentTimeMillis() - t0
+        // uncomment for timing info
+        //println("rendered json (len=%d) in %d ms" format (output.length, t))
+        output
+      }
+    }
+
+    "test rendering uniform tables of varying sizes" in {
+      // renderLotsToJson(100)
+      // renderLotsToJson(1000)
+      // renderLotsToJson(10000)
+      // renderLotsToJson(100000) // this is really slow, takes ~100s to run
+
+      renderLotsToCsv(100)
+      renderLotsToCsv(1000)
+      renderLotsToCsv(10000)
+      renderLotsToCsv(100000)
+    }
+
+    "test string escaping" in {
+      val csv = testRenderCsv("{\"s\":\"a\\\"b\",\"t\":\",\",\"u\":\"aa\\nbb\",\"v\":\"a,b\\\"c\\r\\nd\"}")
+
+      val expected = "" +
+".s,.t,.u,.v\r\n" +
+"\"a\"\"b\",\",\",\"aa\n" +
+"bb\",\"a,b\"\"c\r\n" +
+"d\"\r\n"
+
+      csv must_== expected
+    }
+
+    "test mixed rows" in {
+
+      val input = """
+{"a": 1}
+{"b": 99.1}
+{"a": true}
+{"c": "jgeiwgjewigjewige"}
+{"b": "foo", "d": 999}
+{"e": null}
+{"f": {"aaa": 9}}
+{"c": 100, "g": 934}
+""".trim
+
+      val expected = "" +
+".a,.b,.c,.d,.e,.f.aaa,.g\r\n" +
+"1,,,,,,\r\n" +
+",99.1,,,,,\r\n" +
+"true,,,,,,\r\n" +
+",,jgeiwgjewigjewige,,,,\r\n" +
+",foo,,999,,,\r\n" +
+",,,,null,,\r\n" +
+",,,,,9,\r\n" +
+",,100,,,,934\r\n"
+
+      testRenderCsv(input) must_== expected
+
+      val expected2 = "" +
+".a,.b\r\n1,\r\n,99.1\r\n\r\n" +
+".a,.c\r\ntrue,\r\n,jgeiwgjewigjewige\r\n\r\n" +
+".b,.d,.e\r\nfoo,999,\r\n,,null\r\n\r\n" +
+".c,.f.aaa,.g\r\n,9,\r\n100,,934\r\n"
+
+      testRenderCsv(input, Some(2)) must_== expected2
+    }
   }
 }
 
@@ -552,6 +709,7 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10
+    val smallSliceSize = 3
     
     val idSource = new FreshAtomicIdSource
   }

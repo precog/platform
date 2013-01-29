@@ -24,6 +24,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 
 import com.precog.daze._
+import com.precog.muspelheim._
 
 import java.nio.CharBuffer
 
@@ -46,7 +47,7 @@ import scalaz.std.option._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specification {
+class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   import JobState._
 
   val JSON = MimeTypes.application / MimeTypes.json
@@ -105,7 +106,8 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
         ticker ! Tick
     }
-    startup().copoint
+
+    startup.copoint
   }
 
   "An asynchronous query" should {
@@ -158,13 +160,13 @@ class AsyncQueryExecutorSpec extends TestAsyncQueryExecutorFactory with Specific
   }
 
   step {
-    shutdown().copoint
+    shutdown.copoint
     actorSystem.shutdown()
     actorSystem.awaitTermination()
   }
 }
 
-trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with ManagedQueryModule with SchedulableFuturesModule { self =>
+trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with SchedulableFuturesModule { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
@@ -206,15 +208,16 @@ trait TestAsyncQueryExecutorFactory extends AsyncQueryExecutorFactory with Manag
     }))
   }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
     Future(Success(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-  def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
-  def status() = sys.error("The lowliest of the low :(")
+  val metadataClient = new MetadataClient[Future] {
+    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
+    def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
+  }
 
   def startup = Future { true }
   def shutdown = Future { actorSystem.shutdown; true }

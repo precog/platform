@@ -36,7 +36,10 @@ import java.io.File
 
 import scalaz._
 
-trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with RegressionTestSupport[M] {
+trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
   def sigmoid(z: Double): Double = 1 / (1 + math.exp(z))
 
   def createLogisticSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
@@ -81,6 +84,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -92,7 +96,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testTrivial = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 2
     val loops = 50
@@ -117,20 +121,20 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SArray(elems2) => elems2(0) }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SArray(elems2) => elems2(0) }
           val SDecimal(theta0) = elems(1)
           List(theta0.toDouble, theta1.toDouble)
         }
@@ -148,7 +152,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeFeatures = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 4
     val loops = 50
@@ -175,22 +179,22 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => map("bar") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("baz") }
+          val SDecimal(theta3) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
         }
@@ -208,7 +212,7 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 
   def testThreeSchema = {
-    val line = Line(0, "")
+    val line = Line(1, 1, "")
 
     val num = 3
     val loops = 50
@@ -243,13 +247,13 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - suffix.length)
       
-      val input = dag.Morph2(line, LogisticRegression,
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(0))),
-        dag.Join(line, DerefArray, CrossLeftSort,
-          dag.LoadLocal(line, Const(line, CString(pointsString))),
-          dag.Const(line, CLong(1))))
+      val input = dag.Morph2(LogisticRegression,
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
+        dag.Join(DerefArray, CrossLeftSort,
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -258,14 +262,14 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
 
       def theta(numOfFields: Int) = result collect {
         case (ids, SArray(elems)) if ids.length == 0 && elems(0).asInstanceOf[SObject].fields.size == numOfFields => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => 
-            map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(elems) =>
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => 
+            (map("bar"): @unchecked) match { case SObject(map) => 
+              (map("baz"): @unchecked) match { case SArray(elems) =>
                 elems(0)
               }
             } 
           }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
         }

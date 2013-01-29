@@ -21,7 +21,12 @@ package com.precog.bytecode
 
 import scalaz.Scalaz._
 
-trait Instructions extends Library {
+trait Instructions {
+  type Lib <: Library
+  val library: Lib
+
+  import library._
+
   sealed trait Instruction { self =>
     import instructions._
 
@@ -35,6 +40,8 @@ trait Instructions extends Library {
       case Reduce(_) => (1, 1)
       case Morph1(_) => (1, 1)
       case Morph2(_) => (2, 1)
+      
+      case Assert => (2, 1)
       
       case IUnion => (2, 1)
       case IIntersect => (2, 1)
@@ -62,7 +69,7 @@ trait Instructions extends Library {
       case Drop => (1, 0)
       case Swap(depth) => (depth + 1, depth + 1)
       
-      case Line(_, _) => (0, 0)
+      case Line(_, _, _) => (0, 0)
       
       case LoadLocal => (1, 1)
       case Distinct => (1, 1)
@@ -97,6 +104,8 @@ trait Instructions extends Library {
     case class Morph1(m1: BuiltInMorphism1) extends Instruction
     case class Morph2(m2: BuiltInMorphism2) extends Instruction
     
+    case object Assert extends Instruction with JoinInstr
+    
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr
     case object SetDifference extends Instruction with JoinInstr
@@ -118,8 +127,8 @@ trait Instructions extends Library {
     case object Drop extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
     
-    case class Line(num: Int, text: String) extends Instruction with DataInstr {
-      override def toString = "<%d>".format(num)
+    case class Line(line: Int, col: Int, text: String) extends Instruction with DataInstr {
+      override def toString = "<%d:%d>".format(line, col)
     }
     
     case object LoadLocal extends Instruction

@@ -65,7 +65,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with StorageModule[M]
     with MemoryDatasetConsumer[M] 
-    with IdSourceScannerModule[M] { self =>
+    with IdSourceScannerModule { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -88,11 +88,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val memoizationWorkDir = scratchDir
 
     val flatMapTimeout = Duration(100, "seconds")
-    val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     val maxEvalDuration = controlTimeout
     val clock = blueeyes.util.Clock.System
     
     val maxSliceSize = self.sliceSize
+    val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource
   }

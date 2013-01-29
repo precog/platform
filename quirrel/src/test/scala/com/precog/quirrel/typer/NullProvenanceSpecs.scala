@@ -21,7 +21,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -33,7 +32,7 @@ object NullProvenanceSpecs extends Specification
     with CompilerUtils
     with Compiler
     with ProvenanceChecker 
-    with RandomLibrary {
+    with RandomLibrarySpec {
 
   import ast._
   
@@ -56,11 +55,31 @@ object NullProvenanceSpecs extends Specification
       }
     }
     
+    "propagate through import" in {
+      val tree = compileSingle("import std (//a + //b)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "propagate through assert" in {
+      "left" >> {
+        val tree = compileSingle("assert (//a + //b) 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      "right" >> {
+        val tree = compileSingle("assert 42 (//a + //b)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
     "propagate through new" in {
       val tree = compileSingle("new (//a + //b)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
-    }    
+    }
 
     "propagate through solve" in {
       val tree = compileSingle("solve 'foo = //a + //b 'foo")
