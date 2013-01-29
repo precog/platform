@@ -107,7 +107,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
               heightWeight,
               userId)(line))(line))(line)    
       
-      val opt = optimizeJoins(input, new IdGen)
+      val opt = optimizeJoins(input, Set.empty, new IdGen)
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
@@ -181,7 +181,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           )(line)
         )(line)
 
-      val opt = optimizeJoins(input, new IdGen)
+      val opt = optimizeJoins(input, Set.empty, new IdGen)
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
@@ -231,7 +231,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           )(line)
         )(line)
 
-      val opt = optimizeJoins(input, new IdGen)
+      val opt = optimizeJoins(input, Set.empty, new IdGen)
 
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
@@ -311,7 +311,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             athletesP,
             Const(CString("name"))(line))(line))(line))(line)
             
-      val result = optimizeJoins(input, new IdGen)
+      val result = optimizeJoins(input, Set.empty, new IdGen)
       
       val expected =
         Join(JoinObject, ValueSort(0),
@@ -444,7 +444,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             )(line)
           )(line)
         
-      optimizeJoins(input, new IdGen) mustEqual expected
+      optimizeJoins(input, Set.empty, new IdGen) mustEqual expected
     }
   }
 }

@@ -29,7 +29,7 @@ trait JoinOptimizer extends DAGTransform {
   import dag._
   import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
-  def optimizeJoins(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
+  def optimizeJoins(graph: DepGraph, splits: Set[dag.Split], idGen: IdGen = IdGen): DepGraph = {
     
     def determinedBy(determinee: DepGraph, determiner: DepGraph): Boolean = {
       
@@ -62,11 +62,11 @@ trait JoinOptimizer extends DAGTransform {
     }
 
     def liftRewrite(graph: DepGraph, eq: DepGraph, lifted: DepGraph): DepGraph = {
-      transformBottomUp(graph) { g => if(g == eq) lifted else g }
+      transformBottomUp(graph, splits) { g => if(g == eq) lifted else g }
     }
 
     def rewriteUnderEq(graph: DepGraph, eqA: DepGraph, eqB: DepGraph, liftedA: DepGraph, liftedB: DepGraph, sortId: Int): DepGraph =
-      transformBottomUp(graph) {
+      transformBottomUp(graph, splits) {
         _ match {
           case j @ Join(op, CrossLeftSort | CrossRightSort, lhs, rhs)
             if (determinedBy(lhs, eqA) && determinedBy(rhs, eqB)) ||
@@ -90,7 +90,7 @@ trait JoinOptimizer extends DAGTransform {
         }
       }
 
-    transformBottomUp(graph) {
+    transformBottomUp(graph, splits) {
       _ match {
         case
           f @ Filter(IdentitySort,

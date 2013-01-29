@@ -109,14 +109,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
       if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
 
-    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
       composeOptimizations(optimize, List(
-        inlineStatics(_, ctx),
-        optimizeJoins(_)
+        inlineStatics(_, ctx, splits),
+        optimizeJoins(_, splits)
       ))
 
     def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
-      stagedRewriteDAG(optimize, ctx) andThen
+      stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
       composeOptimizations(optimize, List(
         inferTypes(JType.JUnfixedT),
@@ -498,7 +498,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               state <- monadState.gets(identity)
               grouping2 <- transState liftM grouping
               result <- transState liftM mn(Table.merge(grouping2) { (key, map) =>
-                val back = fullEval(child, splits + (s -> (key -> (map andThen mn))), s :: splits.keys.toList, false)
+                val back = fullEval(child, splits + (s -> (key -> (map andThen mn))), s :: splits.keys.toList)
                 back.eval(state)  //: N[Table]
               })
             } yield {
@@ -733,17 +733,18 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        * graph is considered to be a special forcing point, but as it is the endpoint,
        * it will perforce be evaluated last.
        */
-      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[N, EvaluatorState, Table] = {
+      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
 
         // find the topologically-sorted forcing points (excluding the endpoint)
         // at the current split level
         val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
       
+        lazy val splitNodes = splits.keys.toSet
         type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
         val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
           case (graph, node) => for {
-            rewrittenGraph <- stagedOptimizations(graph, ctx, optimize)
+            rewrittenGraph <- stagedOptimizations(graph, ctx, optimize, splitNodes)
             _ <- prepareEval(node, splits)
           } yield rewrittenGraph
         }
@@ -756,27 +757,25 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         } yield table
       }
     
-      val resultState: StateT[N, EvaluatorState, Table] = fullEval(rewrittenDAG, Map(), Nil, optimize)
+      val resultState: StateT[N, EvaluatorState, Table] = fullEval(rewrittenDAG, Map(), Nil)
 
       val resultTable: N[Table] = resultState.eval(EvaluatorState())
       resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
     }
   
-    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean) = {
+    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean, splits: Set[dag.Split]) =
       for {
         reductions <- monadState.gets(_.reductions)
-      } yield stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
-        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
+      } yield stagedRewriteDAG(optimize, ctx, splits)(reductions.toList.foldLeft(graph) {
+        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result, splits)
         case (graph, _) => graph
       })
-    }
-    
 
     /**
      * Takes a graph, a node and a value. Replaces the node (and
      * possibly its parents) with the value into the graph.
      */
-    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: CValue) = {
+    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: CValue, splits: Set[dag.Split]) = {
       val replacements = graph.foldDown(true) {
         case join@Join(
           DerefArray,
@@ -794,12 +793,17 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       replacements.foldLeft(graph) {
-        case (graph, (from, to)) => replaceNode(graph, from, to)
+        case (graph, (from, to)) => replaceNode(graph, from, to, splits)
       }
     }
 
-    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) =
-      graph.mapDown(recurse => { case `from` => to })
+    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph, splits: Set[dag.Split]) =
+      graph.mapDown(
+        recurse => {
+          case `from` => to
+        },
+        splits
+      )
 
     /**
      * Returns all forcing points in the graph, ordered topologically.
