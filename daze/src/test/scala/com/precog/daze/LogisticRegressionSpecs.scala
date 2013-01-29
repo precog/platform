@@ -17,7 +17,10 @@ import java.io.File
 
 import scalaz._
 
-trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with RegressionTestSupport[M] {
+trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
   def sigmoid(z: Double): Double = 1 / (1 + math.exp(z))
 
   def createLogisticSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
@@ -55,13 +58,14 @@ trait LogisticRegressionTestSupport[M[+_]] extends LogisticRegressionLib[M] with
   }
 }
 
-trait LogisticRegressionSpec[M[+_]] extends Specification
+trait LogisticRegressionSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
     with LogisticRegressionTestSupport[M]
     with LongIdMemoryDatasetConsumer[M]{ self =>
 
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -291,4 +295,4 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 }
 
-object LogisticRegressionSpec extends LogisticRegressionSpec[test.YId] with test.YIdInstances
+object LogisticRegressionSpecs extends LogisticRegressionSpecs[test.YId] with test.YIdInstances

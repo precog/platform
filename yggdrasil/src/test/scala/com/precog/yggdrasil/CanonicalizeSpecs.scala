@@ -3,7 +3,7 @@ package table
 
 import blueeyes.json._
 
-import scalaz.StreamT
+import scalaz.{Copointed, StreamT}
 import scalaz.syntax.copointed._
 
 import org.specs2.mutable._

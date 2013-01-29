@@ -2,7 +2,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -14,7 +13,7 @@ object NullProvenanceSpecs extends Specification
     with CompilerUtils
     with Compiler
     with ProvenanceChecker 
-    with RandomLibrary {
+    with RandomLibrarySpec {
 
   import ast._
   
