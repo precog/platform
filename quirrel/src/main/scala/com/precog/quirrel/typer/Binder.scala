@@ -4,8 +4,12 @@ package typer
 
 import bytecode.Library
 
-trait Binder extends parser.AST with Library {
+trait Binder extends parser.AST {
+  type Lib <: Library
+  val library: Lib
+
   import ast._
+  import library._
   
   type Formal = (Identifier, Let)
   
@@ -103,6 +107,8 @@ trait Binder extends parser.AST with Library {
         
         loop(child, env.copy(names = env.names ++ addend))
       }
+      
+      case Assert(_, pred, child) => loop(pred, env) ++ loop(child, env)
       
       case New(_, child) => loop(child, env)
       
