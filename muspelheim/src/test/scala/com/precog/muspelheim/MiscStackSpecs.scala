@@ -2065,6 +2065,22 @@ trait MiscStackSpecs extends EvalStackSpecs {
         results must contain(SArray(Vector(SDecimal(1), SDecimal(1))))
       }
     }
+    
+    "concatenate object projections on medals with inner-join semantics" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | { height: medals.HeightIncm, weight: medals.Weight }
+        | """.stripMargin
+        
+      val results = eval(input)
+      results must not(beEmpty)
+      
+      forall(results) { res =>
+        val SObject(fields) = res
+        fields must haveKey("height")
+        fields must haveKey("weight")
+      }
+    }
   }
 }
 
