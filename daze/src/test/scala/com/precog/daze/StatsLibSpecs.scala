@@ -162,139 +162,156 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
     "compute rank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
+    
       result must haveSize(10)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
+    
+      result2 must contain(0,2,3,4,7,8).only
+    }
 
-      result2 must contain(1,3,4,5,8,9).only
+    "compute indexedRank" in {
+      val line = Line(1, 1, "")
+    
+      val input = dag.Morph1(IndexedRank,
+        dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
+    
+      val result = testEval(input)
+    
+      result must haveSize(10)
+    
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+    
+      result2 must contain(0,1,2,3,4,5,6,7,8,9).only
     }
 
     "compute rank within a filter" in {
       val line = Line(1, 1, "")
-
+    
       val numbers = dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line)
-
+    
       val input = Filter(IdentitySort,
         numbers,
         Join(Eq, CrossLeftSort,
           dag.Morph1(Rank, numbers)(line),
-          Const(CLong(5))(line))(line))(line)
+          Const(CLong(4))(line))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(3)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(11).only
     }
 
     "compute rank resulting in a boolean set" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Eq, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
-        Const(CLong(5))(line))(line)
+        Const(CLong(4))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(10)
-
+    
       val (tr, fls) = result partition {
         case (ids, STrue) if ids.length == 1 => true
         case (ids, SFalse) if ids.length == 1 => false
         case _ => false
       }
-
+    
       tr.size mustEqual 3
       fls.size mustEqual 7
     }
 
     "compute rank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(10)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(3,5,6,7,10,11).only  
+    
+      result2 must contain(2,4,5,6,9,10).only  
     }
 
     "compute denseRank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
+    
       result must haveSize(10)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(1,2,3,4,5,6).only  
+    
+      result2 must contain(0,1,2,3,4,5).only  
     }
 
     "compute denseRank within a filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
-          Const(CLong(4))(line))(line))(line)
+          Const(CLong(3))(line))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(3)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(11)
     }
 
     "compute denseRank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
           dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(10)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(3,4,5,6,7,8).only  
+    
+      result2 must contain(2,3,4,5,6,7).only  
     }
 
     "compute linear correlation" in {
@@ -453,180 +470,236 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
     "compute rank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
-      result must haveSize(10)
-
+    
+      result must haveSize(18)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
+    
+      result2 must contain(0,1,2,3,4,5,7,8,9,12,13,15,16,17).only  
+    }
 
-      result2 must contain(1,3,4,5,8,9).only  
+    "compute indexedRank" in {
+      val line = Line(1, 1, "")
+    
+      val input = dag.Morph1(IndexedRank,
+        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
+    
+      val result = testEval(input)
+    
+      result must haveSize(18)
+    
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+    
+      result2 must contain(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17).only  
+    }
+
+    "compute rank heterogenously" in {
+      val line = Line(1, 1, "")
+      val data = dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line)
+      val input = Join(
+        JoinArray,
+        IdentitySort,
+        Operate(WrapArray, data)(line),
+        Operate(WrapArray, dag.Morph1(Rank, data)(line))(line)
+      )(line)
+
+      val result = testEval(input).map(_._2)
+
+      def arr(ns: Long*) = SArray(Vector(ns.map(n => SDecimal(n)):_*))
+      def sv(n: Long) = SDecimal(n)
+      def tpl(v: SValue, rank: SValue) = SArray(Vector(v, rank))
+
+      val expected = Set(
+        tpl(SObject(Map("foo" -> SString("bar"))), sv(0)),
+        tpl(arr(9, 10, 11), sv(1)),
+        tpl(SFalse, sv(2)),
+        tpl(STrue, sv(3)),
+        tpl(SString("alissa"), sv(4)),
+        tpl(sv(-10), sv(5)),
+        tpl(sv(-10), sv(5)),
+        tpl(sv(0), sv(7)),
+        tpl(sv(5), sv(8)),
+        tpl(sv(11), sv(9)),
+        tpl(sv(11), sv(9)),
+        tpl(sv(11), sv(9)),
+        tpl(sv(12), sv(12)),
+        tpl(sv(34), sv(13)),
+        tpl(sv(34), sv(13)),
+        tpl(SObject(Map()), sv(15)),
+        tpl(arr(), sv(16)),
+        tpl(SNull, sv(17))
+      )
+
+      result must_== expected
     }
 
     "compute rank within an equals filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, CrossLeftSort,
-          dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
-          Const(CLong(9))(line))(line))(line)
+          dag.Morph1(Rank, dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+          Const(CLong(13))(line))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(2)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(34).only
     }
 
     "compute rank within another equals filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(Rank,
             dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
-          Const(CLong(1))(line))(line))(line)
+          Const(CLong(5))(line))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(2)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(-10).only
-
+    
     }
 
     "compute rank within a less-than filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
         Join(LtEq, CrossLeftSort,
           dag.Morph1(Rank,
             dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
-          Const(CLong(5))(line))(line))(line)
+          Const(CLong(10))(line))(line))(line)
         
       val result = testEval(input)
-
-      result must haveSize(7)
-
+    
+      result must haveSize(12)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(-10,0,5,11).only
     }
 
     "compute rank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
-
-      result must haveSize(10)
-
+    
+      result must haveSize(18)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(3,5,6,7,10,11).only  
+    
+      result2 must contain(5, 10, 14, 6, 9, 2, 17, 7, 3, 18, 11, 19, 4, 15).only
     }
 
     "compute denseRank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
-      result must haveSize(10)
-
+    
+      result must haveSize(18)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(1,2,3,4,5,6).only  
+    
+      result2 must contain(0,1,2,3,4,5,6,7,8,9,10,11,12,13).only
     }
 
     "compute denseRank within an equals filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
-          Const(CLong(6))(line))(line))(line)
+          Const(CLong(10))(line))(line))(line)
         
       val result = testEval(input)
-
+    
       result must haveSize(2)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(34)
     }
 
     "compute denseRank within a less-than filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
         Join(LtEq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
-          Const(CLong(5))(line))(line))(line)
+          Const(CLong(9))(line))(line))(line)
         
       val result = testEval(input)
-
-      result must haveSize(8)
-
+    
+      result must haveSize(13)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(-10,0,5,11,12).only
     }
 
     "compute denseRank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
           dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
-
-      result must haveSize(10)
-
+    
+      result must haveSize(18)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(3,4,5,6,7,8).only  
+    
+      result2 must contain(5, 10, 14, 6, 9, 13, 2, 12, 7, 3, 11, 8, 4, 15).only  
     }
 
     "compute linear correlation" in {
@@ -1196,138 +1269,138 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "compute rank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
+    
       result must haveSize(22)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,14,20,1,6,21,13,2,12,16,11,8,19,4,15).only
+    
+      result2 must contain(0, 5, 10, 14, 20, 1, 13, 12, 7, 3, 18, 11, 19, 4, 15)
     }
 
     "compute rank within a filter" in {
       val line = Line(1, 1, "")
-
+    
       val numbers = dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line)
-
+    
       val input = Filter(IdentitySort,
         numbers,
         Join(Eq, CrossLeftSort,
           dag.Morph1(Rank, numbers)(line),
-          Const(CLong(5))(line))(line))(line)
-
+          Const(CLong(4))(line))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(1)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(-9).only
     }
 
     "compute rank resulting in a boolean set" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Eq, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
-        Const(CLong(5))(line))(line)
-
+        Const(CLong(4))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(22)
-
+    
       val (tr, fls) = result partition {
         case (ids, STrue) if ids.length == 1 => true
         case (ids, SFalse) if ids.length == 1 => false
         case _ => false
       }
-
+    
       tr.size mustEqual 1
       fls.size mustEqual 21
     }
 
     "compute rank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
-        Const(CLong(2))(line))(line)
-
+        Const(CLong(3))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(22)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(10,14,6,21,13,17,22,7,3,18,16,23,8,4,15).only
     }
 
     "compute denseRank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
+    
       result must haveSize(22)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,10,14,1,6,9,13,2,12,7,3,11,8,4,15).only
+    
+      result2 must contain(5,10,14,1,6,9,13,2,12,7,3,11,8,4,0).only
     }
 
     "compute denseRank within a filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
-          Const(CLong(4))(line))(line))(line)
-
+          Const(CLong(3))(line))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(1)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(-9)
     }
 
     "compute denseRank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
           dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
-        Const(CLong(2))(line))(line)
-
+        Const(CLong(3))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(22)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(5,10,14,6,9,13,17,12,7,3,16,11,8,4,15).only
     }
 
@@ -1486,180 +1559,179 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "compute rank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(Rank,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
-      result must haveSize(9)
-
+    
+      result must haveSize(22)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,1,9,2,7,3,8).only
+    
+      result2 must contain(0, 10, 20, 1, 6, 9, 13, 2, 17, 7, 3, 18, 16, 11, 8, 19, 4, 15).only
     }
 
     "compute rank within an equals filter" in {
       val line = Line(1, 1, "")
+    
+      val input = Filter(IdentitySort,
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        Join(Eq, CrossLeftSort,
+          dag.Morph1(Rank,
+            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+          Const(CLong(17))(line))(line))(line)
+    
+      val result = testEval(input)
+    
+      result must haveSize(1)
+    
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      }
+    
+      result2 must contain(12).only
+    }
 
+    "compute rank within another equals filter" in {
+      val line = Line(1, 1, "")
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(Rank,
             dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(9))(line))(line))(line)
-
+    
       val result = testEval(input)
-
+    
       result must haveSize(1)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(12).only
-    }
-
-    "compute rank within another equals filter" in {
-      val line = Line(1, 1, "")
-
-      val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
-        Join(Eq, CrossLeftSort,
-          dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-          Const(CLong(1))(line))(line))(line)
-
-      val result = testEval(input)
-
-      result must haveSize(1)
-
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      }
-
+    
       result2 must contain(-3).only
-
     }
 
     "compute rank within a less-than filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(LtEq, CrossLeftSort,
           dag.Morph1(Rank,
             dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-          Const(CLong(5))(line))(line))(line)
-
+          Const(CLong(10))(line))(line))(line)
+    
       val result = testEval(input)
-
-      result must haveSize(6)
-
+    
+      result must haveSize(11)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(0,-1,1,-3).only
+    
+      result2 must contain(-1,-3).only
     }
 
     "compute rank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(Rank,
           dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-        Const(CLong(2))(line))(line)
-
+        Const(CLong(3))(line))(line)
+    
       val result = testEval(input)
-
-      result must haveSize(9)
-
+    
+      result must haveSize(22)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,10,9,7,3,11,4).only
+    
+      result2 must contain(5, 10, 14, 20, 6, 21, 9, 13, 22, 12, 7, 3, 18, 16, 11, 23, 19, 4).only
     }
 
     "compute denseRank" in {
       val line = Line(1, 1, "")
-
+    
       val input = dag.Morph1(DenseRank,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
-
+    
       val result = testEval(input)
-
-      result must haveSize(9)
-
+    
+      result must haveSize(22)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,1,6,2,7,3,4).only
+    
+      result2 must contain(0, 5, 10, 14, 1, 6, 9, 13, 2, 17, 12, 7, 3, 16, 11, 8, 4, 15).only
     }
 
     "compute denseRank within an equals filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(Eq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-          Const(CLong(6))(line))(line))(line)
-
+          Const(CLong(13))(line))(line))(line)
+    
       val result = testEval(input)
-
+    
       result must haveSize(1)
-
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
+    
       result2 must contain(5)
     }
 
     "compute denseRank within a less-than filter" in {
       val line = Line(1, 1, "")
-
+    
       val input = Filter(IdentitySort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(LtEq, CrossLeftSort,
           dag.Morph1(DenseRank,
             dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-          Const(CLong(5))(line))(line))(line)
-
+          Const(CLong(10))(line))(line))(line)
+    
       val result = testEval(input)
-
-      result must haveSize(7)
-
+    
+      result must haveSize(13)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(0,-3,1,2,-1).only
+    
+      result2 must contain(0,-3,-1).only
     }
 
     "compute denseRank within a join" in {
       val line = Line(1, 1, "")
-
+    
       val input = Join(Add, CrossLeftSort,
         dag.Morph1(DenseRank,
           dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
-        Const(CLong(2))(line))(line)
-
+        Const(CLong(3))(line))(line)
+    
       val result = testEval(input)
-
-      result must haveSize(9)
-
+    
+      result must haveSize(22)
+    
       val result2 = result collect {
         case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
       }
-
-      result2 must contain(5,6,9,7,3,8,4).only
+    
+      result2 must contain(5, 10, 14, 20, 6, 9, 13, 17, 12, 7, 3, 18, 16, 11, 8, 19, 4, 15).only
     }
 
     "compute covariance" in {

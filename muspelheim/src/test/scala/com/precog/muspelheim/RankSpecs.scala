@@ -33,7 +33,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         rank := std::stats::rank(foo)
 
-        foo where rank > 0
+        foo where rank >= 0
       """.stripMargin
 
       val input2 = """count((//clicks).time)"""
@@ -60,7 +60,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         rank := std::stats::rank(distinctFoo)
 
-        distinctFoo where rank > 0
+        distinctFoo where rank >= 0
       """.stripMargin
 
       val input2 = """count(distinct((//clicks).time))"""
@@ -126,7 +126,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         rank := std::stats::rank(distinctFoo)
 
-        distinctFoo where rank > 0
+        distinctFoo where rank >= 0
       """.stripMargin
 
       val input2 = """count(distinct((//clicks).time))"""
@@ -150,7 +150,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         rank := std::stats::rank(newFoo)
 
-        newFoo where rank > 0
+        newFoo where rank >= 0
       """.stripMargin
 
       val input2 = """count((//clicks).time)"""
@@ -175,7 +175,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         rank := std::stats::rank(newFoo)
 
-        newFoo where rank = 1
+        newFoo where rank = 0
       """.stripMargin
 
       val input2 = """count(//clicks where (//clicks).time = min((//clicks).time))"""
@@ -195,7 +195,7 @@ trait RankSpecs extends EvalStackSpecs {
       "of the product of two sets" >> {
         val input = """
           | campaigns := //campaigns 
-          | campaigns where std::stats::rank(campaigns.cpm * campaigns.cpm) = 37""".stripMargin
+          | campaigns where std::stats::rank(campaigns.cpm * campaigns.cpm) = 36""".stripMargin
 
         val results = evalE(input) 
         
@@ -214,7 +214,7 @@ trait RankSpecs extends EvalStackSpecs {
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
-          | campaigns where std::stats::rank(campaigns.cpm) = 37""".stripMargin
+          | campaigns where std::stats::rank(campaigns.cpm) = 36""".stripMargin
 
         val results = evalE(input) 
         
@@ -297,7 +297,7 @@ trait RankSpecs extends EvalStackSpecs {
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
-          | campaigns where std::stats::denseRank(campaigns.cpm) = 4""".stripMargin
+          | campaigns where std::stats::denseRank(campaigns.cpm) = 3""".stripMargin
 
         val results = evalE(input) 
         
@@ -317,7 +317,7 @@ trait RankSpecs extends EvalStackSpecs {
         val input = """
           | campaigns := //campaigns
           | cpmRanked := campaigns with {rank: std::stats::denseRank(campaigns.cpm)}
-          |   count(cpmRanked where cpmRanked.rank <= 5)""".stripMargin
+          |   count(cpmRanked where cpmRanked.rank <= 4)""".stripMargin
 
         val results = eval(input) 
         
