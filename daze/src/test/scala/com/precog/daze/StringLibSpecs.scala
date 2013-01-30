@@ -9,15 +9,15 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-trait StringLibSpec[M[+_]] extends Specification
+trait StringLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with StringLib[M] 
     with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
   import dag._
   import instructions._
+  import library._
 
   private val line = Line(1, 1, "")
   private def homStrings(line: Line) = dag.LoadLocal(Const(CString("/hom/strings"))(line))(line)
@@ -42,7 +42,7 @@ trait StringLibSpec[M[+_]] extends Specification
         
   "for homogeneous sets, the appropriate string function" should {
     "determine length" in {
-      val input = op1Input(length, homStrings)
+      val input = op1Input(library.length, homStrings)
       val result = testEval(input)
       
       result must haveSize(6)
@@ -328,7 +328,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result2 must contain(0, 2, -4, -73, -81, -6)
     }
     "determine equals" in {
-      val input = Join(BuiltInFunction2Op(equals), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(library.equals), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("quirky"))(line))(line)
         
@@ -376,7 +376,7 @@ trait StringLibSpec[M[+_]] extends Specification
 
   "for heterogeneous sets, the appropriate string function" should {
     "determine length" in {
-      val input = dag.Operate(BuiltInFunction1Op(length),
+      val input = dag.Operate(BuiltInFunction1Op(library.length),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
@@ -689,7 +689,7 @@ trait StringLibSpec[M[+_]] extends Specification
       result2 must contain(0, 2, -4, -73, -81, -6)
     }
     "determine equals" in {
-      val input = op2Input(equals, CString("quirky"), hetStrings) 
+      val input = op2Input(library.equals, CString("quirky"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)
@@ -783,4 +783,4 @@ trait StringLibSpec[M[+_]] extends Specification
   }
 }
 
-object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances
+object StringLibSpecs extends StringLibSpecs[test.YId] with test.YIdInstances
