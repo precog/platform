@@ -42,7 +42,7 @@ import com.precog.util.BitSetUtil.Implicits._
 
 import TableModule._
 
-trait ColumnarTableModuleTestSupport[M[+_]] extends TableModuleTestSupport[M] with ColumnarTableModule[M] {
+trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with TableModuleTestSupport[M] {
   def newGroupId: GroupId
 
   def defaultSliceSize = 10

@@ -20,14 +20,18 @@
 package com.precog
 package daze
 
-import bytecode.StaticLibrary
+import com.precog.bytecode.StaticLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object MemoizerSpecs extends Specification with Memoizer with StaticLibrary with FNDummyModule {
+object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
   import instructions._
   import dag._
-  
+
+  type Lib = StaticLibrary
+  val library = new StaticLibrary{}
+  import library._
+
   "dag memoization" should {
     "not memoize a sub-graph of non-forcing operations" in {
       val line = Line(1, 1, "")

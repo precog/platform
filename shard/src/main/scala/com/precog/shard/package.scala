@@ -33,7 +33,7 @@ package object shard {
   type QueryResult = Either[JValue, StreamT[Future, CharBuffer]]
 
   type JobQueryT[M[+_], +A] = QueryT[JobQueryState, M, A]
-
+  
   type BasicPlatform[M[+_]] = Platform[M, StreamT[Future, CharBuffer]]
   type AsyncPlatform[M[+_]] = Platform[M, JobId]
   type SyncPlatform[M[+_]] = Platform[M, (Option[JobId], StreamT[Future, CharBuffer])]

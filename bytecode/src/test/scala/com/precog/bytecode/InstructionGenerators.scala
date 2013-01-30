@@ -23,8 +23,10 @@ import org.scalacheck._
 import Arbitrary.arbitrary
 import Gen._
 
-trait InstructionGenerators extends Instructions with RandomLibrary {
+trait InstructionGenerators extends Instructions {
   import instructions._
+
+  type Lib = RandomLibrary
 
   implicit lazy val arbInstruction: Arbitrary[Instruction] = Arbitrary(genInstruction)
   
@@ -139,12 +141,12 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genPushKey = arbitrary[Int] map PushKey
   
   private lazy val genUnaryOp = for {
-    op <- oneOf(lib1.toSeq)
+    op <- oneOf(library.lib1.toSeq)
     res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1Op(op))
   } yield res
   
   private lazy val genBinaryOp = for {
-    op <- oneOf(lib2.toSeq)
+    op <- oneOf(library.lib2.toSeq)
     res <- oneOf(
       Add,
       Sub,
@@ -176,17 +178,17 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   } yield res
 
   private lazy val genReduction = for {
-    red <- oneOf(libReduction.toSeq)
+    red <- oneOf(library.libReduction.toSeq)
     res <- BuiltInReduction(red)
   } yield res
 
   private lazy val genMorphism1 = for {
-    m <- oneOf(libMorphism1.toSeq)
+    m <- oneOf(library.libMorphism1.toSeq)
     res <- BuiltInMorphism1(m)
   } yield res
 
   private lazy val genMorphism2 = for {
-    m <- oneOf(libMorphism2.toSeq)
+    m <- oneOf(library.libMorphism2.toSeq)
     res <- BuiltInMorphism2(m)
   } yield res
 }

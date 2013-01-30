@@ -21,8 +21,6 @@ package com.precog
 package quirrel
 package emitter
 
-import com.precog.bytecode.{Instructions, StaticLibrary}
-
 import org.specs2.mutable._
 
 import java.io.File
@@ -43,9 +41,10 @@ object EmitterSpecs extends Specification
     with Compiler
     with Emitter
     with RawErrors 
-    with StaticLibrary {
+    with StaticLibrarySpec {
 
   import instructions._
+  import library._
 
   def compileEmit(input: String) = {
     val tree = compileSingle(input.stripMargin)

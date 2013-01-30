@@ -37,7 +37,7 @@ import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
-import com.precog.yggdrasil.util.IdSourceConfig
+import com.precog.yggdrasil.util._
 import com.precog.util.PrecogUnit
 
 import com.weiglewilczek.slf4s.Logging
@@ -147,6 +147,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
+      with EvaluatorConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with MongoColumnarTableModuleConfig
@@ -154,6 +155,8 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   object yggConfig extends YggConfig
 
   override def controlTimeout = Duration(10, "minutes")      // it's just unreasonable to run tests longer than this
+
+  def includeIdField = false
 
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
@@ -201,6 +204,18 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   }
 
   override def map (fs: => Fragments): Fragments = fs ^ Step { shutdown() }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 }
 
 class MongoBasicValidationSpecs extends BasicValidationSpecs with MongoPlatformSpecs
@@ -216,4 +231,20 @@ class MongoRankSpecs extends RankSpecs with MongoPlatformSpecs
 class MongoRenderStackSpecs extends RenderStackSpecs with MongoPlatformSpecs
 
 class MongoUndefinedLiteralSpecs extends UndefinedLiteralSpecs with MongoPlatformSpecs
+
+class MongoIdFieldSpecs extends MongoPlatformSpecs {
+  override def includeIdField = true
+
+  "Mongo's _id field" should {
+    "be included in results when configured" in {
+      val input = """
+          | campaigns := //campaigns 
+          | campaigns._id""".stripMargin
+
+      val results = evalE(input)
+
+      results must not(beEmpty)
+    }
+  }
+}
 

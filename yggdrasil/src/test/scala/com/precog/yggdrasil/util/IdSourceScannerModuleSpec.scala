@@ -26,7 +26,7 @@ import com.precog.common.json._
 
 import org.specs2.mutable._
 
-trait IdSourceScannerModuleSpec[M[+_]] extends IdSourceScannerModule[M] with TableModuleTestSupport[M] with Specification {
+trait IdSourceScannerModuleSpec[M[+_]] extends IdSourceScannerModule with TableModuleTestSupport[M] with Specification {
   private val blockSize = 10000
 
   private val cols = Map(ColumnRef(CPath.Identity, CBoolean) -> Column.const(true))

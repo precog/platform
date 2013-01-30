@@ -46,6 +46,7 @@ import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._
+import muspelheim._
 
 import daze._
 
@@ -70,17 +71,43 @@ trait Lifecycle {
   def shutdown: IO[PrecogUnit]
 }
 
-trait REPL
-    extends muspelheim.ParseEvalStack[Future] 
-    with IdSourceScannerModule[Future]
-    with LongIdMemoryDatasetConsumer[Future] {
+class REPLConfig(dataDir: Option[String]) extends BaseConfig
+    with IdSourceConfig
+    with EvaluatorConfig
+    with StandaloneShardSystemConfig
+    with ColumnarTableModuleConfig
+    with BlockStoreColumnarTableModuleConfig
+    with JDBMProjectionModuleConfig
+    with ActorStorageModuleConfig
+    with ActorProjectionModuleConfig {
+  val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
+  val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
+
+  val sortWorkDir = scratchDir
+  val memoizationBufferSize = sortBufferSize
+  val memoizationWorkDir = scratchDir
+  val ingestConfig = None
+
+  val controlTimeout = Duration(120, "seconds")
+  val flatMapTimeout = controlTimeout
+  val maxEvalDuration = controlTimeout
+  val clock = blueeyes.util.Clock.System
+  
+  val maxSliceSize = 10000
+  val smallSliceSize = 8
+
+  //TODO: Get a producer ID
+  val idSource = new FreshAtomicIdSource
+}
+
+trait REPL extends ParseEvalStack[Future] 
+   with SliceColumnarTableModule[Future, Array[Byte]]
+   with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"
 
   val Prompt = "quirrel> "
   val Follow = "       | "
-
-  val report = LoggingQueryLogger[Future]
 
   def run = IO {
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
@@ -241,34 +268,6 @@ trait REPL
 }
 
 object Console extends App {
-  val controlTimeout = Duration(120, "seconds")
-  class REPLConfig(dataDir: Option[String]) extends BaseConfig
-      with IdSourceConfig
-      with StandaloneShardSystemConfig
-      with ColumnarTableModuleConfig
-      with BlockStoreColumnarTableModuleConfig
-      with JDBMProjectionModuleConfig
-      with ActorStorageModuleConfig
-      with ActorProjectionModuleConfig {
-    val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
-    val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
-
-    val sortWorkDir = scratchDir
-    val memoizationBufferSize = sortBufferSize
-    val memoizationWorkDir = scratchDir
-    val ingestConfig = None
-
-    val flatMapTimeout = controlTimeout
-    val maxEvalDuration = controlTimeout
-    val clock = blueeyes.util.Clock.System
-    
-    val maxSliceSize = 10000
-    val smallSliceSize = 8
-
-    //TODO: Get a producer ID
-    val idSource = new FreshAtomicIdSource
-  }
-
   def loadConfig(dataDir: Option[String]): IO[REPLConfig] = IO {
     new REPLConfig(dataDir)
   }
@@ -279,7 +278,6 @@ object Console extends App {
   } yield {
       scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
-          with SliceColumnarTableModule[Future, Array[Byte]]
           with ActorStorageModule
           with ActorProjectionModule[Array[Byte], Slice]
           with StandaloneActorProjectionSystem { self =>
@@ -322,6 +320,13 @@ object Console extends App {
         }
 
         object Table extends TableCompanion
+
+        def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+          new Evaluator[N](N0) with IdSourceScannerModule {
+            type YggConfig = REPLConfig
+            val yggConfig = replConfig
+            val report = LoggingQueryLogger[N](N0)
+          }
 
         def startup = IO { PrecogUnit }
 

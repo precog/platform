@@ -24,10 +24,13 @@ import bytecode.RandomLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLibrary with FNDummyModule {
+object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyModule {
   import dag._
   import instructions._
   import bytecode._
+
+  type Lib = RandomLibrary
+  object library extends RandomLibrary
 
   "pretty printing" should {
     "format a trivial DAG" in {

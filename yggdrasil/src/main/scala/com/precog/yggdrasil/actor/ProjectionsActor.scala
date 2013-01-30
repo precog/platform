@@ -224,7 +224,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
         } unsafePerformIO
 
       case ProjectionArchive(`descriptor`, archive) => 
-        logger.debug("Archiving " + descriptor)
+        logger.info("Archiving projection: " + descriptor.shows)
         
         (for {
            _ <- sleep
@@ -236,7 +236,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
         } unsafePerformIO
 
       case ProjectionGetBlock(`descriptor`, id, columns) => 
-        logger.info("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
+        logger.trace("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
         (for {
           p <- awaken
           block <- p.getBlockAfter(id, columns)

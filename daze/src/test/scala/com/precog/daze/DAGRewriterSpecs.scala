@@ -25,17 +25,22 @@ import com.precog.common.Path
 import com.precog.yggdrasil._
 import org.joda.time.DateTime
 
-import scalaz.{ Tag, FirstOption }
+import scalaz.{ FirstOption, NaturalTransformation, Tag }
 import scalaz.std.anyVal.booleanInstance.disjunction
 import scalaz.std.option.optionFirst
 import scalaz.syntax.copointed._
 
 trait DAGRewriterSpecs[M[+_]] extends Specification
-    with ReductionLib[M]
     with EvaluatorTestSupport[M] {
 
   import dag._
   import instructions._
+
+  implicit val nt = NaturalTransformation.refl[M]
+
+  val evaluator = Evaluator(M)
+  import evaluator._
+  import library._
 
   "DAG rewriting" should {
     "compute identities given a relative path" in {

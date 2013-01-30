@@ -24,9 +24,13 @@ import org.specs2.mutable._
 import bytecode._
 import com.precog.yggdrasil._
 
-object DAGSpecs extends Specification with DAG with RandomLibrary with FNDummyModule {
+object DAGSpecs extends Specification with DAG with FNDummyModule {
   import instructions._
   import dag._
+
+  type Lib = RandomLibrary
+  val library = new RandomLibrary {}
+  import library._
   
   "dag decoration" should {
     "recognize root instructions" in {

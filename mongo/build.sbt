@@ -20,14 +20,16 @@
 name := "mongo"
 
 libraryDependencies ++= Seq(
-  "org.eclipse.jetty" % "jetty-server"      % "8.1.7.v20120910"
+  "org.eclipse.jetty" % "jetty-server"      % "8.1.3.v20120416"
 )
 
-parallelExecution in Test := true
+parallelExecution in Test := false
 
 ivyXML := 
-<dependency org="org.eclipse.jetty.orbit" name="javax.servlet" rev="3.0.0.v201112011016">
-<artifact name="javax.servlet" type="orbit" ext="jar"/>
-</dependency>
+  <dependencies>
+    <dependency org="org.eclipse.jetty" name="jetty-server" rev="8.1.3.v20120416">
+      <exclude org="org.eclipse.jetty.orbit"/>
+    </dependency>
+  </dependencies>
 
 mainClass := Some("com.precog.shard.mongo.MongoShardServer")

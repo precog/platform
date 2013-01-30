@@ -90,20 +90,24 @@ class MongoQueryExecutorConfig(val config: Configuration)
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 
+  def includeIdField: Boolean = config[Boolean]("include_ids", false)
+
   val clock = blueeyes.util.Clock.System
 
   val ingestConfig = None
 }
 
 object MongoQueryExecutor {
-  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): MongoQueryExecutor = {
+  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
     new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
   }
 }
 
 class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends Platform[Future, StreamT[Future, CharBuffer]] with ShardQueryExecutor[Future] with MongoColumnarTableModule {
+    extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
   type YggConfig = MongoQueryExecutorConfig
+
+  val includeIdField = yggConfig.includeIdField
 
   trait TableCompanion extends MongoColumnarTableCompanion
   object Table extends TableCompanion {
@@ -120,21 +124,32 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
 
   val report = LoggingQueryLogger[Future]
 
-  def startup() = Future {
-    Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-    true
-  }
+  Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
 
   def shutdown() = Future {
     Table.mongo.close()
     true
   }
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(this))
+  implicit val nt = NaturalTransformation.refl[Future]
+  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
+    val M = platform.M
+    type YggConfig = platform.YggConfig
+    val yggConfig = platform.yggConfig
+    val report = LoggingQueryLogger(M)
   }
 
-  def status(): Future[Validation[String, JValue]] = Future(Failure("Status not supported yet."))
+  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
+    Future(Success(executor))
+  }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
+      val yggConfig = platform.yggConfig
+      val report = LoggingQueryLogger[N](N0)
+    }
+  }
 
   val metadataClient = new MetadataClient[Future] {
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
@@ -165,6 +180,5 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     )
   }
 }
-
 
 // vim: set ts=4 sw=4 et:
