@@ -78,7 +78,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
-      queryLogger.info("Executing query %d for %s: %s, prefix: %s".format(qid, apiKey, query,prefix))
+      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
 
       import EvaluationError._
 
@@ -87,6 +87,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
             Validation.success(outputChunks(opts.output) {
               applyQueryOptions(opts) {
+                logger.debug("[QID:%d] Evaluating query".format(qid))
                 if (queryLogger.isDebugEnabled) {
                   eval(dag, evaluationContext, true) map {
                     _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
