@@ -35,7 +35,6 @@ trait LineErrors extends Errors with Phases with parser.AST {
   
   override def isWarning(error: Error) = error match {
     case Error(UnusedLetBinding(_)) => true
-    case Error(UnableToSolveCriticalCondition(_)) => true
     case _ => false
   }
   

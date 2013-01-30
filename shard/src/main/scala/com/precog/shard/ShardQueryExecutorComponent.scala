@@ -39,6 +39,9 @@ trait ShardQueryExecutorConfig
 
 
 trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
+  private val ErrorSeverity = "error"
+  private val WarningSeverity = "warning"
+  
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
@@ -135,6 +138,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
               (tree.errors: Set[Error]) map { err =>
                 val loc = err.loc
                 val tp = err.tp
+                val severity = if (isWarning(err)) WarningSeverity else ErrorSeverity
 
                 JObject(
                   JField("message", JString("Errors occurred compiling your query."))
@@ -142,6 +146,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
                     :: JField("lineNum", JNum(loc.lineNum))
                     :: JField("colNum", JNum(loc.colNum))
                     :: JField("detail", JString(tp.toString))
+                    :: JField("severity", JString(severity))
                     :: Nil)
               } toList)
           }
@@ -158,6 +163,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
                   :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
                   :: JField("colNum", JNum(ex.failures.head.tail.colNum))
                   :: JField("detail", JString(ex.mkString))
+                  :: JField("severity", JString(ErrorSeverity))
                   :: Nil
               ) :: Nil
             )
