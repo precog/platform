@@ -168,7 +168,7 @@ trait CTypeSerialization {
     case _ => None
   }
     
-  implicit val CTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
+  val CTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
     def decompose(ctype : CType) : JValue = JString(nameOf(ctype))
   }
 

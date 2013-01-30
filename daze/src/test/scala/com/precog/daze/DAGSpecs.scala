@@ -57,11 +57,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       }
       
       "push_object" >> {
-        decorate(Vector(Line(1, 1, ""), PushObject)) mustEqual Right(Const(CEmptyObject)(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushObject)) mustEqual Right(Const(JObject.empty)(Line(1, 1, "")))
       }
       
       "push_array" >> {
-        decorate(Vector(Line(1, 1, ""), PushArray)) mustEqual Right(Const(CEmptyArray)(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushArray)) mustEqual Right(Const(JArray.empty)(Line(1, 1, "")))
       }
 
       "push_undefined" >> {
