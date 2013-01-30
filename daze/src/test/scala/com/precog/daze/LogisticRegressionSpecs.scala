@@ -104,11 +104,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -162,11 +162,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -230,11 +230,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()

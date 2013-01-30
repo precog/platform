@@ -7,6 +7,8 @@ import com.precog.common.Path
 import scalaz._
 import scalaz.std.list._
 
+import blueeyes.json._
+
 import com.precog.util.IdGen
 
 trait ArrayLibSpecs[M[+_]] extends Specification
@@ -34,7 +36,7 @@ trait ArrayLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Flatten,
-        dag.LoadLocal(Const(CString("/hom/arrays"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/hom/arrays"))(line))(line))(line)
         
       val result = testEval(input)
       result must haveSize(25)
@@ -51,7 +53,7 @@ trait ArrayLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Flatten,
-        dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/arrays"))(line))(line))(line)
         
       val result = testEval(input)
       result must haveSize(26)
