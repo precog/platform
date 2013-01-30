@@ -71,6 +71,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
 
+  def includeIdField: Boolean = config[Boolean]("include_ids", false)
+
   val clock = blueeyes.util.Clock.System
 
   val ingestConfig = None
@@ -85,6 +87,8 @@ object MongoQueryExecutor {
 class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
     extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
   type YggConfig = MongoQueryExecutorConfig
+
+  val includeIdField = yggConfig.includeIdField
 
   trait TableCompanion extends MongoColumnarTableCompanion
   object Table extends TableCompanion {
@@ -101,10 +105,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
 
   val report = LoggingQueryLogger[Future]
 
-  def startup() = Future {
-    Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-    true
-  }
+  Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
 
   def shutdown() = Future {
     Table.mongo.close()
