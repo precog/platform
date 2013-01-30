@@ -1063,5 +1063,26 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must beEmpty
     }
+    
+    "identify only the first of a double-constrained group set" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo' := foo where foo = 'a
+        |   count(foo' where foo' = 'a)
+        | """.stripMargin
+        
+      val Let(_, _, _, _,
+        solve @ Solve(_, _,
+          Let(_, _, _,
+            where @ Where(_, target, Eq(_, solution, _)),
+            _))) = compileSingle(input) 
+            
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), Nil)
+      
+      solve.errors must beEmpty
+      solve.buckets mustEqual(Map(Set() -> expected))
+    }
   }
 }

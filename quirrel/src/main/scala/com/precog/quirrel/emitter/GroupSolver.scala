@@ -151,7 +151,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           val (groupM, errors) = solveGroupCondition(solve, where.right, false, sigma)
           
           groupM map { group =>
-            val commonalityM = findCommonality(group.exprs + where.left, sigma)
+            val commonalityM = findCommonality(solve, group.exprs + where.left, sigma)
             
             if (commonalityM.isDefined)
               (Some(Group(Some(where), resolveExpr(sigma, where.left), group, dtrace)), errors)
@@ -182,7 +182,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     val (result, errors) = solveGroupCondition(b, constraint, true, sigma)
     
     val orderedSigma = orderTopologically(sigma)
-    val commonality = result map listSolutionExprs flatMap { findCommonality(_, sigma) }
+    val commonality = result map listSolutionExprs flatMap { findCommonality(b, _, sigma) }
     
     val back = for (r <- result; c <- commonality)
       yield Group(None, c, r, List())
@@ -570,7 +570,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Extra(expr) => Set(expr)
   }
   
-  private def findCommonality(nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
+  private def findCommonality(solve: Solve, nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
     case class Kernel(nodes: Set[ExprWrapper], sigma: Map[Formal, Expr], seen: Set[ExprWrapper])
     
     @tailrec
@@ -581,7 +581,10 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         
         // TODO if the below isEmpty, then can drop results from all kernels
         nodes.foldLeft(results) { (results, node) =>
-          results filter { ew => isTranspecable(node, ew.expr, k.sigma) }
+          results filter { ew =>
+            listTicVars(Some(solve), ew.expr, k.sigma).isEmpty &&
+              isTranspecable(node, ew.expr, k.sigma)
+          }
         }
       }
       
