@@ -226,7 +226,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       "push_null" >> {
         val line = Line(1, 1, "")
-        val input = Const(CNull)(line)
+        val input = Const(JNull)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -236,8 +236,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_object" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyObject)(line)
-        
+        val input = Const(JObject.empty)(line)
+
         testEval(input) { result =>
           result must haveSize(1)
           
@@ -251,7 +251,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_array" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyArray)(line)
+        val input = Const(JArray.empty)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -1128,7 +1128,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Const(JString("answer"))(line),
         Join(WrapObject, CrossLeftSort,
           Const(JString("question"))(line),
-          Const(CNull)(line))(line))(line)
+          Const(JNull)(line))(line))(line)
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -1205,7 +1205,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = Operate(WrapArray,
-        Const(CNull)(line))(line)
+        Const(JNull)(line))(line)
         
       testEval(input) { result =>
         result must haveSize(1)
@@ -2277,7 +2277,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(JArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2298,7 +2298,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(JObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2464,7 +2464,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(JArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2486,7 +2486,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(JObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2536,7 +2536,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Join(WrapObject, CrossLeftSort,
               Const(JString("foo"))(line),
-              Const(CNull)(line))(line))(line))(line)
+              Const(JNull)(line))(line))(line))(line)
 
         testEval(input) { result =>
           result must haveSize(3)
@@ -2999,7 +2999,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           Join(DerefObject, CrossLeftSort,
             clicks,
             Const(JString("user"))(line))(line),
-          Const(CNull)(line))(line))(line)
+          Const(JNull)(line))(line))(line)
 
       testEval(input) { result =>
         result must haveSize(3)
