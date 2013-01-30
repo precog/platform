@@ -80,6 +80,8 @@ trait MongoColumnarTableModuleConfig {
 trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig with BlockStoreColumnarTableModuleConfig with MongoColumnarTableModuleConfig
 
+  def includeIdField: Boolean
+
   trait MongoColumnarTableCompanion extends BlockStoreColumnarTableCompanion with Logging {
     def mongo: Mongo
     def dbAuthParams: Map[String, String]
@@ -108,6 +110,12 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
     case class InitialLoad(paths: List[Path]) extends LoadState
     case class InLoad(cursorGen: () => DBCursor, skip: Int, remainingPaths: List[Path]) extends LoadState
 
+    def safeOp[A](nullMessage: String)(v: => A): Option[A] = try {
+      Option(v) orElse { logger.error(nullMessage); None }
+    } catch {
+      case t: Throwable => logger.error("Failure during Mongo query: %s(%s)".format(t.getClass, t.getMessage)); None
+    }
+
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       for {
         paths <- pathsM(table)
@@ -115,6 +123,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
         Table(
           StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) { 
             case InLoad(cursorGen, skip, remaining) => 
+              logger.trace("Running InLoad")
               M.point {
                 val (slice, nextSkip) = makeSlice(cursorGen, skip)
                 Some(slice, nextSkip.map(InLoad(cursorGen, _, remaining)).getOrElse(InitialLoad(remaining)))
@@ -123,36 +132,45 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
             case InitialLoad(path :: xs) => 
               path.elements.toList match {
                 case dbName :: collectionName :: Nil =>
+                  logger.trace("Running InitialLoad")
                   M.point {
-                    try {
-                      val db = mongo.getDB(dbName)
+                    for {
+                      db <- safeOp("Database " + dbName + " does not exist")(mongo.getDB(dbName)).flatMap { d =>
+                        if (! d.isAuthenticated && dbAuthParams.contains(dbName)) {                          
+                          logger.trace("Running auth setup for " + dbName)
+                          dbAuthParams.get(dbName).map(_.split(':')) flatMap {
+                            case Array(user, password) =>
+                              if (d.authenticate(user, password.toCharArray)) {
+                                Some(d)
+                              } else {
+                                logger.error("Authentication failed for database " + dbName); None
+                              }
 
-                      if (! db.isAuthenticated) {
-                        dbAuthParams.get(dbName).map(_.split(':')) foreach {
-                          case Array(user, password) => if (! db.authenticate(user, password.toCharArray)) {
-                            throw new Exception("Authentication failed for database " + dbName)
+                            case invalid =>
+                              logger.error("Invalid user:password for %s: \"%s\"".format(dbName, invalid.mkString(":"))); None
                           }
-                          case invalid => throw new Exception("Invalid user:password for %s: \"%s\"".format(dbName, invalid.mkString(":")))
+                        } else {
+                          Some(d)
                         }
                       }
-
-                      val coll = db.getCollection(collectionName)
-
-                      val selector = jTypeToProperties(tpe, Set()).foldLeft(new BasicDBObject()) {
-                        case (obj, path) => obj.append(path, 1)
+                      coll <- safeOp("Collection " + collectionName + " does not exist") {
+                        logger.trace("Fetching collection: " + collectionName)
+                        db.getCollection(collectionName)
                       }
+                      slice <- safeOp("Invalid result in query") {
+                        logger.trace("Getting data from " + coll)
+                        val selector = jTypeToProperties(tpe, Set()).foldLeft(new BasicDBObject()) {
+                          case (obj, path) => obj.append(path, 1)
+                        }
 
-                      val cursorGen = () => coll.find(new BasicDBObject(), selector)
+                        val cursorGen = () => coll.find(new BasicDBObject(), selector)
 
-                      val (slice, nextSkip) = makeSlice(cursorGen, 0)
-                      Some(slice, nextSkip.map(InLoad(cursorGen, _, xs)).getOrElse(InitialLoad(xs)))
-                    } catch {
-                      case t => 
-                        logger.error("Failure during Mongo query: " + t.getMessage)
-                        // FIXME: We should be able to throw here and terminate the query, but something in BlueEyes is hanging when we do so
-                        //throw new Exception("Failure during Mongo query: " + t.getMessage)
-                        None
-                    }
+                        val (slice, nextSkip) = makeSlice(cursorGen, 0)
+
+                        logger.debug("Gen slice of size " + slice.size)
+                        (slice, nextSkip.map(InLoad(cursorGen, _, xs)).getOrElse(InitialLoad(xs)))
+                      }
+                    } yield slice
                   }
 
                 case err => 
@@ -170,6 +188,8 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
     def makeSlice(cursorGen: () => DBCursor, skip: Int): (Slice, Option[Int]) = {
       import TransSpecModule.paths._
 
+      val idPath: CPath = Key \ 0
+
       // Sort by _id always to mimic JDBM
       val cursor = cursorGen().sort(new BasicDBObject("_id", 1))skip(skip)
 
@@ -179,7 +199,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
           val Success(jv) = MongoToJson(from.next())
           val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize, Some({
             jpath => if (jpath == JPath("._id")) {
-              Key \ 0
+              idPath
             } else {
               Value \ CPath(jpath)
             }
@@ -195,16 +215,26 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       // Slice#typed to fail unless it allows for vacuous success
       val slice = new Slice {
         val (cols, size) = buildColArrays(cursor, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
-        val columns = cols map {
-          case (ref @ ColumnRef(_, CBoolean), (defined, values))     => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
-          case (ref @ ColumnRef(_, CLong), (defined, values))        => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
-          case (ref @ ColumnRef(_, CDouble), (defined, values))      => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
-          case (ref @ ColumnRef(_, CNum), (defined, values))         => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
-          case (ref @ ColumnRef(_, CString), (defined, values))      => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
-          case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
-          case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
-          case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
-        }
+        val columns = cols.flatMap {
+          // The identity column get duped to provide for both identity and an "_id" value
+          case (ref @ ColumnRef(`idPath`, CString), (defined, values))      =>
+            val col = ArrayStrColumn(defined, values.asInstanceOf[Array[String]])
+            if (includeIdField) {
+              Seq(ColumnRef(Value \ CPath("._id"), CString) -> col,
+                  ref -> col) 
+            } else {
+              Seq(ref -> col)
+            }
+          case (ref @ ColumnRef(_, CBoolean), (defined, values))     => Seq((ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]])))
+          case (ref @ ColumnRef(_, CLong), (defined, values))        => Seq((ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]])))
+          case (ref @ ColumnRef(_, CDouble), (defined, values))      => Seq((ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]])))
+          case (ref @ ColumnRef(_, CNum), (defined, values))         => Seq((ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]])))
+          case (ref @ ColumnRef(_, CString), (defined, values))      => Seq((ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]])))
+          case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => Seq((ref, new BitsetColumn(defined) with EmptyArrayColumn))
+          case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => Seq((ref, new BitsetColumn(defined) with EmptyObjectColumn))
+          case (ref @ ColumnRef(_, CNull), (defined, values))        => Seq((ref, new BitsetColumn(defined) with NullColumn))
+          case other => logger.warn("Unexpected column type:  " + other); Seq()
+        }.toMap
       }
 
       val nextSkip = if (cursor.hasNext) {
