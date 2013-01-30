@@ -23,6 +23,7 @@ import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
 import de.johoop.cpd4sbt.CopyPasteDetector._
+import net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -43,7 +44,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
-      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/releases/",
+      "Sonatype Releases"                 at "http://oss.sonatype.org/content/repositories/releases/",
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
@@ -110,7 +111,7 @@ object PlatformBuild extends Build {
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
     
-    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
+    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) map {
       (opts, lib, conf, id, d) =>
       // download jnilib if necessary. a bit sketchy, but convenient
       Process("./jprofiler/setup-jnilib.py").!!
@@ -118,7 +119,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ graphSettings ++ commonSettings
   val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ Seq(test in assembly := {}) ++ commonNexusSettings
 
@@ -127,7 +128,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo, jdbc)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
@@ -149,6 +150,9 @@ object PlatformBuild extends Build {
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+
+  lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
 
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, logging % "test->test")
