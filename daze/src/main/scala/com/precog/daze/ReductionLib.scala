@@ -27,6 +27,8 @@ import yggdrasil.table._
 
 import com.precog.util._
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -128,9 +130,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def extract(res: Result): Table = Table.constDecimal(Set(CNum(res)))
+      def extract(res: Result): Table = Table.constLong(Set(res))
 
-      def extractValue(res: Result) = Some(CNum(res))
+      def extractValue(res: Result) = Some(JNum(res))
     }
 
     object Max extends Reduction(ReductionNamespace, "max") {
@@ -187,9 +189,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       def extract(res: Result): Table =
-        extractValue(res) map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
+        res map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
 
-      def extractValue(res: Result) = res map { CNum(_) }
+      def extractValue(res: Result) = res map { JNum(_) }
     }
 
     object Min extends Reduction(ReductionNamespace, "min") {
@@ -246,9 +248,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       def extract(res: Result): Table =
-        extractValue(res) map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
+        res map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
 
-      def extractValue(res: Result) = res map { CNum(_) }
+      def extractValue(res: Result) = res map { JNum(_) }
     }
 
     val SumMonoid = implicitly[Monoid[Sum.Result]]
@@ -287,11 +289,10 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def extract(res: Result): Table = {
-        extractValue(res) map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
-      }
+      def extract(res: Result): Table =
+        res map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
 
-      def extractValue(res: Result) = res map { CNum(_) }
+      def extractValue(res: Result) = res map { JNum(_) }
     }
 
     val MeanMonoid = implicitly[Monoid[Mean.Result]]
@@ -341,13 +342,15 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def extract(res: Result): Table = extractValue(res) map {
+      def perform(res: Result) = res map {
+        case (sum, count) => sum / count
+      }
+
+      def extract(res: Result): Table = perform(res) map {
         case v => Table.constDecimal(Set(v))
       } getOrElse Table.empty
 
-      def extractValue(res: Result): Option[CNum] = res map {
-        case (sum, count) => CNum(sum / count)
-      }
+      def extractValue(res: Result) = perform(res) map { JNum(_) }
     }
     
     object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
@@ -401,17 +404,17 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def extract(res: Result): Table = extractValue(res) map {
-        v => Table.constDecimal(Set(v))
+      private def perform(res: Result) = res map {
+        case (prod, count) => math.pow(prod.toDouble, 1 / count.toDouble)
+      } filter(StdLib.doubleIsDefined)
+
+      def extract(res: Result): Table = perform(res) map {
+        v => Table.constDouble(Set(v))
       } getOrElse {
         Table.empty
       }
 
-      def extractValue(res: Result) = res map {
-        case (prod, count) => math.pow(prod.toDouble, 1 / count.toDouble)
-      } filter(StdLib.doubleIsDefined) map {
-        mean => CNum(mean)
-      }
+      def extractValue(res: Result) = perform(res).map(JNum(_))
     }
     
     val SumSqMonoid = implicitly[Monoid[SumSq.Result]]
@@ -455,9 +458,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       def extract(res: Result): Table =
-        extractValue(res) map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
+        res map { v => Table.constDecimal(Set(v)) } getOrElse Table.empty
 
-      def extractValue(res: Result) = res map { CNum(_) }
+      def extractValue(res: Result) = res map { JNum(_) }
     }
 
     class CountSumSumSqReducer extends Reducer[Option[(Long, BigDecimal, BigDecimal)]] {
@@ -522,16 +525,19 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
 
-      def extract(res: Result): Table = extractValue(res) map { v =>
+      def perform(res: Result) = res flatMap {
+        case (count, sum, sumsq) if count > 0 =>
+          val n = (sumsq - (sum * sum / count)) / count
+          Some(n)
+        case _ =>
+          None
+      }
+
+      def extract(res: Result): Table = perform(res) map { v =>
           Table.constDecimal(Set(v))
       } getOrElse Table.empty
 
-      // todo using toDouble is BAD
-      def extractValue(res: Result): Option[CNum] = res map {
-        case (count, sum, sumsq) if count > 0 =>
-          val n = (sumsq - (sum * sum / count)) / count
-          CNum(n)
-      }
+      def extractValue(res: Result) = perform(res) map { JNum(_) }
     }
     
     val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
@@ -545,16 +551,20 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
 
-      def extract(res: Result): Table = extractValue(res) map { v =>
+      def perform(res: Result) = res flatMap {
+        case (count, sum, sumsq) if count > 0 =>
+          val n = sqrt(count * sumsq - sum * sum) / count
+          Some(n)
+        case _ =>
+          None
+      }
+
+      def extract(res: Result): Table = perform(res) map { v =>
         Table.constDecimal(Set(v))
       } getOrElse Table.empty
 
       // todo using toDouble is BAD
-      def extractValue(res: Result): Option[CNum] = res map {
-        case (count, sum, sumsq) if count > 0 =>
-          val n = sqrt(count * sumsq - sum * sum) / count
-          CNum(n)
-      }
+      def extractValue(res: Result) = perform(res) map { JNum(_) }
     }
     
     object Forall extends Reduction(ReductionNamespace, "forall") {
@@ -602,15 +612,12 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      private val default = CBoolean(true)
-        
-      def extract(res: Result): Table = extractValue(res) map { v =>
-        Table.constBoolean(Set(v))
-      } getOrElse Table.constBoolean(Set(default))
+      private val default = true
+      private def perform(res: Result) = res getOrElse default
 
-      def extractValue(res: Result): Option[CBoolean] = res map { b =>
-        CBoolean(b)
-      } orElse Some(default)
+      def extract(res: Result): Table =  Table.constBoolean(Set(perform(res)))
+
+      def extractValue(res: Result) = Some(JBool(perform(res)))
     }
     
     object Exists extends Reduction(ReductionNamespace, "exists") {
@@ -658,15 +665,12 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
         
-      private val default = CBoolean(false)
+      private val default = false
+      private def perform(res: Result) = res getOrElse default
 
-      def extract(res: Result): Table = extractValue(res) map { v =>
-        Table.constBoolean(Set(v))
-      } getOrElse Table.constBoolean(Set(default))
+      def extract(res: Result): Table = Table.constBoolean(Set(perform(res)))
 
-      def extractValue(res: Result): Option[CBoolean] = res map { b =>
-        CBoolean(b)
-      } orElse Some(default)
+      def extractValue(res: Result) = Some(JBool(perform(res)))
     }
   }
 }

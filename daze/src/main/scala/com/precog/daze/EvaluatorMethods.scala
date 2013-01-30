@@ -28,6 +28,8 @@ import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.CLong
 
+import blueeyes.json._
+
 import scalaz.std.map._
 
 trait EvaluatorMethodsModule[M[+_]] extends DAG with OpFinderModule[M] {
@@ -41,7 +43,37 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with OpFinderModule[M] {
     type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
+
+    def jValueToCValue(jvalue: JValue): Option[CValue] = jvalue match {
+      case JString(s) => Some(CString(s))
+      case JNumLong(l) => Some(CLong(l))
+      case JNumDouble(d) => Some(CDouble(d))
+      case JNumBigDec(d) => Some(CNum(d))
+      case JBool(b) => Some(CBoolean(b))
+      case JNull => Some(CNull)
+      case JUndefined => Some(CUndefined)
+      case JObject.empty => Some(CEmptyObject)
+      case JArray.empty => Some(CEmptyArray)
+      case _ => None
+    }
     
+    def transJValue[A <: SourceType](jvalue: JValue, target: TransSpec[A]): TransSpec[A] = {
+      jValueToCValue(jvalue) map { cvalue =>
+        trans.ConstLiteral(cvalue, target)
+      } getOrElse {
+        jvalue match {
+          case JArray(elements) => InnerArrayConcat(elements map {
+            element => trans.WrapArray(transJValue(element, target))
+          }: _*)
+          case JObject(fields) => InnerObjectConcat(fields.toSeq map {
+            case (key, value) => trans.WrapObject(transJValue(value, target), key)
+          }: _*)
+          case _ =>
+            sys.error("Can't handle JType")
+        }
+      }
+    }
+
     def transFromBinOp[A <: SourceType](op: BinaryOperation, ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
       case Eq => trans.Equal[A](left, right)
       case NotEq => op1ForUnOp(Comp).spec(ctx)(trans.Equal[A](left, right))

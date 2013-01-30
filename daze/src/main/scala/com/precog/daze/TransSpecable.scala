@@ -23,6 +23,8 @@ import com.precog.common.Path
 import com.precog.common.json.{ CPathField, CPathIndex, CPathMeta }
 import com.precog.yggdrasil._
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monadPlus._
@@ -36,7 +38,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
     import trans._
     
     trait TransSpecableFold[T] {
-      def EqualLiteral(node: Join)(parent: T, value: CValue, invert: Boolean): T
+      def EqualLiteral(node: Join)(parent: T, value: JValue, invert: Boolean): T
       def WrapObject(node: Join)(parent: T, field: String): T
       def DerefObjectStatic(node: Join)(parent: T, field: String): T
       def DerefMetadataStatic(node: Join)(parent: T, field: String): T
@@ -44,8 +46,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def ArraySwap(node: Join)(parent: T, index: Int): T
       def InnerObjectConcat(node: Join)(parent: T): T
       def InnerArrayConcat(node: Join)(parent: T): T
-      def Map1Left(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
-      def Map1Right(node: Join)(parent: T, op: Op2, graph: DepGraph, value: CValue): T
+      def Map1Left(node: Join)(parent: T, op: Op2, graph: DepGraph, value: JValue): T
+      def Map1Right(node: Join)(parent: T, op: Op2, graph: DepGraph, value: JValue): T
       def binOp(node: Join)(leftParent: T, rightParent: => T, op: BinaryOperation): T
       def Filter(node: dag.Filter)(leftParent: T, rightParent: => T): T
       def WrapArray(node: Operate)(parent: T): T
@@ -55,7 +57,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
     }
     
     def isTransSpecable(to: DepGraph, from: DepGraph): Boolean = foldDownTransSpecable(to, Some(from))(new TransSpecableFold[Boolean] {
-      def EqualLiteral(node: Join)(parent: Boolean, value: CValue, invert: Boolean) = parent
+      def EqualLiteral(node: Join)(parent: Boolean, value: JValue, invert: Boolean) = parent
       def WrapObject(node: Join)(parent: Boolean, field: String) = parent
       def DerefObjectStatic(node: Join)(parent: Boolean, field: String) = parent
       def DerefMetadataStatic(node: Join)(parent: Boolean, field: String) = parent
@@ -63,8 +65,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def ArraySwap(node: Join)(parent: Boolean, index: Int) = parent
       def InnerObjectConcat(node: Join)(parent: Boolean) = parent
       def InnerArrayConcat(node: Join)(parent: Boolean) = parent
-      def Map1Left(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
-      def Map1Right(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: CValue) = parent
+      def Map1Left(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: JValue) = parent
+      def Map1Right(node: Join)(parent: Boolean, op: Op2, graph: DepGraph, value: JValue) = parent
       def binOp(node: Join)(leftParent: Boolean, rightParent: => Boolean, op: BinaryOperation) = leftParent && rightParent
       def Filter(node: dag.Filter)(leftParent: Boolean, rightParent: => Boolean) = leftParent && rightParent
       def WrapArray(node: Operate)(parent: Boolean) = parent
@@ -73,7 +75,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def done(node: DepGraph) = true
     })
     
-    def snd[A, B](a: A, b: B) = b
+    private[this] def snd[A, B](a: A, b: B) = b
     
     def mkTransSpec(to: DepGraph, from: DepGraph, ctx: EvaluationContext) =
       mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, Some(from), ctx, identity, snd, some).map(_._1)  
@@ -90,8 +92,11 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
           case (spec, ancestor) => set(parent, (f(spec), ancestor))
         }
         
-        def EqualLiteral(node: Join)(parent: N[S], value: CValue, invert: Boolean) =
-          parent.map(leftMap(_)(trans.EqualLiteral(_, value, invert)))
+        def EqualLiteral(node: Join)(parent: N[S], value: JValue, invert: Boolean) =
+          parent.map(leftMap(_) { target =>
+            val inner = trans.Equal(target, transJValue(value, target))
+            if (invert) op1ForUnOp(Comp).spec(ctx)(inner) else inner
+          })
           
         def WrapObject(node: Join)(parent: N[S], field: String) =
           parent.map(leftMap(_)(trans.WrapObject(_, field)))
@@ -114,11 +119,15 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def InnerArrayConcat(node: Join)(parent: N[S]) =
           parent.map(leftMap(_)(trans.InnerArrayConcat(_)))
 
-        def Map1Left(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyr(value))))
+        def Map1Left(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: JValue) =
+          parent.map(leftMap(_) { target =>
+            trans.Map2(target, transJValue(value, target), op.f2(ctx))
+          })
           
-        def Map1Right(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyl(value))))
+        def Map1Right(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: JValue) =
+          parent.map(leftMap(_) { target =>
+            trans.Map2(transJValue(value, target), target, op.f2(ctx))
+          })
         
         def binOp(node: Join)(leftParent: N[S], rightParent: => N[S], op: BinaryOperation) = {
           for {
@@ -155,9 +164,9 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       
       object ConstInt {
         def unapply(c: Const) = c match {
-          case Const(CNum(n)) => Some(n.toInt)
-          case Const(CLong(n)) => Some(n.toInt)
-          case Const(CDouble(n)) => Some(n.toInt)
+          case Const(JNum(n)) => Some(n.toInt)
+          case Const(JNumLong(n)) => Some(n.toInt)
+          case Const(JNumDouble(n)) => Some(n.toInt)
           case _ => None
         }
       }
@@ -181,13 +190,13 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         case node @ Join(NotEq, CrossLeftSort | CrossRightSort, Const(value), right) =>
           alg.EqualLiteral(node)(loop(right), value, true)
 
-        case node @ Join(instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(CString(field)), right) =>
+        case node @ Join(instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(JString(field)), right) =>
           alg.WrapObject(node)(loop(right), field)
 
-        case node @ Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
+        case node @ Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(JString(field))) =>
           alg.DerefObjectStatic(node)(loop(left), field)
         
-        case node @ Join(DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
+        case node @ Join(DerefMetadata, CrossLeftSort | CrossRightSort, left, Const(JString(field))) =>
           alg.DerefMetadataStatic(node)(loop(left), field)
 
         case node @ Join(DerefArray, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
@@ -196,16 +205,16 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         case node @ Join(instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
           alg.ArraySwap(node)(loop(left), index)
 
-        case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, left, Const(CEmptyObject)) =>
+        case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, left, Const(JObject.empty)) =>
           alg.InnerObjectConcat(node)(loop(left))
                     
-        case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, Const(CEmptyObject), right) =>
+        case node @ Join(JoinObject, CrossLeftSort | CrossRightSort, Const(JObject.empty), right) =>
           alg.InnerObjectConcat(node)(loop(right))
 
-        case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, left, Const(CEmptyArray)) =>
+        case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, left, Const(JArray.empty)) =>
           alg.InnerArrayConcat(node)(loop(left))
                     
-        case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, Const(CEmptyArray), right) =>
+        case node @ Join(JoinArray, CrossLeftSort | CrossRightSort, Const(JArray.empty), right) =>
           alg.InnerArrayConcat(node)(loop(right))
 
         case node @ Join(Op2ForBinOp(op), CrossLeftSort | CrossRightSort, left, Const(value)) =>

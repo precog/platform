@@ -25,6 +25,8 @@ import org.specs2.mutable._
 import yggdrasil._
 import yggdrasil.test._
 
+import blueeyes.json._
+
 trait StaticInlinerSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] {
       
@@ -37,10 +39,10 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(CLong(42))(line),
-        Const(CDouble(3.14))(line))(line)
+        Const(JNumLong(42))(line),
+        Const(JNum(3.14))(line))(line)
         
-      val expected = Const(CNum(45.14))(line)
+      val expected = Const(JNum(45.14))(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
@@ -49,53 +51,53 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(CLong(42))(line),
+        Const(JNumLong(42))(line),
         Join(Mul, CrossRightSort,
-          Const(CDouble(3.14))(line),
-          Const(CLong(2))(line))(line))(line)
+          Const(JNum(3.14))(line),
+          Const(JNumLong(2))(line))(line))(line)
         
-      val expected = Const(CNum(48.28))(line)
+      val expected = Const(JNum(48.28))(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "produce CUndefined in cases where the operation is undefined" in {
+    "produce JUndefined in cases where the operation is undefined" in {
       val line = Line(1, 1, "")
       
       val input = Join(Div, CrossLeftSort,
-        Const(CLong(42))(line),
-        Const(CLong(0))(line))(line)
+        Const(JNumLong(42))(line),
+        Const(JNumLong(0))(line))(line)
         
-      val expected = Const(CUndefined)(line)
+      val expected = Const(JUndefined)(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "propagate through static computations CUndefined when produced at depth" in {
+    "propagate through static computations JUndefined when produced at depth" in {
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(CLong(42))(line),
+        Const(JNumLong(42))(line),
         Join(Div, CrossRightSort,
-          Const(CDouble(3.14))(line),
-          Const(CLong(0))(line))(line))(line)
+          Const(JNum(3.14))(line),
+          Const(JNumLong(0))(line))(line))(line)
         
-      val expected = Const(CUndefined)(line)
+      val expected = Const(JUndefined)(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "propagate through non-singleton computations CUndefined when produced at depth" >> {
+    "propagate through non-singleton computations JUndefined when produced at depth" >> {
       val line = Line(1, 1, "")
       
       "left" >> {
         val input = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          dag.LoadLocal(Const(JString("/foo"))(line))(line),
           Join(Div, CrossRightSort,
-            Const(CDouble(3.14))(line),
-            Const(CLong(0))(line))(line))(line)
+            Const(JNum(3.14))(line),
+            Const(JNumLong(0))(line))(line))(line)
           
-        val expected = Const(CUndefined)(line)
+        val expected = Const(JUndefined)(line)
         
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
       }
@@ -103,11 +105,11 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "right" >> {
         val input = Join(Add, CrossLeftSort,
           Join(Div, CrossRightSort,
-            Const(CDouble(3.14))(line),
-            Const(CLong(0))(line))(line),
-          dag.LoadLocal(Const(CString("/foo"))(line))(line))(line)
+            Const(JNum(3.14))(line),
+            Const(JNumLong(0))(line))(line),
+          dag.LoadLocal(Const(JString("/foo"))(line))(line))(line)
           
-        val expected = Const(CUndefined)(line)
+        val expected = Const(JUndefined)(line)
         
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
       }
@@ -118,18 +120,18 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "true" >> {
         val input = Filter(CrossLeftSort,
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
-          Const(CBoolean(true))(line))(line)
+          dag.LoadLocal(Const(JString("/foo"))(line))(line),
+          Const(JBool(true))(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual dag.LoadLocal(Const(CString("/foo"))(line))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual dag.LoadLocal(Const(JString("/foo"))(line))(line)
       }
       
       "false" >> {
         val input = Filter(CrossLeftSort,
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
-          Const(CBoolean(false))(line))(line)
+          dag.LoadLocal(Const(JString("/foo"))(line))(line),
+          Const(JBool(false))(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CUndefined)(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JUndefined)(line)
       }
     }
   }

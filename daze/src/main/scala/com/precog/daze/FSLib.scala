@@ -77,11 +77,11 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
   
                 StreamT wrapEffect {
                   expanded.sequence map { pathSets => 
-                    val unprefixed: Stream[CString] = for {
+                    val unprefixed: Stream[String] = for {
                       paths <- pathSets
                       path <- paths
                       suffix <- (path - ctx.basePath)
-                    } yield CString(suffix.toString)
+                    } yield suffix.toString
   
                     Table.constString(unprefixed.toSet).slices 
                   }

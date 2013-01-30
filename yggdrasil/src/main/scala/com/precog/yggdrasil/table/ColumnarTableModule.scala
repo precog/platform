@@ -136,33 +136,33 @@ trait ColumnarTableModule[M[+_]]
 
     def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
     
-    def constBoolean(v: collection.Set[CBoolean]): Table = {
-      val column = ArrayBoolColumn(v.map(_.value).toArray)
+    def constBoolean(v: collection.Set[Boolean]): Table = {
+      val column = ArrayBoolColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constLong(v: collection.Set[CLong]): Table = {
-      val column = ArrayLongColumn(v.map(_.value).toArray)
+    def constLong(v: collection.Set[Long]): Table = {
+      val column = ArrayLongColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDouble(v: collection.Set[CDouble]): Table = {
-      val column = ArrayDoubleColumn(v.map(_.value).toArray)
+    def constDouble(v: collection.Set[Double]): Table = {
+      val column = ArrayDoubleColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDecimal(v: collection.Set[CNum]): Table = {
-      val column = ArrayNumColumn(v.map(_.value).toArray)
+    def constDecimal(v: collection.Set[BigDecimal]): Table = {
+      val column = ArrayNumColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constString(v: collection.Set[CString]): Table = {
-      val column = ArrayStrColumn(v.map(_.value).toArray)
+    def constString(v: collection.Set[String]): Table = {
+      val column = ArrayStrColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDate(v: collection.Set[CDate]): Table =  {
-      val column = ArrayDateColumn(v.map(_.value).toArray)
+    def constDate(v: collection.Set[DateTime]): Table =  {
+      val column = ArrayDateColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 

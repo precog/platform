@@ -23,7 +23,8 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
-import com.precog.yggdrasil.CString
+
+import blueeyes.json.JString
 
 trait JoinOptimizer extends DAGTransform {
   import dag._
@@ -98,10 +99,10 @@ trait JoinOptimizer extends DAGTransform {
             Join(Eq, CrossLeftSort | CrossRightSort,
               Join(DerefObject, CrossLeftSort,
                 eqLHS,
-                Const(CString(sortFieldLHS))),
+                Const(JString(sortFieldLHS))),
               Join(DerefObject, CrossLeftSort,
                 eqRHS,
-                Const(CString(sortFieldRHS))))) => {
+                Const(JString(sortFieldRHS))))) => {
                   
             val sortId = idGen.nextInt()
             
@@ -109,9 +110,9 @@ trait JoinOptimizer extends DAGTransform {
               SortBy(
                 Join(JoinObject, IdentitySort,
                   Join(WrapObject, CrossLeftSort,
-                    Const(CString("key"))(f.loc),
-                    Join(DerefObject, CrossLeftSort, graph, Const(CString(sortField))(f.loc))(f.loc))(f.loc),
-                  Join(WrapObject, CrossLeftSort, Const(CString("value"))(f.loc), graph)(f.loc))(f.loc),
+                    Const(JString("key"))(f.loc),
+                    Join(DerefObject, CrossLeftSort, graph, Const(JString(sortField))(f.loc))(f.loc))(f.loc),
+                  Join(WrapObject, CrossLeftSort, Const(JString("value"))(f.loc), graph)(f.loc))(f.loc),
                 "key", "value", sortId)
             }
             

@@ -26,6 +26,8 @@ import com.precog.common.Path
 import scalaz._
 import scalaz.std.list._
 
+import blueeyes.json._
+
 import com.precog.util.IdGen
 
 trait StringLibSpecs[M[+_]] extends Specification
@@ -39,8 +41,8 @@ trait StringLibSpecs[M[+_]] extends Specification
   import library._
 
   private val line = Line(1, 1, "")
-  private def homStrings(line: Line) = dag.LoadLocal(Const(CString("/hom/strings"))(line))(line)
-  private def hetStrings(line: Line) = dag.LoadLocal(Const(CString("/het/strings"))(line))(line)
+  private def homStrings(line: Line) = dag.LoadLocal(Const(JString("/hom/strings"))(line))(line)
+  private def hetStrings(line: Line) = dag.LoadLocal(Const(JString("/het/strings"))(line))(line)
 
   val testAPIKey = "testAPIKey"
 
@@ -55,7 +57,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     dag.Operate(BuiltInFunction1Op(op), loadFrom(line))(line)
   }
 
-  def op2Input(op: Op2, const: CValue, loadFrom: Line => dag.LoadLocal) = {
+  def op2Input(op: Op2, const: JValue, loadFrom: Line => dag.LoadLocal) = {
     Join(BuiltInFunction2Op(op), CrossLeftSort, loadFrom(line), Const(const)(line))(line)
   }
         
@@ -139,7 +141,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
 
     "determine codePointAt with valid integer" in {
-      val input = op2Input(codePointAt, CLong(7), homStrings)
+      val input = op2Input(codePointAt, JNumLong(7), homStrings)
         
       val result = testEval(input)
       
@@ -152,7 +154,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(101, 32, 34, 115)
     }
     "determine codePointAt with invalid integer" in {
-      val input = op2Input(codePointAt, CDouble(7.5), homStrings)
+      val input = op2Input(codePointAt, JNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -165,7 +167,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain()
     } 
     "determine startsWith" in {
-      val input = op2Input(startsWith, CString("s"), homStrings)
+      val input = op2Input(startsWith, JString("s"), homStrings)
         
       val result = testEval(input)
       
@@ -178,7 +180,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }  
     "determine lastIndexOf" in {
-      val input = op2Input(lastIndexOf, CString("s"), homStrings)
+      val input = op2Input(lastIndexOf, JString("s"), homStrings)
         
       val result = testEval(input)
       
@@ -191,7 +193,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(-1, 3, 14, 27)
     }
     "determine concat" in {
-      val input = op2Input(concat, CString("7"), homStrings)
+      val input = op2Input(concat, JString("7"), homStrings)
         
       val result = testEval(input)
       
@@ -204,7 +206,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
     }
     "determine endsWith" in {
-      val input = op2Input(endsWith, CString("y"), homStrings)
+      val input = op2Input(endsWith, JString("y"), homStrings)
         
       val result = testEval(input)
       
@@ -217,7 +219,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine codePointBefore with valid integer" in {
-      val input = op2Input(codePointBefore, CLong(7), homStrings)
+      val input = op2Input(codePointBefore, JNumLong(7), homStrings)
         
       val result = testEval(input)
       
@@ -230,7 +232,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(99, 58, 97, 101)
     }
     "determine codePointBefore with invalid integer" in {
-      val input = op2Input(codePointBefore, CDouble(7.5), homStrings)
+      val input = op2Input(codePointBefore, JNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -243,7 +245,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain()
     }
     "determine takeLeft with valid integer" in {
-      val input = op2Input(takeLeft, CLong(8), homStrings)
+      val input = op2Input(takeLeft, JNumLong(8), homStrings)
         
       val result = testEval(input)
       
@@ -255,7 +257,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "quirky", "solstice", "Monkey: ", "(\"alpha\"", "  Whites").only
     }
     "determine takeRight with valid integer" in {
-      val input = op2Input(takeRight, CLong(8), homStrings)
+      val input = op2Input(takeRight, JNumLong(8), homStrings)
         
       val result = testEval(input)
       
@@ -267,7 +269,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "quirky", "tice + 7", "[Brains]", "\"gamma\")", "!!1!!   ").only
     }
     "determine dropLeft with valid integer" in {
-      val input = op2Input(dropLeft, CLong(8), homStrings)
+      val input = op2Input(dropLeft, JNumLong(8), homStrings)
 
       val result = testEval(input)
       
@@ -279,7 +281,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", " + 7", "[Brains]", ", \"beta\", \"gamma\")", "pace       is   awesome  !!!1!!   ").only
     }
     "determine dropRight with valid integer" in {
-      val input = op2Input(dropRight, CLong(8), homStrings)
+      val input = op2Input(dropRight, JNumLong(8), homStrings)
       val result = testEval(input)
       
       result must haveSize(6)
@@ -290,23 +292,23 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), homStrings)
+      val input = op2Input(takeLeft, JNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), homStrings)
+      val input = op2Input(takeRight, JNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), homStrings)
+      val input = op2Input(dropLeft, JNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), homStrings)
+      val input = op2Input(dropRight, JNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {
-      val input = op2Input(matches, CString("quirky"), homStrings) //todo put regex here!
+      val input = op2Input(matches, JString("quirky"), homStrings) //todo put regex here!
       
       val result = testEval(input)
       
@@ -319,7 +321,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine compareTo" in {
-      val input = op2Input(compareTo, CString("quirky"), homStrings) //todo put regex here!
+      val input = op2Input(compareTo, JString("quirky"), homStrings) //todo put regex here!
         
       val result = testEval(input)
       
@@ -333,8 +335,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareToIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
-        Const(CString("QUIRKY"))(line))(line)
+        dag.LoadLocal(Const(JString("/hom/strings"))(line))(line),
+        Const(JString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
       
@@ -348,8 +350,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equals" in {
       val input = Join(BuiltInFunction2Op(library.equals), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
-        Const(CString("quirky"))(line))(line)
+        dag.LoadLocal(Const(JString("/hom/strings"))(line))(line),
+        Const(JString("quirky"))(line))(line)
         
       val result = testEval(input)
       
@@ -363,8 +365,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine indexOf" in {
       val input = Join(BuiltInFunction2Op(indexOf), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
-        Const(CString("e"))(line))(line)
+        dag.LoadLocal(Const(JString("/hom/strings"))(line))(line),
+        Const(JString("e"))(line))(line)
         
       val result = testEval(input)
       
@@ -378,8 +380,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equalsIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line), 
-        Const(CString("QUIRKY"))(line))(line)
+        dag.LoadLocal(Const(JString("/hom/strings"))(line))(line), 
+        Const(JString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
       
@@ -396,7 +398,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "for heterogeneous sets, the appropriate string function" should {
     "determine length" in {
       val input = dag.Operate(BuiltInFunction1Op(library.length),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -410,7 +412,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine trim" in {
       val input = dag.Operate(BuiltInFunction1Op(trim),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -424,7 +426,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine toUpperCase" in {
       val input = dag.Operate(BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -438,7 +440,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine toLowerCase" in {
       val input = dag.Operate(BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -452,7 +454,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine isEmpty" in {
       val input = dag.Operate(BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -466,7 +468,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine intern" in {
       val input = dag.Operate(BuiltInFunction1Op(intern),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -481,8 +483,8 @@ trait StringLibSpecs[M[+_]] extends Specification
 
     "determine codePointAt with valid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(7))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(7))(line))(line)
         
       val result = testEval(input)
       
@@ -496,8 +498,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointAt with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -511,8 +513,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine startsWith" in {
       val input = Join(BuiltInFunction2Op(startsWith), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CString("s"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JString("s"))(line))(line)
         
       val result = testEval(input)
       
@@ -526,8 +528,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine lastIndexOf" in {
       val input = Join(BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CString("s"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JString("s"))(line))(line)
         
       val result = testEval(input)
       
@@ -541,8 +543,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine concat" in {
       val input = Join(BuiltInFunction2Op(concat), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CString("7"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JString("7"))(line))(line)
         
       val result = testEval(input)
       
@@ -556,8 +558,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine endsWith" in {
       val input = Join(BuiltInFunction2Op(endsWith), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CString("y"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JString("y"))(line))(line)
         
       val result = testEval(input)
       
@@ -571,8 +573,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointBefore with valid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(7))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(7))(line))(line)
         
       val result = testEval(input)
       
@@ -586,8 +588,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointBefore with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -601,8 +603,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine takeLeft with valid integer" in {
       val input = Join(BuiltInFunction2Op(takeLeft), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(8))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(8))(line))(line)
 
       val result = testEval(input)
       
@@ -615,8 +617,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine takeRight with valid integer" in {
       val input = Join(BuiltInFunction2Op(takeRight), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(8))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(8))(line))(line)
 
       val result = testEval(input)
       
@@ -629,8 +631,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine dropLeft with valid integer" in {
       val input = Join(BuiltInFunction2Op(dropLeft), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(8))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(8))(line))(line)
 
       val result = testEval(input)
       
@@ -643,8 +645,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine dropRight with valid integer" in {
       val input = Join(BuiltInFunction2Op(dropRight), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CLong(8))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JNumLong(8))(line))(line)
       
       val result = testEval(input)
       
@@ -656,23 +658,23 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(takeLeft, JNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), hetStrings)
+      val input = op2Input(takeRight, JNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(dropLeft, JNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), hetStrings)
+      val input = op2Input(dropRight, JNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {
-      val input = op2Input(matches, CString("quirky"), hetStrings) //todo put regex here!
+      val input = op2Input(matches, JString("quirky"), hetStrings) //todo put regex here!
       val result = testEval(input)
       
       result must haveSize(6)
@@ -684,7 +686,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine compareTo" in {
-      val input = op2Input(compareTo, CString("quirky"), hetStrings) 
+      val input = op2Input(compareTo, JString("quirky"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)
@@ -696,7 +698,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 2, -36, -73, -81, -6)
     }
     "determine compareToIgnoreCase" in {
-      val input = op2Input(compareToIgnoreCase, CString("QUIRKY"), hetStrings) 
+      val input = op2Input(compareToIgnoreCase, JString("QUIRKY"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)
@@ -708,7 +710,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 2, -4, -73, -81, -6)
     }
     "determine equals" in {
-      val input = op2Input(library.equals, CString("quirky"), hetStrings) 
+      val input = op2Input(library.equals, JString("quirky"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)
@@ -721,8 +723,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine indexOf" in {
       val input = Join(BuiltInFunction2Op(indexOf), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CString("e"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line),
+        Const(JString("e"))(line))(line)
         
       val result = testEval(input)
       
@@ -736,8 +738,8 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equalsIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line), 
-        Const(CString("QUIRKY"))(line))(line)
+        dag.LoadLocal(Const(JString("/het/strings"))(line))(line), 
+        Const(JString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
       
@@ -754,7 +756,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "parseNum" should {
     "handle valid and invalid inputs" in {
       val input = dag.Operate(BuiltInFunction1Op(parseNum),
-        dag.LoadLocal(Const(CString("/het/stringNums"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/stringNums"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -780,7 +782,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "toString" should {
     "convert values to strings" in {
       val input = dag.Operate(BuiltInFunction1Op(numToString),
-        dag.LoadLocal(Const(CString("/het/random"))(line))(line))(line)
+        dag.LoadLocal(Const(JString("/het/random"))(line))(line))(line)
 
       val result = testEval(input)
 

@@ -64,7 +64,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
   def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
 
   def pathTable(path: String) = {
-    Table.constString(Set(CString(path))).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
+    Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
   }
 
   def runExpansion(table: Table): List[JValue] = {

@@ -24,6 +24,8 @@ import com.precog.bytecode.StaticLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
+import blueeyes.json._
+
 object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
   import instructions._
   import dag._
@@ -36,7 +38,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
     "not memoize a sub-graph of non-forcing operations" in {
       val line = Line(1, 1, "")
       
-      val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      val clicks = dag.LoadLocal(Const(JString("/clicks"))(line))(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -44,7 +46,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
           Operate(Neg,
             Join(Mul, CrossLeftSort,
               clicks,
-              Const(CLong(42))(line))(line))(line))(line)
+              Const(JNumLong(42))(line))(line))(line))(line)
           
       memoize(input) mustEqual input
     }
@@ -53,7 +55,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(JString("/clicks"))(line))(line))(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -78,7 +80,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(JString("/clicks"))(line))(line))(line)
       
       lazy val split: dag.Split = dag.Split(
         dag.Group(0, clicks, UnfixedSolution(1, clicks)),
@@ -107,7 +109,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(JString("/clicks"))(line))(line))(line)
       
       val join =
         Join(Add, IdentitySort,

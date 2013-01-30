@@ -110,7 +110,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       def monoid: Monoid[Result]
       def reducer(ctx: EvaluationContext): Reducer[Result]
       def extract(res: Result): Table
-      def extractValue(res: Result): Option[CValue]
+      def extractValue(res: Result): Option[JValue]
 
       def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
     }

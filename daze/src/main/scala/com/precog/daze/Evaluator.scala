@@ -46,6 +46,8 @@ import org.slf4j.LoggerFactory
 
 import akka.dispatch.Future
 
+import blueeyes.json._
+
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.StateT.{StateMonadTrans, stateTMonadState}
 import scalaz.std.anyVal._
@@ -328,23 +330,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           
           case Const(value) => 
             val table = value match {
-              case str @ CString(_) => Table.constString(Set(str))
+              case JString(str) => Table.constString(Set(str))
               
-              case ln @ CLong(_) => Table.constLong(Set(ln))
-              case d @ CDouble(_) => Table.constDouble(Set(d))
-              case n @ CNum(_) => Table.constDecimal(Set(n))
+              case JNumLong(ln) => Table.constLong(Set(ln))
+              case JNumDouble(d) => Table.constDouble(Set(d))
+              case JNum(n) => Table.constDecimal(Set(n))
               
-              case b @ CBoolean(_) => Table.constBoolean(Set(b))
+              case JBool(b) => Table.constBoolean(Set(b))
 
-              case d @ CDate(_) => Table.constDate(Set(d))
-              case as @ CArray(_, CArrayType(elemType)) => Table.constArray(Set(as))(elemType)
+              // TODO: Need to handle complex objects
+              //case as @ CArray(_, CArrayType(elemType)) => Table.constArray(Set(as))(elemType)
               
-              case CNull => Table.constNull
+              case JNull => Table.constNull
               
-              case CEmptyObject => Table.constEmptyObject
-              case CEmptyArray => Table.constEmptyArray
+              case JObject.empty => Table.constEmptyObject
+              case JArray.empty => Table.constEmptyArray
 
-              case CUndefined => Table.empty
+              case JUndefined => Table.empty
             }
             
             val spec = buildConstantWrapSpec(Leaf(Source))
@@ -470,12 +472,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 trans.WrapObject(Leaf(Source), paths.Value.name))
 
               wrapped <- transState liftM table map { _.transform(valueWrapped) }
-              cvalue <- transState liftM result.map(reduction.extractValue)
+              jvalue <- transState liftM result.map(reduction.extractValue)
 
               _ <- monadState.modify { state =>
                 state.copy(
                   assume = state.assume + (m -> wrapped),
-                  reductions = state.reductions + (m -> cvalue)
+                  reductions = state.reductions + (m -> jvalue)
                 )
               }
             } yield {
@@ -775,7 +777,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * Takes a graph, a node and a value. Replaces the node (and
      * possibly its parents) with the value into the graph.
      */
-    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: CValue, splits: Set[dag.Split]) = {
+    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: JValue, splits: Set[dag.Split]) = {
       val replacements = graph.foldDown(true) {
         case join@Join(
           DerefArray,
@@ -784,8 +786,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             DerefArray,
             CrossLeftSort,
             `from`,
-            Const(CLong(index1))),
-          Const(CLong(index2))) =>
+            Const(JNumLong(index1))),
+          Const(JNumLong(index2))) =>
 
           List(
             (join, Const(result)(from.loc))
@@ -1130,7 +1132,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
-      reductions: Map[DepGraph, Option[CValue]] = Map.empty,
+      reductions: Map[DepGraph, Option[JValue]] = Map.empty,
       extraCount: Int = 0
     )
     

@@ -22,6 +22,8 @@ package daze
 
 import com.precog.yggdrasil._
 
+import blueeyes.json._
+
 trait StaticInlinerModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
   import dag._
     
@@ -41,7 +43,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
         recurse => {
           case graph @ Operate(op, child) => {
             recurse(child) match {
-              case child2 @ Const(CUndefined) => Const(CUndefined)(child2.loc)
+              case child2 @ Const(JUndefined) => Const(JUndefined)(child2.loc)
 
               case child2 @ Const(value) => {
                 op match {
@@ -54,11 +56,13 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
                       _ => Operate(op, child2)(graph.loc),
                       newOp1 => {
                         val result = for {
-                          col <- newOp1.f1(ctx).apply(value)
+                          // No Op1F1 that can be applied to a complex JValues
+                          cvalue <- jValueToCValue(value)
+                          col <- newOp1.f1(ctx).apply(cvalue)
                           if col isDefinedAt 0
-                        } yield col cValue 0
+                        } yield col jValue 0
 
-                        Const(result getOrElse CUndefined)(graph.loc)
+                        Const(result getOrElse JUndefined)(graph.loc)
                       }
                     )
                   }
@@ -75,19 +79,22 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
 
             op2ForBinOp(op) flatMap { op2 =>
               (left2, right2) match {
-                case (left2 @ Const(CUndefined), _) =>
-                  Some(Const(CUndefined)(left2.loc))
+                case (left2 @ Const(JUndefined), _) =>
+                  Some(Const(JUndefined)(left2.loc))
 
-                case (_, right2 @ Const(CUndefined)) =>
-                  Some(Const(CUndefined)(right2.loc))
+                case (_, right2 @ Const(JUndefined)) =>
+                  Some(Const(JUndefined)(right2.loc))
 
                 case (left2 @ Const(leftValue), right2 @ Const(rightValue)) => {
                   val result = for {
-                    col <- op2.f2(ctx).partialLeft(leftValue).apply(rightValue)
+                    // Noq Op2F2 that can be applied to a complex JValues
+                    leftCValue <- jValueToCValue(leftValue)
+                    rightCValue <- jValueToCValue(rightValue)
+                    col <- op2.f2(ctx).partialLeft(leftCValue).apply(rightCValue)
                     if col isDefinedAt 0
-                  } yield col cValue 0
+                  } yield col jValue 0
 
-                  Some(Const(result getOrElse CUndefined)(graph.loc))
+                  Some(Const(result getOrElse JUndefined)(graph.loc))
                 }
 
                 case _ => None
@@ -100,8 +107,8 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
             val right2 = recurse(right)
 
             val back = (left2, right2) match {
-              case (_, right2 @ Const(CBoolean(true))) => Some(left2)
-              case (_, right2 @ Const(_)) => Some(Const(CUndefined)(graph.loc))
+              case (_, right2 @ Const(JTrue)) => Some(left2)
+              case (_, right2 @ Const(_)) => Some(Const(JUndefined)(graph.loc))
               case _ => None
             }
 

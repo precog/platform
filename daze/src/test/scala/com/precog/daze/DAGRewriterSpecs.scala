@@ -25,6 +25,8 @@ import com.precog.common.Path
 import com.precog.yggdrasil._
 import org.joda.time.DateTime
 
+import blueeyes.json._
+
 import scalaz.{ FirstOption, NaturalTransformation, Tag }
 import scalaz.std.anyVal.booleanInstance.disjunction
 import scalaz.std.option.optionFirst
@@ -43,10 +45,10 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
   import library._
 
   "DAG rewriting" should {
-    "compute identities given a relative path" in {
+    /*"compute identities given a relative path" in {
       val line = Line(1, 1, "")
 
-      val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
+      val input = dag.LoadLocal(Const(JString("/numbers"))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val result = fullRewriteDAG(true, ctx)(input)
@@ -62,18 +64,18 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
       val line = Line(1, 1, "")
 
-      val t1 = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
+      val t1 = dag.LoadLocal(Const(JString("/hom/pairs"))(line))(line)
 
       val input =
         Join(Add, IdentitySort,
           Join(Add, CrossLeftSort,
             Join(DerefObject, CrossLeftSort,
               t1,
-              Const(CString("first"))(line))(line),
+              Const(JString("first"))(line))(line),
             dag.Reduce(Count, t1)(line))(line),
           Join(DerefObject, CrossLeftSort,
             t1,
-            Const(CString("second"))(line))(line))(line)
+            Const(JString("second"))(line))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val optimize = true
@@ -103,6 +105,63 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       // Must be turned into a Const node
       hasMegaReduce must beFalse
       hasConst must beTrue
+    }*/
+
+    "BLAH" in {
+      /*
+       * clicks := //clicks
+       * solve 'time = clicks.time
+       *   clicks where clicks.time >= 'time - 5 & clicks.time <= 'time + 5
+       */
+
+      val line = Line(1, 1, "")
+
+      val clicks = dag.LoadLocal(Const(JString("/clicks"))(line))(line)
+
+      val clicksTime =
+        Join(DerefObject, CrossLeftSort,
+          clicks,
+          Const(JString("time"))(line)
+        )(line)
+
+      lazy val input: dag.Split =
+        dag.Split(
+          dag.Group(0,
+            clicksTime,
+            UnfixedSolution(1,
+              clicksTime
+            )
+          ),
+          Filter(IdentitySort,
+            clicks,
+            Join(And, IdentitySort,
+              Join(GtEq, CrossLeftSort,
+                clicksTime,
+                Join(Sub, CrossLeftSort,
+                  SplitParam(1)(input)(line),
+                  Const(JNumLong(5))(line)
+                )(line)
+              )(line),
+              Join(LtEq, CrossLeftSort,
+                clicksTime,
+                Join(Add, CrossLeftSort,
+                  SplitParam(1)(input)(line),
+                  Const(JNumLong(5))(line)
+                )(line)
+              )(line)
+            )(line)
+          )(line)
+        )(line)
+
+      val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
+      val optimize = true
+
+      //val optimizedDAG = fullRewriteDAG(optimize, ctx)(input)
+
+      val result: M[Table] = eval(input, ctx, optimize)
+      result.copoint.toJson.copoint foreach { println(_) }
+
+      failure
     }
   }
 }

@@ -27,6 +27,8 @@ import com.precog.common.Path
 import com.precog.common.json._
 import com.precog.util.IOUtils
 
+import blueeyes.json._
+
 import org.specs2.mutable._
 
 import java.io.File
@@ -109,11 +111,11 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(MultiLinearRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -167,11 +169,11 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(MultiLinearRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -235,11 +237,11 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(MultiLinearRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(JString(pointsString))(line))(line),
+          dag.Const(JNumLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
