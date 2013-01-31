@@ -662,18 +662,26 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     
           // begin: annoyance with Scala's lousy pattern matcher
           case Join(op, CrossLeftSort | CrossRightSort, left, Const(value)) => {
-            op2ForBinOp(op) map { _.f2(ctx).applyr(value) } map { f1 =>
+            op2ForBinOp(op) map { op2 =>
               for {
                 pendingTable <- prepareEval(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+                
+                spec = op2.spec(ctx)(
+                  pendingTable.trans,
+                  ConstLiteral(value, pendingTable.trans))
+              } yield PendingTable(pendingTable.table, pendingTable.graph, spec)
             } getOrElse (monadState point PendingTable(Table.empty, graph, TransSpec1.Id))
           }
           
           case Join(op, CrossLeftSort | CrossRightSort, Const(value), right) => {
-            op2ForBinOp(op) map { _.f2(ctx).applyl(value) } map { f1 =>
+            op2ForBinOp(op) map { op2 =>
               for {
                 pendingTable <- prepareEval(right, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
+                
+                spec = op2.spec(ctx)(
+                  ConstLiteral(value, pendingTable.trans),
+                  pendingTable.trans)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, spec)
             } getOrElse (monadState point PendingTable(Table.empty, graph, TransSpec1.Id))
           }
           // end: annoyance
