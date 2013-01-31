@@ -19,7 +19,7 @@ import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
-import com.precog.yggdrasil.util.IdSourceConfig
+import com.precog.yggdrasil.util._
 import com.precog.util.PrecogUnit
 
 import com.weiglewilczek.slf4s.Logging
@@ -129,6 +129,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
+      with EvaluatorConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with MongoColumnarTableModuleConfig
@@ -183,6 +184,18 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   }
 
   override def map (fs: => Fragments): Fragments = fs ^ Step { shutdown() }
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 }
 
 class MongoBasicValidationSpecs extends BasicValidationSpecs with MongoPlatformSpecs

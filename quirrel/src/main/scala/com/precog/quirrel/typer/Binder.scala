@@ -4,8 +4,12 @@ package typer
 
 import bytecode.Library
 
-trait Binder extends parser.AST with Library {
+trait Binder extends parser.AST {
+  type Lib <: Library
+  val library: Lib
+
   import ast._
+  import library._
   
   type Formal = (Identifier, Let)
   

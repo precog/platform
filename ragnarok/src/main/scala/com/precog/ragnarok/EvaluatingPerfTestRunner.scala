@@ -4,7 +4,7 @@ package ragnarok
 import common.Path
 import common.security._
 
-import daze.{ Evaluator, EvaluationContext }
+import daze.{ EvaluatorModule, EvaluationContext }
 
 import yggdrasil._
 import yggdrasil.table.ColumnarTableModuleConfig
@@ -47,12 +47,14 @@ trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
 
 trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
     with StorageModule[M]
-    with IdSourceScannerModule[M]
+    with IdSourceScannerModule
     with PerfTestRunner[M, T] {
 
   type Result = Int
 
   type YggConfig <: PerfTestRunnerConfig
+
+  private implicit val nt = NaturalTransformation.refl[M]
 
   def eval(query: String): M[Result] = try {
     val forest = compile(query)
@@ -72,7 +74,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
 
       case Right(dag) =>
         for {
-          table <- eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
+          table <- Evaluator(M).eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
           size <- countStream(table.renderJson(','))
         } yield size
     }

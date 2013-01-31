@@ -12,6 +12,7 @@ import blueeyes.bkka._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future
+import akka.dispatch.Promise
 import akka.dispatch.ExecutionContext
 import akka.actor.ActorSystem
 
@@ -37,5 +38,10 @@ object JDBMShardServer extends BlueEyesServer
     val stoppable = Stoppable.fromFuture(platform.shutdown)
 
     ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
+  } recoverWith {
+    case ex: Throwable =>
+      System.err.println("Could not start JDBM Shard server!!!")
+      ex.printStackTrace
+      Promise.failed(ex)
   }
 }
