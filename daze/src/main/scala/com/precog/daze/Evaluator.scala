@@ -451,7 +451,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               back <- transState liftM mn(morph1(transformed, ctx))
             } yield PendingTable(back, graph, TransSpec1.Id)
         
-          case dag.Distinct(parent) => {
+          case dag.Distinct(parent) =>
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
             for {
