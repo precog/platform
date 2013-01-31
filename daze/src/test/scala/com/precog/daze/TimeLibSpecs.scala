@@ -31,15 +31,15 @@ import com.precog.util.IdGen
 import org.joda.time._
 import org.joda.time.format._
 
-trait TimeLibSpec[M[+_]] extends Specification
+trait TimeLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with TimeLib[M] 
     with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -3657,6 +3657,6 @@ trait TimeLibSpec[M[+_]] extends Specification
   }
 }
 
-object TimeLibSpec extends TimeLibSpec[test.YId] with test.YIdInstances
+object TimeLibSpecs extends TimeLibSpecs[test.YId] with test.YIdInstances
 
 // vim: set ts=4 sw=4 et:

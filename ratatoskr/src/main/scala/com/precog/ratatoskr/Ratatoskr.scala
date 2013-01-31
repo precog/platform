@@ -753,7 +753,7 @@ object ImportTools extends Command with Logging {
 
         implicit val actorSystem = ActorSystem("yggutilImport")
         implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-        implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
+        implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
 
         val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
 

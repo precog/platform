@@ -21,7 +21,12 @@ package com.precog.bytecode
 
 import scalaz.Scalaz._
 
-trait Instructions extends Library {
+trait Instructions {
+  type Lib <: Library
+  val library: Lib
+
+  import library._
+
   sealed trait Instruction { self =>
     import instructions._
 

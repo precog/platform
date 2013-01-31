@@ -49,9 +49,9 @@ import scalaz.std.option._
 
 trait ManagedMongoJobManagerModule {
   implicit def executionContext: ExecutionContext
+  implicit def M: Monad[Future]
 
   def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
-    import blueeyes.bkka.AkkaTypeClasses._
     import MongoJobManagerSettings.default
 
     val mongo = RealMongo(config.detach("mongo"))
@@ -83,7 +83,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   import JobState._
 
   protected val fs = fs0
-  implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
+  implicit val M = new FutureMonad(executionContext)
   implicit val queryTimeout = settings.queryTimeout
 
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")

@@ -21,11 +21,12 @@ package com.precog.ragnarok
 
 import com.precog.common.accounts._
 import com.precog.common.security._
-import com.precog.daze.LoggingQueryLogger
+import com.precog.daze._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
 import com.precog.yggdrasil.metadata.FileMetadataStorage
 import com.precog.util.{ FileOps, FilesystemFileOps }
 
@@ -112,6 +113,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
       extends StandalonePerfTestRunnerConfig
       with JDBMProjectionModuleConfig
       with BlockStoreColumnarTableModuleConfig
+      with EvaluatorConfig
 
   type YggConfig = JDBMPerfTestRunnerConfig
   object yggConfig extends JDBMPerfTestRunnerConfig {
@@ -130,5 +132,11 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
   yggConfig.dataDir.mkdirs()
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-  val report = LoggingQueryLogger[Future, instructions.Line]
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+    new Evaluator[N](N0) with IdSourceScannerModule {
+      type YggConfig = self.YggConfig
+      val yggConfig = self.yggConfig
+      val report = LoggingQueryLogger[N, instructions.Line](N0)
+    }
+  }
 }

@@ -19,7 +19,7 @@
  */
 package com.precog.daze
 
-trait BigDecimalOperations { 
+object BigDecimalOperations {
   /**
    * Newton's approximation to some number of iterations (by default: 50).
    * Ported from a Java example found here: http://www.java2s.com/Code/Java/Language-Basics/DemonstrationofhighprecisionarithmeticwiththeBigDoubleclass.htm

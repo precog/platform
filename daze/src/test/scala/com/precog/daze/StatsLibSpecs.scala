@@ -35,16 +35,15 @@ class AlmostEqual(d: Double) {
   def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
 }
 
-trait StatsLibSpec[M[+_]] extends Specification
+trait StatsLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
-    with StatsLib[M]
-    with InfixLib[M]
     with LongIdMemoryDatasetConsumer[M]{ self =>
       
   import Function._
   
   import dag._
   import instructions._
+  import library._
 
   val testAPIKey = "testAPIKey"
 
@@ -1784,4 +1783,4 @@ trait StatsLibSpec[M[+_]] extends Specification
   }
 }
 
-object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances
+object StatsLibSpecs extends StatsLibSpecs[test.YId] with test.YIdInstances

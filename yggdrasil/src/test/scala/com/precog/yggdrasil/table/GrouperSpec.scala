@@ -75,6 +75,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
   def tic_aj = JPathField("tic_a")
   def tic_bj = JPathField("tic_b")
 
+  implicit val fid = NaturalTransformation.refl[M]
+
   val eq12F1 = CF1P("testing::eq12F1") {
     case c: DoubleColumn => new Map1Column(c) with BoolColumn {
       def apply(row: Int) = c(row) == 12.0d

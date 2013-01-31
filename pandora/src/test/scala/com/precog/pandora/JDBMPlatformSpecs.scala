@@ -84,6 +84,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
+      with EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
@@ -102,6 +103,18 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   val accountFinder = None
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 
   val rawProjectionModule = new JDBMProjectionModule {
     type YggConfig = self.YggConfig

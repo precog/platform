@@ -32,6 +32,8 @@ class BytecodeSpecs extends Specification
     with BytecodeWriter {
   
   import Prop._
+
+  object library extends RandomLibrary
   
   val numCores = Runtime.getRuntime.availableProcessors
   implicit val params = set(minTestsOk -> (10000 * numCores), workers -> numCores)

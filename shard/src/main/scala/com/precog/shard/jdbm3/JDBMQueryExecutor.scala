@@ -75,13 +75,12 @@ trait JDBMQueryExecutorConfig
     with ActorStorageModuleConfig
     with ActorProjectionModuleConfig 
     with IdSourceConfig 
+    with EvaluatorConfig
     with KafkaIngestActorProjectionSystemConfig {
       
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
   lazy val jobPollFrequency: Duration = config[Int]("precog.evaluator.poll.cancellation", 3) seconds
-
-  def ingestFailureLogRoot: File
 }
 
 trait JDBMQueryExecutorComponent  {
@@ -89,9 +88,11 @@ trait JDBMQueryExecutorComponent  {
 
   def platformFactory(config0: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
     new ManagedPlatform 
+        with ShardQueryExecutorPlatform[Future]
+        with SliceColumnarTableModule[Future, Array[Byte]]
+        with ActorProjectionModule[Array[Byte], table.Slice] 
         with KafkaIngestActorProjectionSystem
-        with ActorStorageModule
-        with ActorProjectionModule[Array[Byte], table.Slice] { platform =>
+        with ActorStorageModule { platform =>
 
       type YggConfig = JDBMQueryExecutorConfig
       val yggConfig = new JDBMQueryExecutorConfig {
@@ -102,7 +103,6 @@ trait JDBMQueryExecutorComponent  {
 
         val clock = blueeyes.util.Clock.System
         val maxSliceSize = config[Int]("jdbm.max_slice_size", 10000)
-        val ingestFailureLogRoot = new File(config[String]("ingest.failure_log_root"))
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
 
         //TODO: Get a producer ID
@@ -132,6 +132,7 @@ trait JDBMQueryExecutorComponent  {
 
       class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
       val storage = new Storage
+      def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
       val rawProjectionModule = new JDBMProjectionModule {
         type YggConfig = platform.YggConfig
@@ -146,6 +147,22 @@ trait JDBMQueryExecutorComponent  {
       }
 
       val Projection = new ProjectionCompanion(projectionsActor, yggConfig.projectionRetrievalTimeout)
+
+      trait TableCompanion extends SliceColumnarTableCompanion {
+        import scalaz.std.anyVal._
+        implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
+      }
+
+      object Table extends TableCompanion
+
+      def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
+        new Evaluator[N](N0) with IdSourceScannerModule {
+          type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
+          val yggConfig = platform.yggConfig
+          // def report = self.report
+          val report = LoggingQueryLogger[N, instructions.Line](N0)
+        }
+      }
 
       val metadataClient = new MetadataClient[Future] {
         def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
@@ -186,9 +203,7 @@ trait JDBMQueryExecutorComponent  {
         }
       }
 
-      def ingestFailureLog(checkpoint: YggCheckpoint): IngestFailureLog = {
-        FilesystemIngestFailureLog(yggConfig.ingestFailureLogRoot, checkpoint)
-      }
+      def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 
       def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
         (for {
@@ -211,39 +226,17 @@ trait JDBMQueryExecutorComponent  {
       }
 
       override def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-        new ShardQueryExecutor[ShardQuery] with SliceColumnarTableModule[ShardQuery, Array[Byte]] {
+        implicit val mn = new (Future ~> ShardQuery) {
+          def apply[A](fut: Future[A]) = fut.liftM[JobQueryT] 
+        }
+
+        new ShardQueryExecutor[ShardQuery](shardQueryMonad) with IdSourceScannerModule {
+          val M = shardQueryMonad.M
+          def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
           type YggConfig = JDBMQueryExecutorConfig
-
-          implicit val M0 = platform.M
-          val M = shardQueryMonad
-
           val yggConfig = platform.yggConfig
 
-          def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
-
-          class Projection(delegate: platform.Projection) extends ProjectionLike[ShardQuery, Array[Byte], Slice] {
-            def descriptor = delegate.descriptor
-            def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor])(implicit M: Monad[ShardQuery]): ShardQuery[Option[BlockProjectionData[Array[Byte], Slice]]] = {
-              delegate.getBlockAfter(id, columns).liftM[JobQueryT]
-            }
-          }
-
-          class ProjectionCompanion extends ProjectionCompanionLike[ShardQuery] {
-            def apply(descriptor: ProjectionDescriptor) = {
-              platform.M.map(platform.Projection(descriptor))(new Projection(_)).liftM[JobQueryT]
-            }
-          }
-
-          val Projection = new ProjectionCompanion
-
-          trait TableCompanion extends SliceColumnarTableCompanion {
-            import scalaz.std.anyVal._
-            implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
-          }
-
-          object Table extends TableCompanion
-
-          val report = errorReport[instructions.Line](M, implicitly)
+          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
         }
       }
 

@@ -21,11 +21,10 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
 import org.specs2.mutable.Specification
 import com.codecommit.gll.LineStream
 
-object TreeShakerSpecs extends Specification with StubPhases with TreeShaker with RandomLibrary {
+object TreeShakerSpecs extends Specification with StubPhases with TreeShaker with RandomLibrarySpec {
   import ast._
   
   "tree shaking" should {

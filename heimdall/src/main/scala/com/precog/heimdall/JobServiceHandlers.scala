@@ -23,7 +23,7 @@ import com.precog.util.flipBytes
 import com.precog.common.jobs._
 import com.precog.common.security._
 
-import blueeyes.bkka.AkkaTypeClasses._
+import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
@@ -373,6 +373,8 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 
 class CreateResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
+  private implicit val M = new FutureMonad(ctx)
+
   val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success((for {
       jobId <- request.parameters get 'jobId
@@ -387,10 +389,10 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
 
       jobs.setResult(jobId, mimeType, data) map {
         case Right(_) =>
-            HttpResponse[ByteChunk](OK)
-          case Left(error) =>
+          HttpResponse[ByteChunk](OK)
+        case Left(error) =>
           HttpResponse[ByteChunk](NotFound, content = Some(ByteChunk(error.getBytes("UTF-8"))))
-        }
+      }
     }) getOrElse {
       Future(HttpResponse[ByteChunk](BadRequest,
         content = Some(ByteChunk("Missing required 'jobId parameter or request body.".getBytes("UTF-8")))))
@@ -405,7 +407,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
-  import JobState._
+  private implicit val M = new FutureMonad(ctx)
 
   val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success(request.parameters get 'jobId map { jobId =>

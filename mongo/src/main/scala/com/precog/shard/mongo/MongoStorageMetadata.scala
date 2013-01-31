@@ -38,7 +38,7 @@ class MongoStorageMetadataSource(mongo: Mongo)(implicit asyncContext: ExecutionC
 }
 
 class MongoStorageMetadata(mongo: Mongo)(implicit asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
-  implicit val M = AkkaTypeClasses.futureApplicative(asyncContext) 
+  implicit val M = new FutureMonad(asyncContext) 
 
   // FIXME: Actually implement these for Mongo
   def findChildren(path: Path): Future[Set[Path]] = {

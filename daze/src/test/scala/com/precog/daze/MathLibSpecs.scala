@@ -29,15 +29,15 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-trait MathLibSpec[M[+_]] extends Specification
+trait MathLibSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with MathLib[M] 
     with LongIdMemoryDatasetConsumer[M] { self =>
       
   import Function._
   
   import dag._
   import instructions._
+  import library._
 
   val line = Line(1, 1, "")
   val testAPIKey = "testAPIKey"
@@ -2103,6 +2103,6 @@ trait MathLibSpec[M[+_]] extends Specification
   }
 }
 
-object MathLibSpec extends MathLibSpec[test.YId] with test.YIdInstances
+object MathLibSpecs extends MathLibSpecs[test.YId] with test.YIdInstances
 
 // vim: set ts=4 sw=4 et:

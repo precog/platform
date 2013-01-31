@@ -20,9 +20,12 @@
 package com.precog.daze
 
 import scala.util.Random
+import scala.collection.mutable
+
+import blueeyes.json._
 
 import com.precog.yggdrasil._
-
+import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.Path
 import com.precog.common.json._
 import com.precog.util.IOUtils
@@ -33,13 +36,26 @@ import java.io.File
 
 import scalaz._
 
-trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with RegressionTestSupport[M] {
-  def createLinearSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
+trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with RegressionTestSupport[M] {
+  import library._
+
+  def sigmoid(z: Double): Double = 1 / (1 + math.exp(z))
+
+  def createLogisticSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
+    val direction: Array[Double] = {
+      var result = new Array[Double](actualThetas.length - 1)
+      result(0) = -actualThetas(0) / actualThetas(1)
+      result
+    }
+
     val testSeqX = {
       def createXs: Array[Double] = {
-        Seq.fill(length - 1)(Random.nextDouble) map {
+        val seq = Seq.fill(length - 1)(Random.nextDouble) map {
           x => x * 2.0 - 1.0
         } toArray
+
+        arraySum(seq, direction)
       }
 
       Seq.fill(noSamples)(createXs)
@@ -48,10 +64,11 @@ trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with Reg
     val deciders = Seq.fill(noSamples)(Random.nextDouble)
 
     val testSeqY = {
-      testSeqX map { 
-        case xs => {
-          val yvalue = dotProduct(actualThetas, 1.0 +: xs)
-          yvalue + Random.nextGaussian
+      (testSeqX zip deciders) map { 
+        case (xs, p) => {
+          val product: Double = dotProduct(actualThetas, 1.0 +: xs)
+          if (sigmoid(product) > p) 1.0
+          else 0.0
         }
       }
     }
@@ -60,15 +77,16 @@ trait LinearRegressionTestSupport[M[+_]] extends LinearRegressionLib[M] with Reg
   }
 }
 
-trait LinearRegressionSpec[M[+_]] extends Specification 
-    with EvaluatorTestSupport[M]
-    with LinearRegressionTestSupport[M]
-    with LongIdMemoryDatasetConsumer[M] { self =>
+trait LogisticRegressionSpec[M[+_]] extends Specification
+    with EvaluatorTestSupport[M] 
+    with LogisticRegressionTestSupport[M]
+    with LongIdMemoryDatasetConsumer[M]{ self =>
 
   import dag._
   import instructions._
+  import library._
 
-  def testAPIKey = "testAPIKey"
+  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(testAPIKey, graph, Path.Root) match {
@@ -88,13 +106,13 @@ trait LinearRegressionSpec[M[+_]] extends Specification
     var thetas = List.empty[List[Double]]
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
+    //runs the logistic regression function on 50 sets of data generated from the same distribution
     while (i < loops) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathIndex(0)),
         CPath(CPathIndex(1))) sorted
 
-      val samples = createLinearSamplePoints(num, 100, actualThetas)
+      val samples = createLogisticSamplePoints(num, 100, actualThetas)
       val points = jvalues(samples, cpaths) map { _.renderCompact }
 
       val tmpFile = File.createTempFile("values", ".json")
@@ -103,7 +121,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(MultiLinearRegression,
+      val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
           dag.LoadLocal(Const(CString(pointsString))(line))(line),
           dag.Const(CLong(0))(line))(line),
@@ -116,7 +134,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SArray(elems2) => elems2(0) }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SArray(elems2) => elems2(0) }
           val SDecimal(theta0) = elems(1)
           List(theta0.toDouble, theta1.toDouble)
         }
@@ -141,18 +159,18 @@ trait LinearRegressionSpec[M[+_]] extends Specification
 
     val actualThetas = makeThetas(num)
 
-    var thetas: List[List[Double]] = List.empty[List[Double]]
+    var thetas = List.empty[List[Double]]
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
-    while (i < loops) {
+    //runs the logistic regression function on 50 sets of data generated from the same distribution
+    while (i < 50) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathField("foo")),
         CPath(CPathIndex(0), CPathField("bar")),
         CPath(CPathIndex(0), CPathField("baz")),
         CPath(CPathIndex(1))) sorted
 
-      val samples = createLinearSamplePoints(num, 100, actualThetas)
+      val samples = createLogisticSamplePoints(num, 100, actualThetas)
       val points = jvalues(samples, cpaths) map { _.renderCompact }
 
       val tmpFile = File.createTempFile("values", ".json")
@@ -161,7 +179,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(MultiLinearRegression,
+      val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
           dag.LoadLocal(Const(CString(pointsString))(line))(line),
           dag.Const(CLong(0))(line))(line),
@@ -174,9 +192,9 @@ trait LinearRegressionSpec[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => map("bar") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("baz") }
+          val SDecimal(theta3) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
         }
@@ -193,7 +211,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
     ok mustEqual Array.fill(num)(true)
   }
 
-  def testThreeSchemata = {
+  def testThreeSchema = {
     val line = Line(1, 1, "")
 
     val num = 3
@@ -207,8 +225,8 @@ trait LinearRegressionSpec[M[+_]] extends Specification
 
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
-    while (i < loops) {
+    //runs the logistic regression function on 50 sets of data generated from the same distribution
+    while (i < 50) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathField("ack"), CPathIndex(0)),
         CPath(CPathIndex(0), CPathField("bak"), CPathField("bazoo")),
@@ -217,7 +235,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
         CPath(CPathIndex(1))) sorted
 
       val samples = {
-        val samples0 = createLinearSamplePoints(num, 100, actualThetas)
+        val samples0 = createLogisticSamplePoints(num, 100, actualThetas)
         samples0 map { case (xs, y) => (Random.nextGaussian +: Random.nextGaussian +: xs, y) }
       }
       val points = jvalues(samples, cpaths, num) map { _.renderCompact }
@@ -229,7 +247,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - suffix.length)
       
-      val input = dag.Morph2(MultiLinearRegression,
+      val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
           dag.LoadLocal(Const(CString(pointsString))(line))(line),
           dag.Const(CLong(0))(line))(line),
@@ -244,14 +262,14 @@ trait LinearRegressionSpec[M[+_]] extends Specification
 
       def theta(numOfFields: Int) = result collect {
         case (ids, SArray(elems)) if ids.length == 0 && elems(0).asInstanceOf[SObject].fields.size == numOfFields => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => 
-            map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(elems) =>
+          val SDecimal(theta1) = (elems(0): @unchecked) match { case SObject(map) => 
+            (map("bar"): @unchecked) match { case SObject(map) => 
+              (map("baz"): @unchecked) match { case SArray(elems) =>
                 elems(0)
               }
             } 
           }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta2) = (elems(0): @unchecked) match { case SObject(map) => map("foo") }
           val SDecimal(theta0) = elems(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
         }
@@ -272,6 +290,7 @@ trait LinearRegressionSpec[M[+_]] extends Specification
     val allThetas = List(thetasSchema1, thetasSchema2, thetasSchema3)
 
     val result = allThetas map { getBooleans }
+
     val expected = Array.fill(num)(true)
 
     result(0) mustEqual expected
@@ -279,11 +298,11 @@ trait LinearRegressionSpec[M[+_]] extends Specification
     result(2) mustEqual expected
   }
 
-  "linear regression" should {
+  "logistic regression" should {
     "pass randomly generated test with a single feature" in (testTrivial or testTrivial)
     "pass randomly generated test with three features inside an object" in (testThreeFeatures or testThreeFeatures)
-    "pass randomly generated test with three distinct schemata" in (testThreeSchemata or testThreeSchemata)
+    "pass randomly generated test with three distinct schemata" in (testThreeSchema or testThreeSchema)
   }
 }
 
-object LinearRegressionSpec extends LinearRegressionSpec[test.YId] with test.YIdInstances
+object LogisticRegressionSpec extends LogisticRegressionSpec[test.YId] with test.YIdInstances

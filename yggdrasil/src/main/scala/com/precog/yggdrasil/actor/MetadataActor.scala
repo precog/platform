@@ -152,9 +152,10 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
+      val replyTo = sender
       Future {
         logger.trace("Spawning Future for FindPathMetadata")
-        sender ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
+        replyTo ! runIO(storage.findPathMetadata(path, selector, columnMetadataFor), "FindPathMetadata")
         logger.trace("Completed " + msg.toString)
       }
 

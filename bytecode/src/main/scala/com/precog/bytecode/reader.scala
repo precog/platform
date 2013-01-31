@@ -32,6 +32,7 @@ trait Reader extends Instructions {
 trait BytecodeReader extends Reader {
   import instructions._
   import Function._
+  import library._
 
   private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism1] = libMorphism1.map(op => op.opcode -> BuiltInMorphism1(op))(collection.breakOut)
   private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism2] = libMorphism2.map(op => op.opcode -> BuiltInMorphism2(op))(collection.breakOut)

@@ -100,7 +100,6 @@ trait PerfTestSuite extends Logging {
   def run(config: RunConfig) {
     import akka.actor.ActorSystem
     import akka.dispatch.{ Future, ExecutionContext, Await }
-    import blueeyes.bkka.AkkaTypeClasses._
     import PerfTestPrettyPrinters._
     import RunConfig.OutputFormat
 

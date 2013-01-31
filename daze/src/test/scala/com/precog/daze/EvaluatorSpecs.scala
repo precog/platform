@@ -48,18 +48,28 @@ import scalaz.effect._
 import scalaz.syntax.copointed._
 import scalaz.std.anyVal._
 import scalaz.std.list._
+import scala.Function._
 
 import org.specs2.specification.Fragment
 import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait EvaluatorTestSupport[M[+_]] extends Evaluator[M]
-    with ReductionLib[M]
+trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with BaseBlockStoreTestModule[M]
-    with IdSourceScannerModule[M] { outer =>
+    with IdSourceScannerModule { outer =>
       
-  val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
@@ -67,10 +77,6 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M]
   val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
 
   val projections = Map.empty[ProjectionDescriptor, Projection]
-
-  val report = new LoggingQueryLogger[M, instructions.Line] with ExceptionQueryLogger[M, instructions.Line] {
-    implicit def M = outer.M
-  }
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
@@ -134,13 +140,12 @@ trait EvaluatorTestSupport[M[+_]] extends Evaluator[M]
 
 trait EvaluatorSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
-    with StdLib[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
-  
-  import Function._
   
   import dag._
   import instructions._
+
+  import library._
 
   val testAPIKey = "testAPIKey"
 

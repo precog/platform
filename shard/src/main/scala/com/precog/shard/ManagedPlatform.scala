@@ -73,7 +73,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
   def errorReport[A](implicit shardQueryMonad: ShardQueryMonad, decomposer0: Decomposer[A]): QueryLogger[ShardQuery, A] = {
     import scalaz.syntax.monad._
 
-    implicit val M0 = shardQueryMonad.M
+    implicit val M = shardQueryMonad.M
 
     shardQueryMonad.jobId map { jobId0 =>
       val lift = new (Future ~> ShardQuery) {

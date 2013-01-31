@@ -30,7 +30,7 @@ import akka.dispatch.{ ExecutionContext, Future, Promise }
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.bkka.AkkaTypeClasses._
+import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.data.DefaultBijections._
 import blueeyes.core.http._

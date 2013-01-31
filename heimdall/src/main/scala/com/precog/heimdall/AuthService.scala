@@ -55,7 +55,6 @@ case class WebAuthService(protocol: String, host: String, port: Int, path: Strin
     extends WebClient(protocol, host, port, path) with AuthService[Response] {
   import scalaz.syntax.monad._
   import scalaz.EitherT.eitherT
-  import blueeyes.bkka.AkkaTypeClasses._
   implicit val M: Monad[Future] = new FutureMonad(executor)
 
   final def isValid(apiKey: APIKey): Response[Boolean] = withJsonClient { client =>
