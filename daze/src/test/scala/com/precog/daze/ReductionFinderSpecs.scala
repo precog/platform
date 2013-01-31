@@ -102,10 +102,12 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
             Const(JString("baz"))(line))(line), 
           Const(JNum(12))(line))(line))(line)
 
-      val nonEqTrans = trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("foo")), CNum(5), true)
+      val fooDerefTrans = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("foo"))
+      val nonEqTrans = trans.Map1(trans.Equal(fooDerefTrans, trans.ConstLiteral(CLong(5), fooDerefTrans)), Unary.Comp.f1(ctx))
       val objTrans = trans.WrapObject(trans.Leaf(trans.Source), "bar")
       val opTrans = op1ForUnOp(Neg).spec(ctx)(trans.DerefArrayStatic(trans.Leaf(trans.Source), CPathIndex(1)))
-      val filterTrans = trans.Filter(trans.Leaf(trans.Source), trans.EqualLiteral(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("baz")), CNum(12), false)) 
+      val bazDerefTrans = trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("baz"))
+      val filterTrans = trans.Filter(trans.Leaf(trans.Source), trans.Equal(bazDerefTrans, trans.ConstLiteral(CLong(12), bazDerefTrans)))
 
       val reductions: List[(trans.TransSpec1, List[Reduction])] = List((filterTrans, List(StdDev)), (opTrans, List(Max)), (objTrans, List(Max, Sum)), (nonEqTrans, List(Min))).reverse
       val megaR = MegaReduce(reductions, clicks)

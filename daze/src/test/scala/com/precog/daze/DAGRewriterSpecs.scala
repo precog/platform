@@ -45,7 +45,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
   import library._
 
   "DAG rewriting" should {
-    /*"compute identities given a relative path" in {
+    "compute identities given a relative path" in {
       val line = Line(1, 1, "")
 
       val input = dag.LoadLocal(Const(JString("/numbers"))(line))(line)
@@ -91,7 +91,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val rewritten = inlineNodeValue(
         optimizedDAG,
         megaReduce.get,
-        CNum(42),
+        JNum(42),
         Set.empty
       )
 
@@ -99,69 +99,12 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
         case m@MegaReduce(_, _) => true
       }(disjunction)
       val hasConst = rewritten.foldDown(false) {
-        case m@Const(CNum(n)) if n == 42 => true
+        case m@Const(JNum(n)) if n == 42 => true
       }(disjunction)
 
       // Must be turned into a Const node
       hasMegaReduce must beFalse
       hasConst must beTrue
-    }*/
-
-    "BLAH" in {
-      /*
-       * clicks := //clicks
-       * solve 'time = clicks.time
-       *   clicks where clicks.time >= 'time - 5 & clicks.time <= 'time + 5
-       */
-
-      val line = Line(1, 1, "")
-
-      val clicks = dag.LoadLocal(Const(JString("/clicks"))(line))(line)
-
-      val clicksTime =
-        Join(DerefObject, CrossLeftSort,
-          clicks,
-          Const(JString("time"))(line)
-        )(line)
-
-      lazy val input: dag.Split =
-        dag.Split(
-          dag.Group(0,
-            clicksTime,
-            UnfixedSolution(1,
-              clicksTime
-            )
-          ),
-          Filter(IdentitySort,
-            clicks,
-            Join(And, IdentitySort,
-              Join(GtEq, CrossLeftSort,
-                clicksTime,
-                Join(Sub, CrossLeftSort,
-                  SplitParam(1)(input)(line),
-                  Const(JNumLong(5))(line)
-                )(line)
-              )(line),
-              Join(LtEq, CrossLeftSort,
-                clicksTime,
-                Join(Add, CrossLeftSort,
-                  SplitParam(1)(input)(line),
-                  Const(JNumLong(5))(line)
-                )(line)
-              )(line)
-            )(line)
-          )(line)
-        )(line)
-
-      val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
-      val optimize = true
-
-      //val optimizedDAG = fullRewriteDAG(optimize, ctx)(input)
-
-      val result: M[Table] = eval(input, ctx, optimize)
-      result.copoint.toJson.copoint foreach { println(_) }
-
-      failure
     }
   }
 }
