@@ -80,7 +80,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
         def apply[A](fa: Future[A]) = fa.liftM[JobQueryT]
       }
 
-      new JobQueryLogger[ShardQuery, A] {
+      new JobQueryLogger[ShardQuery, A] with ShardQueryLogger[ShardQuery, A] {
         val M = shardQueryMonad
         val jobManager = self.jobManager.withM[ShardQuery](lift, implicitly, shardQueryMonad.M, shardQueryMonad)
         val jobId = jobId0
@@ -88,7 +88,9 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
         val decomposer = decomposer0
       }
     } getOrElse {
-      LoggingQueryLogger[ShardQuery]
+      new LoggingQueryLogger[ShardQuery, A] with ShardQueryLogger[ShardQuery, A] {
+        val M = shardQueryMonad
+      }
     }
   }
 
