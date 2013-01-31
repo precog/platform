@@ -37,11 +37,37 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       results must haveSize(1)
 
       forall(results) {
-        case (ids, SArray(elems)) =>
+        case (ids, SObject(elems)) =>
           ids must haveSize(0)
-          elems must haveSize(2)
-          elems(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
-          elems(1) must beLike { case SDecimal(d) => ok }
+          elems.keys mustEqual Set("Model1")
+          
+          val SArray(arr1) = elems("Model1")
+
+          arr1(0) must beLike { case SObject(elems) => elems("height") match { case SDecimal(d) => elems must haveSize(1) } }
+          arr1(1) must beLike { case SDecimal(d) => ok }
+      }
+    }
+
+    "predict logistic regression" >> {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+        model := std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+
+        std::stats::predictLogistic(model, {height: 34, other: 35})
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(0)
+          elems.keys mustEqual Set("Model1")
+
+          elems("Model1") must beLike { case SDecimal(d) => ok }
       }
     }
 
@@ -52,7 +78,15 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
           std::stats::logisticRegression(medals, medals.S)
         """.stripMargin
 
-      evalE(input) must haveSize(4)
+      val results = evalE(input)
+
+      results must haveSize(1)
+
+      forall(results) {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(0)
+          elems.keys mustEqual Set("Model1", "Model2", "Model3", "Model4")
+      }
     }
 
     "return something when fed constants" >> {

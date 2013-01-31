@@ -438,8 +438,8 @@ trait ColumnarTableModule[M[+_]]
     protected def pathsM(table: Table) = {
       table reduce {
         new CReducer[Set[Path]] {
-          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
-            columns(JTextT) flatMap {
+          def reduce(schema: CSchema, range: Range): Set[Path] = {
+            schema.columns(JTextT) flatMap {
               case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
               case _ => Set()
             }
@@ -556,7 +556,17 @@ trait ColumnarTableModule[M[+_]]
         }
       }
 
-      rec(slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }, monoid.zero)
+      rec(
+        slices map { s => 
+          val schema = new CSchema {
+            val columnRefs = s.columns.keySet
+            def columns(jtype: JType) = s.logicalColumns(jtype) 
+          }
+
+          reducer.reduce(schema, 0 until s.size) 
+        }, 
+        monoid.zero
+      )
     }
 
     def compact(spec: TransSpec1): Table = {

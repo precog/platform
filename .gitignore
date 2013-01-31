@@ -33,5 +33,5 @@ jprofiler.jnilib
 /jdbc/precog*.zip
 /jdbc/precog/
 .tag
-/personal/
+/personal
 

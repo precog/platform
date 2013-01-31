@@ -19,25 +19,22 @@
 ## 
 #!/bin/bash
 
-cd `dirname $0`
-
-if [[ `ls target/*.jar | wc -l` != 1 ]]; then
-    echo "Missing/too many jars!"
+[ "$#" -eq 1 ] || {
+    echo "Usage: fixjdbm.sh <service name>"
     exit 1
-fi
+}
 
-TMPDIR=precog
+[ -f "byIdentity.d.0" ] || {
+    echo "This script needs to be run from a jdbm/ directory for a projection!"
+    exit 1
+}
 
-mkdir -p $TMPDIR
-rm -rf $TMPDIR/*
-
-java -Xmx2048m -jar ../tools/lib/proguard.jar @proguard.conf -injars target/jdbc-assembly*.jar -outjars $TMPDIR/precog.jar | tee proguard.log 
-mkdir web
-cp -R ../mongo/quirrelide/build/* web/
-rm -rf web/index.html web/php web/*.php
-zip -ru $TMPDIR/precog.jar web
-rm -rf web
-cp precog.sh precog.bat config.cfg README.md CHANGELOG.md $TMPDIR/
-zip -r precog.zip $TMPDIR
-
-
+mkdir recovery
+monit unmonitor $1
+stop $1
+cp byIdentity* recovery/
+cd recovery
+~ubuntu/scala-2.9.2/bin/scala -cp /usr/share/java/$1.jar ~ubuntu/fixjdbm.scala
+cp fixed/* ../
+start $1
+monit monitor $1
