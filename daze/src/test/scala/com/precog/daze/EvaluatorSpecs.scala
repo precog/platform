@@ -3386,6 +3386,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
       testEval(input) { _ must not(beEmpty) }
     }
+
+    "correctly evaluate a constant array" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(JArray(JNum(1), JBool(true), JString("three")))(line)
+
+      testEval(input) { _ must haveSize(1) }
+    }
+
+    "correctly evaluate a constant object" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(JObject("a" -> JNum(1), "b" -> JBool(true), "c" -> JString("true")))(line)
+
+      testEval(input) { _ must haveSize(1) }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
