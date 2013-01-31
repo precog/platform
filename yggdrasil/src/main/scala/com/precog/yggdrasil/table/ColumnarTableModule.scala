@@ -166,11 +166,6 @@ trait ColumnarTableModule[M[+_]]
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
-      val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
-      Table(Slice(Map(ColumnRef(CPathArray, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
-    }
-
     def constNull: Table = 
       Table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 

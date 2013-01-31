@@ -34,6 +34,8 @@ import scala.util.Random
 
 import scala.annotation.tailrec
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -51,8 +53,8 @@ trait ReductionHelper {
   def reduceDouble(seq: Seq[ColumnValues]): Result
 }
 
-trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] {
-  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with RegressionSupport {
+trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] with EvaluatorMethodsModule[M] {
+  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with RegressionSupport with EvaluatorMethods {
     import trans._
   
     override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
@@ -215,11 +217,12 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
             val tree = CPath.makeTree(cpaths, Range(1, finalTheta.length).toSeq :+ 0)
   
             val spec = TransSpec.concatChildren(tree)
-  
-            val theta = Table.constArray(Set(CArray[Double](finalTheta)))
-  
+
+            val jvalue = JArray(finalTheta.map(JNum(_)).toList)
+            val theta = Table.constEmptyArray.transform(transJValue(jvalue, TransSpec1.Id))
+
             val result = theta.transform(spec)
-  
+
             val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
             val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
   

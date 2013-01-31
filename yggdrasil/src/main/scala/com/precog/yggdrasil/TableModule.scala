@@ -118,7 +118,6 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def constDouble(v: Set[Double]): Table
     def constDecimal(v: Set[BigDecimal]): Table
     def constDate(v: Set[org.joda.time.DateTime]): Table
-    def constArray[A: CValueType](v: Set[CArray[A]]): Table
     def constBoolean(v: Set[Boolean]): Table
     def constNull: Table
     

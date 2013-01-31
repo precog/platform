@@ -31,14 +31,16 @@ import TableModule._
 import Jama._
 import Jama.Matrix._
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.syntax.monad._
 import scalaz.std.stream._
 import scalaz.std.set._
 import scalaz.syntax.traverse._
 
-trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport {
+trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
+  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport with EvaluatorMethods {
     import trans._
   
     override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression)
@@ -145,8 +147,9 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
   
         val spec = TransSpec.concatChildren(tree)
   
-        val theta = Table.constArray(Set(CArray[Double](res)))
-  
+        val jvalue = JArray(res.map(JNum(_)).toList)
+        val theta = Table.constEmptyArray.transform(transJValue(jvalue, TransSpec1.Id))
+
         val result = theta.transform(spec)
   
         val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
