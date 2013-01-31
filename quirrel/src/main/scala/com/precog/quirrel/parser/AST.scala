@@ -1019,6 +1019,10 @@ trait AST extends Phases {
       val sym = 'mod
     }
     
+    final case class Pow(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
+      val sym = 'pow
+    }
+
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'lt
     }

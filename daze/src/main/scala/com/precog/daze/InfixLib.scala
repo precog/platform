@@ -29,7 +29,7 @@ import com.precog.util.NumericComparisons
 
 trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
   trait InfixLib extends ColumnarTableLib {
-    import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom}
+    import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom, doubleIsDefined}
 
     def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
     
@@ -159,6 +159,39 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
           case (c1: NumColumn, c2: NumColumn) =>
             new NumFrom.NN(c1, c2, numNeZero, numMod)
+        }
+      }
+
+      val Pow = new Op2(InfixNamespace, "pow") {
+        val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+        def defined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
+        def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::pow") {
+          case (c1: DoubleColumn, c2: DoubleColumn) =>
+            new DoubleFrom.DD(c1, c2, defined, Math.pow)
+
+          case (c1: DoubleColumn, c2: LongColumn) =>
+            new DoubleFrom.DL(c1, c2, defined, Math.pow)
+
+          case (c1: DoubleColumn, c2: NumColumn) =>
+            new DoubleFrom.DN(c1, c2, defined, Math.pow)
+
+          case (c1: LongColumn, c2: DoubleColumn) =>
+            new DoubleFrom.LD(c1, c2, defined, Math.pow)
+
+          case (c1: NumColumn, c2: DoubleColumn) =>
+            new DoubleFrom.ND(c1, c2, defined, Math.pow)
+
+          case (c1: LongColumn, c2: LongColumn) =>
+            new DoubleFrom.LL(c1, c2, defined, Math.pow)
+
+          case (c1: LongColumn, c2: NumColumn) =>
+            new DoubleFrom.LN(c1, c2, defined, Math.pow)
+
+          case (c1: NumColumn, c2: LongColumn) =>
+            new DoubleFrom.NL(c1, c2, defined, Math.pow)
+
+          case (c1: NumColumn, c2: NumColumn) =>
+            new DoubleFrom.NN(c1, c2, defined, Math.pow)
         }
       }
 

@@ -422,6 +422,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Mod(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
       case Mod(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
       
+      case Pow(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Pow(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+
       case Lt(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
       case Lt(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
       
@@ -452,6 +455,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Mul(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Div(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Mod(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Pow(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       
       case Lt(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case LtEq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
