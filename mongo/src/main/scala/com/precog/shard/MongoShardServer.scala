@@ -1,7 +1,9 @@
 package com.precog.shard
 package mongo
 
-import com.precog.mongo._
+import akka.actor.ActorSystem
+import akka.dispatch.{ExecutionContext, Future, Promise}
+
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.daze._
@@ -20,8 +22,6 @@ import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
 
-import akka.actor.ActorSystem
-
 import scalaz._
 
 import org.streum.configrity.Configuration
@@ -34,7 +34,7 @@ object MongoShardServer extends BlueEyesServer with ShardService {
   val clock = Clock.System
 
   def configureShardState(config: Configuration) = Future {
-    val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
+    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
     BasicShardState(MongoQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 
@@ -74,7 +74,8 @@ Please note that path globs are not yet supported in Precog for MongoDB
                    request: HttpServletRequest,
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
-            response.sendRedirect("http://localhost:%d/index.html?apiKey=%s&analyticsService=http://localhost:%d/&version=false&useJsonp=true".format(serverPort, rootKey, quirrelPort))
+            val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase.split(':').head).getOrElse("localhost")
+            response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false&useJsonp=true".format(requestedHost, serverPort, rootKey, quirrelPort))
           }
         }
       }

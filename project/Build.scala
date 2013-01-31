@@ -4,6 +4,7 @@ import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
 import de.johoop.cpd4sbt.CopyPasteDetector._
+import net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -24,7 +25,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
-      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/releases/",
+      "Sonatype Releases"                 at "http://oss.sonatype.org/content/repositories/releases/",
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
@@ -83,6 +84,19 @@ object PlatformBuild extends Build {
     )
   )
 
+  val jettySettings = Seq(
+    libraryDependencies ++= Seq(
+      "org.eclipse.jetty" % "jetty-server"      % "8.1.3.v20120416",
+      "javax.servlet"     % "javax.servlet-api"   % "3.0.1"
+    ),
+    ivyXML :=
+    <dependencies>
+      <dependency org="org.eclipse.jetty" name="jetty-server" rev="8.1.3.v20120416">
+        <exclude org="org.eclipse.jetty.orbit" />
+      </dependency>
+    </dependencies>
+  )
+
   val jprofilerSettings = Seq(
     fork in profileTask := true,
     fork in run := true,
@@ -90,8 +104,8 @@ object PlatformBuild extends Build {
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
-    
-    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
+
+    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) map {
       (opts, lib, conf, id, d) =>
       // download jnilib if necessary. a bit sketchy, but convenient
       Process("./jprofiler/setup-jnilib.py").!!
@@ -99,7 +113,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ graphSettings ++ commonSettings
   val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ Seq(test in assembly := {}) ++ commonNexusSettings
 
@@ -108,7 +122,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, ratatoskr, mongo)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, ratatoskr, mongo, jdbc)
 
   /// Libraries ///
 
@@ -168,7 +182,10 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", muspelheim, pandora % "test->test")
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+
+  lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
+    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   /// Tooling ///
 
