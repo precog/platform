@@ -77,7 +77,7 @@ trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   }
 }
 
-trait LogisticRegressionSpec[M[+_]] extends Specification
+trait LogisticRegressionSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] 
     with LogisticRegressionTestSupport[M]
     with LongIdMemoryDatasetConsumer[M]{ self =>
@@ -314,4 +314,4 @@ trait LogisticRegressionSpec[M[+_]] extends Specification
   }
 }
 
-object LogisticRegressionSpec extends LogisticRegressionSpec[test.YId] with test.YIdInstances
+object LogisticRegressionSpecs extends LogisticRegressionSpecs[test.YId] with test.YIdInstances
