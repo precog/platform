@@ -41,7 +41,7 @@ import scalaz._
 import org.streum.configrity.Configuration
 
 object JDBCShardServer extends BlueEyesServer with ShardService  with StaticAPIKeyManagerComponent {
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
+  val actorSystem = ActorSystem("ExecutorSystem")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   val futureMonad: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
   
@@ -87,7 +87,7 @@ Please note that path globs are not yet supported in Precog for PostgreSQL
                    request: HttpServletRequest,
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
-            val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase).getOrElse("localhost")
+            val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase.split(':').head).getOrElse("localhost")
             response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false&useJsonp=true".format(requestedHost, serverPort, rootKey, quirrelPort))
           }
         }

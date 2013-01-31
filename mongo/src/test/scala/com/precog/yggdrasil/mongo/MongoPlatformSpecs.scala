@@ -156,6 +156,8 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   override def controlTimeout = Duration(10, "minutes")      // it's just unreasonable to run tests longer than this
 
+  def includeIdField = false
+
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
@@ -229,4 +231,20 @@ class MongoRankSpecs extends RankSpecs with MongoPlatformSpecs
 class MongoRenderStackSpecs extends RenderStackSpecs with MongoPlatformSpecs
 
 class MongoUndefinedLiteralSpecs extends UndefinedLiteralSpecs with MongoPlatformSpecs
+
+class MongoIdFieldSpecs extends MongoPlatformSpecs {
+  override def includeIdField = true
+
+  "Mongo's _id field" should {
+    "be included in results when configured" in {
+      val input = """
+          | campaigns := //campaigns 
+          | campaigns._id""".stripMargin
+
+      val results = evalE(input)
+
+      results must not(beEmpty)
+    }
+  }
+}
 
