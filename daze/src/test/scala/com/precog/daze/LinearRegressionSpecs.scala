@@ -119,9 +119,13 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       tmpFile.delete()
 
       val theta = result collect {
-        case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SArray(elems2) => elems2(0) }
-          val SDecimal(theta0) = elems(1)
+        case (ids, SObject(elems)) if ids.length == 0 => {
+          elems.keys mustEqual Set("Model1")
+
+          val SArray(arr1) = elems("Model1")
+
+          val SDecimal(theta1) = arr1(0) match { case SArray(elems2) => elems2(0) }
+          val SDecimal(theta0) = arr1(1)
           List(theta0.toDouble, theta1.toDouble)
         }
       }
@@ -177,11 +181,15 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       tmpFile.delete()
 
       val theta = result collect {
-        case (ids, SArray(elems)) if ids.length == 0 => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = elems(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = elems(1) 
+        case (ids, SObject(elems)) if ids.length == 0 => {
+          elems.keys mustEqual Set("Model1")
+
+          val SArray(arr1) = elems("Model1")
+
+          val SDecimal(theta1) = arr1(0) match { case SObject(map) => map("bar") }
+          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("baz") }
+          val SDecimal(theta3) = arr1(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta0) = arr1(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
         }
       }
@@ -244,26 +252,29 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       val result = testEval(input)
       tmpFile.delete()
 
-      result must haveSize(3)
+      result must haveSize(1)
 
-      def theta(numOfFields: Int) = result collect {
-        case (ids, SArray(elems)) if ids.length == 0 && elems(0).asInstanceOf[SObject].fields.size == numOfFields => {
-          val SDecimal(theta1) = elems(0) match { case SObject(map) => 
+      def theta(model: String) = result collect {
+        case (ids, SObject(elems)) if ids.length == 0 =>
+          elems.keys mustEqual Set("Model1", "Model2", "Model3")
+
+          val SArray(arr1) = elems(model)
+
+          val SDecimal(theta1) = arr1(0) match { case SObject(map) => 
             map("bar") match { case SObject(map) => 
               map("baz") match { case SArray(elems) =>
                 elems(0)
               }
             } 
           }
-          val SDecimal(theta2) = elems(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = elems(1) 
+          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("foo") }
+          val SDecimal(theta0) = arr1(1) 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
-        }
       }
 
-      thetasSchema1 = thetasSchema1 ++ theta(2)
-      thetasSchema2 = thetasSchema2 ++ theta(3)
-      thetasSchema3 = thetasSchema3 ++ theta(4)
+      thetasSchema1 = thetasSchema1 ++ theta("Model1")
+      thetasSchema2 = thetasSchema2 ++ theta("Model2")
+      thetasSchema3 = thetasSchema3 ++ theta("Model3")
 
       i += 1
     }
