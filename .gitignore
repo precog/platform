@@ -29,6 +29,9 @@ jprofiler.jnilib
 /mongo/proguard.log
 /mongo/precog*.zip
 /mongo/precog/
+/jdbc/proguard.log
+/jdbc/precog*.zip
+/jdbc/precog/
 .tag
-/personal/
+/personal
 

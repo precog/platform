@@ -48,7 +48,7 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
 
   lazy val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
+  implicit val M = new FutureMonad(executionContext)
 
   lazy val clock = blueeyes.util.Clock.System
 
