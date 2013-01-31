@@ -230,15 +230,43 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         
         case dag.Group(_, _, _) => sys.error("assertion error")
       }
-
+      
       def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
-        val assumptionCheck: StateT[N, EvaluatorState, Option[Table]] = for (state <- monadState.gets(identity)) yield state.assume.get(graph)
+        def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
+          for (state <- monadState.gets(identity)) yield state.assume.get(graph)
+        
+        def memoized(graph: DepGraph, f: DepGraph => StateT[N, EvaluatorState, PendingTable]) = {
+          def memoizedResult = graph match {
+            case graph: StagingPoint => {
+              for {
+                pending <- f(graph)
+                _ <- monadState.modify { state => state.copy(assume = state.assume + (graph -> pending.table)) }
+              } yield pending
+            }
+            
+            case _ => f(graph)
+          }
+  
+          assumptionCheck(graph) flatMap { assumedResult: Option[Table] =>
+            val liftedAssumption = assumedResult map {
+              monadState point PendingTable(_, graph, TransSpec1.Id)
+            }
+            
+            liftedAssumption getOrElse memoizedResult
+          }
+        }
         
         def get0(pt: PendingTable): (TransSpec1, DepGraph) = (pt.trans, pt.graph)
-        def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): PendingTable = pt.copy(trans = tg._1, graph = tg._2)
-        def init0(tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] = evalNotTransSpecable(tg._2)
+        
+        def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
+          for {
+            _ <- monadState.modify { state => state.copy(assume = state.assume + (tg._2 -> pt.table)) }
+          } yield pt.copy(trans = tg._1, graph = tg._2)
+
+        def init0(tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
+          memoized(tg._2, evalNotTransSpecable)
         
         type TSM[+T] = StateT[N, EvaluatorState, T]
         def evalTransSpecable(to: DepGraph): StateT[N, EvaluatorState, PendingTable] =
@@ -705,26 +733,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
         }
         
-        val result = evalTransSpecable(graph)
-        
-        def memoizedResult = graph match {
-          case graph: StagingPoint => {
-            for {
-              pending <- result
-              _ <- monadState.modify { state => state.copy(assume = state.assume + (graph -> pending.table)) }
-            } yield pending
-          }
-          
-          case _ => result
-        }
-
-        assumptionCheck flatMap { assumedResult: Option[Table] =>
-          val liftedAssumption = assumedResult map {
-            monadState point PendingTable(_, graph, TransSpec1.Id)
-          }
-          
-          liftedAssumption getOrElse memoizedResult
-        }
+        memoized(graph, evalTransSpecable)
       }
     
       /**
@@ -1129,6 +1138,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       reductions: Map[DepGraph, Option[CValue]] = Map.empty,
       extraCount: Int = 0
     )
+    
+    var hits = 0
+    var misses = 0
     
     private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
   }
