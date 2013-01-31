@@ -162,7 +162,7 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      val Pow = new Op2(InfixNamespace, "pow") {
+      val Pow = new Op2F2(InfixNamespace, "pow") {
         val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
         def defined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
         def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::pow") {
@@ -195,8 +195,7 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      class CompareOp2(name: String, f: Int => Boolean)
-      extends Op2F2(InfixNamespace, name) {
+      class CompareOp2(name: String, f: Int => Boolean) extends Op2F2(InfixNamespace, name) {
         val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
         import NumericComparisons.compare
         def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::compare") {
@@ -234,8 +233,7 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val Gt = new CompareOp2("gt", _ > 0)
       val GtEq = new CompareOp2("gte", _ >= 0)
 
-      class BoolOp2(name: String, f: (Boolean, Boolean) => Boolean)
-      extends Op2F2(InfixNamespace, name) {
+      class BoolOp2(name: String, f: (Boolean, Boolean) => Boolean) extends Op2F2(InfixNamespace, name) {
         val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
         def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::bool") {
           case (c1: BoolColumn, c2: BoolColumn) => new BoolFrom.BB(c1, c2, f)
