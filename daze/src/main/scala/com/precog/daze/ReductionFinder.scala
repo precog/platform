@@ -31,47 +31,6 @@ import com.precog.yggdrasil.CLong
 
 import scalaz.std.map._
 
-trait EvaluatorMethodsModule[M[+_]] extends DAG with OpFinderModule[M] {
-  import library._
-  import trans._
-
-  trait EvaluatorMethods extends OpFinder {
-    import dag._ 
-    import instructions._
-
-    type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
-    type TableTransSpec1 = TableTransSpec[Source1]
-    type TableTransSpec2 = TableTransSpec[Source2]
-    
-    def transFromBinOp[A <: SourceType](op: BinaryOperation, ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
-      case Eq => trans.Equal[A](left, right)
-      case NotEq => op1ForUnOp(Comp).spec(ctx)(trans.Equal[A](left, right))
-      case instructions.WrapObject => WrapObjectDynamic(left, right)
-      case JoinObject => InnerObjectConcat(left, right)
-      case JoinArray => InnerArrayConcat(left, right)
-      case instructions.ArraySwap => sys.error("nothing happens")
-      case DerefObject => DerefObjectDynamic(left, right)
-      case DerefMetadata => sys.error("cannot do a dynamic metadata deref")
-      case DerefArray => DerefArrayDynamic(left, right)
-      case _ => trans.Map2(left, right, op2ForBinOp(op).get.f2(ctx))     // if this fails, we're missing a case above
-    }
-
-    def makeTableTrans(tableTrans: TableTransSpec1): TransSpec1 = {
-      val wrapped = for ((key @ CPathField(fieldName), value) <- tableTrans) yield {
-        val mapped = TransSpec.deepMap(value) {
-          case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
-        }
-        
-        trans.WrapObject(mapped, fieldName)
-      }
-      
-      wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
-        trans.InnerObjectConcat(acc, ts)
-      }
-    }
-  }
-}
-
 trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
   type TS1 = trans.TransSpec1
   import library._
@@ -157,16 +116,14 @@ trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
           }
 
         case Join(op, _, left, Const(value)) =>
-          op2ForBinOp(op) map { _.f2(ctx).applyr(value) } match {
-            case Some(f1) => loop(left, t => f(trans.Map1(t, f1)))
-            case None => (f(Leaf(Source)), graph)
-          }
+          op2ForBinOp(op) map { op2 =>
+            loop(left, t => f(op2.spec(ctx)(t, ConstLiteral(value, t))))
+          } getOrElse (f(Leaf(Source)), graph)
             
         case Join(op, CrossLeftSort | CrossRightSort, Const(value), right) =>
-          op2ForBinOp(op) map { _.f2(ctx).applyl(value) } match {
-            case Some(f1) => loop(right, t => f(trans.Map1(t, f1)))
-            case None => (f(Leaf(Source)), graph)
-          }
+          op2ForBinOp(op) map { op2 =>
+            loop(right, t => f(op2.spec(ctx)(ConstLiteral(value, t), t)))
+          } getOrElse (f(Leaf(Source)), graph)
 
         case dag.Join(op, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
           val (targetTrans, targetAncestor) = loop(target, identity _)

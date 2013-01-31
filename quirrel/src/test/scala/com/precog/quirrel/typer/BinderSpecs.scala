@@ -738,6 +738,22 @@ object BinderSpecs extends Specification
       }
     }
     
+    "forward binding through pow" in {
+      {
+        val e @ Let(_, _, _, _, Pow(_, d: Dispatch, _)) = parseSingle("a := 42 a ^ 1")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+
+      {
+        val e @ Let(_, _, _, _, Pow(_, _, d: Dispatch)) = parseSingle("a := 42 1 ^ a")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+
     "forward binding through less-than" in {
       {
         val e @ Let(_, _, _, _, Lt(_, d: Dispatch, _)) = parseSingle("a := 42 a < 1")

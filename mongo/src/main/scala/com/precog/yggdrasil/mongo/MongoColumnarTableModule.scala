@@ -46,9 +46,11 @@ import com.mongodb.WriteConcern;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
+import com.mongodb.DBObject
 import com.mongodb.DBCursor;
 import com.mongodb.ServerAddress;
+
+import org.bson.types.ObjectId
 
 import java.io.File
 import java.util.SortedMap
@@ -57,7 +59,11 @@ import java.util.Comparator
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
+import org.joda.time.DateTime
+
 import com.weiglewilczek.slf4s.Logging
+
+import org.apache.commons.codec.binary.Hex
 
 import scalaz._
 import scalaz.Ordering._
@@ -69,8 +75,10 @@ import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.stream._
+
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.immutable.Queue
 
 import TableModule._
 
@@ -188,55 +196,153 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
     def makeSlice(cursorGen: () => DBCursor, skip: Int): (Slice, Option[Int]) = {
       import TransSpecModule.paths._
 
-      val idPath: CPath = Key \ 0
-
       // Sort by _id always to mimic JDBM
-      val cursor = cursorGen().sort(new BasicDBObject("_id", 1))skip(skip)
+      val cursor = cursorGen().sort(new BasicDBObject("_id", 1)).skip(skip).limit(yggConfig.maxSliceSize + 1)
+      val objects = cursor.toArray
+      cursor.close()
 
-      @tailrec def buildColArrays(from: DBCursor, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
-        if (sliceIndex < yggConfig.maxSliceSize && from.hasNext) {
-          // horribly inefficient, but a place to start
-          val Success(jv) = MongoToJson(from.next())
-          val refs = withIdsAndValues(jv, into, sliceIndex, yggConfig.maxSliceSize, Some({
-            jpath => if (jpath == JPath("._id")) {
-              idPath
-            } else {
-              Value \ CPath(jpath)
-            }
-          }))
-          buildColArrays(from, refs, sliceIndex + 1)
-        } else {
-          (into, sliceIndex)
-        }
-      }
-  
-      // FIXME: If cursor is empty the generated
-      // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-      // Slice#typed to fail unless it allows for vacuous success
+      val (hasMore, size0, columns0) = buildColumns(objects)
+
       val slice = new Slice {
-        val (cols, size) = buildColArrays(cursor, Map.empty[ColumnRef, ArrayColumn[_]], 0)
-        val columns = cols.flatMap {
-          // The identity column get duped to provide for both identity and an "_id" value
-          case (ref @ ColumnRef(`idPath`, CString), column)      =>
-            if (includeIdField) {
-              Seq(ColumnRef(Value \ CPath("._id"), CString) -> column,
-                  ref -> column)
-            } else {
-              Seq(ref -> column)
-            }
-          case nonId => Seq(nonId)
-        }
+        val size = size0
+        val columns = if (includeIdField) {
+          columns0 get ColumnRef(Key \ 0, CString) map { idCol =>
+            columns0 + (ColumnRef(Value \ CPathField("_id"), CString) -> idCol)
+          } getOrElse columns0
+        } else columns0
       }
 
-      val nextSkip = if (cursor.hasNext) {
+      // FIXME: If cursor is empty the generated columns won't satisfy
+      // sampleData.schema. This will cause the subsumption test in Slice#typed
+      // to fail unless it allows for vacuous success
+
+      val nextSkip = if (hasMore) {
         Some(skip + slice.size)
       } else {
         None
       }
 
-      cursor.close()
-
       (slice, nextSkip)
+    }
+
+    private def buildColumns(dbObjs: java.util.List[DBObject]): (Boolean, Int, Map[ColumnRef, Column]) = {
+      val sliceSize = dbObjs.size
+
+      val acc = mutable.Map.empty[(List[CPathNode], CType), ArrayColumn[_]]
+
+      def insertValue(rprefix: List[CPathNode], row: Int, value: Any) {
+        value match {
+          case null =>
+            acc.getOrElseUpdate((rprefix, CNull), {
+              MutableNullColumn.empty()
+            }).asInstanceOf[MutableNullColumn].tap(_.update(row, true))
+
+          case objId: ObjectId =>
+            // TODO: We should ensure this matches up w/ BlueEyes exactly.
+            val value = "ObjectId(\"" + Hex.encodeHexString(objId.toByteArray) + "\")"
+            val col = acc.getOrElseUpdate((rprefix, CString), {
+              ArrayStrColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayStrColumn]
+            col.update(row, value)
+
+          case str: String =>
+            val col = acc.getOrElseUpdate((rprefix, CString), {
+              ArrayStrColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayStrColumn]
+            col.update(row, str)
+
+          case num: java.lang.Integer =>
+            val col = acc.getOrElseUpdate((rprefix, CLong), {
+              ArrayLongColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayLongColumn]
+            col.update(row, num.longValue)
+
+          case num: java.lang.Long =>
+            val col = acc.getOrElseUpdate((rprefix, CLong), {
+              ArrayLongColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayLongColumn]
+            col.update(row, num.longValue)
+
+          case num: java.lang.Float =>
+            val col = acc.getOrElseUpdate((rprefix, CDouble), {
+              ArrayDoubleColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayDoubleColumn]
+            col.update(row, num.doubleValue)
+
+          case num: java.lang.Double =>
+            val col = acc.getOrElseUpdate((rprefix, CDouble), {
+              ArrayDoubleColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayDoubleColumn]
+            col.update(row, num.doubleValue)
+
+          case bool: java.lang.Boolean =>
+            val col = acc.getOrElseUpdate((rprefix, CBoolean), {
+              ArrayBoolColumn.empty()
+            }).asInstanceOf[ArrayBoolColumn]
+            col.update(row, bool.booleanValue)
+
+          case array: java.util.ArrayList[_] if array.isEmpty =>
+            val col = acc.getOrElseUpdate((rprefix, CEmptyArray), {
+              MutableEmptyArrayColumn.empty()
+            }).asInstanceOf[MutableEmptyArrayColumn]
+            col.update(row, true)
+
+          case array: java.util.ArrayList[_] =>
+            val values = array.listIterator()
+            while (values.hasNext) {
+              val idx = values.nextIndex()
+              val value = values.next()
+              insertValue(CPathIndex(idx) :: rprefix, row, value)
+            }
+
+          case dbObj: DBObject =>
+            val keys = dbObj.keySet()
+            if (keys.isEmpty) {
+              acc.getOrElseUpdate((rprefix, CEmptyObject), {
+                MutableEmptyObjectColumn.empty()
+              }).asInstanceOf[MutableEmptyObjectColumn].tap(_.update(row, true))
+            } else {
+              val keys = dbObj.keySet().iterator()
+              while (keys.hasNext) {
+                val k = keys.next()
+                insertValue(CPathField(k) :: rprefix, row, dbObj.get(k))
+              }
+            }
+
+          case date: java.util.Date =>
+            val col = acc.getOrElseUpdate((rprefix, CDate), {
+              ArrayDateColumn.empty(sliceSize)
+            }).asInstanceOf[ArrayDateColumn]
+            col.update(row, new DateTime(date))
+        }
+      }
+
+      def insert(dbObj: DBObject, row: Int) = {
+        import TransSpecModule.paths._
+
+        if (dbObj.containsField("_id")) {
+          insertValue(CPathIndex(0) :: Key :: Nil, row, dbObj.get("_id"))
+        }
+
+        val keys = dbObj.keySet().iterator()
+        val valuePrefix = Value :: Nil
+        while (keys.hasNext) {
+          val key = keys.next()
+          if (key != "_id")
+            insertValue(CPathField(key) :: valuePrefix, row, dbObj.get(key))
+        }
+      }
+
+      val dbObjIter = dbObjs.iterator()
+      var row = 0
+      while (dbObjIter.hasNext && row < yggConfig.maxSliceSize) {
+        insert(dbObjIter.next(), row)
+        row += 1
+      }
+
+      (dbObjIter.hasNext, row, acc.map({ case ((rprefix, cType), col) =>
+        (ColumnRef(CPath(rprefix.reverse), cType), col)
+      }).toMap)
     }
   }
 }

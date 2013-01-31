@@ -42,6 +42,7 @@ import scala.annotation.tailrec
 
 trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
   type Lib <: TableLib
+  implicit def M: Monad[M]
 
   object TableLib {
     private val defaultMorphism1Opcode = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -67,43 +68,63 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     def _lib2: Set[Op2] = Set()
     def _libReduction: Set[Reduction] = Set()
 
-    sealed trait MorphismAlignment 
-    object MorphismAlignment {
-      case object Match extends MorphismAlignment
-      case object Cross extends MorphismAlignment
+    trait Morph1Apply {
+      def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
 
-    abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like {
+    sealed trait MorphismAlignment 
+    object MorphismAlignment {
+      case class Match(morph: M[Morph1Apply]) extends MorphismAlignment
+      case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
+      case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
+    }
+
+    abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like with Morph1Apply {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
-      def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
     
     abstract class Morphism2(val namespace: Vector[String], val name: String) extends Morphism2Like {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       val multivariate: Boolean = false
       def alignment: MorphismAlignment
-      def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
-   
-    abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A]
 
+    abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A]
+      
       def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1(this)
       def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
     }
 
     abstract class Op1F1(namespace: Vector[String], name: String) extends Op1(namespace, name) {
+      override def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.Map1(source, f1(ctx))
+      
       def f1(ctx: EvaluationContext): F1
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
-
+    
     abstract class Op2(namespace: Vector[String], name: String) extends Morphism2(namespace, name) with Op2Like {
-      val alignment = MorphismAlignment.Match
-      def f2(ctx: EvaluationContext): F2
-      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2 is wrong")
+      val alignment = MorphismAlignment.Match(M.point {
+        new Morph1Apply { 
+          def apply(input: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2 is wrong")
+        }
+      })
+
+      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A]
+      
+      def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2(this)
     }
 
-    abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike {
+    abstract class Op2F2(namespace: Vector[String], name: String) extends Op2(namespace, name) {
+      override def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
+        trans.Map2(left, right, f2(ctx))
+      
+      def f2(ctx: EvaluationContext): F2
+      override def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2F2(this)
+    }
+
+    abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike with Morph1Apply {
       val opcode: Int = defaultReductionOpcode.getAndIncrement
       type Result
 
@@ -127,13 +148,16 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
 
       def monoid = r.monoid
       def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
+        def reduce(schema: CSchema, range: Range): Result = {
           idx match {
             case Some(jdx) =>
-              val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
+              val cols0 = new CSchema {
+                def columnRefs = schema.columnRefs
+                def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+              }
               r.reducer(ctx).reduce(cols0, range)
             case None => 
-              r.reducer(ctx).reduce(cols, range)
+              r.reducer(ctx).reduce(schema, range)
           }
         }
       }
@@ -153,14 +177,17 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
               type Result = (x.Result, acc.Result) 
 
               def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-                def reduce(cols: JType => Set[Column], range: Range): Result = {
+                def reduce(schema: CSchema, range: Range): Result = {
                   idx match {
                     case Some(jdx) =>
-                      val cols0 = (tpe: JType) => cols(JArrayFixedT(Map(jdx -> tpe)))
-                      val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(cols, range))
+                      val cols0 = new CSchema {
+                        def columnRefs = schema.columnRefs
+                        def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+                      }
+                      val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(schema, range))
                       (a, b)
                     case None => 
-                      (x.reducer(ctx).reduce(cols, range), acc.reducer(ctx).reduce(cols, range))
+                      (x.reducer(ctx).reduce(schema, range), acc.reducer(ctx).reduce(schema, range))
                   }
                 }
               }
@@ -215,6 +242,7 @@ trait StdLibModule[M[+_]]
     with StatsLibModule[M]
     with LogisticRegressionLibModule[M]
     with LinearRegressionLibModule[M]
+    with PredictionLibModule[M]
     with FSLibModule[M] {
   type Lib <: StdLib
 
@@ -230,10 +258,10 @@ trait StdLibModule[M[+_]]
       with StatsLib
       with LogisticRegressionLib
       with LinearRegressionLib
+      with PredictionLib
       with FSLib
 }
 
-//TODO: Move to ColumnSupport or some such place
 object StdLib {
   import java.lang.Double.{isNaN, isInfinite}
 

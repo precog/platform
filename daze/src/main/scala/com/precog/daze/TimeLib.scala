@@ -119,7 +119,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     DateTimeZone.setDefault(DateTimeZone.UTC)
 
-    object ParseDateTime extends Op2(TimeNamespace, "parseDateTime") {
+    object ParseDateTime extends Op2F2(TimeNamespace, "parseDateTime") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
         case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
@@ -160,11 +160,11 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.Map1(source, f1(ctx))
     }
 
-    object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
+    object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
         case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
@@ -184,7 +184,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    trait TimePlus extends Op2 {
+    trait TimePlus extends Op2F2 {
       val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
         case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
@@ -228,40 +228,40 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def plus(d: DateTime, i: Int): String
     }
 
-    object YearsPlus extends Op2(TimeNamespace, "yearsPlus") with TimePlus{ 
+    object YearsPlus extends Op2F2(TimeNamespace, "yearsPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.years(i)).toString()
     }
 
-    object MonthsPlus extends Op2(TimeNamespace, "monthsPlus") with TimePlus{ 
+    object MonthsPlus extends Op2F2(TimeNamespace, "monthsPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.months(i)).toString()
     }
 
-    object WeeksPlus extends Op2(TimeNamespace, "weeksPlus") with TimePlus{ 
+    object WeeksPlus extends Op2F2(TimeNamespace, "weeksPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.weeks(i)).toString()
     }
 
-    object DaysPlus extends Op2(TimeNamespace, "daysPlus") with TimePlus{ 
+    object DaysPlus extends Op2F2(TimeNamespace, "daysPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.days(i)).toString()
     }
 
-    object HoursPlus extends Op2(TimeNamespace, "hoursPlus") with TimePlus{ 
+    object HoursPlus extends Op2F2(TimeNamespace, "hoursPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.hours(i)).toString()
     }
 
-    object MinutesPlus extends Op2(TimeNamespace, "minutesPlus") with TimePlus{ 
+    object MinutesPlus extends Op2F2(TimeNamespace, "minutesPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.minutes(i)).toString()
     }
 
-    object SecondsPlus extends Op2(TimeNamespace, "secondsPlus") with TimePlus{ 
+    object SecondsPlus extends Op2F2(TimeNamespace, "secondsPlus") with TimePlus{ 
       def plus(d: DateTime, i: Int) = d.plus(Period.seconds(i)).toString()
     }
 
-    object MillisPlus extends Op2(TimeNamespace, "millisPlus") with TimePlus{
+    object MillisPlus extends Op2F2(TimeNamespace, "millisPlus") with TimePlus{
       def plus(d: DateTime, i: Int) = d.plus(Period.millis(i)).toString()
     }
     
 
-    trait TimeBetween extends Op2 {
+    trait TimeBetween extends Op2F2 {
       val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
         case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
@@ -282,39 +282,39 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def between(d1: DateTime, d2: DateTime): Long
     }
 
-    object YearsBetween extends Op2(TimeNamespace, "yearsBetween") with TimeBetween{
+    object YearsBetween extends Op2F2(TimeNamespace, "yearsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
     }
 
-    object MonthsBetween extends Op2(TimeNamespace, "monthsBetween") with TimeBetween{
+    object MonthsBetween extends Op2F2(TimeNamespace, "monthsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
     }
 
-    object WeeksBetween extends Op2(TimeNamespace, "weeksBetween") with TimeBetween{
+    object WeeksBetween extends Op2F2(TimeNamespace, "weeksBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
     }
 
-    object DaysBetween extends Op2(TimeNamespace, "daysBetween") with TimeBetween{
+    object DaysBetween extends Op2F2(TimeNamespace, "daysBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
     }
 
-    object HoursBetween extends Op2(TimeNamespace, "hoursBetween") with TimeBetween{
+    object HoursBetween extends Op2F2(TimeNamespace, "hoursBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
     }
 
-    object MinutesBetween extends Op2(TimeNamespace, "minutesBetween") with TimeBetween{
+    object MinutesBetween extends Op2F2(TimeNamespace, "minutesBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
     }
 
-    object SecondsBetween extends Op2(TimeNamespace, "secondsBetween") with TimeBetween{
+    object SecondsBetween extends Op2F2(TimeNamespace, "secondsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
     }
 
-    object MillisBetween extends Op2(TimeNamespace, "millisBetween") with TimeBetween{
+    object MillisBetween extends Op2F2(TimeNamespace, "millisBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
     }
 
-    object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
+    object MillisToISO extends Op2F2(TimeNamespace, "millisToISO") {
       val tpe = BinaryOperationType(JNumberT, JTextT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::millisToIso") {
         case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {

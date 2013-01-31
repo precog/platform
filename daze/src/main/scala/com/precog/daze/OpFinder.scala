@@ -53,6 +53,7 @@ trait StdLibOpFinderModule[M[+_]] extends Instructions with StdLibModule[M] {
         case Mul => Some(Infix.Mul)
         case Div => Some(Infix.Div)
         case Mod => Some(Infix.Mod)
+        case Pow => Some(Infix.Pow)
         
         case Lt => Some(Infix.Lt)
         case LtEq => Some(Infix.LtEq)

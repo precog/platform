@@ -22,6 +22,8 @@ package daze
 
 import com.precog.yggdrasil._
 
+import Function._
+
 trait StaticInlinerModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
   import dag._
     
@@ -72,8 +74,10 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
           val left2 = recurse(left)
           val right2 = recurse(right)
           
-          op2ForBinOp(op) flatMap { op2 =>
-            (left2, right2) match {
+          val graphM = for {
+            op2 <- op2ForBinOp(op)
+            op2F2 <- op2.fold(op2 = const(None), op2F2 = { Some(_) })
+            result <- (left2, right2) match {
               case (left2 @ Const(CUndefined), _) =>
                 Some(Const(CUndefined)(left2.loc))
               
@@ -82,7 +86,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               
               case (left2 @ Const(leftValue), right2 @ Const(rightValue)) => {
                 val result = for {
-                  col <- op2.f2(ctx).partialLeft(leftValue).apply(rightValue)
+                  col <- op2F2.f2(ctx).partialLeft(leftValue).apply(rightValue)
                   if col isDefinedAt 0
                 } yield col cValue 0
                 
@@ -91,7 +95,9 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               
               case _ => None
             }
-          } getOrElse Join(op, sort, left2, right2)(graph.loc)
+          } yield result
+          
+          graphM getOrElse Join(op, sort, left2, right2)(graph.loc)
         }
         
         case graph @ Filter(sort @ (CrossLeftSort | CrossRightSort), left, right) => {
