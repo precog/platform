@@ -99,7 +99,8 @@ object PlatformBuild extends Build {
       "com.chuusai"                 %% "shapeless"          % "1.2.3",
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
       "org.spire-math"              %% "spire"              % "0.2.0-M2",
-      "com.rubiconproject.oss"      % "jchronic"            % "0.2.6"
+      "com.rubiconproject.oss"      % "jchronic"            % "0.2.6",
+      "javax.servlet"               % "servlet-api"         % "2.4" % "provided"
     )
   )
 

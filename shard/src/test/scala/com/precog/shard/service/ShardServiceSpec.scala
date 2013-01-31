@@ -362,8 +362,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
 trait TestPlatform extends ManagedPlatform { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
-  import AkkaTypeClasses._
-  
+
   def actorSystem: ActorSystem  
   implicit def executionContext: ExecutionContext
   val to = Duration(3, "seconds")
