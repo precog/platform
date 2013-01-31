@@ -23,7 +23,6 @@ import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
 import de.johoop.cpd4sbt.CopyPasteDetector._
-import net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -122,8 +121,8 @@ object PlatformBuild extends Build {
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
-
-    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) map {
+    
+    javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
       (opts, lib, conf, id, d) =>
       // download jnilib if necessary. a bit sketchy, but convenient
       Process("./jprofiler/setup-jnilib.py").!!
@@ -131,7 +130,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ graphSettings ++ commonSettings
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
   val commonNexusSettings = nexusSettings ++ commonPluginsSettings
   val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ Seq(test in assembly := {}) ++ commonNexusSettings
 
