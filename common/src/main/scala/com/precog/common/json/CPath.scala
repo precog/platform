@@ -1,5 +1,6 @@
 package com.precog.common.json
 
+
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
