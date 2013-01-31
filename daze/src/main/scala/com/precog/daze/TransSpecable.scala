@@ -73,7 +73,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def done(node: DepGraph) = true
     })
     
-    def snd[A, B](a: A, b: B) = b
+    def snd[A, B](a: A, b: B): Option[B] = Some(b)
     
     def mkTransSpec(to: DepGraph, from: DepGraph, ctx: EvaluationContext) =
       mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, Some(from), ctx, identity, snd, some).map(_._1)  
@@ -81,7 +81,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
     def findTransSpecAndAncestor(to: DepGraph, ctx: EvaluationContext) =
       mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, None, ctx, identity, snd, some)  
       
-    def mkTransSpecWithState[N[+_] : Monad, S](to: DepGraph, from: Option[DepGraph], ctx: EvaluationContext, get: S => (TransSpec1, DepGraph), set: (S, (TransSpec1, DepGraph)) => S, init: ((TransSpec1, DepGraph)) => N[S]): N[S] = {
+    def mkTransSpecWithState[N[+_] : Monad, S](to: DepGraph, from: Option[DepGraph], ctx: EvaluationContext, get: S => (TransSpec1, DepGraph), set: (S, (TransSpec1, DepGraph)) => N[S], init: ((TransSpec1, DepGraph)) => N[S]): N[S] = {
       foldDownTransSpecable(to, from)(new TransSpecableFold[N[S]] {
         import trans._
 
@@ -91,34 +91,34 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         }
         
         def EqualLiteral(node: Join)(parent: N[S], value: CValue, invert: Boolean) =
-          parent.map(leftMap(_)(trans.EqualLiteral(_, value, invert)))
+          parent.flatMap(leftMap(_)(trans.EqualLiteral(_, value, invert)))
           
         def WrapObject(node: Join)(parent: N[S], field: String) =
-          parent.map(leftMap(_)(trans.WrapObject(_, field)))
+          parent.flatMap(leftMap(_)(trans.WrapObject(_, field)))
           
         def DerefObjectStatic(node: Join)(parent: N[S], field: String) =
-          parent.map(leftMap(_)(trans.DerefObjectStatic(_, CPathField(field))))
+          parent.flatMap(leftMap(_)(trans.DerefObjectStatic(_, CPathField(field))))
         
         def DerefMetadataStatic(node: Join)(parent: N[S], field: String) =
-          parent.map(leftMap(_)(trans.DerefMetadataStatic(_, CPathMeta(field))))
+          parent.flatMap(leftMap(_)(trans.DerefMetadataStatic(_, CPathMeta(field))))
         
         def DerefArrayStatic(node: Join)(parent: N[S], index: Int) =
-          parent.map(leftMap(_)(trans.DerefArrayStatic(_, CPathIndex(index))))
+          parent.flatMap(leftMap(_)(trans.DerefArrayStatic(_, CPathIndex(index))))
         
         def ArraySwap(node: Join)(parent: N[S], index: Int) = 
-          parent.map(leftMap(_)(trans.ArraySwap(_, index)))
+          parent.flatMap(leftMap(_)(trans.ArraySwap(_, index)))
         
         def InnerObjectConcat(node: Join)(parent: N[S]) =
-          parent.map(leftMap(_)(trans.InnerObjectConcat(_)))
+          parent.flatMap(leftMap(_)(trans.InnerObjectConcat(_)))
           
         def InnerArrayConcat(node: Join)(parent: N[S]) =
-          parent.map(leftMap(_)(trans.InnerArrayConcat(_)))
+          parent.flatMap(leftMap(_)(trans.InnerArrayConcat(_)))
 
         def Map1Left(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyr(value))))
+          parent.flatMap(leftMap(_)(trans.Map1(_, op.f2(ctx).applyr(value))))
           
         def Map1Right(node: Join)(parent: N[S], op: Op2, graph: DepGraph, value: CValue) =
-          parent.map(leftMap(_)(trans.Map1(_, op.f2(ctx).applyl(value))))
+          parent.flatMap(leftMap(_)(trans.Map1(_, op.f2(ctx).applyl(value))))
         
         def binOp(node: Join)(leftParent: N[S], rightParent: => N[S], op: BinaryOperation) = {
           for {
@@ -126,7 +126,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
             (l, al) =  get(pl)
             pr      <- rightParent
             (r, ar) =  get(pr)
-            result  <- if(al == ar) set(pl, (transFromBinOp(op, ctx)(l, r), al)).point[N] else init(Leaf(Source), node)  
+            result  <-  if(al == ar) set(pl, (transFromBinOp(op, ctx)(l, r), al)) else init(Leaf(Source), node)  
           } yield result
         }
           
@@ -136,14 +136,14 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
             (l, al) =  get(pl)
             pr      <- rightParent
             (r, ar) =  get(pr)
-            result  <- if(al == ar) set(pl, (trans.Filter(l, r), al)).point[N] else init(Leaf(Source), node)
+            result  <- if(al == ar) set(pl, (trans.Filter(l, r), al)) else init(Leaf(Source), node)
           } yield result
         
         def WrapArray(node: Operate)(parent: N[S]) =
-          parent.map(leftMap(_)(trans.WrapArray(_)))
+          parent.flatMap(leftMap(_)(trans.WrapArray(_)))
         
         def Op1(node: Operate)(parent: N[S], op: UnaryOperation) =
-          parent.map(leftMap(_)(parent => op1ForUnOp(op).spec(ctx)(parent)))
+          parent.flatMap(leftMap(_)(parent => op1ForUnOp(op).spec(ctx)(parent)))
 
         def unmatched(node: DepGraph) = init(Leaf(Source), node)
         
