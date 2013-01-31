@@ -261,6 +261,12 @@ trait AST extends Phases {
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
       
+      case Pow(loc, left, right) => {
+        indent + "type: pow\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+      }
+
       case Lt(loc, left, right) => {
         indent + "type: lt\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
@@ -678,6 +684,9 @@ trait AST extends Phases {
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
       case Mod(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Pow(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
       case Lt(_, left, right) =>
