@@ -1046,9 +1046,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       extraCount: Int = 0
     )
     
-    var hits = 0
-    var misses = 0
-    
     private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
   }
 }
