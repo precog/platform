@@ -140,6 +140,41 @@ trait ClusteringSpecs extends EvalStackSpecs {
       }
     }
 
+    "make a histogram of clusters" in {
+      val input = """
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        clustering := std::stats::kMedians({ HeightIncm: h, Weight: w }, 5)
+        assignments := std::stats::assignClusters(medals, clustering)
+
+        medals' := medals with { cluster: assignments.Model1 }
+
+        solve 'cluster
+          clusters := medals'.cluster where medals'.cluster = 'cluster
+          { numPtsInCluster: count(clusters), clusterId: 'cluster }
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(5)
+
+      val validClusters = (1 to 5).map("Cluster" + _).toSet
+
+      results must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          elems.keys mustEqual Set("numPtsInCluster", "clusterId") 
+          elems("numPtsInCluster") must beLike {
+            case SDecimal(d) => d must be_>=(BigDecimal(1))
+          }
+          elems("clusterId") must beLike {
+            case SString(clusterId) => validClusters must contain(clusterId)
+          }
+      }
+    }
+
     "assign values to a cluster when field names of cluster aren't present in data" in {
       val input = """
           medals := //summer_games/london_medals
