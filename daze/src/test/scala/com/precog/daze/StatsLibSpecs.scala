@@ -180,35 +180,51 @@ trait StatsLibSpecs[M[+_]] extends Specification
     "compute rank, denseRank, indexedRank on Doubles and Longs" in {
       val line = Line(1, 1, "")
       
-      val data = dag.LoadLocal(Const(CString("/hom/numbersDoubleLong"))(line))(line)
+      val data = dag.LoadLocal(Const(CString("/het/numbersDoubleLong"))(line))(line)
     
-      def DAGger(rank: Morphism1, name: String) = {
-        Join(WrapObject, CrossLeftSort,
-          Const(CString(name))(line),
-          dag.Morph1(rank, data)(line))(line)
-      }
+      def wrapper(d: DepGraph, name: String) = 
+        Join(WrapObject, CrossLeftSort, Const(CString(name))(line), d)(line)
 
-      val rank = DAGger(Rank, "rank")
-      val denseRank = DAGger(DenseRank, "denseRank")
-      val indexedRank = DAGger(IndexedRank, "indexedRank")
-      val wrappedData = Join(WrapObject, CrossLeftSort, Const(CString("point"))(line), data)(line)
+      def morpher(rank: Morphism1, name: String) =
+        wrapper(dag.Morph1(rank, data)(line), name)
 
-      val input = Join(JoinObject, IdentitySort,
-        Join(JoinObject, IdentitySort,
-          Join(JoinObject, IdentitySort,
-            rank,
-            denseRank)(line),
-          indexedRank)(line),
-      wrappedData)(line)
+      def joiner(lhs: DepGraph, rhs: DepGraph): DepGraph =
+        Join(JoinObject, IdentitySort, lhs, rhs)(line)
 
-      val result = testEval(input)
-      println("result: " + result)
-    
-      //val result2 = result collect {
-      //  case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
-      //}
-    
-      //result2 must contain(0,2,3,4,7,8).only
+      val input = List(
+        morpher(Rank, "rank"),
+        morpher(DenseRank, "denseRank"),
+        morpher(IndexedRank, "indexedRank"),
+        wrapper(data, "point")
+      ).reduceLeft(joiner)
+
+      // sort a tuple by its first (Long) field
+      val ordering = scala.math.Ordering.by[(Long, _), Long](_._1)
+
+      // this is ugly, but so is the structure coming out of testEval :/
+      val result: List[Map[String, SValue]] = testEval(input).toList.map {
+        case (Vector(k), SObject(v)) => (k, v)
+      }.sorted(ordering).map(_._2)
+
+      val expected = List(
+        Map("indexedRank" -> SDecimal(0), "denseRank" -> SDecimal(0), "rank" -> SDecimal(0), "point" -> SDecimal(-30.2)),
+        Map("indexedRank" -> SDecimal(1), "denseRank" -> SDecimal(0), "rank" -> SDecimal(0), "point" -> SDecimal(-30.2)),
+        Map("indexedRank" -> SDecimal(2), "denseRank" -> SDecimal(1), "rank" -> SDecimal(2), "point" -> SDecimal(-2)),
+        Map("indexedRank" -> SDecimal(3), "denseRank" -> SDecimal(1), "rank" -> SDecimal(2), "point" -> SDecimal(-2)),
+        Map("indexedRank" -> SDecimal(4), "denseRank" -> SDecimal(2), "rank" -> SDecimal(4), "point" -> SDecimal(0)),
+        Map("indexedRank" -> SDecimal(5), "denseRank" -> SDecimal(3), "rank" -> SDecimal(5), "point" -> SDecimal(10.1)),
+        Map("indexedRank" -> SDecimal(6), "denseRank" -> SDecimal(4), "rank" -> SDecimal(6), "point" -> SDecimal(12.6)),
+        Map("indexedRank" -> SDecimal(7), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(8), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(9), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(10), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(11), "denseRank" -> SDecimal(6), "rank" -> SDecimal(11), "point" -> SDecimal(30)),
+        Map("indexedRank" -> SDecimal(12), "denseRank" -> SDecimal(7), "rank" -> SDecimal(12), "point" -> SDecimal(40.3)),
+        Map("indexedRank" -> SDecimal(13), "denseRank" -> SDecimal(7), "rank" -> SDecimal(12), "point" -> SDecimal(40.3)),
+        Map("indexedRank" -> SDecimal(14), "denseRank" -> SDecimal(8), "rank" -> SDecimal(14), "point" -> SDecimal(50))
+      )
+
+      result must_== expected
     }
 
     "compute indexedRank" in {
