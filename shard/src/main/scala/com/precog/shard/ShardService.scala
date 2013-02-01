@@ -110,14 +110,6 @@ trait ShardService extends
       "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
   )
 
-  private implicit val onQRError: (HttpFailure, String) => HttpResponse[QueryResult] = { (failure, msg) =>
-    HttpResponse[QueryResult](status = failure, content = Some(Left(JString(msg))))
-  }
-
-  private implicit val onChunkError: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, msg) =>
-    HttpResponse[ByteChunk](status = failure, content = Some(Left(ByteBuffer.wrap(msg.getBytes))))
-  }
-
   private val queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes))
@@ -141,10 +133,16 @@ trait ShardService extends
 
   private val cf = implicitly[ByteChunk => Future[JValue]]
 
+  def shardService[F[+_]](service: HttpService[Future[JValue], F[Future[HttpResponse[QueryResult]]]])(implicit
+      F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {
+    service map { _ map { _ map { _ map queryResultToByteChunk } } } contramap cf
+  }
+
   private def asyncHandler(state: ShardState) = {
-    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = {
-      apiKey(k => state.apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
-        path("/analytics/queries") {
+    //val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = {
+    val queryHandler = jsonApiKey(state.apiKeyFinder) {
+      path("/analytics/queries") {
+        shardService[({ type λ[+α] = (APIKey => α) })#λ] {
           asyncQuery(post(asyncQueryService(state)))
         }
       }
@@ -152,40 +150,39 @@ trait ShardService extends
 
     state match {
       case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _) =>
-        // [ByteChunk, Future[HttpResponse[ByteChunk]]]
-        apiKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
+        jsonApiKey(apiKeyFinder) {
           path("/analytics/queries") {
             path("'jobId") {
               get(new AsyncQueryResultServiceHandler(jobManager)) ~
               delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
             }
           }
-        } ~ { 
-          queryHandler map { _ map { _ map queryResultToByteChunk } } contramap cf
-        }
+        } ~ queryHandler
 
       case _ =>
-        queryHandler map { _ map { _ map queryResultToByteChunk } } contramap cf
+        queryHandler
     }
   }
 
   private def syncHandler(state: ShardState) = {
     jsonp[ByteChunk] {
-      apiKey(k => state.apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey))) {
-        dataPath("analytics/fs") {
+      jsonApiKey(state.apiKeyFinder) {
+        dataPath("/analytics/fs") {
           query[ByteChunk, HttpResponse[ByteChunk]] {
             get {
-              syncQueryService(state) map { _ map { _ map { _ map queryResultToByteChunk } } } contramap cf
+              shardService[({ type λ[+α] = ((APIKey, Path, String, QueryOptions) => α) })#λ] {
+                syncQueryService(state)
+              }
             } ~
             options {
               (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
             }
           }
         } ~
-        dataPath("meta/fs") {
+        dataPath("/meta/fs") {
           get {
-            new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder) map {
-              _ map { _ map { _ map queryResultToByteChunk } }
+            shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
+              new BrowseServiceHandler[Future[JValue]](state.platform.metadataClient, state.apiKeyFinder)
             }
           } ~
           options {

@@ -94,7 +94,7 @@ trait TestShardService extends
   val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "minutes"))
+    def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
   }
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future]
@@ -126,7 +126,7 @@ trait TestShardService extends
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
-      override val accessControl = new UnrestrictedAccessControl[Future]()
+      override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)
 
       override val jobManager = self.jobManager
 
@@ -179,7 +179,7 @@ trait TestShardService extends
   */
 }
 
-class ShardServiceSpec extends TestShardService with FutureMatchers {
+class ShardServiceSpec extends TestShardService {
   def syncClient(query: String, apiKey: Option[String] = Some(testAPIKey)) = {
     apiKey.map{ queryService.query("apiKey", _) }.getOrElse(queryService).query("q", query)
   }
@@ -209,8 +209,8 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     data.foldLeft("") { _ + _.toString } map (JParser.parseUnsafe(_))
   }
 
-  def extractJobId(stream: StreamT[Future, CharBuffer]): Future[JobId] = {
-    extractResult(stream) map (_ \ "jobId") map {
+  def extractJobId(jv: JValue): JobId = {
+    jv \ "jobId" match {
       case JString(jobId) => jobId
       case _ => sys.error("This is not JSON! GIVE ME JSON!")
     }
@@ -231,26 +231,26 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
 
   "Shard query service" should {
     "handle absolute accessible query from root path" in {
-      query(accessibleAbsoluteQuery) must whenDelivered { beLike {
+      query(accessibleAbsoluteQuery).copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
-      }}
+      }
     }
 
     "create a job when an async query is posted" in {
       val res = for {
-        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
-        jobId <- extractJobId(res)
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Left(res)), _) <- asyncQuery(simpleQuery)
+        jobId = extractJobId(res)
         job <- jobManager.findJob(jobId)
       } yield job
 
-      res must whenDelivered { beLike {
+      res.copoint must beLike {
         case Some(Job(_, _, _, _, _, _)) => ok
-      }}
+      }
     }
     "results of an async job must eventually be made available" in {
       val res = for {
-        HttpResponse(HttpStatus(Accepted, _), _, Some(Right(res)), _) <- asyncQuery(simpleQuery)
-        jobId <- extractJobId(res)
+        HttpResponse(HttpStatus(Accepted, _), _, Some(Left(res)), _) <- asyncQuery(simpleQuery)
+        jobId = extractJobId(res)
         _ <- waitForJobCompletion(jobId)
         HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- asyncQueryResults(jobId)
         result <- extractResult(data)
@@ -262,39 +262,39 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         JField("data", JArray(JNum(2) :: Nil)) ::
         Nil)
 
-      res must whenDelivered { beLike {
+      res.copoint must beLike {
         case `expected` => ok
-      }}
+      }
     }
     "reject absolute inaccessible query from root path" in {
-      query(inaccessibleAbsoluteQuery) must whenDelivered { beLike {
+      query(inaccessibleAbsoluteQuery).copoint must beLike {
         case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
-      }}
+      }
     }
     "handle relative query from accessible non-root path" in {
-      query(relativeQuery, path = "/test") must whenDelivered { beLike {
+      query(relativeQuery, path = "/test").copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
-      }}
+      }
     }
     "reject relative query from inaccessible non-root path" in {
-      query(relativeQuery, path = "/inaccessible") must whenDelivered { beLike {
+      query(relativeQuery, path = "/inaccessible").copoint must beLike {
         case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
-      }}
+      }
     }
     "reject query when no API key provided" in {
-      query(simpleQuery, None) must whenDelivered { beLike {
+      query(simpleQuery, None).copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
-      }}
+      }
     }
     "reject query when API key not found" in {
-      query(simpleQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
-      }}
+      query(simpleQuery, Some("not-gonna-find-it")).copoint must beLike {
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+      }
     }
     "reject query when grant is expired" in {
-      query(accessibleAbsoluteQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
+      query(accessibleAbsoluteQuery, Some(expiredAPIKey)).copoint must beLike {
         case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
-      }}
+      }
     }
     "return warnings/errors if format is 'detailed'" in {
       val result = for {
@@ -308,9 +308,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         JField("data", JArray(JNum(2) :: Nil)) ::
         Nil)
 
-      result must whenDelivered { beLike {
+      result.copoint must beLike {
         case `expected` => ok
-      }}
+      }
     }
     "return just the results if format is 'simple'" in {
       val result = for {
@@ -319,9 +319,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       } yield result
 
       val expected = JArray(JNum(2) :: Nil)
-      result must whenDelivered { beLike {
+      result.copoint must beLike {
         case `expected` => ok
-      }}
+      }
     }
   }
   
@@ -332,29 +332,29 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   "Shard browse service" should {
     "handle browse for API key accessible path" in {
       val obj = JObject(Map("foo" -> JArray(JString("foo")::JString("bar")::Nil)))
-      browse() must whenDelivered { beLike {
+      browse().copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
-      }}
+      }
     }
     "reject browse for non-API key accessible path" in {
-      browse(path = "") must whenDelivered { beLike {
+      browse(path = "").copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
-      }}
+      }
     }
     "reject browse when no API key provided" in {
-      browse(None) must whenDelivered { beLike {
+      browse(None).copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
-      }}
+      }
     }
     "reject browse when API key not found" in {
-      browse(Some("not-gonna-find-it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
-      }}
+      browse(Some("not-gonna-find-it")).copoint must beLike {
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+      }
     }
     "reject browse when grant expired" in {
-      browse(Some(expiredAPIKey), path = "/test") must whenDelivered { beLike {
+      browse(Some(expiredAPIKey), path = "/test").copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
-      }}
+      }
     }
   }
 }
@@ -371,7 +371,7 @@ trait TestPlatform extends ManagedPlatform { self =>
   val ownerMap: Map[Path, Set[AccountId]]
 
   private def wrap[M[+_]: Monad](a: JArray): StreamT[M, CharBuffer] = {
-    val str = a.toString
+    val str = a.renderCompact
     val buffer = CharBuffer.allocate(str.length)
     buffer.put(str)
     buffer.flip()
@@ -399,16 +399,16 @@ trait TestPlatform extends ManagedPlatform { self =>
 
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-    val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
-    val allowed = Await.result(Future.sequence(requiredPaths.map {
-      path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
-    }).map(_.forall(identity)), to)
-    
-    if(allowed)
-          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
-    else
-          shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
+      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+        val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
+        val allowed = Await.result(Future.sequence(requiredPaths.map {
+          path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
+        }).map(_.forall(identity)), to)
+        
+        if(allowed)
+              shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+        else
+              shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
       }
     }
   }

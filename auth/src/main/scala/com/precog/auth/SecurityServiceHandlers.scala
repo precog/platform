@@ -21,7 +21,7 @@ package com.precog.auth
 
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.common.services.ServiceHandlerUtil
+import com.precog.common.services.ServiceHandlerUtil._
 
 import blueeyes.bkka._
 import blueeyes.core.http._
@@ -52,7 +52,7 @@ import scalaz.syntax.std.option._
 
 import shapeless._
 
-class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val clock: Clock)(implicit executor: ExecutionContext) extends ServiceHandlerUtil {
+class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val clock: Clock)(implicit executor: ExecutionContext) {
   import com.precog.common.security.service.v1
   type R = HttpResponse[JValue]
 

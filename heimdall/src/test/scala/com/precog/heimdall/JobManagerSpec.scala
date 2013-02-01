@@ -79,11 +79,11 @@ class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self
 
   include(new JobManagerSpec[Future] {
     val validAPIKey = "Anything should work!"
-    implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(executionContext) with Copointed[Future] {
+    implicit lazy val M: Monad[Future] with Copointed[Future] = new FutureMonad(executionContext) with Copointed[Future] {
       def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
     }
 
-    val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default, new InMemoryFileStorage[Future])
+    lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default, new InMemoryFileStorage[Future])
   })
 
   step {

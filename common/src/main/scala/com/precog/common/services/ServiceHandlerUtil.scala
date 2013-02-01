@@ -28,7 +28,10 @@ import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
-trait ServiceHandlerUtil {
+object ServiceHandlerUtil {
+  def forbidden(message: String): HttpResponse[JValue] =
+    HttpResponse[JValue](HttpStatus(Forbidden), content = Some(JString(message)))
+
   def badRequest(message: String, details: Option[String] = None): HttpResponse[JValue] = 
     HttpResponse[JValue](HttpStatus(BadRequest, message), content = Some(jobject(jfield("error", details getOrElse message))))
   

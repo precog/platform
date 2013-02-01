@@ -74,7 +74,8 @@ object Responses {
 }
 
 class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyFinder: APIKeyFinder[Future], clock: Clock, rootAccountId: String)(implicit executor: ExecutionContext) 
-    extends ServiceHandlerUtil with Logging {
+    extends Logging {
+  import ServiceHandlerUtil._
 
   def withAccountAdmin[A](accountId: String, auth: Account, request: HttpRequest[_])(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
     accountManager.findAccountById(accountId) flatMap { 
