@@ -152,6 +152,8 @@ trait InstructionGenerators extends Instructions {
       Sub,
       Mul,
       Div,
+      Mod,
+      Pow,
       
       Lt,
       LtEq,

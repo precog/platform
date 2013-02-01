@@ -91,6 +91,8 @@ trait BytecodeReader extends Reader {
         case 0x01 => Some(Sub)
         case 0x02 => Some(Mul)
         case 0x03 => Some(Div)
+        case 0x04 => Some(Mod)
+        case 0x05 => Some(Pow)
         
         case 0x10 => Some(Lt)
         case 0x11 => Some(LtEq)

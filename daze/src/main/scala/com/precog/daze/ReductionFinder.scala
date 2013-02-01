@@ -42,7 +42,7 @@ trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] wi
 
     case class ReduceInfo(reduce: dag.Reduce, spec: TransSpec1, ancestor: DepGraph)
 
-    def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext) = {
+    def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext): ReduceInfo = {
       val (spec, ancestor) = findTransSpecAndAncestor(reduce.parent, ctx).getOrElse((Leaf(Source), reduce.parent))
       ReduceInfo(reduce, spec, ancestor)
     }

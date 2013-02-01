@@ -36,38 +36,38 @@ trait TypeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     object isNumber extends Op1(TypeNamespace, "isNumber") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JNumberT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JNumberT)
     }
 
     object isBoolean extends Op1(TypeNamespace, "isBoolean") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JBooleanT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JBooleanT)
     }
 
     object isNull extends Op1(TypeNamespace, "isNull") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JNullT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JNullT)
     }
 
     object isString extends Op1(TypeNamespace, "isString") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JTextT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JTextT)
     }
 
     object isObject extends Op1(TypeNamespace, "isObject") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JObjectUnfixedT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JObjectUnfixedT)
     }
 
     object isArray extends Op1(TypeNamespace, "isArray") {
       val tpe = UnaryOperationType(JType.JUniverseT, JBooleanT)
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.IsType(transSpec, JArrayUnfixedT)
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.IsType(source, JArrayUnfixedT)
     }
   }
 }

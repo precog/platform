@@ -17,30 +17,46 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "common"
+package com.precog
+package daze
 
-scalacOptions += "-Ydependent-method-types"
+import com.precog.yggdrasil.table._
 
-libraryDependencies ++= Seq(
-  "ch.qos.logback" %  "logback-classic"    % "1.0.0",
-  "org.streum"     %  "configrity_2.9.1" % "0.9.0",
-  "org.apache"     %% "kafka-core" % "0.7.5",
-  "com.chuusai"    %% "shapeless" % "1.2.3"
-)
+import scala.annotation.tailrec
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.2" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-      <exclude org="org.apache.hadoop"/>
-      <exclude org="org.apache.avro"/>
-    </dependency>
-    <dependency org="org.apache.avro" name="avro" rev="1.4.0">
-      <exclude org="org.mortbay.jetty"/>
-    </dependency>
-  </dependencies>
+object RangeUtil {
+  /**
+   * Loops through a Range much more efficiently than Range#foreach, running
+   * the provided callback 'f' on each position. Assumes that step is 1.
+   */
+  def loop(r: Range)(f: Int => Unit) {
+    var i = r.start
+    val limit = r.end
+    while (i < limit) {
+      f(i)
+      i += 1
+    }
+  }
 
-parallelExecution in test := false
+  /**
+   * Like loop but also includes a built-in check for whether the given Column
+   * is defined for this particular row.
+   */
+  def loopDefined(r: Range, col: Column)(f: Int => Unit): Boolean = {
+    @tailrec def unseen(i: Int, limit: Int): Boolean = if (i < limit) {
+      if (col.isDefinedAt(i)) { f(i); seen(i + 1, limit) }
+      else unseen(i + 1, limit)
+    } else {
+      false
+    }
+
+    @tailrec def seen(i: Int, limit: Int): Boolean = if (i < limit) {
+      if (col.isDefinedAt(i)) f(i)
+      seen(i + 1, limit)
+    } else {
+      true
+    }
+
+    unseen(r.start, r.end)
+  }
+}

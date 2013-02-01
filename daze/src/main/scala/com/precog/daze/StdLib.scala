@@ -90,17 +90,20 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     }
 
     abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A]
-
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A]
+      
       def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1(this)
       def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
     }
 
     abstract class Op1F1(namespace: Vector[String], name: String) extends Op1(namespace, name) {
+      override def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.Map1(source, f1(ctx))
+      
       def f1(ctx: EvaluationContext): F1
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
-
+    
     abstract class Op2(namespace: Vector[String], name: String) extends Morphism2(namespace, name) with Op2Like {
       val alignment = MorphismAlignment.Match(M.point {
         new Morph1Apply { 
@@ -108,7 +111,17 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
         }
       })
 
+      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A]
+      
+      def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2(this)
+    }
+
+    abstract class Op2F2(namespace: Vector[String], name: String) extends Op2(namespace, name) {
+      override def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
+        trans.Map2(left, right, f2(ctx))
+      
       def f2(ctx: EvaluationContext): F2
+      override def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2F2(this)
     }
 
     abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike with Morph1Apply {

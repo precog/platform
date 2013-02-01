@@ -109,6 +109,8 @@ trait BytecodeWriter extends Writer with Version {
       case Sub => 0x01
       case Mul => 0x02
       case Div => 0x03
+      case Mod => 0x04
+      case Pow => 0x05
       
       case Lt => 0x10
       case LtEq => 0x11

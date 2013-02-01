@@ -850,6 +850,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2 must contain(-1)
         }
       }
+
+      "pow" >> {
+        val line = Line(1, 1, "")
+
+        val input = Join(Pow, CrossLeftSort,
+          Const(CLong(11))(line),
+          Const(CLong(3))(line))(line)
+
+        testEval(input) { result =>
+          result must haveSize(1)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+
+          result2 must contain(1331)
+        }
+      }
     }
     
     "evaluate a binary numeric operation mapped over heterogeneous numeric set" >> {
