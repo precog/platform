@@ -11,7 +11,6 @@ trait ClusteringSpecs extends EvalStackSpecs {
   }
 
   "clustering" should {
-  /*
     "return correctly structured results in simple case" in {
       val input = """
           medals := //summer_games/london_medals
@@ -24,7 +23,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1")
@@ -33,7 +32,6 @@ trait ClusteringSpecs extends EvalStackSpecs {
             clusters.keys mustEqual Set("Cluster1", "Cluster2", "Cluster3")
             clusterSchema(clusters) must_== List("height", "weight")
           }
-        case _ => ko
       }
     }
 
@@ -66,7 +64,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       val validClusters = (1 to 4).map("Cluster" + _).toSet
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(1)
           elems.keys mustEqual Set("Model1")
@@ -74,10 +72,9 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems("Model1") must beLike {
             case SString(c1) => validClusters must contain(c1)
           }
-        case _ => ko
       }
     }
-*/
+
     "join cluster information to original data" in {
       val input = """
         medals := //summer_games/london_medals
@@ -105,21 +102,24 @@ trait ClusteringSpecs extends EvalStackSpecs {
       val resultsCount = evalE(input2)
 
       val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+
       results must haveSize(count)
+      results must not beEmpty
 
       val validClusters = (1 to 4).map("Cluster" + _).toSet
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           elems.keys must contain("cluster")
           elems("cluster") must beLike {
-            //todo wrong!
-            case SString(clusterId) => validClusters must contain(clusterId)
+            case SObject(obj) =>
+              obj.keys mustEqual Set("Model1")
+              obj("Model1") must beLike {
+                case SString(clusterId) => validClusters must contain(clusterId)
+              }
           }
-        case _ => ko
       }
     }
-    /*
 
     "assign values to a cluster when field names of cluster aren't present in data" in {
       val input = """
@@ -145,11 +145,10 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1", "Model2", "Model3", "Model4")
-        case _ => ko
       }
     }
 
@@ -222,15 +221,14 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1")
           elems("Model1") must beLike {
             case SObject(obj) => obj.keySet mustEqual (1 to 6).map("Cluster" + _).toSet
           }
-        case _ => ko
       }
-    }*/
+    }
   }
 }

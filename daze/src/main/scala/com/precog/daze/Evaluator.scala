@@ -331,7 +331,7 @@ trait Evaluator[M[+_]] extends DAG
             })
 
             (transformed, morph1) = transformedAndMorph1
-            
+
             back <- transState liftM morph1(transformed, ctx) 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
@@ -674,13 +674,11 @@ trait Evaluator[M[+_]] extends DAG
                     case _ => sys.error("unreachable code")
                   }
 
-                  println("prefixLength: " + prefixLength)
                   val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op, ctx))
 
-                  val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))//.printer("table left \n \n \n").transform(TransSpec1.Id)
-                  val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))//.printer("table right \n \n \n").transform(TransSpec1.Id)
+                  val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
+                  val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
                   val result = join(leftResult, rightResult)(key, spec)
-                  //result.printer("joined table").transform(TransSpec1.Id)
 
                   PendingTable(result, graph, TransSpec1.Id)
 
@@ -692,8 +690,6 @@ trait Evaluator[M[+_]] extends DAG
         }
   
         case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
-          println("op: " + op)
-
           val isLeft = joinSort == CrossLeftSort
 
           for {
@@ -1205,9 +1201,6 @@ trait Evaluator[M[+_]] extends DAG
   private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
     val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
     val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
-    println("key transspec: " + key)
-    println("spec: " + spec)
-    result.printer("cogrouped table").transform(TransSpec1.Id)
 
     result.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
   }
@@ -1229,10 +1222,6 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
-    println("sharedLength: " + sharedLength)
-    println("leftLength: " + leftLength)
-    println("rightLength: " + rightLength)
-
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
