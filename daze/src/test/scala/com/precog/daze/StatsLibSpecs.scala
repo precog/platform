@@ -177,6 +177,40 @@ trait StatsLibSpecs[M[+_]] extends Specification
       result2 must contain(0,2,3,4,7,8).only
     }
 
+    "compute rank, denseRank, indexedRank on Doubles and Longs" in {
+      val line = Line(1, 1, "")
+      
+      val data = dag.LoadLocal(Const(CString("/hom/numbersDoubleLong"))(line))(line)
+    
+      def DAGger(rank: Morphism1, name: String) = {
+        Join(WrapObject, CrossLeftSort,
+          Const(CString(name))(line),
+          dag.Morph1(rank, data)(line))(line)
+      }
+
+      val rank = DAGger(Rank, "rank")
+      val denseRank = DAGger(DenseRank, "denseRank")
+      val indexedRank = DAGger(IndexedRank, "indexedRank")
+      val wrappedData = Join(WrapObject, CrossLeftSort, Const(CString("point"))(line), data)(line)
+
+      val input = Join(JoinObject, IdentitySort,
+        Join(JoinObject, IdentitySort,
+          Join(JoinObject, IdentitySort,
+            rank,
+            denseRank)(line),
+          indexedRank)(line),
+      wrappedData)(line)
+
+      val result = testEval(input)
+      println("result: " + result)
+    
+      //val result2 = result collect {
+      //  case (ids, SDecimal(d)) if ids.length == 1 => d.toInt
+      //}
+    
+      //result2 must contain(0,2,3,4,7,8).only
+    }
+
     "compute indexedRank" in {
       val line = Line(1, 1, "")
     
