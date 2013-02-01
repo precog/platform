@@ -110,8 +110,7 @@ trait MergeSpec[M[+_]] extends
           GroupingSpec.Intersection
         )
   
-      def evaluator(groupKey: Table, partition: GroupId => M[Table]) = {
-        val keyJson = groupKey.toJson.copoint.head
+      def evaluator(key: JValue, partition: GroupId => M[Table]) = {
         val K0 = JParser.parse("""{"1":0,"2":4}""")
         val K1 = JParser.parse("""{"1":1,"2":5}""")
         val K2 = JParser.parse("""{"1":2,"2":6}""")
@@ -136,7 +135,7 @@ trait MergeSpec[M[+_]] extends
         val r2 = fromJson(JParser.parseManyFromString(r2Json).valueOr(throw _).toStream)
         val r3 = fromJson(JParser.parseManyFromString(r3Json).valueOr(throw _).toStream)
           
-        (keyJson match {
+        (key match {
           case K0 => {
             //println("key: "+keyJson+" partition(0):")
             //partition(0).flatMap(_.toJson).copoint.foreach(println)
@@ -227,8 +226,7 @@ trait MergeSpec[M[+_]] extends
           GroupingSpec.Intersection
         )
 
-      def evaluator(groupKey: Table, partition: GroupId => M[Table]) = {
-        val keyJson = groupKey.toJson.copoint.head
+      def evaluator(key: JValue, partition: GroupId => M[Table]) = {
         val K0 = JParser.parse("""{"1":"1996","extra0":true,"extra1":true}""")
         val K1 = JParser.parse("""{"1":"2000","extra0":true,"extra1":true}""")
         val K2 = JParser.parse("""{"1":"2004","extra0":true,"extra1":true}""")
@@ -251,9 +249,8 @@ trait MergeSpec[M[+_]] extends
         val r1 = fromJson(JParser.parseManyFromString(r1Json).valueOr(throw _).toStream)
         val r2 = fromJson(JParser.parseManyFromString(r2Json).valueOr(throw _).toStream)
         val r3 = fromJson(JParser.parseManyFromString(r3Json).valueOr(throw _).toStream)
-          
 
-        (keyJson match {
+        (key match {
           case K0 => {
             //println("key: "+keyJson+" partition(0):")
             //partition(0).flatMap(_.toJson).copoint.foreach(println)
