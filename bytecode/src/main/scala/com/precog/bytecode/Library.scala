@@ -48,7 +48,7 @@ trait Morphism2Like {
   val opcode: Int
   val tpe: BinaryOperationType
   val retainIds: Boolean = false
-  def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
+  val idAlignment: IdentityAlignment = IdentityAlignment.MatchAlignment
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn

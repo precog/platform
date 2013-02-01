@@ -59,7 +59,10 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
             case ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype) => 
               val idxCols = schema.columns(JObjectFixedT(Map("key" -> JArrayFixedT(Map(idx -> JNumberT)))))  
               assert(idxCols.size == 1)
-              (idx, idxCols.head match { case (col: LongColumn) => col })
+              (idx, idxCols.head match {
+                case (col: LongColumn) => col
+                case _ => sys.error("expected LongColumn")
+              })
           }
 
           val deref = indexedCols.toList.sortBy(_._1).map(_._2)
@@ -81,7 +84,10 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
                 jtpe map { tpe => 
                   val res = schema.columns(tpe)
                   assert(res.size == 1)
-                  (cpath, res.head match { case (col: DoubleColumn) => col })
+                  (cpath, res.head match {
+                    case (col: DoubleColumn) => col
+                    case _ => sys.error("expected DoubleColumn")
+                  })
                 }
               }
             }
@@ -103,7 +109,10 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
               jtpe map { tpe => 
                 val res = schema.columns(tpe)
                 assert(res.size == 1)
-                res.head match { case (col: DoubleColumn) => col }
+                res.head match {
+                  case (col: DoubleColumn) => col
+                  case _ => sys.error("expected DoubleColumn")
+                }
               }
             }
           }
@@ -125,7 +134,7 @@ trait PredictionHelper[M[+_]] extends GenOpcode[M] {
           }
 
           (i: Int) => joined collect { case (field, (values, constant)) if constant.isDefinedAt(i) => 
-            val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(0), rest @ _*), col) if col.isDefinedAt(i) => 
+            val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(_), CPathIndex(0), rest @ _*), col) if col.isDefinedAt(i) => 
               val paths = TableModule.paths.Value +: rest
               (CPath(paths: _*), col.apply(i))
             }

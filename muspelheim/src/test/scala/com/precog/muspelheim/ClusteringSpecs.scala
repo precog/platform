@@ -30,6 +30,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
   }
 
   "clustering" should {
+  /*
     "return correctly structured results in simple case" in {
       val input = """
           medals := //summer_games/london_medals
@@ -48,6 +49,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems.keys mustEqual Set("Model1")
           elems("Model1") must beLike { case SObject(clusters) =>
             clusters must haveSize(3)
+            clusters.keys mustEqual Set("Cluster1", "Cluster2", "Cluster3")
             clusterSchema(clusters) must_== List("height", "weight")
           }
         case _ => ko
@@ -94,6 +96,49 @@ trait ClusteringSpecs extends EvalStackSpecs {
         case _ => ko
       }
     }
+*/
+    "join cluster information to original data" in {
+      val input = """
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        clustering := std::stats::kMedians({ HeightIncm: h, Weight: w }, 3)
+        assignments := std::stats::assignClusters(medals, clustering)
+
+        medals with { cluster: assignments }
+        --assignments with { points: medals }
+      """.stripMargin
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        count({ height: h, weight: w })
+      """
+
+      val results = evalE(input)
+      val resultsCount = evalE(input2)
+
+      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+      results must haveSize(count)
+
+      val validClusters = (1 to 4).map("Cluster" + _).toSet
+
+      forall(results) {
+        case (ids, SObject(elems)) =>
+          elems.keys must contain("cluster")
+          elems("cluster") must beLike {
+            //todo wrong!
+            case SString(clusterId) => validClusters must contain(clusterId)
+          }
+        case _ => ko
+      }
+    }
+    /*
 
     "assign values to a cluster when field names of cluster aren't present in data" in {
       val input = """
@@ -205,6 +250,6 @@ trait ClusteringSpecs extends EvalStackSpecs {
           }
         case _ => ko
       }
-    }
+    }*/
   }
 }

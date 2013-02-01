@@ -678,7 +678,7 @@ trait DAG extends Instructions with TransSpecModule {
     case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) parent.identities
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort
@@ -694,7 +694,7 @@ trait DAG extends Instructions with TransSpecModule {
           if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
           else left.identities ++ right.identities
         }
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort

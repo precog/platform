@@ -80,7 +80,6 @@ trait AssignClustersSpecs[M[+_]] extends Specification
   }
 
   "assign clusters" should {
-  /*
     "assign correctly with a single schema" in {
       val GeneratedPointSet(points, centers) = genPoints(3000, 4, 8)
 
@@ -181,7 +180,7 @@ trait AssignClustersSpecs[M[+_]] extends Specification
           }
         }
       }
-    }*/
+    }
 
     "assign correctly with multiple rows of schema with overlapping modelIds" in {
       val line = Line(0, "")
@@ -191,10 +190,19 @@ trait AssignClustersSpecs[M[+_]] extends Specification
         dag.LoadLocal(line, Const(line, CString("/hom/clusteringModel"))))
 
       val result0 = testEval(input)
-      println("result: " + result0)
 
-      result0 must haveSize(14)
-      
+      result0 must haveSize(7)
+
+      val result = result0 collect { case (ids, value) if ids.size == 2 => value }
+
+      result mustEqual Set(
+        (SObject(Map("Model1" -> SString("Cluster2")))), 
+        (SObject(Map("Model2" -> SString("Cluster1")))),
+        (SObject(Map("Model2" -> SString("Cluster1")))), 
+        (SObject(Map("Model1" -> SString("Cluster2")))), 
+        (SObject(Map("Model1" -> SString("Cluster2")))), 
+        (SObject(Map("Model1" -> SString("Cluster3")))), 
+        (SObject(Map("Model1" -> SString("Cluster1"))))) 
     }
   }
 }
