@@ -162,10 +162,13 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      val Pow = new Op2(InfixNamespace, "pow") {
+      // Separate trait for use in MathLib
+      trait Power {
+        def cf2pName: String
+
         val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
         def defined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
-        def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix::pow") {
+        def f2(ctx: EvaluationContext): F2 = CF2P(cf2pName) {
           case (c1: DoubleColumn, c2: DoubleColumn) =>
             new DoubleFrom.DD(c1, c2, defined, Math.pow)
 
@@ -193,6 +196,10 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           case (c1: NumColumn, c2: NumColumn) =>
             new DoubleFrom.NN(c1, c2, defined, Math.pow)
         }
+      }
+
+      object Pow extends Op2(InfixNamespace, "pow") with Power {
+        val cf2pName = "builtin::infix::pow"
       }
 
       class CompareOp2(name: String, f: Int => Boolean)

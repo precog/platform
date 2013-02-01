@@ -27,8 +27,8 @@ import yggdrasil._
 import yggdrasil.table._
 import TransSpecModule._
 
-trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  trait MathLib extends ColumnarTableLib {
+trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] with InfixLibModule[M] {
+  trait MathLib extends ColumnarTableLib with InfixLib {
     import trans._
   
     val MathNamespace = Vector("std", "math")
@@ -40,6 +40,10 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     import StdLib.{DoubleFrom, doubleIsDefined}
     import java.lang.Math
   
+    object pow extends Op2(MathNamespace, "pow") with Infix.Power {
+      val cf2pName = "builtin::math::op2dd::pow"
+    }
+
     abstract class Op1DD(name: String, defined: Double => Boolean, f: Double => Double)
     extends Op1F1(MathNamespace, name) {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
@@ -154,9 +158,7 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object min extends Op2DDD("min", bothDefined, Math.min)
   
     object hypot extends Op2DDD("hypot", bothDefined, Math.hypot)
-  
-    object pow extends Op2DDD("pow", bothDefined, Math.pow)
-  
+
     object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
   
     @deprecated
