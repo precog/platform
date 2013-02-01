@@ -41,8 +41,7 @@ import Validation._
 
 import blueeyes.json._
 
-// TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
+trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   type IdType
 
   type X = Throwable
@@ -55,7 +54,8 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] {
   def consumeEval(apiKey: APIKey, graph: DepGraph, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     val ctx = EvaluationContext(apiKey, prefix, new DateTime())
     Validation.fromTryCatch {
-      val result = eval(graph, ctx, optimize)
+      implicit val nt = NaturalTransformation.refl[M]
+      val result = Evaluator(M).eval(graph, ctx, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JUndefined
       }}

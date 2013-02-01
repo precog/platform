@@ -17,9 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+resolvers += Classpaths.typesafeResolver
+
 resolvers ++= Seq(
   "sbt-idea-repo" at "http://mpeltonen.github.com/maven/",
-  "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots")
+  "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots",
+  "scct-github-repository" at "http://mtkopone.github.com/scct/maven-repo")
 
 libraryDependencies ++= Seq( 
   Defaults.sbtPluginExtra("com.eed3si9n" % "sbt-assembly" % "0.7.2", "0.11.2", "2.9.1" ),
@@ -28,3 +31,8 @@ libraryDependencies ++= Seq(
 )
 
 addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "2.1.0")
+
+addSbtPlugin("reaktor" % "sbt-scct" % "0.2-SNAPSHOT")
+
+addSbtPlugin("de.johoop" % "cpd4sbt" % "1.1.0")
+

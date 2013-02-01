@@ -21,8 +21,6 @@ package com.precog
 package quirrel
 package emitter
 
-import com.precog.bytecode.{Instructions, StaticLibrary}
-
 import org.specs2.mutable._
 
 import java.io.File
@@ -43,9 +41,10 @@ object EmitterSpecs extends Specification
     with Compiler
     with Emitter
     with RawErrors 
-    with StaticLibrary {
+    with StaticLibrarySpec {
 
   import instructions._
+  import library._
 
   def compileEmit(input: String) = {
     val tree = compileSingle(input.stripMargin)
@@ -94,6 +93,19 @@ object EmitterSpecs extends Specification
       testEmit("undefined")(
         Vector(
           PushUndefined))
+    }
+    
+    "emit child of import" in {
+      testEmit("import std 42")(
+        Vector(PushNum("42")))
+    }
+    
+    "emit assert" in {
+      testEmit("assert true 42")(
+        Vector(
+          PushTrue,
+          PushNum("42"),
+          Assert))
     }
 
     "emit filter of two where'd loads with value provenance" >> {
@@ -244,10 +256,13 @@ object EmitterSpecs extends Specification
     "emit line information for cross for division of load in static provenance with load in value provenance" in {
       testEmitLine("load(\"foo\") * 2")(
         Vector(
-          Line(1,"load(\"foo\") * 2"),
+          Line(1, 6, "load(\"foo\") * 2"),
           PushString("foo"),
+          Line(1, 1, "load(\"foo\") * 2"),
           LoadLocal,
+          Line(1, 15, "load(\"foo\") * 2"),
           PushNum("2"),
+          Line(1, 1, "load(\"foo\") * 2"),
           Map2Cross(Mul)))
     }
 
@@ -1608,7 +1623,7 @@ object EmitterSpecs extends Specification
       }
     }
 
-    // Regression test for #39652091
+    // Regression test for #PLATFORM-503 (Pivotal #39652091)
     "not emit dups inside functions (might have let bindings with formals)" in {
       val input = """
         |
@@ -1627,6 +1642,50 @@ object EmitterSpecs extends Specification
 
       result must contain(PushString("India"))
       result must contain(PushString("Canada"))
+    }
+
+    // Regression test for #PLATFORM-652
+    "if/then/else compiles into match instead of cross" in {
+      val input = """
+        | conversions := //conversions
+        | conversions' := conversions with
+        | {female: if conversions.customer.gender = "female" then 1 else 0}
+        | conversions'
+        """.stripMargin
+
+      val result = compileEmit(input)
+
+      result must contain(Map2Match(JoinObject))
+      result must not(contain(Map2Cross(JoinObject)))
+    }
+    
+    // regression test for PLATFORM-909
+    "produce valid bytecode for double-constrained group set should produce" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo' := foo where foo = 'a
+        |   count(foo' where foo' = 'a)
+        | """.stripMargin
+        
+      testEmit(input)(Vector(
+        PushString("/foo"),
+        Morph1(BuiltInMorphism1(expandGlob)),
+        LoadLocal,
+        Dup,
+        KeyPart(1),
+        Swap(1),
+        Group(0),
+        Split,
+        PushGroup(0),
+        Dup,
+        Swap(1),
+        PushKey(1),
+        Map2Cross(Eq),
+        FilterMatch,
+        Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+        Merge))
     }
   }
   

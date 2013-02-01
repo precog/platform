@@ -58,31 +58,31 @@ trait TypeInferencer extends DAG {
         graph match {
           case _: Root => typing 
     
-          case New(_, parent) => inner(jtpe, typing, parent)
+          case New(parent) => inner(jtpe, typing, parent)
     
-          case ld @ LoadLocal(_, parent, _) =>
+          case ld @ LoadLocal(parent, _) =>
             val typing0 = inner(JTextT, typing, parent)
             typing0 get ld map { jtpes => typing + (ld -> (jtpes + jtpe)) } getOrElse (typing + (ld -> Set(jtpe)))
   
-          case Operate(_, op, parent) => inner(op.tpe.arg, typing, parent)
+          case Operate(op, parent) => inner(op.tpe.arg, typing, parent)
     
-          case Reduce(_, red, parent) => inner(red.tpe.arg, typing, parent)
+          case Reduce(red, parent) => inner(red.tpe.arg, typing, parent)
 
           // TODO: this is correct, but could be more precise
           // we should use the trans specs to narrow the possible types of parent
-          case MegaReduce(_, _, parent) => inner(JType.JUnfixedT, typing, parent)
+          case MegaReduce(_, parent) => inner(JType.JUnfixedT, typing, parent)
     
-          case Morph1(_, m, parent) => inner(m.tpe.arg, typing, parent)
+          case Morph1(m, parent) => inner(m.tpe.arg, typing, parent)
     
-          case Morph2(_, m, left, right) => inner(m.tpe.arg1, inner(m.tpe.arg0, typing, left), right)
+          case Morph2(m, left, right) => inner(m.tpe.arg1, inner(m.tpe.arg0, typing, left), right)
     
-          case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
+          case Join(DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
             inner(JObjectFixedT(Map(str -> jtpe)), typing, left)
     
-          case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
+          case Join(DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
             inner(JArrayFixedT(Map(d.toInt -> jtpe)), typing, left)
     
-          case Join(_, WrapObject, CrossLeftSort | CrossRightSort, ConstString(str), right) => {
+          case Join(WrapObject, CrossLeftSort | CrossRightSort, ConstString(str), right) => {
             val jtpe2 = jtpe match {
               case JObjectFixedT(map) =>
                 map get str getOrElse universe
@@ -93,7 +93,7 @@ trait TypeInferencer extends DAG {
             inner(jtpe2, typing, right)
           }
     
-          case Join(_, ArraySwap, CrossLeftSort | CrossRightSort, left, right) => {
+          case Join(ArraySwap, CrossLeftSort | CrossRightSort, left, right) => {
             val jtpe2 = jtpe match {
               case JArrayFixedT(_) => jtpe
               case _ => JArrayUnfixedT
@@ -102,14 +102,16 @@ trait TypeInferencer extends DAG {
             inner(JNumberT, inner(jtpe2, typing, left), right)
           }
     
-          case Join(_, op: BinaryOperation, _, left, right) =>
+          case Join(op: BinaryOperation, _, left, right) =>
             inner(op.tpe.arg1, inner(op.tpe.arg0, typing, left), right)
     
-          case IUI(_, _, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+          case Assert(pred, child) => inner(jtpe, inner(jtpe, typing, pred), child)
+          
+          case IUI(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
   
-          case Diff(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+          case Diff(left, right) => inner(jtpe, inner(jtpe, typing, left), right)
     
-          case Filter(_, _, target, boolean) =>
+          case Filter(_, target, boolean) =>
             inner(JBooleanT, inner(jtpe, typing, target), boolean)
     
           case Sort(parent, _) => inner(jtpe, typing, parent)
@@ -120,20 +122,22 @@ trait TypeInferencer extends DAG {
   
           case Memoize(parent, _) => inner(jtpe, typing, parent)
     
-          case Distinct(_, parent) => inner(jtpe, typing, parent)
+          case Distinct(parent) => inner(jtpe, typing, parent)
     
-          case s @ Split(_, spec, child) =>
+          case s @ Split(spec, child) =>
             inner(jtpe, collectSpecTypes(universe, typing, spec), child)
           
-          case s @ SplitGroup(_, id, _) => {
-            val Split(_, spec, _) = s.parent
-            findGroup(spec, id) map { inner(jtpe, typing, _) } getOrElse typing
+          // not using extractors due to bug
+          case s: SplitGroup => {
+            val Split(spec, _) = s.parent
+            findGroup(spec, s.id) map { inner(jtpe, typing, _) } getOrElse typing
           }
           
-          case s @ SplitParam(_, id) => {
-            val Split(_, spec, _) = s.parent
+          // not using extractors due to bug
+          case s: SplitParam => {
+            val Split(spec, _) = s.parent
             
-            findParams(spec, id).foldLeft(typing) { (typing, graph) =>
+            findParams(spec, s.id).foldLeft(typing) { (typing, graph) =>
               inner(jtpe, typing, graph)
             }
           }
@@ -145,8 +149,8 @@ trait TypeInferencer extends DAG {
 
     def applyTypes(typing: Map[DepGraph, JType], graph: DepGraph): DepGraph = {
       graph mapDown { recurse => {
-        case ld @ LoadLocal(loc, parent, _) =>
-          LoadLocal(loc, recurse(parent), typing(ld))
+        case ld @ LoadLocal(parent, _) =>
+          LoadLocal(recurse(parent), typing(ld))(ld.loc)
       }}
     }
     

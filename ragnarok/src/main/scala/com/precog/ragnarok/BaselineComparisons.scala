@@ -105,7 +105,7 @@ trait BaselineComparisons {
     }
     val str = sb.toString
 
-    JParser.parse(str) match {
+    JParser.parseUnsafe(str) match {
       case JArray(tests) =>
         tests.foldLeft(Map[(List[String], Option[String]), Statistics]()) { case (acc, obj) =>
           (obj \? "stats") match {

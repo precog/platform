@@ -32,6 +32,7 @@ import spire.ArrayOps
 
 import scalaz._
 import scalaz.{Monad, Monoid, StreamT}
+import scalaz.std.list._
 import scalaz.syntax.monad._
 
 import scala.annotation.tailrec 
@@ -501,171 +502,186 @@ trait KMediansCoreSetClustering {
   }
 }
 
-trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
-  import trans._
-  import TransSpecModule._
+trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMethodsModule[M] with AssignClusterModule[M] {
+  trait ClusteringLib extends ColumnarTableLib with AssignClusterSupport with EvaluatorMethods {
+    import trans._
+    import TransSpecModule._
 
-  override def _libMorphism2 = super._libMorphism2 ++ Set(KMediansClustering)
-  val Stats4Namespace = Vector("std", "stats")
+    override def _libMorphism2 = super._libMorphism2 ++ Set(KMediansClustering, AssignClusters)
+    val Stats4Namespace = Vector("std", "stats")
 
-  object KMediansClustering extends Morphism2(Stats4Namespace, "kMedians") with KMediansCoreSetClustering {
-    val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
+    object KMediansClustering extends Morphism2(Stats4Namespace, "kMedians") with KMediansCoreSetClustering {
+      val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
-    lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
 
-    type KS = List[Int]
-    val epsilon = 0.1
+      type KS = List[Int]
+      val epsilon = 0.1
 
-    implicit def monoidKS = new Monoid[KS] { 
-      def zero: KS = List.empty[Int]
-      def append(ks1: KS, ks2: => KS) = ks1 ++ ks2
-    }
-
-    def reducerKS: CReducer[KS] = new CReducer[KS] {
-      def reduce(schema: CSchema, range: Range): KS = {
-        val columns = schema.columns(JObjectFixedT(Map("value" -> JNumberT)))
-        val cols: List[Int] = (columns flatMap {
-          case lc: LongColumn =>
-            range collect {
-              case i if lc.isDefinedAt(i) && lc(i) > 0 => lc(i).toInt
-            }
-
-          case dc: DoubleColumn =>
-            range flatMap { i => 
-              if (dc.isDefinedAt(i)) {
-                val n = dc(i)
-                if (n.isValidInt && n > 0) {
-                  Some(n.toInt)
-                } else {
-                  None
-                }
-              } else {
-                None
-              }
-            }
-
-          case nc: NumColumn =>
-            range flatMap { i =>
-              if (nc.isDefinedAt(i)) {
-                val n = nc(i)
-                if (n.isValidInt && n > 0) {
-                  Some(n.toInt)
-                } else {
-                  None
-                }
-              } else {
-                None
-              }
-            }
-
-          case _ => List.empty[Int]
-        }).toList
-        cols
+      implicit def monoidKS = new Monoid[KS] { 
+        def zero: KS = List.empty[Int]
+        def append(ks1: KS, ks2: => KS) = ks1 ++ ks2
       }
-    }
 
-    def reducerFeatures(k: Int): CReducer[CoreSetTree] = new CReducer[CoreSetTree] {
-      def reduce(schema: CSchema, range: Range): CoreSetTree = {
-        val features = schema.columns(JArrayHomogeneousT(JNumberT))
+      def reducerKS: CReducer[KS] = new CReducer[KS] {
+        def reduce(schema: CSchema, range: Range): KS = {
+          val columns = schema.columns(JObjectFixedT(Map("value" -> JNumberT)))
+          val cols: List[Int] = (columns flatMap {
+            case lc: LongColumn =>
+              range collect {
+                case i if lc.isDefinedAt(i) && lc(i) > 0 => lc(i).toInt
+              }
 
-        // we know that there is only one item in `features`
-        val values: Option[Array[Array[Double]]] = features collectFirst {
-          case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
-            val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
-            mapped
+            case dc: DoubleColumn =>
+              range flatMap { i => 
+                if (dc.isDefinedAt(i)) {
+                  val n = dc(i)
+                  if (n.isValidInt && n > 0) {
+                    Some(n.toInt)
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                }
+              }
+
+            case nc: NumColumn =>
+              range flatMap { i =>
+                if (nc.isDefinedAt(i)) {
+                  val n = nc(i)
+                  if (n.isValidInt && n > 0) {
+                    Some(n.toInt)
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                }
+              }
+
+            case _ => List.empty[Int]
+          }).toList
+          cols
+        }
+      }
+
+      def reducerFeatures(k: Int): CReducer[CoreSetTree] = new CReducer[CoreSetTree] {
+        def reduce(schema: CSchema, range: Range): CoreSetTree = {
+          val features = schema.columns(JArrayHomogeneousT(JNumberT))
+
+          // we know that there is only one item in `features`
+          val values: Option[Array[Array[Double]]] = features collectFirst {
+            case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
+              val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
+              mapped
+          }
+
+          values map { v => CoreSetTree.fromPoints(v, k) } getOrElse CoreSetTree.empty
+        }
+      }
+
+      def extract(coreSetTree: CoreSetTree, k: Int, jtype: JType, modelId: Int): Table = {
+        val (centers, weights) = coreSetTree.coreSet
+
+        // TODO for a better approximation, instead use algorithm outlined here
+        // http://valis.cs.uiuc.edu/~sariel/papers/03/kcoreset/kcoreset.pdf
+        val (_, points, _) = approxKMedian(centers, weights, k)
+
+        val cpaths = Schema.cpath(jtype)
+
+        val tree = CPath.makeTree(cpaths, Range(0, points.head.length).toSeq)
+
+        val spec = TransSpec.concatChildren(tree)
+
+        val tables = points map { pt => Table.constArray(Set(CArray[Double](pt))) }
+
+        val transformedTables = tables map { table => table.transform(spec) }
+
+        val wrappedTables = transformedTables.zipWithIndex map {
+          case (tbl, idx) => tbl.transform(trans.WrapObject(TransSpec1.Id, "Cluster" + (idx + 1)))
         }
 
-        values map { v => CoreSetTree.fromPoints(v, k) } getOrElse CoreSetTree.empty
-      }
-    }
+        val table = wrappedTables reduce { 
+          (t1, t2) => t1.cross(t2)(trans.InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+        }
 
-    def extract(coreSetTree: CoreSetTree, k: Int, jtype: JType, modelId: Int): Table = {
-      val (centers, weights) = coreSetTree.coreSet
+        val result = table.transform(trans.WrapObject(TransSpec1.Id, "Model" + modelId))
 
-      // TODO for a better approximation, instead use algorithm outlined here
-      // http://valis.cs.uiuc.edu/~sariel/papers/03/kcoreset/kcoreset.pdf
-      val (_, points, _) = approxKMedian(centers, weights, k)
+        val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+        val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
-      val cpaths = Schema.cpath(jtype)
-
-      val tree = CPath.makeTree(cpaths, Range(0, points.head.length).toSeq)
-
-      val spec = TransSpec.concatChildren(tree)
-
-      val tables = points map { pt => Table.constArray(Set(CArray[Double](pt))) }
-
-      val transformedTables = tables map { table => table.transform(spec) }
-
-      val wrappedTables = transformedTables.zipWithIndex map {
-        case (tbl, idx) => tbl.transform(trans.WrapObject(TransSpec1.Id, "Cluster" + (idx + 1)))
+        valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
       }
 
-      val table = wrappedTables reduce { 
-        (t1, t2) => t1.cross(t2)(trans.InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
-      }
+      def morph1Apply(ks: List[Int]): Morph1Apply = new Morph1Apply {
+        def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
+          val table = table0.transform(DerefObjectStatic(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), paths.Value))
 
-      val result = table.transform(trans.WrapObject(TransSpec1.Id, "Model" + modelId))
+          val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
 
-      val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
-      val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
-
-      valueTable.cross(keyTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
-    }
-
-    def morph1Apply(ks: List[Int]): Morph1Apply = new Morph1Apply {
-      def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
-        val table = table0.transform(DerefObjectStatic(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), paths.Value))
-
-        val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
-
-        val res = ks map { k =>
-          val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
-          
-          val specs: M[Seq[(TransSpec1, JType)]] = schemas map {
-            _ map { jtype => (trans.Typed(TransSpec1.Id, jtype), jtype) }
-          }
-
-          val tables: StreamT[M, (Table, JType)] = StreamT.wrapEffect {
-            specs map { ts =>
-              StreamT.fromStream(M.point((ts map { case (spec, jtype) => (table.transform(spec), jtype) }).toStream))
+          val res = ks map { k =>
+            val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
+            
+            val specs: M[Seq[(TransSpec1, JType)]] = schemas map {
+              _ map { jtype => (trans.Typed(TransSpec1.Id, jtype), jtype) }
             }
+
+            val tables: StreamT[M, (Table, JType)] = StreamT.wrapEffect {
+              specs map { ts =>
+                StreamT.fromStream(M.point((ts map { case (spec, jtype) => (table.transform(spec), jtype) }).toStream))
+              }
+            }
+
+            val sliceSize = 1000
+            val features: StreamT[M, Table] = tables flatMap { case (tbl, jtype) =>
+              val coreSetTree = tbl.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducerFeatures(k))
+
+              StreamT(coreSetTree map { tree =>
+                StreamT.Yield(extract(tree, k, jtype, defaultNumber.getAndIncrement), StreamT.empty[M, Table])
+              })
+            }
+
+            features
           }
 
-          val sliceSize = 1000
-          val features: StreamT[M, Table] = tables flatMap { case (tbl, jtype) =>
-            val coreSetTree = tbl.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducerFeatures(k))
+          val tables: StreamT[M, Table] = res.foldLeft(StreamT.empty[M, Table])(_ ++ _)
+          val modelConcat = buildConstantWrapSpec(OuterObjectConcat(
+            DerefObjectStatic(Leaf(SourceLeft), paths.Value),
+            DerefObjectStatic(Leaf(SourceRight), paths.Value)))
 
-            StreamT(coreSetTree map { tree =>
-              StreamT.Yield(extract(tree, k, jtype, defaultNumber.getAndIncrement), StreamT.empty[M, Table])
+          def merge(table: Option[Table], tables: StreamT[M, Table]): OptionT[M, Table] = {
+            OptionT(tables.uncons flatMap {
+              case Some((head, tail)) =>
+                table map { tbl =>
+                  merge(Some(tbl.cross(head)(modelConcat)), tail).run
+                } getOrElse {
+                  merge(Some(head), tail).run
+                }
+              case None =>
+                M.point(table)
             })
           }
 
-          features
+          merge(None, tables) getOrElse Table.empty
         }
-
-        val tables: StreamT[M, Table] = res.foldLeft(StreamT.empty[M, Table])(_ ++ _)
-        val modelConcat = buildConstantWrapSpec(OuterObjectConcat(
-          DerefObjectStatic(Leaf(SourceLeft), paths.Value),
-          DerefObjectStatic(Leaf(SourceRight), paths.Value)))
-
-        def merge(table: Option[Table], tables: StreamT[M, Table]): OptionT[M, Table] = {
-          OptionT(tables.uncons flatMap {
-            case Some((head, tail)) =>
-              table map { tbl =>
-                merge(Some(tbl.cross(head)(modelConcat)), tail).run
-              } getOrElse {
-                merge(Some(head), tail).run
-              }
-            case None =>
-              M.point(table)
-          })
-        }
-
-        merge(None, tables) getOrElse Table.empty
       }
+
+      def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] =
+        t2.reduce(reducerKS) map { ks => (t1, morph1Apply(ks)) }
     }
 
-    def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] =
-      t2.reduce(reducerKS) map { ks => (t1, morph1Apply(ks)) }
+    object AssignClusters extends Morphism2(Vector("std", "stats"), "assignClusters") with AssignClusterBase {
+      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+      override val retainIds = true
+
+      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+
+      def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
+        val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
+        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models)) }
+      }
+    }
   }
 }

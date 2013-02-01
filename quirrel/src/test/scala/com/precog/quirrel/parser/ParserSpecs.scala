@@ -31,6 +31,25 @@ import scala.io.Source
 object ParserSpecs extends Specification with ScalaCheck with StubPhases with Parser {
   import ast._
   
+  val keywords = Set(
+    "new",
+    "true",
+    "false",
+    "where",
+    "with",
+    "union",
+    "intersect",
+    "difference",
+    "neg",
+    "undefined",
+    "null",
+    "import",
+    "solve",
+    "if",
+    "then",
+    "else",
+    "assert")
+  
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {
       parseSingle("x(a) := 1 2") must beLike {
@@ -119,6 +138,26 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "reject a singular wildcard import expression" in {
       parseSingle("import _ 42") must throwA[ParseException]
+    }
+    
+    "accept a simple assertion" in {
+      parseSingle("assert true 42") must beLike {
+        case Assert(_, BoolLit(_, true), NumLit(_, "42")) => ok
+      }
+    }
+    
+    "accept an assertion with a compound expression" in {
+      parseSingle("assert a < 12 [a]") must beLike {
+        case Assert(_,
+          Lt(_,
+            Dispatch(_, Identifier(Vector(), "a"), Vector()),
+            NumLit(_, "12")),
+          ArrayDef(_, Vector(Dispatch(_, Identifier(Vector(), "a"), Vector())))) => ok
+      }
+    }
+    
+    "reject an assertion lacking a predicate" in {
+      parseSingle("assert 42") must throwA[ParseException]
     }
 
     "accept a single solve expression" in {
@@ -252,7 +291,9 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
 
     "reject a variable named as a keyword" in {
-      parseSingle("new") must throwA[ParseException]
+      forall(keywords) { kw =>
+        parse("%s := 1 1".format(kw)) must throwA[ParseException]
+      }
     }
     
     "reject a variable starting with a number" in {
@@ -706,6 +747,18 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("1 %") must throwA[ParseException]
     }
     
+    "accept a power operation" in {
+      parseSingle("1 ^ 2") must beLike { case Pow(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
+    }
+
+    "reject a power operation lacking a left operand" in {
+      parseSingle("^ 1") must throwA[ParseException]
+    }
+
+    "reject a power operation lacking a right operand" in {
+      parseSingle("1 ^") must throwA[ParseException]
+    }
+
     "accept a less-than operation" in {
       parseSingle("1 < 2") must beLike { case Lt(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
@@ -883,6 +936,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("1 % 2 / 3") must beLike { case Div(_, Mod(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
       parseSingle("1 / 2 % 3") must beLike { case Mod(_, Div(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
     }
+
+    "favor power according to left/right ordering" in {
+      parseSingle("1 / 2 ^ 3") must beLike { case Div(_, NumLit(_, "1"), Pow(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
+
+      parseSingle("1 ^ 2 ^ 3") must beLike { case Pow(_, Pow(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
     
     "favor addition/subtraction according to left/right ordering" in {
       parseSingle("1 + 2 - 3") must beLike { case Sub(_, Add(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
@@ -1011,6 +1070,22 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     "favor where over relate" in {
       parseSingle("a where b ~ c d") must beLike { case Relate(_, Where(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector()), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
       parseSingle("a ~ b where c d") must beLike { case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Where(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector())), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
+    }
+    
+    "favor where over let" in {
+      parseSingle("a := 1 2 where 3") must beLike { case Let(_, Identifier(Vector(), "a"), Vector(), NumLit(_, "1"), Where(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
+    }
+    
+    "favor where over assert" in {
+      parseSingle("assert 1 2 where 3") must beLike { case Assert(_, NumLit(_, "1"), Where(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
+    }
+    
+    "favor where over solve" in {
+      parseSingle("solve 'a 2 where 3") must beLike { case Solve(_, Vector(TicVar(_, "'a")), Where(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
+    }
+    
+    "favor where over import" in {
+      parseSingle("import a 2 where 3") must beLike { case Import(_, SpecificImport(Vector("a")), Where(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
     }
   }
   
@@ -1272,76 +1347,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   }
   
   "global ambiguity resolution" should {
-    "recognize <keyword>foo as an identifier" >> {
-      "new" >> {
-        parseSingle("newfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "newfoo"), Vector()) => ok
-        }
-      }
-      
-      "true" >> {
-        parseSingle("truefoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "truefoo"), Vector()) => ok
-        }
-      }
-      
-      "false" >> {
-        parseSingle("falsefoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "falsefoo"), Vector()) => ok
-        }
-      }
-      
-      "where" >> {
-        parseSingle("wherefoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "wherefoo"), Vector()) => ok
-        }
-      }
-      
-      "with" >> {
-        parseSingle("withfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "withfoo"), Vector()) => ok
-        }
-      }   
-      
-      "union" >> {
-        parseSingle("unionfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "unionfoo"), Vector()) => ok
-        }
-      }    
-      
-      "intersect" >> {
-        parseSingle("intersectfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
-        }
-      }         
-
-      "difference" >> {
-        parseSingle("differencefoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "differencefoo"), Vector()) => ok
-        }
-      }      
-      
-      "undefined" >> {
-        parseSingle("undefinedfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "undefinedfoo"), Vector()) => ok
-        }
-      }
-
-      "null" >> {
-        parseSingle("nullfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "nullfoo"), Vector()) => ok
-        }
-      }
-      
-      "import" >> {
-        parseSingle("importfoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "importfoo"), Vector()) => ok
-        }
-      }      
-
-      "solve" >> {
-        parseSingle("solvefoo") must beLike {
-          case Dispatch(_, Identifier(Vector(), "solvefoo"), Vector()) => ok
+    "recognize <keyword>foo as an identifier" in {
+      forall(keywords) { kw =>
+        val input = kw + "foo"
+        parseSingle(input) must beLike {
+          case Dispatch(_, Identifier(Vector(), `input`), Vector()) => ok
         }
       }
     }

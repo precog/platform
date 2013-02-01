@@ -29,15 +29,16 @@ import blueeyes.persistence.mongo.RealMongoSpecSupport
 import blueeyes.persistence.mongo.json.BijectionsMongoJson.JsonToMongo
 
 import com.mongodb.WriteConcern
+import com.mongodb.Mongo
 
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.daze.{ StringIdMemoryDatasetConsumer, LoggingQueryLogger }
+import com.precog.daze._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.actor.StandaloneShardSystemConfig
-import com.precog.yggdrasil.util.IdSourceConfig
+import com.precog.yggdrasil.util._
 import com.precog.util.PrecogUnit
 
 import com.weiglewilczek.slf4s.Logging
@@ -147,6 +148,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
+      with EvaluatorConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig
       with MongoColumnarTableModuleConfig
@@ -155,19 +157,25 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   override def controlTimeout = Duration(10, "minutes")      // it's just unreasonable to run tests longer than this
 
+  def includeIdField = false
+
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
-  val report = LoggingQueryLogger[Future]
+  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] {
+    implicit def M = self.M
+  }
 
   trait TableCompanion extends MongoColumnarTableCompanion
+
+  var mongo: Mongo = _
 
   object Table extends TableCompanion {
     import trans._
 
     def dbAuthParams = Map.empty
-    val mongo = MongoPlatformSpecEngine.acquire.realMongo
+    def mongo = self.mongo
     override def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       // Rewrite paths of the form /foo/bar/baz to /test/foo_bar_baz
       val pathFixTS = Map1(Leaf(Source), CF1P("fix_paths") {
@@ -185,19 +193,36 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike[Future, Projection] {
-    def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
+  class Storage extends StorageLike[Future] {
     def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
     def userMetadataView(apiKey: APIKey) = null
   }
   
   val storage = new Storage
 
+  def userMetadataView(apiKey: APIKey) = null
+
+  def startup() {
+    mongo = MongoPlatformSpecEngine.acquire.realMongo
+  }
+
   def shutdown() {
     MongoPlatformSpecEngine.release
   }
 
-  override def map (fs: => Fragments): Fragments = fs ^ Step { shutdown() }
+  override def map (fs: => Fragments): Fragments = (Step { startup() }) ^ fs ^ (Step { shutdown() })
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+        val M = N0
+      }
+      class YggConfig extends EvaluatorConfig {
+        val idSource = new FreshAtomicIdSource
+        val maxSliceSize = 10
+      }
+      val yggConfig = new YggConfig
+    }
 }
 
 class MongoBasicValidationSpecs extends BasicValidationSpecs with MongoPlatformSpecs
@@ -213,4 +238,20 @@ class MongoRankSpecs extends RankSpecs with MongoPlatformSpecs
 class MongoRenderStackSpecs extends RenderStackSpecs with MongoPlatformSpecs
 
 class MongoUndefinedLiteralSpecs extends UndefinedLiteralSpecs with MongoPlatformSpecs
+
+class MongoIdFieldSpecs extends MongoPlatformSpecs {
+  override def includeIdField = true
+
+  "Mongo's _id field" should {
+    "be included in results when configured" in {
+      val input = """
+          | campaigns := //campaigns 
+          | campaigns._id""".stripMargin
+
+      val results = evalE(input)
+
+      results must not(beEmpty)
+    }
+  }
+}
 

@@ -21,7 +21,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
@@ -35,9 +34,10 @@ object BinderSpecs extends Specification
     with Parser
     with StubPhases
     with Binder
-    with StaticLibrary {
+    with StaticLibrarySpec {
       
   import ast._
+  import library._
   
   "let binding" should {
     "bind name in resulting scope" in {
@@ -362,99 +362,99 @@ object BinderSpecs extends Specification
       t.errors must beEmpty
     }
     
-    "allow shadowing of built-in bindings" in {
-      {
+    "allow shadowing of built-in bindings" >> {
+      "count" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("count := 1 count")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "geometricMean" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("geometricMean := 1 geometricMean")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "load" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("load := 1 load")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "max" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("max := 1 max")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "mean" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("mean := 1 mean")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "median" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("median := 1 median")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "mean" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("mean := 1 mean")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "min" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("min := 1 min")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "mode" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("mode := 1 mode")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "stdDev" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("stdDev := 1 stdDev")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "sum" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("sum := 1 sum")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }      
 
-      {
+      "sumSq" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("sumSq := 1 sumSq")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "variance" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("variance := 1 variance")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
-      {
+      "distinct" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("distinct := 1 distinct")
         d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
@@ -488,6 +488,20 @@ object BinderSpecs extends Specification
       d2.binding mustEqual LetBinding(e1)
       d2.isReduction mustEqual false
       d2.errors must beEmpty
+    }
+    
+    "forward binding through import" in {
+      val e @ Let(_, _, _, _, Import(_, _, d: Dispatch)) = parseSingle("a := 42 import std a")
+      d.binding mustEqual LetBinding(e)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+    
+    "forward binding through assert" in {
+      val e @ Let(_, _, _, _, Assert(_, _, d: Dispatch)) = parseSingle("a := 42 assert true a")
+      d.binding mustEqual LetBinding(e)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
     }
     
     "forward binding through new" in {
@@ -724,6 +738,22 @@ object BinderSpecs extends Specification
       }
     }
     
+    "forward binding through pow" in {
+      {
+        val e @ Let(_, _, _, _, Pow(_, d: Dispatch, _)) = parseSingle("a := 42 a ^ 1")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+
+      {
+        val e @ Let(_, _, _, _, Pow(_, _, d: Dispatch)) = parseSingle("a := 42 1 ^ a")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+
     "forward binding through less-than" in {
       {
         val e @ Let(_, _, _, _, Lt(_, d: Dispatch, _)) = parseSingle("a := 42 a < 1")

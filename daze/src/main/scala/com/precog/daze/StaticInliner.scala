@@ -22,83 +22,97 @@ package daze
 
 import com.precog.yggdrasil._
 
-trait StaticInliner[M[+_]] extends DAG with EvaluatorMethods[M] {
+import Function._
+
+trait StaticInlinerModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
   import dag._
+    
+  trait StaticInliner extends EvaluatorMethods {
+    def inlineStatics(graph: DepGraph, ctx: EvaluationContext): DepGraph
+  }
+}
+
+trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLibModule[M] {
+  import dag._
+  import library._
   import instructions._
-  
-  def inlineStatics(graph: DepGraph, ctx: EvaluationContext): DepGraph = {
-    graph mapDown { recurse => {
-      case Operate(loc, op, child) => {
-        val child2 = recurse(child)
-        
-        
-        child2 match {
-          case Const(_, CUndefined) => Const(loc, CUndefined)
-          
-          case Const(_, value) => {
-            op match {
-              case instructions.WrapArray =>    // TODO currently can't be a cvalue
-                Operate(loc, op, child2)
-              
-              case _ => {
-                val newOp1 = op1(op)
-                newOp1.fold(
-                  _ => Operate(loc, op, child2),
-                  newOp1 => {
-                    val result = for {
-                      col <- newOp1.f1(ctx).apply(value)
-                      if col isDefinedAt 0
-                    } yield col cValue 0
-                    
-                    Const(loc, result getOrElse CUndefined)
-                  }
-                )
+
+  trait StdLibStaticInliner extends StaticInliner {
+    def inlineStatics(graph: DepGraph, ctx: EvaluationContext): DepGraph = {
+      graph mapDown { recurse => {
+        case graph @ Operate(op, child) => {
+          recurse(child) match {
+            case child2 @ Const(CUndefined) => Const(CUndefined)(child2.loc)
+            
+            case child2 @ Const(value) => {
+              op match {
+                case instructions.WrapArray =>    // TODO currently can't be a cvalue
+                  Operate(op, child2)(graph.loc)
+                
+                case _ => {
+                  val newOp1 = op1ForUnOp(op)
+                  newOp1.fold(
+                    _ => Operate(op, child2)(graph.loc),
+                    newOp1 => {
+                      val result = for {
+                        col <- newOp1.f1(ctx).apply(value)
+                        if col isDefinedAt 0
+                      } yield col cValue 0
+                      
+                      Const(result getOrElse CUndefined)(graph.loc)
+                    }
+                  )
+                }
               }
             }
+            
+            case child2 => Operate(op, child2)(graph.loc)
           }
-          
-          case _ => Operate(loc, op, child2)
         }
-      }
-      
-      case Join(loc, op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
-        val left2 = recurse(left)
-        val right2 = recurse(right)
         
-        op2ForBinOp(op) flatMap { op2 =>
-          (left2, right2) match {
-            case (Const(_, CUndefined), _) =>
-              Some(Const(loc, CUndefined))
-            
-            case (_, Const(_, CUndefined)) =>
-              Some(Const(loc, CUndefined))
-            
-            case (Const(_, leftValue), Const(_, rightValue)) => {
-              val result = for {
-                col <- op2.f2(ctx).partialLeft(leftValue).apply(rightValue)
-                if col isDefinedAt 0
-              } yield col cValue 0
+        case graph @ Join(op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
+          val left2 = recurse(left)
+          val right2 = recurse(right)
+          
+          val graphM = for {
+            op2 <- op2ForBinOp(op)
+            op2F2 <- op2.fold(op2 = const(None), op2F2 = { Some(_) })
+            result <- (left2, right2) match {
+              case (left2 @ Const(CUndefined), _) =>
+                Some(Const(CUndefined)(left2.loc))
               
-              Some(Const(loc, result getOrElse CUndefined))
+              case (_, right2 @ Const(CUndefined)) =>
+                Some(Const(CUndefined)(right2.loc))
+              
+              case (left2 @ Const(leftValue), right2 @ Const(rightValue)) => {
+                val result = for {
+                  col <- op2F2.f2(ctx).partialLeft(leftValue).apply(rightValue)
+                  if col isDefinedAt 0
+                } yield col cValue 0
+                
+                Some(Const(result getOrElse CUndefined)(graph.loc))
+              }
+              
+              case _ => None
             }
-            
+          } yield result
+          
+          graphM getOrElse Join(op, sort, left2, right2)(graph.loc)
+        }
+        
+        case graph @ Filter(sort @ (CrossLeftSort | CrossRightSort), left, right) => {
+          val left2 = recurse(left)
+          val right2 = recurse(right)
+          
+          val back = (left2, right2) match {
+            case (_, right2 @ Const(CBoolean(true))) => Some(left2)
+            case (_, right2 @ Const(_)) => Some(Const(CUndefined)(graph.loc))
             case _ => None
           }
-        } getOrElse Join(loc, op, sort, left2, right2)
-      }
-      
-      case Filter(loc, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
-        val left2 = recurse(left)
-        val right2 = recurse(right)
-        
-        val back = (left2, right2) match {
-          case (_, Const(_, CBoolean(true))) => Some(left2)
-          case (_, Const(_, _)) => Some(Const(loc, CUndefined))
-          case _ => None
+          
+          back getOrElse Filter(sort, left2, right2)(graph.loc)
         }
-        
-        back getOrElse Filter(loc, sort, left2, right2)
-      }
-    }}
+      }}
+    }
   }
 }

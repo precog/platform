@@ -20,8 +20,6 @@
 package com.precog.quirrel
 package emitter
 
-import com.precog.bytecode.{Instructions, StaticLibrary}
-
 import org.specs2.mutable._
 
 import java.io.File
@@ -37,10 +35,11 @@ object GroupSolverSpecs extends Specification
     with GroupSolver
     with ProvenanceChecker
     with RawErrors 
-    with StaticLibrary {
+    with StaticLibrarySpec {
       
   import ast._
   import buckets._
+  import library._
   
   "group solver" should {
     "identify and solve group set for trivial solve example" in {
@@ -254,6 +253,35 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _, _,
           tree @ Solve(_,
             Vector(Eq(_, _, constrSol)), count @ Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _))))))) = compileSingle(input)
+          
+      val btrace1 = List()
+      val btrace2 = List()
+      val expected = IntersectBucketSpec(
+        Group(Some(origin), target,
+          UnfixedSolution("'a", bodySol),
+          btrace1),
+        Group(None, constrSol,
+          UnfixedSolution("'a", constrSol),
+          btrace2))
+      
+      tree.errors must beEmpty
+      tree.buckets mustEqual Map(Set() -> expected)
+    }
+
+    "identify composite bucket for solve with constraint for 'a in constraints and body with assertion" in {
+      val input = """
+        | foo := //foo 
+        | bar := //bar 
+        | assert true
+        | solve 'a = bar.a 
+        |   count(foo where foo.a = 'a)
+        """.stripMargin
+      
+      val Let(_, _, _, _,
+        Let(_, _, _, _,
+          Assert(_, _, 
+            tree @ Solve(_,
+              Vector(Eq(_, _, constrSol)), count @ Dispatch(_, _, Vector(origin @ Where(_, target, Eq(_, bodySol, _)))))))) = compileSingle(input)
           
       val btrace1 = List()
       val btrace2 = List()
@@ -579,6 +607,18 @@ object GroupSolverSpecs extends Specification
               Where(_, left, right))))) = compileSingle(input)
       
       tree.errors must not(beEmpty)
+    }
+    
+    "reject a constraint which attempts to parent through an assertion" in {
+      val input = """
+        | foo := //foo
+        | foo' := assert true foo
+        |
+        | solve 'a
+        |   foo where foo'.a = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
     }
 
     "accept a constraint in a solve" in {
@@ -1022,6 +1062,27 @@ object GroupSolverSpecs extends Specification
         | """.stripMargin
         
       compileSingle(input).errors must beEmpty
+    }
+    
+    "identify only the first of a double-constrained group set" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo' := foo where foo = 'a
+        |   count(foo' where foo' = 'a)
+        | """.stripMargin
+        
+      val Let(_, _, _, _,
+        solve @ Solve(_, _,
+          Let(_, _, _,
+            where @ Where(_, target, Eq(_, solution, _)),
+            _))) = compileSingle(input) 
+            
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), Nil)
+      
+      solve.errors must beEmpty
+      solve.buckets mustEqual(Map(Set() -> expected))
     }
   }
 }

@@ -94,7 +94,7 @@ trait ColumnarTableModuleConfig {
 trait ColumnarTableModule[M[+_]]
     extends TableModule[M]
     with ColumnarTableTypes
-    with IdSourceScannerModule[M]
+    with IdSourceScannerModule
     with SliceTransforms[M]
     with SamplableColumnarTableModule[M]
     with IndicesModule[M]
@@ -109,6 +109,8 @@ trait ColumnarTableModule[M[+_]]
   type Table <: ColumnarTable
   type TableCompanion <: ColumnarTableCompanion
   case class TableMetrics(startCount: Int, sliceTraversedCount: Int)
+
+  implicit def M: Monad[M]
 
   def newScratchDir(): File = IOUtils.createTmpDir("ctmscratch").unsafePerformIO
   def jdbmCommitInterval: Long = 200000l
@@ -301,7 +303,7 @@ trait ColumnarTableModule[M[+_]]
     /**
      * Merge controls the iteration over the table of group key values. 
      */
-    def merge(grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => M[Table]): M[Table] = {
+    def merge[N[+_]](grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
       
       type Key = Seq[JValue]
@@ -392,9 +394,11 @@ trait ColumnarTableModule[M[+_]]
           Table.fromJson(row #:: Stream.empty)
         }
 
-        val groupKeys = unionOfIntersections(indicesGroupedBySource)
+        val groupKeys: Set[Key] = unionOfIntersections(indicesGroupedBySource)
 
-        val evaluatorResults = for (groupKey <- groupKeys) yield {
+        // given a groupKey, return an M[Table] which represents running
+        // the evaluator on that subgroup.
+        def evaluateGroupKey(groupKey: Key): M[Table] = {
           val groupKeyTable = tableFromGroupKey(groupKey, fullSchema)
 
           def map(gid: GroupId): M[Table] = {
@@ -409,17 +413,19 @@ trait ColumnarTableModule[M[+_]]
             t.sort(DerefObjectStatic(Leaf(Source), CPathField("key")))
           }
 
-          body(groupKeyTable, map)
+          nt(body(groupKeyTable, map))
         }
 
-        // TODO: consider moving to TableCompanion.concat?
-        evaluatorResults.sequence.map { tables =>
-          val (slices, size) = tables.foldLeft((StreamT.empty[M, Slice], TableSize(0))) {
-            case ((slices, size), table) =>
-              (slices ++ table.slices, size + table.size)
-          }
-          Table(slices, size)
+        // TODO: this can probably be done as one step, but for now
+        // it's probably fine.
+        val tables: StreamT[M, Table] = StreamT.unfoldM(groupKeys.toList) {
+          case k :: ks => evaluateGroupKey(k).map(t => Some((t, ks)))
+          case Nil => M.point(None)
         }
+
+        val slices: StreamT[M, Slice] = tables.flatMap(_.slices)
+
+        M.point(Table(slices, UnknownSize))
       }
     }
 
@@ -446,7 +452,7 @@ trait ColumnarTableModule[M[+_]]
      * Given a JValue, an existing map of columnrefs to column data,
      * a sliceIndex, and a sliceSize, return an updated map.
      */
-    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, (BitSet, Array[_])] = {
+    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] = {
 
       jv.flattenWithPath.foldLeft(into) {
         case (acc, (jpath, JUndefined)) => acc
@@ -454,52 +460,35 @@ trait ColumnarTableModule[M[+_]]
           val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
           val ref = ColumnRef(remapPath.map(_(jpath)).getOrElse(CPath(jpath)), ctype)
           
-          val pair: (BitSet, Array[_]) = v match {
+          val updatedColumn: ArrayColumn[_] = v match {
             case JBool(b) =>
-              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
-              col(sliceIndex) = b
-              (defined + sliceIndex, col)
+              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
               
-            case JNum(d) => {
-              val isLong = ctype == CLong
-              val isDouble = ctype == CDouble
-              
-              val (defined, col) = if (isLong) {
-                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                col(sliceIndex) = d.toLong
-                (defined, col)
-              } else if (isDouble) {
-                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
-                col(sliceIndex) = d.toDouble
-                (defined, col)
-              } else {
-                val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                col(sliceIndex) = d
-                (defined, col)
-              }
-              
-              (defined + sliceIndex, col)
+            case JNum(d) => ctype match {
+              case CLong =>
+                acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
+
+              case CDouble =>
+                acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
+
+              case CNum =>
+                acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
             }
               
             case JString(s) =>
-              val (defined, col) = acc.getOrElse(ref, (new BitSet, new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
-              col(sliceIndex) = s
-              (defined + sliceIndex, col)
+              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
               
             case JArray(Nil) =>
-              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-              (defined + sliceIndex, col)
+              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
               
             case JObject(_) =>
-              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-              (defined + sliceIndex, col)
+              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
               
             case JNull        =>
-              val (defined, col) = acc.getOrElse(ref, (new BitSet, null)).asInstanceOf[(BitSet, Array[Boolean])]
-              (defined + sliceIndex, col)
+              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
           }
           
-          acc + (ref -> pair)
+          acc + (ref -> updatedColumn)
       }
     }
 
@@ -509,7 +498,7 @@ trait ColumnarTableModule[M[+_]]
       def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
         val (prefix, suffix) = sampleData.splitAt(sliceSize)
   
-        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
+        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
           from match {
             case jv #:: xs =>
               val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
@@ -523,17 +512,7 @@ trait ColumnarTableModule[M[+_]]
         // columns won't satisfy sampleData.schema. This will cause the subsumption test in
         // Slice#typed to fail unless it allows for vacuous success
         val slice = new Slice {
-          val (cols, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
-          val columns = cols map {
-            case (ref @ ColumnRef(_, CBoolean), (defined, values))     => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
-            case (ref @ ColumnRef(_, CLong), (defined, values))        => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
-            case (ref @ ColumnRef(_, CDouble), (defined, values))      => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
-            case (ref @ ColumnRef(_, CNum), (defined, values))         => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
-            case (ref @ ColumnRef(_, CString), (defined, values))      => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
-            case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
-            case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
-            case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
-          }
+          val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
         }
     
         (slice, suffix)
@@ -1489,6 +1468,210 @@ trait ColumnarTableModule[M[+_]]
       }
 
       collectSchemas(Set.empty, slices)
+    }
+
+    /**
+     * This method renders the entire table into a single string,
+     * encoded as CSV.
+     * 
+     * In the future we may want something Stream-based, but for now
+     * the method seems to be "fast enough" for our purposes.
+     *
+     * The column headers are currently stringified CPaths. These are
+     * introduced introduced slice-by-slice in alphabetical order. So
+     * if there is one slice, the headers will be totally
+     * alphabetical. If two slices, the alphabetized headers from the
+     * first slice are first, and then the other headers (also
+     * alphabetized). And so on.
+     *
+     * The escaping here should match Microsoft's:
+     *
+     * If a value contains commas, double-quotes, or CR/LF, it will be
+     * escaped. To escape a value, it is wrapped in double quotes. Any
+     * double-quotes in the value are themselves doubled. So:
+     * 
+     * the fox said: "hello, my name is fred."
+     * 
+     * becomes:
+     * 
+     * "the fox said: ""hello, my name is fred."""
+     */
+    def renderCsv(): StreamT[M, CharBuffer] = {
+      import scala.collection.{Map => GenMap}
+      import scala.util.Sorting
+
+      /**
+       * Represents the column headers we have. We track three things:
+       * 
+       *  1. n: the number of headers so far.
+       *  2. m: a map from path strings to header position
+       *  3. a: an array of path strings used.
+       * 
+       * The class is immutable so as we find new headers we'll create
+       * new instances. If this proves to be a problem we could easily
+       * make a mutable version.
+       */
+      class Indices(n: Int, m: GenMap[String, Int], a: Array[String]) {
+        def size = n
+        def getPaths: Array[String] = a
+        def columnForPath(path: String) = m(path)
+        def pathForColumn(col: Int) = a(col)
+        def combine(that: Indices): Indices = {
+          val buf = new mutable.ArrayBuffer[String](a.length)
+          buf ++= a
+          that.getPaths.foreach(p => if (!m.contains(p)) buf.append(p))
+          Indices.fromPaths(buf.toArray)
+        }
+        override def equals(that: Any): Boolean = that match {
+          case that: Indices =>
+            val len = n
+            if (len != that.size) return false
+            var i = 0
+            val paths = that.getPaths
+            while (i < len) {
+              if (a(i) != paths(i)) return false
+              i += 1
+            }
+            true
+          case _ =>
+            false
+        }
+        def writeToBuilder(sb: StringBuilder): Unit = {
+          if (n == 0) return ()
+          sb.append(a(0))
+          var i = 1
+          val len = n
+          while (i < len) { sb.append(','); sb.append(a(i)); i += 1 }
+          sb.append("\r\n")
+        }
+      }
+
+      object Indices {
+        def empty: Indices = new Indices(0, Map.empty[String, Int], new Array[String](0))
+
+        def fromPaths(ps: Array[String]): Indices = {
+          val paths = ps.sorted
+          val m = mutable.Map.empty[String, Int]
+          var i = 0
+          val len = paths.length
+          while (i < len) { m(paths(i)) = i; i += 1 }
+          new Indices(len, m, paths)
+        }
+      }
+
+      // these methods will quote CSV values for us
+      // they could probably be a bit faster but are OK so far.
+      def quoteIfNeeded(s: String): String = if (needsQuoting(s)) quote(s) else s
+      def quote(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+      def needsQuoting(s: String): Boolean = {
+        var i = 0
+        while (i < s.length) {
+          val c = s.charAt(i)
+          if (c == ',' || c == '"' || c == '\r' || c == '\n') return true
+          i += 1
+        }
+        false
+      }
+
+      /**
+       * Render a particular column of a slice into an array of
+       * Strings, handling any escaping that is needed.
+       */
+      def renderColumn(col: Column, rows: Int): Array[String] = {
+        val arr = new Array[String](rows)
+        var row = 0
+        while (row < rows) {
+          arr(row) = if (col.isDefinedAt(row))
+            quoteIfNeeded(col.strValue(row))
+          else
+            ""
+          row += 1
+        }
+        arr
+      }
+
+      /**
+       * Generate indices for this slice.
+       */
+      def indicesForSlice(slice: Slice): Indices =
+        Indices.fromPaths(slice.columns.keys.map(_.selector.toString).toArray)
+
+      /**
+       * Renders a slice into an array of lines, as well as updating
+       * our Indices with any previous unseen paths.
+       * 
+       * Since slice's underlying data is column-oriented, we evaluate
+       * each column individually, building an array of values. Then
+       * we stride across these arrays building our rows (Line
+       * objects).
+       * 
+       * Since we know in advance how many rows we have, we can return
+       * an array of lines.
+       */
+      def renderSlice(pastIndices: Option[Indices], slice: Slice): (Indices, CharBuffer) = {
+
+        val indices = indicesForSlice(slice)
+        val height = slice.size
+        val width = indices.size
+
+        if (width == 0) return (indices, CharBuffer.allocate(0))
+
+        val items = slice.columns.toArray
+        val ncols = items.length
+
+        // load each column into strings
+        val columns = items.map { case (_, col) =>
+          renderColumn(col, height)
+        }
+        val positions = items.map { case (ColumnRef(path, _), _) =>
+          indices.columnForPath(path.toString)
+        }
+
+        val sb = new StringBuilder()
+
+        pastIndices match {
+          case None => indices.writeToBuilder(sb)
+          case Some(ind) => if (ind != indices) {
+            sb.append("\r\n")
+            indices.writeToBuilder(sb)
+          }
+        }
+
+        var row = 0
+        while (row < height) {
+          // fill in all the buckets for this particular row
+          val buckets = Array.fill(width)("")
+          var i = 0
+          while (i < ncols) {
+            val s = columns(i)(row)
+            if (s != "") buckets(positions(i)) = s
+            i += 1
+          }
+
+          // having filled the buckets, add them to the string builder
+          sb.append(buckets(0))
+          i = 1
+          while (i < width) {
+            sb.append(',')
+            sb.append(buckets(i))
+            i += 1
+          }
+          sb.append("\r\n")
+
+          row += 1
+        }
+        (indices, CharBuffer.wrap(sb))
+      }
+
+      StreamT.unfoldM((slices, none[Indices])) {
+        case (stream, pastIndices) => stream.uncons.map {
+          case Some((slice, tail)) =>
+            val (indices, cb) = renderSlice(pastIndices, slice)
+            Some((cb, (tail, Some(indices))))
+          case None =>
+            None
+        }
+      }
     }
 
     def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {

@@ -97,6 +97,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
+      case Assert(_, pred, child) =>
+        loop(dispatches)(pred) ++ loop(dispatches)(child)
+      
       case New(_, child) => loop(dispatches)(child)
       
       case Relate(_, from, to, in) =>
@@ -148,7 +151,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           val (groupM, errors) = solveGroupCondition(solve, where.right, false, sigma)
           
           groupM map { group =>
-            val commonalityM = findCommonality(group.exprs + where.left, sigma)
+            val commonalityM = findCommonality(solve, group.exprs + where.left, sigma)
             
             if (commonalityM.isDefined)
               (Some(Group(Some(where), resolveExpr(sigma, where.left), group, dtrace)), errors)
@@ -179,7 +182,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     val (result, errors) = solveGroupCondition(b, constraint, true, sigma)
     
     val orderedSigma = orderTopologically(sigma)
-    val commonality = result map listSolutionExprs flatMap { findCommonality(_, sigma) }
+    val commonality = result map listSolutionExprs flatMap { findCommonality(b, _, sigma) }
     
     val back = for (r <- result; c <- commonality)
       yield Group(None, c, r, List())
@@ -282,11 +285,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
-        case LetBinding(let) => {
-          val ids = let.params map { Identifier(Vector(), _) }
-          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
-          solveGroupCondition(b, let.left, free, sigma2)
-        }
+        case LetBinding(let) =>
+          solveGroupCondition(b, let.left, free, enterLet(sigma, let, actuals))
         
         case FormalBinding(let) => {
           val actualM = sigma get ((id, let))
@@ -314,18 +314,19 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           actualM flatMap pred(b, tv, free, sigma).lift getOrElse false
         }
         
-        case LetBinding(let) => {
-          val ids = let.params map { Identifier(Vector(), _) }
-          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
-          
-          pred(b, tv, free, sigma2).lift(let.left) getOrElse false
-        }
+        case LetBinding(let) =>
+          pred(b, tv, free, enterLet(sigma, let, actuals)).lift(let.left) getOrElse false
         
         case _ => false
       }
     }
     
     case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b)
+  }
+  
+  private def enterLet(sigma: Map[Formal, Expr], let: Let, actuals: Vector[Expr]): Map[Formal, Expr] = {
+    val ids = let.params map { Identifier(Vector(), _) }
+    sigma ++ (ids zip Stream.continually(let) zip actuals)
   }
   
   private def mergeSpecs(specs: TraversableOnce[(Option[BucketSpec], Set[Error])]): (Option[BucketSpec], Set[Error]) = {
@@ -368,11 +369,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
             }
           }
           
-          case LetBinding(let) => {
-            val ids = let.params map { Identifier(Vector(), _) }
-            val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
-            isTranspecable(let.left, from, sigma2)
-          }
+          case LetBinding(let) =>
+            isTranspecable(let.left, from, enterLet(sigma, let, actuals))
           
           case Op1Binding(_) | Op2Binding(_) => true
           
@@ -419,6 +417,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Mod(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
       case Mod(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
       
+      case Pow(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
+      case Pow(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
+
       case Lt(_, left, right) if isPrimitive(left, sigma) => isTranspecable(right, from, sigma)
       case Lt(_, left, right) if isPrimitive(right, sigma) => isTranspecable(left, from, sigma)
       
@@ -449,6 +450,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Mul(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Div(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case Mod(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      case Pow(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       
       case Lt(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       case LtEq(_, left, right) => isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
@@ -486,11 +488,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           }
         }
         
-        case LetBinding(let) => {
-          val ids = let.params map { Identifier(Vector(), _) }
-          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
-          isPrimitive(let.left, sigma2)
-        }
+        case LetBinding(let) =>
+          isPrimitive(let.left, enterLet(sigma, let, actuals))
         
         case _ => false
       }
@@ -519,6 +518,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       allVars -- listTicVars(Some(b2), child, sigma)
     }
     
+    case Assert(_, pred, child) => listTicVars(b, pred, sigma) ++ listTicVars(b, child, sigma)
+    
     case New(_, child) => listTicVars(b, child, sigma)
     
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
@@ -543,11 +544,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case d @ Dispatch(_, id, actuals) => {
       val leftSet = d.binding match {
-        case LetBinding(b2) => {
-          val ids = b2.params map { Identifier(Vector(), _) }
-          val sigma2 = sigma ++ (ids zip Stream.continually(b2) zip actuals)
-          listTicVars(b, b2.left, sigma2)
-        }
+        case LetBinding(b2) =>
+          listTicVars(b, b2.left, enterLet(sigma, b2, actuals))
         
         case FormalBinding(let) => listTicVars(b, sigma((id, let)), sigma)
         case _ => Set[(Option[Solve], TicId)]()
@@ -576,7 +574,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Extra(expr) => Set(expr)
   }
   
-  private def findCommonality(nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
+  private def findCommonality(solve: Solve, nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
     case class Kernel(nodes: Set[ExprWrapper], sigma: Map[Formal, Expr], seen: Set[ExprWrapper])
     
     @tailrec
@@ -587,7 +585,10 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         
         // TODO if the below isEmpty, then can drop results from all kernels
         nodes.foldLeft(results) { (results, node) =>
-          results filter { ew => isTranspecable(node, ew.expr, k.sigma) }
+          results filter { ew =>
+            listTicVars(Some(solve), ew.expr, k.sigma).isEmpty &&
+              isTranspecable(node, ew.expr, k.sigma)
+          }
         }
       }
       
@@ -631,6 +632,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
     
+    case Assert(_, pred, child) => (Set(pred, child), sigma)
+    
     case New(_, child) => (Set(child), sigma)
     
     case Relate(_, _, _, in) => (Set(in), sigma)
@@ -639,12 +642,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
-        case LetBinding(let) => {
-          val ids = let.params map { Identifier(Vector(), _) }
-          val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
-          
-          (Set(let.left), sigma2)
-        }
+        case LetBinding(let) =>
+          (Set(let.left), enterLet(sigma, let, actuals))
         
         case FormalBinding(let) => (Set(sigma((id, let))), sigma)
         

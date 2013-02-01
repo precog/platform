@@ -49,8 +49,14 @@ object JobQueryState {
 trait JobQueryStateMonad extends SwappableMonad[JobQueryState] {
   import JobQueryState._
 
+  /** Returns `true` if the job has been cancelled. */
   def isCancelled(): Boolean
+
+  /** Returns `true` if the job has expired. */
   def hasExpired(): Boolean
+
+  /** Force the job to immediately abort. */
+  def abort(): Boolean
 
   def swap[M[+_], A](state: JobQueryState[M[A]])(implicit M: Monad[M]): M[JobQueryState[A]] = {
     state match {

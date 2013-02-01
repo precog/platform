@@ -100,6 +100,12 @@ trait AST extends Phases {
           indent + "child: \n" + prettyPrint(child, level + 2)
       }
       
+      case Assert(loc, pred, child) => {
+        indent + "type: assert\n" +
+          indent + "pred: " + prettyPrint(pred, level + 2) +
+          indent + "child: \n" + prettyPrint(child, level + 2)
+      }
+      
       case New(loc, child) => {
         indent + "type: new\n" +
           indent + "child:\n" + prettyPrint(child, level + 2)
@@ -255,6 +261,12 @@ trait AST extends Phases {
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
       
+      case Pow(loc, left, right) => {
+        indent + "type: pow\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+      }
+
       case Lt(loc, left, right) => {
         indent + "type: lt\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
@@ -451,9 +463,12 @@ trait AST extends Phases {
         
         sizing && contents && (child1 equalsIgnoreLoc child2)
       }
-          
+      
       case (Import(_, spec1, child1), Import(_, spec2, child2)) =>
         (child1 equalsIgnoreLoc child2) && (spec1 == spec2)
+      
+      case (Assert(_, pred1, child1), Assert(_, pred2, child2)) =>
+        (child1 equalsIgnoreLoc child2) && (pred1 equalsIgnoreLoc pred2)
 
       case (New(_, child1), New(_, child2)) =>
         child1 equalsIgnoreLoc child2
@@ -596,6 +611,9 @@ trait AST extends Phases {
       
       case Import(_, spec, child) =>
         spec.hashCode + child.hashCodeIgnoreLoc
+      
+      case Assert(_, pred, child) =>
+        pred.hashCodeIgnoreLoc + child.hashCodeIgnoreLoc
 
       case New(_, child) => child.hashCodeIgnoreLoc * 23
 
@@ -666,6 +684,9 @@ trait AST extends Phases {
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
       case Mod(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Pow(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
       case Lt(_, left, right) =>
@@ -843,6 +864,14 @@ trait AST extends Phases {
       val sym = 'import
       val isPrefix = true
     }
+
+    final case class Assert(loc: LineStream, pred: Expr, child: Expr) extends Expr {
+      val sym = 'assert
+      
+      def form = 'assert ~ pred ~ child
+      
+      def children = List(pred, child)
+    }
     
     final case class New(loc: LineStream, child: Expr) extends Expr with PrecedenceUnaryNode {
       val sym = 'new
@@ -999,6 +1028,10 @@ trait AST extends Phases {
       val sym = 'mod
     }
     
+    final case class Pow(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
+      val sym = 'pow
+    }
+
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'lt
     }

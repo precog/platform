@@ -22,6 +22,7 @@ import Keys._
 import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
+import de.johoop.cpd4sbt.CopyPasteDetector._
 
 object PlatformBuild extends Build {
   val jprofilerLib = SettingKey[String]("jprofiler-lib", "The library file used by jprofiler")
@@ -42,7 +43,7 @@ object PlatformBuild extends Build {
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
-      "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/releases/",
+      "Sonatype Releases"                 at "http://oss.sonatype.org/content/repositories/releases/",
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
@@ -79,7 +80,8 @@ object PlatformBuild extends Build {
 
     libraryDependencies ++= Seq(
       "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"         % "1.0.7",
-      "com.google.guava"            %  "guava"              % "12.0",
+      "com.google.guava"            %  "guava"              % "13.0",
+      "com.google.code.findbugs"    % "jsr305"              % "1.3.+",
       "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
       "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
@@ -94,9 +96,22 @@ object PlatformBuild extends Build {
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
       "com.chuusai"                 %% "shapeless"          % "1.2.3",
-      "org.spire-math"              % "spire_2.9.1"              % "0.3.0-RC2"//,
       //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
+      "org.spire-math"              % "spire_2.9.1"              % "0.3.0-RC2",
+      "com.rubiconproject.oss"      % "jchronic"            % "0.2.6"
     )
+  )
+
+  val jettySettings = Seq(
+    libraryDependencies ++= Seq(
+      "org.eclipse.jetty" % "jetty-server"      % "8.1.3.v20120416"
+    ),
+    ivyXML :=
+    <dependencies>
+      <dependency org="org.eclipse.jetty" name="jetty-server" rev="8.1.3.v20120416">
+        <exclude org="org.eclipse.jetty.orbit" />
+      </dependency>
+    </dependencies>
   )
 
   val jprofilerSettings = Seq(
@@ -115,14 +130,16 @@ object PlatformBuild extends Build {
     }
   )
 
-  val commonNexusSettings = nexusSettings ++ commonSettings
-  val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ commonNexusSettings
+  val commonPluginsSettings = ScctPlugin.instrumentSettings ++ cpdSettings ++ commonSettings
+  val commonNexusSettings = nexusSettings ++ commonPluginsSettings
+  val commonAssemblySettings = sbtassembly.Plugin.assemblySettings ++ Seq(test in assembly := {}) ++ commonNexusSettings
 
   // Logging is simply a common project for the test log configuration files
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
   lazy val platform = Project(id = "platform", base = file(".")).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo)
+    settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo, jdbc)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
@@ -143,7 +160,10 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test", logging % "test->test")
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+
+  lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
+    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
 
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, logging % "test->test")

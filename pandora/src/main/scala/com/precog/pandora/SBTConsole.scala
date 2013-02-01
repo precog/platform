@@ -42,63 +42,70 @@ import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
 import yggdrasil.table._
-import yggdrasil.table.jdbm3._
 import yggdrasil.util._
 
 import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
+import akka.actor.Props
 import akka.dispatch._
 import akka.util.Duration
 
 import com.codecommit.gll.LineStream
 
-object SBTConsole {
-  
-  trait Platform 
-      extends muspelheim.ParseEvalStack[Future] 
-      with IdSourceScannerModule[Future] 
-      with PrettyPrinter
-      with LongIdMemoryDatasetConsumer[Future]
-      with JDBMColumnarTableModule[Future]
-      with JDBMProjectionModule
-      with SystemActorStorageModule
-      with StandaloneShardSystemActorModule {
+import akka.dispatch.Await
+import akka.util.Duration
+import scalaz._
 
-    trait YggConfig
-        extends BaseConfig
-        with IdSourceConfig
-        with ColumnarTableModuleConfig
-        with StandaloneShardSystemConfig
-        with JDBMProjectionModuleConfig
-        with BlockStoreColumnarTableModuleConfig
+import java.io.File
 
-    trait TableCompanion extends JDBMColumnarTableCompanion {
-      import scalaz.std.anyVal._
-      implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
-    }
+import scalaz.effect.IO
 
-    object Table extends TableCompanion
+import blueeyes.bkka._
+
+import org.streum.configrity.Configuration
+import org.streum.configrity.io.BlockFormat
+
+trait PlatformConfig extends BaseConfig
+    with IdSourceConfig
+    with EvaluatorConfig
+    with StandaloneShardSystemConfig
+    with ColumnarTableModuleConfig
+    with BlockStoreColumnarTableModuleConfig
+    with JDBMProjectionModuleConfig
+    with ActorStorageModuleConfig
+    with ActorProjectionModuleConfig 
+
+trait Platform extends muspelheim.ParseEvalStack[Future] 
+    with IdSourceScannerModule
+    with SliceColumnarTableModule[Future, Array[Byte]]
+    with ActorStorageModule
+    with ActorProjectionModule[Array[Byte], Slice]
+    with StandaloneActorProjectionSystem 
+    with LongIdMemoryDatasetConsumer[Future] 
+    with PrettyPrinter { self =>
+
+  type YggConfig = PlatformConfig
+
+  trait TableCompanion extends SliceColumnarTableCompanion {
+    import scalaz.std.anyVal._
+    implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
   }
 
+  object Table extends TableCompanion
+}
+
+object SBTConsole {
   val controlTimeout = Duration(30, "seconds")
 
   val platform = new Platform { console =>
-    import akka.dispatch.Await
-    import akka.util.Duration
-    import scalaz._
-
-    import java.io.File
-
-    import scalaz.effect.IO
-    
-    import org.streum.configrity.Configuration
-    import org.streum.configrity.io.BlockFormat
-
     implicit val actorSystem = ActorSystem("sbtConsoleActorSystem")
     implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
+      def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
+    }
 
-    object yggConfig extends YggConfig {
+    val yggConfig = new PlatformConfig {
       val config = Configuration parse {
         Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
       }
@@ -108,7 +115,6 @@ object SBTConsole {
       val memoizationWorkDir = scratchDir
 
       val flatMapTimeout = controlTimeout
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       val maxEvalDuration = controlTimeout
       val clock = blueeyes.util.Clock.System
       val ingestConfig = None
@@ -120,25 +126,37 @@ object SBTConsole {
       val idSource = new FreshAtomicIdSource
     }
 
-    implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-      def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
-    }
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-    class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO) {
-      val accessControl = new UnrestrictedAccessControl[Future]()
-      val accountManager = new InMemoryAccountManager[Future]()
-    }
+    val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
+    val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
+      initShardActors(metadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
 
+    val accessControl = new UnrestrictedAccessControl[Future]()
+
+    object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
+    class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
     val storage = new Storage
 
-    val report = LoggingQueryLogger[Future]
+    def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
-    object Projection extends JDBMProjectionCompanion {
-      val fileOps = FilesystemFileOps
-      def ensureBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
-      def findBaseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
-      def archiveDir(descriptor: ProjectionDescriptor) = sys.error("todo")
+    val rawProjectionModule = new JDBMProjectionModule {
+      type YggConfig = PlatformConfig
+      val yggConfig = console.yggConfig
+      val Projection = new ProjectionCompanion {
+        def fileOps = FilesystemFileOps
+        def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = metadataStorage.ensureDescriptorRoot(descriptor)
+        def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = metadataStorage.findDescriptorRoot(descriptor)
+        def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = metadataStorage.findArchiveRoot(descriptor)
+      }
     }
+
+    def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+      new Evaluator[N](N0) with IdSourceScannerModule {
+        type YggConfig = PlatformConfig
+        val yggConfig = console.yggConfig
+        val report = LoggingQueryLogger[N](N0)
+      }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
       case Success(results) => results.map(_._2)
@@ -178,13 +196,11 @@ object SBTConsole {
 
     def startup() {
       // start storage shard 
-      Await.result(storage.start(), controlTimeout)
     }
     
     def shutdown() {
       // stop storage shard
-      Await.result(storage.stop(), controlTimeout)
-      
+      Await.result(Stoppable.stop(shardActors.stoppable, yggConfig.stopTimeout.duration), yggConfig.stopTimeout.duration)
       actorSystem.shutdown()
     }
   }
