@@ -582,6 +582,8 @@ trait ClusteringLib[M[+_]] extends GenOpcode[M] with Evaluator[M] {
     def extract(coreSetTree: CoreSetTree, k: Int, jtype: JType, modelId: Int): Table = {
       val (centers, weights) = coreSetTree.coreSet
 
+      // TODO for a better approximation, instead use algorithm outlined here
+      // http://valis.cs.uiuc.edu/~sariel/papers/03/kcoreset/kcoreset.pdf
       val (_, points, _) = approxKMedian(centers, weights, k)
 
       val cpaths = Schema.cpath(jtype)

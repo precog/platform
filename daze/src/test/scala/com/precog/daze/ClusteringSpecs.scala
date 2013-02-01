@@ -133,9 +133,8 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
         obj("Model1") must beLike { 
           case SObject(clusterMap) => 
             clusterMap.keys mustEqual clusterIds
-            forall(clusterIds.map(clusterMap(_))) { 
+            clusterIds.map(clusterMap(_)) must haveAllElementsLike { 
               case SDecimal(d) => d mustEqual(4.4)
-              case _ => ko
             } 
         }
       }
@@ -166,9 +165,8 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
         obj("Model1") must beLike { 
           case SObject(clusterMap) => 
             clusterMap.keys mustEqual clusterIds
-            forall(clusterIds.map(clusterMap(_))) { 
+            clusterIds.map(clusterMap(_)) must haveAllElementsLike { 
               case SDecimal(d) => expected must contain(d)
-              case _ => ko
             } 
 
             val actual = clusterIds.map(clusterMap(_)) collect { case SDecimal(d) => d }
@@ -202,9 +200,8 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
         obj("Model1") must beLike { 
           case SObject(clusterMap) => 
             clusterMap.keys mustEqual clusterIds
-            forall(clusterIds.map(clusterMap(_))) { 
+            clusterIds.map(clusterMap(_)) must haveAllElementsLike { 
               case SObject(obj) => expected must contain(obj)
-              case _ => ko
             } 
 
             val actual = clusterIds.map(clusterMap(_)) collect { case SObject(obj) => obj }

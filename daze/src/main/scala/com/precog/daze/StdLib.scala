@@ -83,7 +83,7 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] with TransS
   trait Morphism1Impl extends Morphism1Like with Morph1Apply
 
   trait Morphism2Impl extends Morphism2Like {
-    override final val idAlignment: IdentityAlignment = alignment match {
+    override final def idAlignment: IdentityAlignment = alignment match {
       case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
       case _ => IdentityAlignment.CrossAlignment
     }

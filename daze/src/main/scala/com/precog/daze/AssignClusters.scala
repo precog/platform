@@ -48,8 +48,6 @@ trait AssignPredictionHelper[M[+_]] extends GenOpcode[M] {
     type ModelId = String
     case class ModelCluster(name: ClusterId, featureValues: Map[CPath, Double])
     case class Model(name: ModelId, clusters: Array[ModelCluster])
-    //case class ModelCluster(name: ClusterId, featureValues: Array[Double])
-    //case class Model(name: ModelId, cpaths: List[CPath], clusters: Array[ModelCluster])
     case class ModelSet(identity: Seq[Option[Long]], models: Set[Model])
     type Models = List[ModelSet]
 
@@ -76,17 +74,6 @@ trait AssignPredictionHelper[M[+_]] extends GenOpcode[M] {
           (i: Int) => deref.map(c => c.isDefinedAt(i).option(c.apply(i)))
         }
 
-        //val models: Map[ModelId, Array[(ClusterId, Map[CPath, DoubleColumn])]]
-
-        //{ (i: Int) => 
-        //  models map { case (modelId, clusters) =>
-        //    clusters map { case (clusterId, features) =>
-        //      features collect { case (cpath, col) if col.isDefinedAt(i) => col(i) }
-        //    }
-        //  }
-
-        //}
-
         val rowModels: Int => Set[Model] = {
           val modelTuples: Map[ModelId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = {
             schema.columnRefs.flatMap {
@@ -101,21 +88,10 @@ trait AssignPredictionHelper[M[+_]] extends GenOpcode[M] {
             } groupBy { _._1 }
           }
 
-          //type ModelMap = Map[ModelId, (List[CPath], Map[ClusterId, List[DoubleColumn]])]
-
-          //val modelMap: Map[ModelId, List[(ClusterId, Map[CPath, DoubleColumn])]] = modelTuples map { case (modelId, clusterTuples) =>
-          //  val featureTuples: Map[ClusterId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = clusterTuples.groupBy(_._2)
-          //  val clusters = featureTuples.map({ case (clusterId, values) =>
-          //    (clusterId, values.map { case (_, _, cpath, col) => (cpath, col) }.toMap)
-          //  }).toList
-
-          //  (modelId -> clusters)
-          //}
-
-          val xyz: Map[ModelId, Map[ClusterId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]]] = modelTuples map { case (modelId, models) => (modelId, models.groupBy(_._2)) }
+          val modelsByCluster = modelTuples map { case (modelId, models) => (modelId, models.groupBy(_._2)) }
 
           { (i: Int) =>
-            xyz.map { case (modelId, clusters) => 
+            modelsByCluster.map { case (modelId, clusters) => 
               val modelClusters: Array[ModelCluster] = clusters.map { case (clusterId, colInfo) =>
                 val featureValues = colInfo.collect { case (_, _, cpath, col) if col.isDefinedAt(i) => cpath -> col(i) }.toMap
                 ModelCluster(clusterId, featureValues)
@@ -125,29 +101,6 @@ trait AssignPredictionHelper[M[+_]] extends GenOpcode[M] {
             }.toSet
           }
         }
-
-          //val models: Set[(ModelId, List[CPath], Map[ClusterId, List[DoubleColumn]])] = modelMap.map { case (modelId, clusters) =>
-          //  val paths: List[CPath] = clusters.flatMap { case (_, cols) => cols.keySet.toList }.toSet.toList
-
-          //  val clusterMap: Map[ClusterId, List[DoubleColumn]] = clusters.map({ case (clusterId, colMap) =>
-          //    (clusterId, paths collect { case p if colMap.contains(p) => colMap(p) })
-          //  }).toMap
-
-          //  (modelId, paths, clusterMap)
-          //}.toSet
-
-          //{ (i: Int) =>
-          //  models.collect({ case (modelId, paths, clusters) => 
-          //    val clusterModels: Array[ModelCluster] = clusters.map { case (clusterId, columns) =>
-          //      columns.zip(paths)
-          //      ModelCluster(clusterId, columns.collect { case col if col.isDefinedAt(i) =>
-          //        col.apply(i)
-          //      }.toArray)
-          //    }.toArray
-
-          //    Model(modelId, paths, clusterModels)
-          //  }).toSet
-          //}
 
         range.toList map { i => ModelSet(rowIdentities(i), rowModels(i)) }
       }

@@ -254,16 +254,20 @@ trait PredictionLib[M[+_]] extends Evaluator[M] with PredictionHelper[M] {
   object LinearPrediction extends Morphism2(Stats3Namespace, "predictLinear") with PredictionImpl {
     val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
 
+    override val retainIds = true
+
     lazy val alignment = MorphismAlignment.Custom(alignCustom _)
 
     def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
       val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
-      t1.transform(spec).reduce(reducer) map { models => (t2.transform(spec), morph1Apply(models, identity _)) }
+      t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, identity _)) }
     }
   }
 
   object LogisticPrediction extends Morphism2(Stats3Namespace, "predictLogistic") with PredictionImpl {
     val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+    override val retainIds = true
 
     lazy val alignment = MorphismAlignment.Custom(alignCustom _)
 
@@ -271,7 +275,7 @@ trait PredictionLib[M[+_]] extends Evaluator[M] with PredictionHelper[M] {
       val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
       def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
 
-      t1.transform(spec).reduce(reducer) map { models => (t2.transform(spec), morph1Apply(models, sigmoid _)) }
+      t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, sigmoid _)) }
     }
   }
 }

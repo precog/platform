@@ -48,8 +48,8 @@ trait PredictionLibSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Morph2(line, LinearPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model1"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))),
+        dag.LoadLocal(line, Const(line, CString("/hom/model1"))))
 
       val result0 = testEval(input)
 
@@ -83,8 +83,8 @@ trait PredictionLibSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Morph2(line, LinearPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model2"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))),
+        dag.LoadLocal(line, Const(line, CString("/hom/model2"))))
 
       val result0 = testEval(input)
 
@@ -115,8 +115,8 @@ trait PredictionLibSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Morph2(line, LogisticPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model1"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/model1data"))),
+        dag.LoadLocal(line, Const(line, CString("/hom/model1"))))
 
       val result0 = testEval(input)
 
@@ -150,8 +150,8 @@ trait PredictionLibSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input = dag.Morph2(line, LogisticPrediction,
-        dag.LoadLocal(line, Const(line, CString("/hom/model2"))),
-        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))))
+        dag.LoadLocal(line, Const(line, CString("/hom/model2data"))),
+        dag.LoadLocal(line, Const(line, CString("/hom/model2"))))
 
       val result0 = testEval(input)
 
