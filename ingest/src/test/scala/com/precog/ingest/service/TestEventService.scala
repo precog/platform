@@ -77,7 +77,7 @@ trait TestEventService extends
 
   override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-  private val to = Duration(1, "seconds")
+  private val to = Duration(5, "seconds")
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(asyncContext) with Copointed[Future] {

@@ -35,7 +35,6 @@ import org.scalacheck.Gen._
 import akka.actor.ActorSystem
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
-import akka.dispatch.Await
 
 import org.joda.time._
 
@@ -83,7 +82,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     "track event with valid API key" in {
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _) :: Nil) => values must contain(testValue).only
       }
     }
@@ -93,7 +92,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
         chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
       } 
       
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => content.validated[Long]("content-length") must_== Success(37L)
       } 
     }
@@ -106,7 +105,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
           "skipped": 0,
           "errors": [ {
             "line": 0,
-            "reason": "expected whitespace got # (line 1, column 7)"
+            "reason": "expected whitespace or eof got # (line 1, column 7)"
           } ]
         }""")
 
@@ -114,7 +113,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
         chunk("178234#!!@#$\n", """{ "testing": 321 }""")
       } 
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
           msg mustEqual msg2
           events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
@@ -126,7 +125,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
         chunk("a,b,c\n1,2,3\n4, ,a", "\n6,7,8")
       } 
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
           // render then parseUnsafe so that we get the same numeric representations
           events flatMap { _.data.map(v => JParser.parseUnsafe(v.renderCompact)) } must_== List(
@@ -139,15 +138,15 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     "reject track request when API key not found" in {
       val result = track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
 
-      Await.result(result, 5.seconds) must beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
       }
     }
     
     "reject track request when no API key provided" in {
       val result = track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue) 
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
       }
     }
@@ -155,14 +154,14 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     "reject track request when grant is expired" in {
       val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }
     }
     
     "reject track request when path is not accessible by API key" in {
       val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue) 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
       }
     }
@@ -172,7 +171,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
         genObject(251).sample.get: JValue 
       }
 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _), _) =>
           msg must startWith("Cannot ingest values with more than 250 primitive fields.")
       }
@@ -182,7 +181,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     "cap errors at 100" in {
       val data = chunk(List.fill(500)("!@#$") mkString "\n")
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true, sync = true)(data) 
-      Await.result(result, 5.seconds) must beLike {
+      result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
           msg \ "total" must_== JNum(500)
           msg \ "ingested" must_== JNum(0)
