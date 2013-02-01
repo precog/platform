@@ -165,6 +165,9 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   val user4Grant = Await.result(apiKeyManager.findGrant(user4.grants.head), to).get
   val user4DerivedGrant = Await.result(
     apiKeyManager.newGrant(None, None, user4.apiKey, Set(user4Grant.grantId), standardPermissions("user4"), None), to) 
+
+  val user5 = Await.result(apiKeyManager.newAPIKey(Some("user5-key"), None, user1.apiKey, Set.empty), to)
+  val user6 = Await.result(apiKeyManager.newAPIKey(Some("user6-key"), None, user1.apiKey, Set.empty), to)
   
   val expiredGrant = Await.result(
     apiKeyManager.newGrant(None, None, user1.apiKey, Set(user1Grant.grantId), standardPermissions("user1"), Some(new DateTime().minusYears(1000))), to) 
@@ -208,10 +211,12 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
     
     "enumerate existing API keys" in {
-      getAPIKeys(rootAPIKey) must awaited(to) { beLike {
+      getAPIKeys(user1.apiKey) must awaited(to) { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jts), _) =>
           val ks = jts.deserialize[Set[v1.APIKeyDetails]]
-          ks.map(_.apiKey) must haveTheSameElementsAs(allAPIKeys.filter(_.issuerKey.exists(_ == rootAPIKey)).map(_.apiKey))
+          ks must haveSize(3)
+          ks.map(_.apiKey) must containAllOf(List(user5.apiKey, user6.apiKey))
+          // ks.map(_.apiKey) must haveTheSameElementsAs(allAPIKeys.filter(_.issuerKey.exists(_ == user1.apiKey)).map(_.apiKey))
       }}
     }
 

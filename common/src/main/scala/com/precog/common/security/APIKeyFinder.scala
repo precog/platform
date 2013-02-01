@@ -67,17 +67,8 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
   }
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = {
-    //def find0(record: APIKeyRecord): M[Set[v1.APIKeyDetails]] = {
-    //  for {
-    //    childKeys  <- underlying.findAPIKeyChildren(record.apiKey) 
-    //    keySets    <- (childKeys map find0).sequence
-    //    keyDetails <- (childKeys collect recordDetails).sequence 
-    //  } yield keyDetails ++ keySets.flatten 
-    //}
-
     underlying.findAPIKey(fromRoot) flatMap {
       case Some(record) => 
-        //find0(record)
         underlying.findAPIKeyChildren(record.apiKey) flatMap { 
           _ collect recordDetails sequence 
         }
