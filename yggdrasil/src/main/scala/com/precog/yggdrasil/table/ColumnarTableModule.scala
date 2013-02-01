@@ -298,7 +298,7 @@ trait ColumnarTableModule[M[+_]]
     /**
      * Merge controls the iteration over the table of group key values. 
      */
-    def merge[N[+_]](grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
+    def merge[N[+_]](grouping: GroupingSpec)(body: (JValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
       
       type Key = Seq[JValue]
@@ -383,10 +383,9 @@ trait ColumnarTableModule[M[+_]]
           }
         }
 
-        def tableFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): Table = {
+        def jValueFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): JValue = {
           val items = (cpaths zip key).map(t => (t._1.name, t._2))
-          val row = JObject(items.toMap)
-          Table.fromJson(row #:: Stream.empty)
+          JObject(items.toMap)
         }
 
         val groupKeys: Set[Key] = unionOfIntersections(indicesGroupedBySource)
@@ -394,7 +393,7 @@ trait ColumnarTableModule[M[+_]]
         // given a groupKey, return an M[Table] which represents running
         // the evaluator on that subgroup.
         def evaluateGroupKey(groupKey: Key): M[Table] = {
-          val groupKeyTable = tableFromGroupKey(groupKey, fullSchema)
+          val groupKeyTable = jValueFromGroupKey(groupKey, fullSchema)
 
           def map(gid: GroupId): M[Table] = {
             val subTableProjections = (sourceKeys.filter(_.groupId == gid).map { indexedSource =>

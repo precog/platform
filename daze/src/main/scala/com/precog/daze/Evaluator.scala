@@ -98,7 +98,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
     private val transState = StateMonadTrans[EvaluatorState]
     private val monadState = stateTMonadState[EvaluatorState, N]
-  
+
+    private[this] implicit def setMonoid[A] = new Monoid[Set[A]] {
+      def zero = Set()
+      def append(a: Set[A], b: => Set[A]) = a ++ b
+    }
+
     def report: QueryLogger[N, instructions.Line]
   
     def freshIdScanner: Scanner
@@ -135,9 +140,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
   
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
-      val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
 
-      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
+      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => {
           for {
             leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -192,7 +196,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       //** only used in resolveTopLevelGroup **/
-      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
+      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
         case UnionBucketSpec(left, right) => {
           for {
             leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -233,7 +237,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         case dag.Group(_, _, _) => sys.error("assertion error")
       }
 
-      def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, PendingTable] = {
+      def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
         val assumptionCheck: StateT[N, EvaluatorState, Option[Table]] = for (state <- monadState.gets(identity)) yield state.assume.get(graph)
@@ -316,16 +320,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
           
           case s: SplitParam => 
-            val (key, _) = splits(s.parent)
-            
-            val source = trans.DerefObjectStatic(Leaf(Source), CPathField(s.id.toString))
-            val spec = buildConstantWrapSpec(source)
-            
-            monadState point PendingTable(key transform spec, graph, TransSpec1.Id)
+            sys.error("Inlining of SplitParam failed")
           
           // not using extractors due to bug
           case s: SplitGroup => 
-            val (_, f) = splits(s.parent)
+            val f = splits(s.parent)
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           
           case Const(value) => 
@@ -494,12 +493,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case s @ dag.Split(spec, child) => 
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
+            val params = child.foldDown(true) {
+              case param: dag.SplitParam if param.parent == s => Set(param)
+            }
+
             val table = for {
               grouping <- resolveTopLevelGroup(spec, splits)
               state <- monadState.gets(identity)
               grouping2 <- transState liftM grouping
               result <- transState liftM mn(Table.merge(grouping2) { (key, map) =>
-                val back = fullEval(child, splits + (s -> (key -> (map andThen mn))), s :: splits.keys.toList)
+                val splits2 = splits + (s -> (map andThen mn))
+                val rewritten = params.foldLeft(child) {
+                  case (child, param) =>
+                    val subKey = key \ param.id.toString
+                    replaceNode(child, param, Const(subKey)(param.loc), splits2.keys.toSet)
+                }
+
+                val back = fullEval(rewritten, splits2, s :: splits.keys.toList)
                 back.eval(state)  //: N[Table]
               })
             } yield {
@@ -734,13 +744,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        * graph is considered to be a special forcing point, but as it is the endpoint,
        * it will perforce be evaluated last.
        */
-      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
+      def fullEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
 
         // find the topologically-sorted forcing points (excluding the endpoint)
         // at the current split level
-        val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
-      
+        val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(parentSplits)
+
         lazy val splitNodes = splits.keys.toSet
         type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
         val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
@@ -877,11 +887,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     // Takes a list of Splits, head is the current Split, which must be referenced.
     // The rest of the referenced Splits must be in the the list.
     private def referencesOnlySplit(parentSplits: List[dag.Split])(graph: DepGraph): Boolean = {
-      implicit val setMonoid = new Monoid[Set[dag.Split]] {
-        def zero = Set()
-        def append(a: Set[dag.Split], b: => Set[dag.Split]) = a ++ b
-      }
-
       val referencedSplits = graph.foldDown(false) {
         case s: dag.SplitParam => Set(s.parent)
         case s: dag.SplitGroup => Set(s.parent)

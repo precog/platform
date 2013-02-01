@@ -124,7 +124,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def constEmptyObject: Table
     def constEmptyArray: Table
 
-    def merge[N[+_]](grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
+    def merge[N[+_]](grouping: GroupingSpec)(body: (JValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
     def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] 
   }
