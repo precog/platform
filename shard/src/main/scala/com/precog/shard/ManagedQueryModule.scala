@@ -113,15 +113,15 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime] = None)(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
+  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime => DateTime])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
     val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now()))
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job =>
-        val mgr = JobQueryStateManager(job.id, expires)
+        val mgr = JobQueryStateManager(job.id, expires map (_(yggConfig.clock.now())))
         mgr.start()
         mgr
-      } getOrElse FakeJobQueryStateManager(expires)
+      } getOrElse FakeJobQueryStateManager(expires map (_(yggConfig.clock.now())))
     } yield (new ShardQueryMonad {
       val jobId = job map (_.id)
       val Q: JobQueryStateMonad = queryStateManager

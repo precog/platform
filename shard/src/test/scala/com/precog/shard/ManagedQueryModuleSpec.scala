@@ -68,7 +68,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   val jobActorSystem = ActorSystem("managedQueryModuleSpecJobs")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, Duration(5, "seconds"))
+    def copoint[A](m: Future[A]) = Await.result(m, Duration(30, "seconds"))
   }
 
   lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
@@ -154,11 +154,11 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
     "complete successfully if not cancelled" in {
       val ticks = for {
-        (_, _, query) <- execute(13)
+        (_, _, query) <- execute(7)
         ticks <- query
       } yield ticks
 
-      ticks.copoint must_== 13
+      ticks.copoint must_== 7
     }
 
     "be cancellable" in {
@@ -190,9 +190,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     "cannot be cancelled after it has successfully completed" in {
       val ticks = for {
         (jobId, _, query) <- execute(3)
-        cancelled <- cancel(jobId, 5)
-        _ <- waitFor(1)
         ticks <- query
+        cancelled <- cancel(jobId, 3)
       } yield ticks
 
       ticks.copoint must_== 3
@@ -258,11 +257,12 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
         val numTicks = query.toInt
-        val expiration = opts.timeout map (yggConfig.clock.now().plus(_))
+        val expiration = opts.timeout map { to =>
+          { (time: DateTime) => time.plus(to) }
+        }
+
         WriterT(createJob(apiKey, Some(userQuery.serialize), expiration) map { implicit M0 =>
           val ticks = new AtomicInteger()
-          // val tickFutures: Vector[Future] = ((1 to numTicks) map (ticker.wait(_))).toVector
-
           val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
               schedule(1) {
