@@ -256,31 +256,40 @@ object CPath extends CPathSerialization {
   }
   
   def makeTree[A](cpaths0: Seq[CPath], values: Seq[A]): CPathTree[A] = {
-    val cpathNodes = cpaths0.sorted map { _.nodes }
-    val cpathWithValue = cpathNodes.zip(values) map { case (path, value) => PathWithLeaf[A](path, value) }
-
-    def inner[A](paths: Seq[PathWithLeaf[A]]): Seq[CPathTree[A]] = {
-      if (paths.size == 1 && paths.head.size == 0) {
-        List(LeafNode(paths.head.value))
-      } else {
-        val filtered = paths filterNot { case PathWithLeaf(path, _) => path.isEmpty }
-        val grouped = filtered groupBy { case PathWithLeaf(path, _) => path.head }
-
-        def recurse[A](paths: Seq[PathWithLeaf[A]]) = 
-          inner(paths map { case PathWithLeaf(path, v) => PathWithLeaf(path.tail, v) })
-
-        val result = grouped.toSeq.sortBy(_._1) map { case (node, paths) =>
-          node match {
-            case (field: CPathField) => FieldNode(field, recurse(paths))
-            case (index: CPathIndex) => IndexNode(index, recurse(paths))
-            case _ => sys.error("CPathArray and CPathMeta not supported")
-          }
-        }
-        result
+    if (cpaths0.isEmpty) {
+      values.headOption match {
+        case Some(a) => RootNode(Seq(LeafNode(a)))
+        case None => RootNode(Seq.empty[CPathTree[A]])
       }
-    }
+    } else {
+      assert(values.length == cpaths0.length)
 
-    RootNode(inner(cpathWithValue))
+      val cpathNodes = cpaths0.sorted map { _.nodes }
+      val cpathWithValue = cpathNodes.zip(values) map { case (path, value) => PathWithLeaf[A](path, value) }
+
+      def inner[A](paths: Seq[PathWithLeaf[A]]): Seq[CPathTree[A]] = {
+        if (paths.size == 1 && paths.head.size == 0) {
+          List(LeafNode(paths.head.value))
+        } else {
+          val filtered = paths filterNot { case PathWithLeaf(path, _) => path.isEmpty }
+          val grouped = filtered groupBy { case PathWithLeaf(path, _) => path.head }
+
+          def recurse[A](paths: Seq[PathWithLeaf[A]]) = 
+            inner(paths map { case PathWithLeaf(path, v) => PathWithLeaf(path.tail, v) })
+
+          val result = grouped.toSeq.sortBy(_._1) map { case (node, paths) =>
+            node match {
+              case (field: CPathField) => FieldNode(field, recurse(paths))
+              case (index: CPathIndex) => IndexNode(index, recurse(paths))
+              case _ => sys.error("CPathArray and CPathMeta not supported")
+            }
+          }
+          result
+        }
+      }
+
+      RootNode(inner(cpathWithValue))
+    }
   }
 
   implicit def singleNodePath(node: CPathNode) = CPath(node)

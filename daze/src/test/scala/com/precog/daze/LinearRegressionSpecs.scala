@@ -36,6 +36,16 @@ import scalaz._
 trait LinearRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with RegressionTestSupport[M] {
   import library._
+  import dag._
+  import instructions._
+
+  def predictionInput(morph: Morphism2, modelData: String, model: String) = {
+    val line = Line(0, 0, "")
+    dag.Morph2(morph,
+      dag.LoadLocal(Const(CString(modelData))(line))(line),
+      dag.LoadLocal(Const(CString(model))(line))(line)
+    )(line)
+  }
 
   def createLinearSamplePoints(length: Int, noSamples: Int, actualThetas: Array[Double]): Seq[(Array[Double], Double)] = {
     val testSeqX = {
@@ -298,6 +308,68 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     "pass randomly generated test with a single feature" in (testTrivial or testTrivial)
     "pass randomly generated test with three features inside an object" in (testThreeFeatures or testThreeFeatures)
     "pass randomly generated test with three distinct schemata" in (testThreeSchemata or testThreeSchemata)
+  }
+
+  "linear prediction" should {
+    "predict simple case" in {
+
+      val input = predictionInput(LinearPrediction, "/hom/model1data", "/hom/model1")
+
+      val result0 = testEval(input)
+
+      result0 must haveSize(19)
+
+      val result = result0 collect { case (ids, value) if ids.size == 2 => value }
+
+      result mustEqual Set(
+        (SObject(Map("Model2" -> SDecimal(42.5), "Model1" -> SDecimal(48.5)))),
+        (SObject(Map("Model2" -> SDecimal(41.0)))),
+        (SObject(Map("Model2" -> SDecimal(8.0), "Model1" -> SDecimal(12.0)))), 
+        (SObject(Map("Model2" -> SDecimal(17.0), "Model1" -> SDecimal(6.6)))), 
+        (SObject(Map("Model2" -> SDecimal(26.0), "Model1" -> SDecimal(24.0)))), 
+        (SObject(Map("Model2" -> SDecimal(23.0), "Model1" -> SDecimal(35.0)))), 
+        (SObject(Map("Model2" -> SDecimal(29.0), "Model1" -> SDecimal(39.0)))), 
+        (SObject(Map("Model2" -> SDecimal(2.0), "Model1" -> SDecimal(0.0)))), 
+        (SObject(Map("Model2" -> SDecimal(-16.0), "Model1" -> SDecimal(-18.0)))), 
+        (SObject(Map("Model3" -> SDecimal(9.5)))), 
+        (SObject(Map("Model3" -> SDecimal(7.0)))), 
+        (SObject(Map("Model3" -> SDecimal(-11.0)))), 
+        (SObject(Map("Model3" -> SDecimal(19.75)))), 
+        (SObject(Map("Model3" -> SDecimal(-0.5)))), 
+        (SObject(Map("Model3" -> SDecimal(17.0)))), 
+        (SObject(Map("Model3" -> SDecimal(14.5)))), 
+        (SObject(Map("Model3" -> SDecimal(-0.5)))), 
+        (SObject(Map("Model3" -> SDecimal(24.5)))), 
+        (SObject(Map("Model3" -> SDecimal(-0.5)))))
+    }
+
+    "predict case with repeated model names and arrays" in {
+      val line = Line(0, 0, "")
+
+      val input = predictionInput(LinearPrediction, "/hom/model2data", "/hom/model2")
+
+      val result0 = testEval(input)
+
+      result0 must haveSize(14)
+
+      val result = result0 collect { case (ids, value) if ids.size == 2 => value }
+
+      result mustEqual Set(
+        (SObject(Map("Model1" -> SDecimal(8.0), "Model3" -> SDecimal(18.0)))), 
+        (SObject(Map("Model1" -> SDecimal(17.0)))), 
+        (SObject(Map("Model1" -> SDecimal(23.0)))),
+        (SObject(Map("Model1" -> SDecimal(2.0)))), 
+        (SObject(Map("Model2" -> SDecimal(14.0), "Model1" -> SDecimal(9.0)))), 
+        (SObject(Map("Model1" -> SDecimal(18.0)))), 
+        (SObject(Map("Model1" -> SDecimal(24.0)))),
+        (SObject(Map("Model1" -> SDecimal(3.0)))), 
+        (SObject(Map("Model3" -> SDecimal(0.0)))),
+        (SObject(Map("Model3" -> SDecimal(7.2)))),
+        (SObject(Map("Model3" -> SDecimal(-5.1)))), 
+        (SObject(Map("Model2" -> SDecimal(36.0)))),
+        (SObject(Map("Model3" -> SDecimal(-4.0)))),
+        (SObject(Map("Model2" -> SDecimal(77.0)))))
+    }
   }
 }
 
