@@ -3117,7 +3117,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "evaluate with on the results of a histogram function" in {
       val line = Line(1, 1, "")
-      
+      // 
+      // clicks := //clicks
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram with {rank: std::stats::rank(histogram.num)}
+      //
+    
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
        
       lazy val histogram: dag.Split = dag.Split(
