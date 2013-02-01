@@ -7,15 +7,17 @@ object IdentityAlignment {
   object MatchAlignment extends IdentityAlignment
 }
 
-trait Morphism1Like {
+trait FunctionLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
-  val tpe: UnaryOperationType
-  val retainIds: Boolean = false
-
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
+}
+
+trait Morphism1Like extends FunctionLike {
+  val tpe: UnaryOperationType
+  val retainIds: Boolean = false
 }
 
 object Morphism1Like {
@@ -23,16 +25,10 @@ object Morphism1Like {
     Some(m.namespace, m.name, m.opcode, m.tpe)
 }
 
-trait Morphism2Like {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
   val retainIds: Boolean = false
   def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
-
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
-  override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 object Morphism2Like {
@@ -40,14 +36,8 @@ object Morphism2Like {
     Some(m.namespace, m.name, m.opcode, m.tpe)
 }
 
-trait Op1Like {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+trait Op1Like extends FunctionLike {
   val tpe: UnaryOperationType
-
-  def fqn: String
-  override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 object Op1Like {
@@ -55,14 +45,8 @@ object Op1Like {
     Some(op1.namespace, op1.name, op1.opcode, op1.tpe)
 }
 
-trait Op2Like {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+trait Op2Like extends FunctionLike {
   val tpe: BinaryOperationType
-
-  def fqn: String
-  override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 object Op2Like {
@@ -70,14 +54,8 @@ object Op2Like {
     Some(op2.namespace, op2.name, op2.opcode, op2.tpe)
 }
 
-trait ReductionLike {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+trait ReductionLike extends FunctionLike {
   val tpe: UnaryOperationType
-
-  def fqn: String
-  override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 object ReductionLike {

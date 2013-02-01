@@ -166,7 +166,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
       
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
       val expected = extractPathsFor(Path.Root)(sample)
 
       (actor ? FindChildren(Path.Root)) must whenDelivered {
@@ -180,7 +180,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       val testPath: Path = event.path.parent.getOrElse(event.path)
 
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
       val expected = extractPathsFor(testPath)(sample)
 
       (actor ? FindChildren(testPath)) must whenDelivered {
@@ -192,7 +192,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
       val expected = extractSelectorsFor(event.path)(sample)
 
       (actor ? FindSelectors(event.path)) must whenDelivered {
@@ -204,7 +204,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
       val expected = extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
 
       (actor ? FindDescriptors(event.path, CPath(event.data.flattenWithPath.head._1))) must whenDelivered {

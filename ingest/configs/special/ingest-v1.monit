@@ -8,9 +8,16 @@ check process ingest-v1 with pidfile /var/run/precog/ingest-v1.pid
   if 3 restarts within 10 cycles then timeout
   group ingest-v1
 
-# Watch server log for issues
+# Watch server logs for issues
 check file ingest-v1.server.log with path /var/log/precog/ingest-v1.server.log
-  if match "Exception" for 3 cycles then alert
+  if match "Exception" for 1 cycles then alert
+  if match "Error" for 1 cycles then alert
+  depends on ingest-v1
+  group ingest-v1
+
+check file ingest-v1.stdout.log with path /var/log/precog/ingest-v1.stdout.log
+  if match "Exception" for 1 cycles then alert
+  if match "Error" for 1 cycles then alert
   depends on ingest-v1
   group ingest-v1
 

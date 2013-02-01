@@ -2,7 +2,6 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
@@ -14,9 +13,10 @@ object ProvenanceComputationSpecs extends Specification
     with CompilerUtils
     with Compiler
     with ProvenanceChecker 
-    with StaticLibrary {
+    with StaticLibrarySpec {
 
   import ast._
+  import library._
   
   "provenance computation" should {
     "compute result provenance correctly in BIF1" in {
@@ -126,6 +126,18 @@ object ProvenanceComputationSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }
+    
+    "identify import according to its child expression" in {
+      val tree = compileSingle("import std //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
+    "identify assert according to its right expression" in {
+      val tree = compileSingle("assert //bar //foo")
+      tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty
     }
     
@@ -1198,6 +1210,12 @@ object ProvenanceComputationSpecs extends Specification
           val tree = compileSingle("if (//bar union //baz) then //bar else //baz")
           tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
           tree.errors must beEmpty
+        }
+        // Regression test for #PLATFORM-652
+        {
+          val tree = compileSingle("if //foo then 1 else 0")
+          tree.provenance mustEqual StaticProvenance("/foo")
+          tree.errors mustEqual Set()
         }
         {
           val tree = compileSingle("if //foo then //bar else //baz")

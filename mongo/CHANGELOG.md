@@ -1,6 +1,18 @@
 Precog for MongoDB Changelog
 ==========
 
+Version 1.2.0
+-------------
+* Add the "include_ids" configuration parameter to include Mongo's
+"\_id" field to results. To enable, add the parameter to the queryExecutor block. For example:
+
+        queryExecutor {
+          include_ids = true
+          mongo {
+            server = "mongodb://localhost:27017"
+          }
+        }
+
 Version 1.1.2
 -------------
 * Fix a bug resulting in concurrent usage of Mongo cursors

@@ -4,8 +4,12 @@ package typer
 
 import bytecode.Library
 
-trait Binder extends parser.AST with Library {
+trait Binder extends parser.AST {
+  type Lib <: Library
+  val library: Lib
+
   import ast._
+  import library._
   
   type Formal = (Identifier, Let)
   
@@ -104,6 +108,8 @@ trait Binder extends parser.AST with Library {
         loop(child, env.copy(names = env.names ++ addend))
       }
       
+      case Assert(_, pred, child) => loop(pred, env) ++ loop(child, env)
+      
       case New(_, child) => loop(child, env)
       
       case Relate(_, from, to, in) =>
@@ -173,10 +179,15 @@ trait Binder extends parser.AST with Library {
         (values map { loop(_, env) }).fold(Set()) { _ ++ _ }
     }
     
+    // Need to make sure none of the primitives in the bottom Set are
+    // in the libraries. This is because the Set is ordered by
+    // hashCode and the Binding hashCode seems non-deterministic. In
+    // any case, we just shouldn't have a Set of Bindings where two or
+    // more have the same name.
     val builtIns = lib1.map(Op1Binding) ++
       lib2.map(Op2Binding) ++
       libReduction.map(ReductionBinding) ++
-      libMorphism1.map(Morphism1Binding) ++
+      libMorphism1.map(Morphism1Binding).filterNot { _.name == ExpandGlobBinding.name } ++
       libMorphism2.map(Morphism2Binding) ++
       Set(LoadBinding, DistinctBinding, ExpandGlobBinding)
       
