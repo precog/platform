@@ -52,7 +52,7 @@ object PlatformBuild extends Build {
 
     publishTo <<= (version) { version: String =>
       val nexus = "http://nexus.reportgrid.com/content/repositories/"
-      if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at nexus+"snapshots/") 
+      if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at nexus+"snapshots/")
       else                                   Some("releases"  at nexus+"releases/")
     }
   )
@@ -66,7 +66,7 @@ object PlatformBuild extends Build {
     addCompilerPlugin("org.scala-tools.sxr" % "sxr_2.9.0" % "0.2.7"),
     scalacOptions <+= scalaSource in Compile map { "-P:sxr:base-directory:" + _.getAbsolutePath },
     scalacOptions ++= {
-      Seq("-deprecation", "-unchecked", "-g:none") ++ 
+      Seq("-deprecation", "-unchecked", "-g:none") ++
       Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
     },
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
@@ -138,6 +138,9 @@ object PlatformBuild extends Build {
   // Logging is simply a common project for the test log configuration files
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
+  lazy val standalone = Project(id = "standalone", base = file("standalone")).
+    settings((commonAssemblySettings  ++ jettySettings): _*) dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, shard, muspelheim % "compile->compile;test->test", logging % "test->test", auth, accounts)
+
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
     aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok, heimdall, mongo, jdbc)
@@ -161,10 +164,13 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test", logging % "test->test")
 
   lazy val mongo = Project(id = "mongo", base = file("mongo")).
-    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(standalone, muspelheim % "compile->compile;test->test")
 
   lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
-    settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test")
+    settings(commonAssemblySettings: _*).dependsOn(standalone, muspelheim % "compile->compile;test->test")
+
+  lazy val desktop = Project(id = "desktop", base = file("desktop")).
+    settings(commonAssemblySettings: _*).dependsOn(standalone, shard)
 
   lazy val daze = Project(id = "daze", base = file("daze")).
     settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, logging % "test->test")
@@ -186,7 +192,7 @@ object PlatformBuild extends Build {
 
   lazy val accounts     = Project(id = "accounts", base = file("accounts")).
     settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth, common, logging % "test->test")
- 
+
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard, logging % "test->test")
 

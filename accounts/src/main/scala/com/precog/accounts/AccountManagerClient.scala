@@ -54,8 +54,8 @@ trait AccountManagerClientComponent {
   implicit val M: Monad[Future]
 
   def accountManagerFactory(config: Configuration): BasicAccountManager[Future] = {
-    config.get[String]("service.hardcoded_account").map { accountId =>
-      new HardCodedAccountManager(accountId)
+    config.get[String]("service.hardcoded_account").orElse(config.get[String]("service.static_account")).map { accountId =>
+      new StaticAccountManager(accountId)(asyncContext)
     }.getOrElse {
       val protocol = config[String]("service.protocol")
       val host = config[String]("service.host")
@@ -64,31 +64,11 @@ trait AccountManagerClientComponent {
       val user = config[String]("service.user")
       val password = config[String]("service.password")
       val cacheSize = config[Int]("service.cache_size", 1000)
-      
+
       val settings = AccountManagerClientSettings(protocol, host, port, path, user, password, cacheSize)
       new AccountManagerClient(settings)
     }
   }
-}
-
-class HardCodedAccountManager(accountId: AccountId) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
-  logger.debug("Starting new hardcoded account manager. All queries resolve to \"%s\"".format(accountId))
-
-  val asyncContext = defaultFutureDispatch
-   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = Promise.successful(Set(accountId))
-
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] = {
-    val singleton = Set(accountId)
-    Promise.successful {
-      apiKeys.map { key => (key, singleton) }.toMap
-    }
-  }
-  
-  def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
-
-  def close(): Future[Unit] = Promise.successful(())
 }
 
 class AccountManagerClient(settings: AccountManagerClientSettings) extends BasicAccountManager[Future] with AkkaDefaults with Logging {
@@ -98,7 +78,7 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
 
   val asyncContext = defaultFutureDispatch
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-  
+
   def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = {
     apiKeyToAccountCache.get(apiKey).map(Promise.successful(_)).getOrElse {
       invoke { client =>
@@ -131,7 +111,7 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
     apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
       case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
     }
-  
+
   def findAccountById(accountId: AccountId): Future[Option[Account]] = {
     invoke { client =>
       client.contentType(application/MimeTypes.json).get[JValue](accountId) map {
@@ -143,11 +123,11 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
             throw HttpException(BadGateway, "Unexpected response to find account request: " + err)
          }
 
-        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
+        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) =>
           logger.error("Fatal error attempting to find account: " + failure + ": " + content)
           throw HttpException(failure, reason)
 
-        case other => 
+        case other =>
           logger.error("Unexpected response from accounts service: " + other)
           throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
       }
@@ -155,9 +135,9 @@ class AccountManagerClient(settings: AccountManagerClientSettings) extends Basic
   }
 
   def close(): Future[Unit] = ().point[Future]
-  
+
   def invoke[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb 
+    val client = new HttpClientXLightWeb
     val auth = HttpHeaders.Authorization("Basic "+new String(Base64.encodeBase64((user+":"+password).getBytes("UTF-8")), "UTF-8"))
     f(client.protocol(protocol).host(host).port(port).path(path).header(auth))
   }

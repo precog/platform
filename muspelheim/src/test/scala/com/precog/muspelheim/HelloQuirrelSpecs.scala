@@ -30,13 +30,13 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           result must haveSize(1)
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SString("male"))))
         }
-        
+
         "object with null" >> {
           val result = eval("""{ name: "John", age: 29, gender: null }""")
           result must haveSize(1)
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
-        
+
         "object with undefined" >> {
           val result = eval("""{ name: "John", age: 29, gender: undefined }""")
           result must haveSize(0)
@@ -47,12 +47,12 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           result must haveSize(1)
           result must contain(SBoolean(true))
         }
-        
+
         "string" >> {
           val result = eval("\"hello, world\"")
           result must haveSize(1)
           result must contain(SString("hello, world"))
-        }        
+        }
 
         "null" >> {
           val result = eval("null")
@@ -72,63 +72,63 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           result must haveSize(1)
           result must contain(SDecimal(7))
         }
-        
+
         "subtraction" >> {
           val result = eval("5 - 2")
           result must haveSize(1)
           result must contain(SDecimal(3))
         }
-        
+
         "multiplication" >> {
           val result = eval("8 * 2")
           result must haveSize(1)
           result must contain(SDecimal(16))
         }
-        
+
         "division" >> {
           val result = eval("12 / 3")
           result must haveSize(1)
           result must contain(SDecimal(4))
         }
-        
+
         "mod" >> {
           val result = eval("5 % 2")
           result must haveSize(1)
           result must contain(SDecimal(1))
         }
       }
-      
+
       "booleans" >> {
         "greater-than" >> {
           val result = eval("5 > 2")
           result must haveSize(1)
           result must contain(SBoolean(true))
         }
-        
+
         "not-equal" >> {
           val result = eval("\"foo\" != \"foo\"")
           result must haveSize(1)
           result must contain(SBoolean(false))
         }
       }
-      
+
       "variables" >> {
         "1" >> {
           val input = """
             | total := 2 + 1
             | total * 3""".stripMargin
-            
+
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(9))
         }
-        
+
         "2" >> {
           val input = """
             | num := 4
             | square := num * num
             | square - 1""".stripMargin
-            
+
           val result = eval(input)
           result must haveSize(1)
           result must contain(SDecimal(15))
@@ -169,10 +169,10 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           val result = eval(input)
           result must haveSize(5)
       }
-      
+
       "should merge objects without timing out" >> {
         val input = """
-           //richie1/test 
+           //richie1/test
         """.stripMargin
 
         eval(input) must haveSize(100)
@@ -183,7 +183,7 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           //fastspring_nulls where (//fastspring_nulls).endDate = null
         """.stripMargin
 
-        val result = eval(input) 
+        val result = eval(input)
         result must haveSize(1)
       }
 
@@ -215,7 +215,6 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
 //
 //        val result = eval(input)
 //        result must haveSize(4)
-//      } 
+//      }
     }
 }
-

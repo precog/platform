@@ -18,40 +18,35 @@
  *
  */
 package com.precog.shard
-package jdbm3
+package desktop
 
-import com.precog.auth.MongoAPIKeyManagerComponent
-import com.precog.accounts.AccountManagerClientComponent
-import com.precog.common.security._
-import com.precog.common.jobs._
+import akka.actor.ActorSystem
+import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import akka.dispatch.Future
-import akka.dispatch.Promise
+import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
 
-import blueeyes.BlueEyesServer
-import blueeyes.bkka._
-import blueeyes.util.Clock
+import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
-import scalaz._
+import com.precog.common.jobs.InMemoryJobManager
+import com.precog.shard.jdbm3.JDBMQueryExecutorComponent
+import com.precog.standalone.StandaloneShardServer
 
-object JDBMShardServer extends BlueEyesServer
-    with ShardService
-    with JDBMQueryExecutorComponent
-    with MongoAPIKeyManagerComponent
-    with AccountManagerClientComponent {
-  import WebJobManager._
+object DesktopShardServer
+    extends StandaloneShardServer
+    with JDBMQueryExecutorComponent {
+  val caveatMessage = None
+  override def hardCodedAccount = Some("desktop")
 
-  val clock = Clock.System
+  val actorSystem = ActorSystem("desktopExecutorActorSystem")
+  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  implicit val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  override def configureShardState(config: Configuration) = M.point {
+  def configureShardState(config: Configuration) = M.point {
     val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
     val accountManager = accountManagerFactory(config.detach("accounts"))
-    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val jobManager = new InMemoryJobManager
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
 
     val stoppable = Stoppable.fromFuture {
