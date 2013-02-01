@@ -196,4 +196,3 @@ class AsyncQueryServiceHandler(
     HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
   }
 }
-
