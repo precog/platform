@@ -43,7 +43,7 @@ trait PerAccountThreadPoolModule { self =>
   implicit def defaultAsyncContext: ExecutionContext
 
   private lazy val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
-  
+
   private def asyncContextFor(accountId: AccountId): ExecutionContext = {
     if (executorCache.contains(accountId)) {
       executorCache.get(accountId)
@@ -58,7 +58,7 @@ trait PerAccountThreadPoolModule { self =>
   def getAccountExecutionContext(apiKey: APIKey): EitherT[Future, String, ExecutionContext] = {
     EitherT.eitherT(
       apiKeyManager.rootPath(apiKey) flatMap { keyPath =>
-        accountManager.findControllingAccount(keyPath) map { 
+        accountManager.findControllingAccount(keyPath) map {
           case Some(accountId) =>
             \/.right(asyncContextFor(accountId))
           case None =>

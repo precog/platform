@@ -18,7 +18,7 @@
  *
  */
 package com.precog.common
-package security 
+package security
 
 import blueeyes._
 import blueeyes.core.service._
@@ -40,18 +40,18 @@ import scalaz._
 import scalaz.syntax.std.option._
 
 class APIKeyRequiredService[A, B](apiKeyManager: APIKeyManager[Future], val delegate: HttpService[A, APIKeyRecord => Future[B]])
-  (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
+  (implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher)
   extends DelegatingService[A, Future[B], A, APIKeyRecord => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     request.parameters.get('apiKey).
       toSuccess[NotServed](DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")) flatMap { apiKey =>
       delegate.service(request) map { (f: APIKeyRecord => Future[B]) =>
         logger.debug("Locating API key: " + apiKey)
-        apiKeyManager.findAPIKey(apiKey) flatMap {  
+        apiKeyManager.findAPIKey(apiKey) flatMap {
           case None =>
             logger.warn("Could not locate API key " + apiKey)
             Future(err(BadRequest, "The specified API key does not exist: "+apiKey))
-            
+
           case Some(apiKey) =>
             logger.debug("Found API key " + apiKey)
             f(apiKey)
