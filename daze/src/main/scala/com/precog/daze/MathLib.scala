@@ -114,7 +114,7 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object ulp extends Op1DD("ulp", doubleIsDefined, Math.ulp)
   
     abstract class Op2DDD(name: String, defined:(Double, Double) => Boolean,
-      f:(Double, Double) => Double) extends Op2(MathNamespace, name) {
+      f:(Double, Double) => Double) extends Op2F2(MathNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::math::op2dd::" + name) {
         case (c1: DoubleColumn, c2: DoubleColumn) =>

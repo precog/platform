@@ -29,6 +29,7 @@ import blueeyes.persistence.mongo.RealMongoSpecSupport
 import blueeyes.persistence.mongo.json.BijectionsMongoJson.JsonToMongo
 
 import com.mongodb.WriteConcern
+import com.mongodb.Mongo
 
 import com.precog.bytecode._
 import com.precog.common._
@@ -168,11 +169,13 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   trait TableCompanion extends MongoColumnarTableCompanion
 
+  var mongo: Mongo = _
+
   object Table extends TableCompanion {
     import trans._
 
     def dbAuthParams = Map.empty
-    val mongo = MongoPlatformSpecEngine.acquire.realMongo
+    def mongo = self.mongo
     override def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       // Rewrite paths of the form /foo/bar/baz to /test/foo_bar_baz
       val pathFixTS = Map1(Leaf(Source), CF1P("fix_paths") {
@@ -199,11 +202,15 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   def userMetadataView(apiKey: APIKey) = null
 
+  def startup() {
+    mongo = MongoPlatformSpecEngine.acquire.realMongo
+  }
+
   def shutdown() {
     MongoPlatformSpecEngine.release
   }
 
-  override def map (fs: => Fragments): Fragments = fs ^ Step { shutdown() }
+  override def map (fs: => Fragments): Fragments = (Step { startup() }) ^ fs ^ (Step { shutdown() })
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {

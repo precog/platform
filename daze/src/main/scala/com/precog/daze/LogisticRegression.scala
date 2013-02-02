@@ -37,6 +37,7 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
+import scalaz.std.list._
 import scalaz.std.set._
 import scalaz.std.stream._
 import scalaz.std.tuple._
@@ -51,11 +52,11 @@ trait ReductionHelper {
   def reduceDouble(seq: Seq[ColumnValues]): Result
 }
 
-trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] with EvaluatorMethodsModule[M] {
-  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with RegressionSupport with EvaluatorMethods {
+trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] with EvaluatorMethodsModule[M] with PredictionLibModule[M] {
+  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with PredictionSupport with RegressionSupport with EvaluatorMethods {
     import trans._
 
-    override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression)
+    override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression, LogisticPrediction)
 
     object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
       val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
@@ -274,6 +275,21 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
           objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
         }
+      }
+    }
+
+    object LogisticPrediction extends Morphism2(Stats2Namespace, "predictLogistic") with PredictionBase {
+      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+      override val retainIds = true
+
+      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+
+      def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
+        val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
+        def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
+
+        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, sigmoid _)) }
       }
     }
   }

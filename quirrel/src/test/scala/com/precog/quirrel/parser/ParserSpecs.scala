@@ -747,6 +747,18 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("1 %") must throwA[ParseException]
     }
     
+    "accept a power operation" in {
+      parseSingle("1 ^ 2") must beLike { case Pow(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
+    }
+
+    "reject a power operation lacking a left operand" in {
+      parseSingle("^ 1") must throwA[ParseException]
+    }
+
+    "reject a power operation lacking a right operand" in {
+      parseSingle("1 ^") must throwA[ParseException]
+    }
+
     "accept a less-than operation" in {
       parseSingle("1 < 2") must beLike { case Lt(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
@@ -923,6 +935,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       
       parseSingle("1 % 2 / 3") must beLike { case Div(_, Mod(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
       parseSingle("1 / 2 % 3") must beLike { case Mod(_, Div(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
+    }
+
+    "favor power according to left/right ordering" in {
+      parseSingle("1 / 2 ^ 3") must beLike { case Div(_, NumLit(_, "1"), Pow(_, NumLit(_, "2"), NumLit(_, "3"))) => ok }
+
+      parseSingle("1 ^ 2 ^ 3") must beLike { case Pow(_, Pow(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")) => ok }
     }
     
     "favor addition/subtraction according to left/right ordering" in {

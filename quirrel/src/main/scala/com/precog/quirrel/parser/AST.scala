@@ -261,6 +261,12 @@ trait AST extends Phases {
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
       
+      case Pow(loc, left, right) => {
+        indent + "type: pow\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+      }
+
       case Lt(loc, left, right) => {
         indent + "type: lt\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
@@ -680,6 +686,9 @@ trait AST extends Phases {
       case Mod(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
+      case Pow(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
       case Lt(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
 
@@ -1019,6 +1028,10 @@ trait AST extends Phases {
       val sym = 'mod
     }
     
+    final case class Pow(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
+      val sym = 'pow
+    }
+
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'lt
     }

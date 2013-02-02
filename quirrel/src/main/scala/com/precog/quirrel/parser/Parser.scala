@@ -122,6 +122,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "*" ~ expr ^# { (loc, e1, _, e2) => Mul(loc, e1, e2) }
     | expr ~ "/" ~ expr ^# { (loc, e1, _, e2) => Div(loc, e1, e2) }
     | expr ~ "%" ~ expr ^# { (loc, e1, _, e2) => Mod(loc, e1, e2) }
+    | expr ~ "^" ~ expr ^# { (loc, e1, _, e2) => Pow(loc, e1, e2) }
     
     | expr ~ "<" ~ expr  ^# { (loc, e1, _, e2) => Lt(loc, e1, e2) }
     | expr ~ "<=" ~ expr ^# { (loc, e1, _, e2) => LtEq(loc, e1, e2) }
@@ -219,6 +220,7 @@ trait Parser extends RegexParsers with Filters with AST {
       Deref,
       Comp,
       Neg,
+      Pow,
       (Mul, Div, Mod),
       (Add, Sub),
       (Lt, LtEq, Gt, GtEq),

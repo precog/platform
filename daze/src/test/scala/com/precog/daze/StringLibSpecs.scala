@@ -318,6 +318,18 @@ trait StringLibSpecs[M[+_]] extends Specification
       
       result2 must contain(true, false)
     }
+    "determine matches with capture" in {
+      val input = op2Input(regexMatches, CString(""".*(e)[^a]*(a)?[^a]*.*"""), homStrings)
+      
+      val result = testEval(input)
+      result must haveSize(4)
+      
+      val result2 = result collect {
+        case (ids, SArray(vec)) if ids.length == 1 => vec
+      }
+      
+      result2 must contain(Vector(SString("e"), SString("a")), Vector(SString("e"), SString("")))
+    }
     "determine compareTo" in {
       val input = op2Input(compareTo, CString("quirky"), homStrings) //todo put regex here!
         
