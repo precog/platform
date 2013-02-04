@@ -120,8 +120,13 @@ trait CScanner {
   def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column])
 }
 
+trait CSchema {
+  def columnRefs: Set[ColumnRef]
+  def columns(jtype: JType): Set[Column]
+}
+
 trait CReducer[A] {
-  def reduce(columns: (JType => Set[Column]), range: Range): A
+  def reduce(schema: CSchema, range: Range): A
 }
 
 

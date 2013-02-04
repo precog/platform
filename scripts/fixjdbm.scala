@@ -17,30 +17,38 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "common"
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.table._
 
-scalacOptions += "-Ydependent-method-types"
+import java.io.File
 
-libraryDependencies ++= Seq(
-  "ch.qos.logback" %  "logback-classic"    % "1.0.0",
-  "org.streum"     %  "configrity_2.9.1" % "0.9.0",
-  "org.apache"     %% "kafka-core" % "0.7.5",
-  "com.chuusai"    %% "shapeless" % "1.2.3"
-)
+import org.apache.jdbm._
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.2" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-      <exclude org="org.apache.hadoop"/>
-      <exclude org="org.apache.avro"/>
-    </dependency>
-    <dependency org="org.apache.avro" name="avro" rev="1.4.0">
-      <exclude org="org.mortbay.jetty"/>
-    </dependency>
-  </dependencies>
+import scala.collection.JavaConverters._
 
-parallelExecution in test := false
+(new File("fixed")).mkdirs()
+
+val src = DBMaker.openFile("byIdentity").make()
+val dst = DBMaker.openFile("fixed/byIdentity").make()
+
+val mapName = "byIdentityMap"
+
+val si = src.getTreeMap(mapName).asInstanceOf[java.util.Map[Array[Byte], Array[Byte]]]
+
+println("Input size = " + si.size)
+
+val keyColRefs = Seq(ColumnRef(".key[0]", CLong))
+
+val keyFormat = RowFormat.IdentitiesRowFormatV1(keyColRefs)
+
+val di = dst.createTreeMap(mapName, SortingKeyComparator(keyFormat, true), ByteArraySerializer, ByteArraySerializer)
+
+si.entrySet.iterator.asScala.foreach {
+  e => di.put(e.getKey, e.getValue.drop(2))
+}
+
+dst.commit()
+
+src.close()
+dst.close()
