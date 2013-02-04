@@ -101,7 +101,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
 
   def rootPath(apiKey: APIKey): M[Seq[APIKey]] = {
     findAPIKey(apiKey) flatMap {
-      case Some(record) if record.apiKey != apiKey =>
+      case Some(record) =>
         record.issuerKey map { rootPath } getOrElse { M.point(Vector()) } map {
           _ :+ apiKey
         }
