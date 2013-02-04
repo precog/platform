@@ -138,6 +138,9 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def deleteGrant(authAPIKey: String, grantId: String) =
     authService.query("apiKey", authAPIKey).delete("/grants/"+grantId)
 
+  def getPermissions(authAPIKey: String, path: Path) =
+    authService.query("apiKey", authAPIKey).get("/permissions/fs/" + path)
+
   def equalGrant(g1: Grant, g2: Grant) = (g1.grantId == g2.grantId) && (g1.permissions == g2.permissions) && (g1.expirationDate == g2.expirationDate)
   
   def mkNewGrantRequest(grant: Grant) = grant match {
@@ -367,6 +370,27 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
         HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
         afterDelete = jgs.deserialize[Set[v1.GrantDetails]]
       } yield !afterDelete.exists(_.grantId == details.grantId)) must awaited(to) { beTrue }
+    }
+
+    "retrieve permissions for a given path owned by user" in {
+      getPermissions(user1.apiKey, Path("/user1")) must awaited(to) { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jperms), _) =>
+          val perms = jperms.deserialize[Set[Permission]] map Permission.accessType
+          val types = Set("read", "reduce", "write", "delete")
+          perms must_== types
+      }}
+    }
+
+    "retrieve permissions for a path we don't own" in {
+      val permsM = for {
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _) <- createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty, Set(ReadPermission(Path("/user1/public"), Set("user1"))), None))
+        _ <- addAPIKeyGrant(user1.apiKey, user4.apiKey, jid.deserialize[v1.GrantDetails].grantId)
+        HttpResponse(HttpStatus(OK, _), _, Some(jperms), _) <- getPermissions(user4.apiKey, Path("/user1/public"))
+      } yield jperms.deserialize[Set[Permission]]
+
+      permsM must awaited(to) { haveOneElementLike {
+        case ReadPermission(_, _) => ok
+      }}
     }
   }
 }
