@@ -2,6 +2,7 @@ package com.precog.auth
 
 import com.precog.common.security._
 import com.precog.common.security.service._
+import com.precog.common.services.PathServiceCombinators
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -18,7 +19,7 @@ import DefaultBijections._
 import org.streum.configrity.Configuration
 import scalaz._
 
-trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators {
+trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators with PathServiceCombinators {
   case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
 
   val timeout = akka.util.Timeout(120000) //for now
@@ -73,6 +74,9 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                       post(CreateGrantChildHandler)
                     }
                   }
+                } ~
+                dataPath("/permissions/fs") {
+                  get(ReadPermissionsHandler)
                 }
               }
             }
