@@ -177,7 +177,57 @@ trait StatsLibSpecs[M[+_]] extends Specification
       result2 must contain(0,2,3,4,7,8).only
     }
 
-    "compute rank, denseRank, indexedRank on Doubles and Longs" in {
+    "compute rank, denseRank, indexedRank" in {
+      val line = Line(1, 1, "")
+      
+      val data = dag.LoadLocal(Const(CString("/het/numbersDoubleLong"))(line))(line)
+    
+      def wrapper(d: DepGraph, name: String) = 
+        Join(WrapObject, CrossLeftSort, Const(CString(name))(line), d)(line)
+
+      def morpher(rank: Morphism1, name: String) =
+        wrapper(dag.Morph1(rank, data)(line), name)
+
+      def joiner(lhs: DepGraph, rhs: DepGraph): DepGraph =
+        Join(JoinObject, IdentitySort, lhs, rhs)(line)
+
+      val input = List(
+        morpher(Rank, "rank"),
+        morpher(DenseRank, "denseRank"),
+        morpher(IndexedRank, "indexedRank"),
+        wrapper(data, "point")
+      ).reduceLeft(joiner)
+
+      // sort a tuple by its first (Long) field
+      val ordering = scala.math.Ordering.by[(Long, _), Long](_._1)
+
+      // this is ugly, but so is the structure coming out of testEval :/
+      val result: List[Map[String, SValue]] = testEval(input).toList.map {
+        case (Vector(k), SObject(v)) => (k, v)
+      }.sorted(ordering).map(_._2)
+
+      val expected = List(
+        Map("indexedRank" -> SDecimal(0), "denseRank" -> SDecimal(0), "rank" -> SDecimal(0), "point" -> SDecimal(-30.2)),
+        Map("indexedRank" -> SDecimal(1), "denseRank" -> SDecimal(0), "rank" -> SDecimal(0), "point" -> SDecimal(-30.2)),
+        Map("indexedRank" -> SDecimal(2), "denseRank" -> SDecimal(1), "rank" -> SDecimal(2), "point" -> SDecimal(-2)),
+        Map("indexedRank" -> SDecimal(3), "denseRank" -> SDecimal(1), "rank" -> SDecimal(2), "point" -> SDecimal(-2)),
+        Map("indexedRank" -> SDecimal(4), "denseRank" -> SDecimal(2), "rank" -> SDecimal(4), "point" -> SDecimal(0)),
+        Map("indexedRank" -> SDecimal(5), "denseRank" -> SDecimal(3), "rank" -> SDecimal(5), "point" -> SDecimal(10.1)),
+        Map("indexedRank" -> SDecimal(6), "denseRank" -> SDecimal(4), "rank" -> SDecimal(6), "point" -> SDecimal(12.6)),
+        Map("indexedRank" -> SDecimal(7), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(8), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(9), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(10), "denseRank" -> SDecimal(5), "rank" -> SDecimal(7), "point" -> SDecimal(15)),
+        Map("indexedRank" -> SDecimal(11), "denseRank" -> SDecimal(6), "rank" -> SDecimal(11), "point" -> SDecimal(30)),
+        Map("indexedRank" -> SDecimal(12), "denseRank" -> SDecimal(7), "rank" -> SDecimal(12), "point" -> SDecimal(40.3)),
+        Map("indexedRank" -> SDecimal(13), "denseRank" -> SDecimal(7), "rank" -> SDecimal(12), "point" -> SDecimal(40.3)),
+        Map("indexedRank" -> SDecimal(14), "denseRank" -> SDecimal(8), "rank" -> SDecimal(14), "point" -> SDecimal(50))
+      )
+
+      result must_== expected
+    }
+
+    "compute rank, denseRank, indexedRank on heterogenous numbers" in {
       val line = Line(1, 1, "")
       
       val data = dag.LoadLocal(Const(CString("/het/numbersDoubleLong"))(line))(line)

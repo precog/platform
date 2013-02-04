@@ -834,6 +834,53 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
     trait BaseRankScanner extends CScanner {
       import scala.collection.mutable
 
+      // collapses number columns into one decimal column.
+      //
+      // TODO: it would be nice to avoid doing this, but its not clear that
+      // decimals are going to be a significant performance problem for rank
+      // (compared to sorting) and this simplifies the algorithm a lot.
+      protected def decimalize(m: Map[ColumnRef, Column], r: Range): Map[ColumnRef, Column] = {
+        val m2 = mutable.Map.empty[ColumnRef, Column]
+        val nums = mutable.Map.empty[CPath, List[Column]]
+
+        m.foreach { case (ref @ ColumnRef(path, ctype), col) =>
+          if (ctype == CLong || ctype == CDouble || ctype == CNum) {
+            nums(path) = col :: nums.getOrElse(path, Nil)
+          } else {
+            m2(ref) = col
+          }
+        }
+
+        val start = r.start
+        val end = r.end
+        val len = r.size
+
+        nums.foreach {
+          case (path, cols) =>
+            val bs = new BitSet()
+            val arr = new Array[BigDecimal](len)
+            cols.foreach {
+              case col: LongColumn =>
+                val bs2 = col.definedAt(start, end)
+                Loop.range(0, len)(j => if (bs2.get(j)) arr(j) = BigDecimal(col(j + start)))
+                bs.or(bs2)
+              case col: DoubleColumn =>
+                val bs2 = col.definedAt(start, end)
+                Loop.range(0, len)(j => if (bs2.get(j)) arr(j) = BigDecimal(col(j + start)))
+                bs.or(bs2)
+              case col: NumColumn =>
+                val bs2 = col.definedAt(start, end)
+                Loop.range(0, r.size)(j => if (bs2.get(j)) arr(j) = col(j + start))
+                bs.or(bs2)
+              case col =>
+                sys.error("unexpected column found: %s" format col)
+            }
+
+            m2(ColumnRef(path, CNum)) = shiftColumn(ArrayNumColumn(bs, arr), start)
+        }
+        m2.toMap
+      }
+
       /**
        * Represents the state of the scanner at the end of a slice.
        *
@@ -927,7 +974,10 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
+
+        val m = decimalize(_m, range)
+
         val start = range.start
         val end = range.end
         val len = end - start
@@ -1057,7 +1107,9 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
+        val m = decimalize(_m, range)
+
         val start = range.start
         val end = range.end
         val len = end - start
