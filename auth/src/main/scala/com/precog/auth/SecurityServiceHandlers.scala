@@ -19,6 +19,7 @@
  */
 package com.precog.auth
 
+import com.precog.common.Path
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
@@ -305,6 +306,27 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       }
     }
     
+    val metadata = None
+  }
+
+  object ReadPermissionsHandler extends CustomHttpService[Future[JValue], (APIKey, Path) => Future[R]] with Logging {
+    val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey, path: Path) =>
+      val atO: Option[Validation[Extractor.Error, DateTime]] = request.parameters.get('at).map(JString(_).validated[DateTime])
+      atO.sequence[({ type λ[α] = Validation[Extractor.Error, α] })#λ, DateTime] match {
+        case Success(at) =>
+          apiKeyManager.validGrants(authAPIKey, at) map { grants =>
+            val pathPermissions = grants flatMap (_.permissions) filter { perm =>
+              (perm.path == path) || path.isChildOf(perm.path)
+            }
+            ok(Some(pathPermissions))
+          }
+
+        case Failure(e) =>
+          logger.warn("The 'at paramter was not a valid DateTime: " + e)
+          Promise successful badRequest("Invalid date provided to 'at parameter.", Some(e.message))
+      }
+    }
+
     val metadata = None
   }
 }

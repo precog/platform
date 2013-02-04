@@ -36,13 +36,17 @@ import blueeyes.core.http.HttpStatusCodes.{ Response => _, _ }
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.SerializationImplicits._
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity.Configuration
 
 import scalaz._
 import scalaz.EitherT.eitherT
 import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
+import scalaz.std.set._
 
 object WebAPIKeyFinder {
   def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyFinder[Future] = {
@@ -75,11 +79,43 @@ class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, r
   }
 
   def findAllAPIKeys(fromRoot: APIKey): Future[Set[v1.APIKeyDetails]] = {
-    sys.error("todo")
+    withJsonClient { client =>
+      client.query("apiKey", fromRoot).get[JValue]("apikeys/") map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
+          jvalue.validated[Set[v1.APIKeyDetails]] getOrElse Set.empty
+        case res =>
+          logger.warn("Unexpected response from auth service for apiKey " + fromRoot + ":\n" + res)
+          Set.empty
+      }
+    }
+  }
+
+  private val fmt = ISODateTimeFormat.dateTime()
+
+  private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Future[Set[Permission]] = {
+    withJsonClient { client0 =>
+      val client = at map (fmt.print(_)) map (client0.query("at", _)) getOrElse client0
+      client.query("apiKey", apiKey).get[JValue]("/permissions/fs/" + path) map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
+          jvalue.validated[Set[Permission]] getOrElse Set.empty
+        case res =>
+          logger.warn("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
+          Set.empty
+      }
+    }
   }
 
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): Future[Boolean] = {
-    sys.error("todo")
+
+    // We group permissions by path, then find the permissions for each path individually.
+    // This means a call to this will do 1 HTTP request per path, which isn't efficient.
+
+    val results: Set[Future[Boolean]] = perms.groupBy(_.path).map({ case (path, requiredPathPerms) =>
+      findPermissions(apiKey, path, at) map { actualPathPerms =>
+        requiredPathPerms forall { perm => actualPathPerms exists (_ implies perm) }
+      }
+    })(collection.breakOut)
+    results.sequence.map(_.foldLeft(true)(_ && _))
   }
 
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Future[v1.APIKeyDetails] = {
