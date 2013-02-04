@@ -241,6 +241,9 @@ trait JDBMQueryExecutorComponent  {
           def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
           type YggConfig = JDBMQueryExecutorConfig
           val yggConfig = platform.yggConfig
+          
+          def warn(warning: JValue): ShardQuery[Unit] =
+            jsonReport.warn(warning, "warning")
 
 
 /*
@@ -261,6 +264,7 @@ trait JDBMQueryExecutorComponent  {
 
         */
           val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
+          val jsonReport = errorReport[JValue]
         }
       }
 
