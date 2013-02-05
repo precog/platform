@@ -36,13 +36,13 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object JDBMShardServer extends BlueEyesServer 
-    with ShardService 
-    with JDBMQueryExecutorComponent 
-    with MongoAPIKeyManagerComponent 
+object JDBMShardServer extends BlueEyesServer
+    with ShardService
+    with JDBMQueryExecutorComponent
+    with MongoAPIKeyManagerComponent
     with AccountManagerClientComponent {
   import WebJobManager._
-  
+
   val clock = Clock.System
 
   implicit val asyncContext = defaultFutureDispatch

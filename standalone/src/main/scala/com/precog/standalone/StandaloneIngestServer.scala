@@ -17,9 +17,27 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package pandora
+package com.precog.standalone
 
-import com.precog.muspelheim.LinearRegressionSpecs
+import akka.dispatch.Future
 
-class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformSpecs
+import blueeyes.BlueEyesServer
+import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.util.Clock
+
+import scalaz.Monad
+
+import com.precog.common.security.StaticAPIKeyManagerComponent
+import com.precog.ingest.EventService
+import com.precog.ingest.kafka.KafkaEventStoreComponent
+
+object StandaloneIngestServer
+    extends BlueEyesServer
+    with EventService
+    with StaticAPIKeyManagerComponent
+    with KafkaEventStoreComponent {
+  val clock = Clock.System
+
+  implicit val asyncContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+}

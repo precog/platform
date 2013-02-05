@@ -75,7 +75,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with ShardQueryExecutorConfig
   with IdSourceConfig
   with ShardConfig {
-    
+
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
   val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
 
@@ -125,7 +125,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   val report = LoggingQueryLogger[Future]
 
   Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-
+  
   def shutdown() = Future {
     Table.mongo.close()
     true
@@ -137,6 +137,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
     val report = LoggingQueryLogger(M)
+    def warn(warning: JValue) = report.warn(warning, "warning")
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
@@ -155,21 +156,21 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {
-          case Nil => 
+          case Nil =>
             val dbs = Table.mongo.getDatabaseNames.asScala.toList
             // TODO: Poor behavior on Mongo's part, returning database+collection names
             // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
-            
+
             val finalNames = dbs.foldLeft(dbs.toSet) {
               case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
             }.toList.sorted
             Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
-          case dbName :: Nil => 
+          case dbName :: Nil =>
             val db = Table.mongo.getDB(dbName)
             Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
-          case _ => 
+          case _ =>
             Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
         }
       }

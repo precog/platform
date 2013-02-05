@@ -60,7 +60,7 @@ trait ShardQueryExecutorConfig
 trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
+  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
       extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, CharBuffer]] {
 
     type YggConfig <: ShardQueryExecutorConfig
@@ -74,6 +74,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         JObject(JField("lineNum", JNum(line.line)), JField("colNum", JNum(line.col)), JField("detail", JString(line.text)))
       }
     }
+    
+    def warn(warning: JValue): N[Unit]
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
@@ -83,26 +85,35 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       import EvaluationError._
 
       val solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
-        asBytecode(query) flatMap { bytecode =>
-          ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-            Validation.success(outputChunks(opts.output) {
-              applyQueryOptions(opts) {
-                logger.debug("[QID:%d] Evaluating query".format(qid))
-                if (queryLogger.isDebugEnabled) {
-                  eval(dag, evaluationContext, true) map {
-                    _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
-                      slice => "size: " + slice.size
+        asBytecode(query) flatMap {
+          case (warnings, bytecode) => {
+            ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
+              Validation.success(outputChunks(opts.output) {
+                applyQueryOptions(opts) {
+                  logger.debug("[QID:%d] Evaluating query".format(qid))
+                  
+                  val evalResult = if (queryLogger.isDebugEnabled) {
+                    eval(dag, evaluationContext, true) map {
+                      _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                        slice => "size: " + slice.size
+                      }
                     }
+                  } else {
+                    eval(dag, evaluationContext, true)
                   }
-                } else {
-                  eval(dag, evaluationContext, true)
+                  
+                  val warnResult = warnings map warn reduceOption { _ >> _ }
+                  
+                  warnResult map { res =>
+                    res >> evalResult
+                  } getOrElse evalResult
                 }
-              }
-            })
+              })
+            }
           }
         }
       }
-      
+
       N.point {
         ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[N, CharBuffer]]])
       }
@@ -128,20 +139,40 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         table
       }
 
-      def page(table: N[Table]): N[Table] = opts.page map { case (offset, limit) =>
-          table map (_.takeRange(offset, limit))
+      def page(table: N[Table]): N[Table] = opts.page map {
+        case (offset, limit) =>
+          table map { _.takeRange(offset, limit) }
       } getOrElse table
 
       page(sort(table map (_.compact(constants.SourceValue.Single))))
     }
 
-    private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
+    private def asBytecode(query: String): Validation[EvaluationError, (Set[JValue], Vector[Instruction])] = {
+      def renderError(err: Error): JValue = {
+        val loc = err.loc
+        val tp = err.tp
+
+        JObject(
+          JField("message", JString("Errors occurred compiling your query."))
+            :: JField("line", JString(loc.line))
+            :: JField("lineNum", JNum(loc.lineNum))
+            :: JField("colNum", JNum(loc.colNum))
+            :: JField("detail", JString(tp.toString))
+            :: Nil)
+      }
+      
       try {
         val forest = compile(query)
-        val validForest = forest filter { _.errors.isEmpty }
+        val validForest = forest filter { tree =>
+          tree.errors forall isWarning
+        }
         
         if (validForest.size == 1) {
-          success(emit(validForest.head))
+          val tree = validForest.head
+          
+          val warnings = tree.errors map renderError
+          
+          success((warnings, emit(validForest.head)))
         } else if (validForest.size > 1) {
           failure(UserError(
             JArray(
@@ -150,21 +181,9 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
                   JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
         } else {
           val nested = forest map { tree =>
-            JArray(
-              (tree.errors: Set[Error]) map { err =>
-                val loc = err.loc
-                val tp = err.tp
-
-                JObject(
-                  JField("message", JString("Errors occurred compiling your query."))
-                    :: JField("line", JString(loc.line))
-                    :: JField("lineNum", JNum(loc.lineNum))
-                    :: JField("colNum", JNum(loc.colNum))
-                    :: JField("detail", JString(tp.toString))
-                    :: Nil)
-              } toList)
+            JArray((tree.errors: Set[Error]) map renderError toList)
           }
-          
+
           failure(UserError(JArray(nested.toList)))
         }
       } catch {
@@ -208,7 +227,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
     }
 
     private def renderStream(table: Table): N[StreamT[N, CharBuffer]] =
-      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))    
+      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))
   }
 }
 // vim: set ts=4 sw=4 et:

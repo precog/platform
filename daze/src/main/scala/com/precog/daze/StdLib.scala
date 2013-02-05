@@ -72,9 +72,9 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       def apply(input: Table, ctx: EvaluationContext): M[Table]
     }
 
-    sealed trait MorphismAlignment 
+    sealed trait MorphismAlignment
     object MorphismAlignment {
-      case class Match(morph: M[Morph1Apply]) extends MorphismAlignment
+      case class Match(morph: M[Morph1Apply]) extends MorphismAlignment 
       case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
       case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
     }
@@ -87,11 +87,15 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       val multivariate: Boolean = false
       def alignment: MorphismAlignment
+      override final def idAlignment: IdentityAlignment = alignment match {
+        case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
+        case _ => IdentityAlignment.CrossAlignment
+      }
     }
 
     abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
       def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A]
-      
+
       def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1(this)
       def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
     }
@@ -101,6 +105,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
         trans.Map1(source, f1(ctx))
       
       def f1(ctx: EvaluationContext): F1
+
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
     
@@ -112,7 +117,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       })
 
       def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A]
-      
+
       def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2(this)
     }
 
@@ -121,6 +126,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
         trans.Map2(left, right, f2(ctx))
       
       def f2(ctx: EvaluationContext): F2
+
       override def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2F2(this)
     }
 
@@ -173,7 +179,7 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
       def rec(reductions: List[(Reduction, Option[Int])], acc: Reduction): Reduction = {
         reductions match {
           case (x, idx) :: xs =>
-            val impl = new Reduction(Vector(), "") {
+              val impl = new Reduction(Vector(), "") {
               type Result = (x.Result, acc.Result) 
 
               def reducer(ctx: EvaluationContext) = new CReducer[Result] {
@@ -223,7 +229,7 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
           case Nil => acc
         }
       }
-      
+    
       val (impl1, idx1) = reductions.head
       rec(reductions.tail, new WrapArrayTableReduction(impl1, idx1))
     }
@@ -240,9 +246,9 @@ trait StdLibModule[M[+_]]
     with TypeLibModule[M]
     with StringLibModule[M]
     with StatsLibModule[M]
+    with ClusteringLibModule[M] 
     with LogisticRegressionLibModule[M]
     with LinearRegressionLibModule[M]
-    with PredictionLibModule[M]
     with FSLibModule[M] {
   type Lib <: StdLib
 
@@ -256,9 +262,9 @@ trait StdLibModule[M[+_]]
       with TypeLib
       with StringLib
       with StatsLib
+      with ClusteringLib
       with LogisticRegressionLib
       with LinearRegressionLib
-      with PredictionLib
       with FSLib
 }
 

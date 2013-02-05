@@ -18,7 +18,7 @@
  *
  */
 package com.precog.shard
-package jdbm3 
+package jdbm3
 
 import blueeyes.json._
 
@@ -70,15 +70,15 @@ import org.streum.configrity.Configuration
 
 trait JDBMQueryExecutorConfig
     extends ShardQueryExecutorConfig
-    with BlockStoreColumnarTableModuleConfig 
+    with BlockStoreColumnarTableModuleConfig
     with JDBMProjectionModuleConfig
     with ManagedQueryModuleConfig
     with ActorStorageModuleConfig
-    with ActorProjectionModuleConfig 
-    with IdSourceConfig 
+    with ActorProjectionModuleConfig
+    with IdSourceConfig
     with EvaluatorConfig
     with KafkaIngestActorProjectionSystemConfig {
-      
+
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
   lazy val jobPollFrequency: Duration = config[Int]("precog.evaluator.poll.cancellation", 3) seconds
@@ -93,10 +93,10 @@ trait JDBMQueryExecutorComponent  {
       extAccessControl: APIKeyManager[Future],
       extAccountManager: BasicAccountManager[Future],
       extJobManager: JobManager[Future]) = {
-    new ManagedPlatform with PerAccountThreadPoolModule  
+    new ManagedPlatform with PerAccountThreadPoolModule
         with ShardQueryExecutorPlatform[Future]
         with SliceColumnarTableModule[Future, Array[Byte]]
-        with ActorProjectionModule[Array[Byte], table.Slice] 
+        with ActorProjectionModule[Array[Byte], table.Slice]
         with KafkaIngestActorProjectionSystem
         with ActorStorageModule { platform =>
 
@@ -118,7 +118,7 @@ trait JDBMQueryExecutorComponent  {
       val clock = blueeyes.util.Clock.System
 
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
-      
+
       private implicit val actorSystem = ActorSystem("jdbmExecutorActorSystem")
       implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       implicit val M: Monad[Future] = new FutureMonad(defaultAsyncContext)
@@ -133,7 +133,7 @@ trait JDBMQueryExecutorComponent  {
       val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
       val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
-      val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) = 
+      val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
         initShardActors(metadataStorage, extAccountManager, projectionsActor)
 
       class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
@@ -197,7 +197,7 @@ trait JDBMQueryExecutorComponent  {
               case _ => throw new MatchError("Non-compound in compounds")
             }.toList
 
-            val types = JArray(primitives.map { 
+            val types = JArray(primitives.map {
               case PathValue(t, _, _) => JString(CType.nameOf(t))
               case _ => throw new MatchError("Non-primitive in primitives")
             }.toList)
@@ -205,7 +205,7 @@ trait JDBMQueryExecutorComponent  {
             JObject(fields :+ JField("types", types))
           }
 
-          futRoot.map { pr => Success(transform(pr.children)) } 
+          futRoot.map { pr => Success(transform(pr.children)) }
         }
       }
 
@@ -233,7 +233,7 @@ trait JDBMQueryExecutorComponent  {
 
       override def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
         implicit val mn = new (Future ~> ShardQuery) {
-          def apply[A](fut: Future[A]) = fut.liftM[JobQueryT] 
+          def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
         }
 
         new ShardQueryExecutor[ShardQuery](shardQueryMonad) with IdSourceScannerModule {
@@ -241,6 +241,9 @@ trait JDBMQueryExecutorComponent  {
           def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
           type YggConfig = JDBMQueryExecutorConfig
           val yggConfig = platform.yggConfig
+          
+          def warn(warning: JValue): ShardQuery[Unit] =
+            jsonReport.warn(warning, "warning")
 
 
 /*
@@ -261,6 +264,7 @@ trait JDBMQueryExecutorComponent  {
 
         */
           val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
+          val jsonReport = errorReport[JValue]
         }
       }
 
