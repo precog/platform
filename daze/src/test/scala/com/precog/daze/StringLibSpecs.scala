@@ -321,7 +321,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine matches with capture" in {
-      val input = op2Input(regexMatches, JString(""".*(e)[^a]*(a)?[^a]*.*"""), homStrings)
+      val input = op2Input(regexMatch, JString(""".*(e)[^a]*(a)?[^a]*.*"""), homStrings)
       
       val result = testEval(input)
       result must haveSize(4)

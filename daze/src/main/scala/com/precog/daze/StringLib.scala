@@ -45,7 +45,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, regexMatches, compareTo, compareToIgnoreCase, equals, indexOf)
+      matches, regexMatch, compareTo, compareToIgnoreCase, equals, indexOf)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -114,7 +114,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     object matches extends Op2SSB("matches", _ matches _)
     
-    object regexMatches extends Op2(StringNamespace, "regexMatches") {
+    object regexMatch extends Op2(StringNamespace, "regexMatch") {
       import trans._
       
       val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
