@@ -199,7 +199,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     val bigTime =   "2011-09-23T18:33:22.520-10:00"
 
     "produce correct results when lhs is smaller" in {
-      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MinTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(smallTime),
         parseDateTimeFuzzy(bigTime))(line)
 
@@ -207,7 +207,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "produce correct results when rhs is smaller" in {
-      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MinTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(bigTime),
         parseDateTimeFuzzy(smallTime))(line)
 
@@ -215,7 +215,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "produce correct results when times are equal" in {
-      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MinTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(bigTime),
         parseDateTimeFuzzy(bigTime))(line)
 
@@ -228,7 +228,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     val bigTime =   "2011-09-23T18:33:22.520-10:00"
 
     "produce correct results when lhs is larger" in {
-      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MaxTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(bigTime),
         parseDateTimeFuzzy(smallTime))(line)
 
@@ -236,7 +236,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "produce correct results when rhs is larger" in {
-      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MaxTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(smallTime),
         parseDateTimeFuzzy(bigTime))(line)
 
@@ -244,7 +244,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "produce correct results when times are equal" in {
-      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MaxTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(bigTime),
         parseDateTimeFuzzy(bigTime))(line)
 
@@ -257,7 +257,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     val bigTime =   "2011-09-23T18:33:22.520-10:00"
 
     "for maxTime, both parsed" in {
-      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MaxTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(bigTime),
         parseDateTimeFuzzy(smallTime))(line)
 
@@ -265,7 +265,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "for maxTime, big parsed" in {
-      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MaxTimeOf), CrossLeftSort,
         parseDateTimeFuzzy(smallTime),
         doNotParse(bigTime))(line)
 
@@ -273,7 +273,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "for minTime, small parsed" in {
-      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MinTimeOf), CrossLeftSort,
         doNotParse(bigTime),
         parseDateTimeFuzzy(smallTime))(line)
 
@@ -281,7 +281,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
 
     "for minTime, neither parsed" in {
-      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(MinTimeOf), CrossLeftSort,
         doNotParse(smallTime),
         doNotParse(bigTime))(line)
 
