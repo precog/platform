@@ -53,7 +53,7 @@ object JType {
   // TODO JArrayHomogeneousT can't go in here. Is this just used for tests?
   val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT | JDateT
   val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
-  val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JDateT, JNumberT), JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
+  val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JDateT, JNumberT), JTextT), JBooleanT), JNullT), JObjectUnfixedT), JArrayUnfixedT)
 }
 
 case class UnaryOperationType(arg: JType, result: JType)

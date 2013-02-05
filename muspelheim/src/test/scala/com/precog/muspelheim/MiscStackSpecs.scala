@@ -33,11 +33,34 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | a := {dummy: if clicks.time < 1329326691939 then 1 else 0}
         | clicks with {a:a}
         | """.stripMargin
+
+      val result = evalE(input)
+      result must not beEmpty
         
-      forall(evalE(input)) {
+      forall(result) {
         case (ids, SObject(fields)) => fields must haveKey("a")
         case r => failure("Result has wrong shape: "+r)
       }
+    }
+
+    "filter set based on DateTime comparison" in {
+      val input = """
+        | clicks := //clicks
+        | clicks' := clicks with { ISODateTime: std::time::parseDateTimeFuzzy(clicks.timeString) } 
+        | 
+        | maxTime := std::time::parseDateTimeFuzzy("2012-02-09T00:31:13.610-09:00")
+        |
+        | clicks'.ISODateTime where clicks'.ISODateTime <= maxTime
+        | """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)
+
+      val actual = result collect {
+        case (ids, SString(str)) if ids.length == 1 => str
+      }
+
+      actual mustEqual Set("2012-02-09T00:31:13.610-09:00")
     }
 
     "reduce sets" in {
@@ -63,6 +86,8 @@ trait MiscStackSpecs extends EvalStackSpecs {
       """.stripMargin
 
       val result = evalE(input)
+
+      result must haveSize(1)
 
       val actual = result collect {
         case (ids, SString(time)) if ids.length == 0 => time

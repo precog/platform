@@ -472,9 +472,9 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         Map2Cross(WrapObject),
         Map2Cross(JoinObject),
         Merge))
-  
-        val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
 
+        val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JDateT, JNumberT), JTextT), JBooleanT), JNullT), JObjectUnfixedT), JArrayUnfixedT)
+  
         val expectedSpec = IntersectBucketSpec(
           IntersectBucketSpec(
               dag.Group(0,

@@ -51,6 +51,10 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
       Const(CString(fmt))(line))(line)
   }
 
+  def parseDateTimeFuzzy(time: String) = {
+    Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), Const(CString(time))(line))(line)
+  }
+
   def basicComparison(input: DepGraph, expected: Boolean) = {
     val result = testEval(input)
     
@@ -81,8 +85,8 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
 
     "compute lt resulting in true" in {
       val input = Join(Lt, CrossLeftSort,
-        parseDateTime("Jul 8, 1999 3:19:33 PM", "MMM d, yyyy h:mm:ss a"),
-        parseDateTime("Jun 3, 2020 3:12:33 AM", "MMM d, yyyy h:mm:ss a"))(line)
+        parseDateTimeFuzzy("2010-06-03T04:12:33.323Z"),
+        parseDateTimeFuzzy("2011-06-03T04:12:33.323Z"))(line)
 
       basicComparison(input, true)
     }
@@ -151,6 +155,22 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
       basicComparison(input, true)
     }
 
+    "compute eq given equal times in different timezones" in {
+      val input = Join(Eq, CrossLeftSort,
+        parseDateTimeFuzzy("2011-06-03T04:12:33.323+02:00"),
+        parseDateTimeFuzzy("2011-06-03T02:12:33.323Z"))(line)
+
+      basicComparison(input, true)
+    }
+
+    "compute eq given times `equivalent` except for timezones" in {
+      val input = Join(Eq, CrossLeftSort,
+        parseDateTimeFuzzy("2011-06-03T04:12:33.323+02:00"),
+        parseDateTimeFuzzy("2011-06-03T04:12:33.323Z"))(line)
+
+      basicComparison(input, false)
+    }
+
     "compute noteq resulting in false" in {
       val input = Join(NotEq, CrossLeftSort,
         parseDateTime("Jun 3, 2020 3:12:33 AM", "MMM d, yyyy h:mm:ss a"),
@@ -163,6 +183,16 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
       val input = Join(NotEq, CrossLeftSort,
         parseDateTime("Jul 8, 1999 3:19:33 PM", "MMM d, yyyy h:mm:ss a"),
         parseDateTime("Jun 3, 2020 3:12:33 AM", "MMM d, yyyy h:mm:ss a"))(line)
+
+      basicComparison(input, true)
+    }
+  }
+
+  "comparision of two DateTimes input as CDate" should {
+    "produce correct results using lt" in {
+      val input = Join(Lt, CrossLeftSort,
+        Const(CDate(new DateTime("2010-09-23T18:33:22.520-10:00")))(line),
+        Const(CDate(new DateTime("2011-09-23T18:33:22.520-10:00")))(line))(line)
 
       basicComparison(input, true)
     }
