@@ -97,6 +97,18 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
                 Join(DerefArray, sort, left2, right2)(graph.loc)
             }
 
+          case graph @ Join(ArraySwap, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JArray(l)), Const(JNum(r))) if r >= 0 && r < l.length =>
+                val i = r.intValue
+                Const(JArray(l(i) :: l.take(i) ++ l.drop(i + 1)))(graph.loc)
+              case _ =>
+                Join(ArraySwap, sort, left2, right2)(graph.loc)
+            }
+
           // Object operations
           case graph @ Join(WrapObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
             val left2 = recurse(left)

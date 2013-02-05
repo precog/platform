@@ -155,6 +155,12 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
 
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(true), JBool(false)))(line)
       }
+
+      "swap" >> {
+        val input = Join(ArraySwap, CrossLeftSort, Const(JArray(JBool(true), JBool(false), JString("TEST")))(line), Const(JNum(1))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(false), JBool(true), JString("TEST")))(line)
+      }
     }
 
     "detect and resolve object" >> {
