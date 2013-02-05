@@ -249,7 +249,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         val sanityCheck = eval(sanity)
 
-        results must be empty
+        results must not be empty
 
         sanityCheck must not be empty
       }
@@ -316,7 +316,7 @@ trait RankSpecs extends EvalStackSpecs {
 
         val sanityCheck = eval(sanity)
 
-        results must be empty
+        results must not be empty
 
         sanityCheck must not be empty
       }
