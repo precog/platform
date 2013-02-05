@@ -125,7 +125,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   val report = LoggingQueryLogger[Future]
 
   Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-
+  
   def shutdown() = Future {
     Table.mongo.close()
     true
@@ -137,6 +137,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
     val report = LoggingQueryLogger(M)
+    def warn(warning: JValue) = report.warn(warning, "warning")
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {

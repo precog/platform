@@ -37,7 +37,6 @@ trait RawErrors extends Errors with Phases {
   
   override def isWarning(error: Error) = error match {
     case UnusedLetBinding(_) => true
-    case UnableToSolveCriticalCondition(_) => true
     case _ => false
   }
 }
