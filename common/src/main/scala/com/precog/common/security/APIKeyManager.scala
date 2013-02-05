@@ -42,12 +42,12 @@ object APIKeyManager {
 
 trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
   implicit val M : Monad[M]
-  
+
   def rootGrantId: M[GrantId]
   def rootAPIKey:  M[APIKey]
- 
+
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant]
-  
+
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord]
 
   def newAccountGrant(accountId: AccountId, name: Option[String] = None, description: Option[String] = None, issuerKey: APIKey, parentIds: Set[GrantId], expiration: Option[DateTime] = None): M[Grant] = {
@@ -57,7 +57,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
     val writePerms = Set(WritePermission, DeletePermission).map(_(Path(path), Set()) : Permission)
     newGrant(name, description, issuerKey, parentIds, readPerms ++ writePerms, expiration)
   }
-  
+
   def newStandardAccountGrant(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None): M[Grant] =
     for {
       rk <- rootAPIKey
@@ -75,10 +75,10 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
       nk <- newAPIKey(name, description, rk, Set(ng.grantId))
     } yield nk
   }
-  
+
   def listAPIKeys(): M[Seq[APIKeyRecord]]
   def listGrants(): M[Seq[Grant]]
-  
+
   def findAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
   def findGrant(gid: GrantId): M[Option[Grant]]
   def findGrantChildren(gid: GrantId): M[Set[Grant]]
@@ -106,7 +106,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
           _ :+ apiKey
         }
 
-      case None => 
+      case None =>
         M.point(Vector())
     }
   }
@@ -120,7 +120,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
         }
       }.getOrElse(None.point[M])
     }
-  
+
   def validGrants(apiKey: APIKey, at: Option[DateTime] = None): M[Set[Grant]] = {
     logger.trace("Checking grant validity for apiKey " + apiKey)
     findAPIKey(apiKey).flatMap(_.map { apiKeyRecord =>
@@ -141,7 +141,7 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
       }
     }
   }
-  
+
   def deriveSingleParentGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentId: GrantId, perms: Set[Permission], expiration: Option[DateTime] = None): M[Option[GrantId]] = {
     validGrants(issuerKey, expiration).flatMap { validGrants =>
       validGrants.find(_.grantId == parentId) match {
@@ -151,14 +151,14 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
       }
     }
   }
-  
+
   def deriveAndAddGrant(name: Option[String], description: Option[String], issuerKey: APIKey, perms: Set[Permission], recipientKey: APIKey, expiration: Option[DateTime] = None): M[Option[GrantId]] = {
     deriveGrant(name, description, issuerKey, perms, expiration).flatMap(_ match {
       case Some(grantId) => addGrants(recipientKey, Set(grantId)).map(_.map(_ => grantId))
       case _ => none[GrantId].point[M]
     })
   }
-  
+
   def newAPIKeyWithGrants(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[NewGrantRequest]): M[Option[APIKey]] = {
     grants.map { grant =>
       hasCapability(issuerKey, grant.permissions, grant.expirationDate)
@@ -170,5 +170,5 @@ trait APIKeyManager[M[+_]] extends AccessControl[M] with Logging {
         none[APIKey].point[M]
       }
     }
-  } 
-} 
+  }
+}

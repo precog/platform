@@ -33,15 +33,16 @@ import Jama.Matrix._
 
 import scalaz._
 import scalaz.syntax.monad._
+import scalaz.std.list._
 import scalaz.std.stream._
 import scalaz.std.set._
 import scalaz.syntax.traverse._
 
-trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
-  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport with EvaluatorMethods {
+trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] with PredictionLibModule[M] {
+  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport with PredictionSupport with EvaluatorMethods {
     import trans._
 
-    override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression)
+    override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression, LinearPrediction)
 
     object MultiLinearRegression extends Morphism2(Stats2Namespace, "linearRegression") {
       val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
@@ -205,6 +206,19 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
           objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
         }
+      }
+    }
+
+    object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with PredictionBase {
+      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+
+      override val retainIds = true
+
+      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+
+      def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
+        val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
+        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, scala.Predef.identity[Double])) }
       }
     }
   }
