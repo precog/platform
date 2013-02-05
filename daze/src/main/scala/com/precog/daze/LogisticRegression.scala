@@ -218,8 +218,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
             val spec = TransSpec.concatChildren(tree)
 
-            val jvalue = JArray(finalTheta.map(JNum(_)).toList)
-            val theta = Table.constEmptyArray.transform(transJValue(jvalue, TransSpec1.Id))
+            val theta = Table.fromJson(Stream(JArray(finalTheta.map(JNum(_)).toList)))
 
             val result = theta.transform(spec)
 

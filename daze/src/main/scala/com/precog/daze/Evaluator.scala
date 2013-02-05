@@ -349,28 +349,27 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           
           case Const(value) => 
-            val (table, valueSpec) = value match {
-              case JString(str) => (Table.constString(Set(str)), TransSpec1.Id)
+            val table = value match {
+              case JString(str) => Table.constString(Set(str))
               
-              case JNumLong(ln) => (Table.constLong(Set(ln)), TransSpec1.Id)
-              case JNumDouble(d) => (Table.constDouble(Set(d)), TransSpec1.Id)
-              case JNum(n) => (Table.constDecimal(Set(n)), TransSpec1.Id)
+              case JNumLong(ln) => Table.constLong(Set(ln))
+              case JNumDouble(d) => Table.constDouble(Set(d))
+              case JNum(n) => Table.constDecimal(Set(n))
               
-              case JBool(b) => (Table.constBoolean(Set(b)), TransSpec1.Id)
+              case JBool(b) => Table.constBoolean(Set(b))
 
-              case JNull => (Table.constNull, TransSpec1.Id)
+              case JNull => Table.constNull
               
-              case JObject.empty => (Table.constEmptyObject, TransSpec1.Id)
-              case JArray.empty => (Table.constEmptyArray, TransSpec1.Id)
+              case JObject.empty => Table.constEmptyObject
+              case JArray.empty => Table.constEmptyArray
 
-              case JUndefined => (Table.empty, TransSpec1.Id)
+              case JUndefined => Table.empty
 
-              case JArray(_) => (Table.constEmptyArray, transJValue(value, Leaf(Source)))
-              case JObject(_) => (Table.constEmptyObject, transJValue(value, Leaf(Source)))
+              case json => Table.fromJson(Stream(json))
             }
 
             val spec = buildConstantWrapSpec(Leaf(Source))
-            monadState point PendingTable(table.transform(spec), graph, valueSpec)
+            monadState point PendingTable(table.transform(spec), graph, TransSpec1.Id)
 
           case Undefined() =>
             monadState point PendingTable(Table.empty, graph, TransSpec1.Id)
