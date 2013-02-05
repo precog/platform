@@ -45,7 +45,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, regexMatch, compareTo, compareToIgnoreCase, equals, indexOf)
+      matches, regexMatch, compareTo, compareToIgnoreCase, equals, indexOf, split, splitRegex)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -311,6 +311,50 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
       def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
         transSpec => trans.Map1(transSpec, f1(ctx))
+    }
+
+    object split extends Op2F2(StringNamespace, "split") {
+      import java.util.regex.Pattern
+
+      val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
+
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::split") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
+          val tpe = CArrayType(CString)
+          override def isDefinedAt(row: Int): Boolean =
+            super.isDefinedAt(row) && c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int): Array[String] =
+            Pattern.compile(Pattern.quote(c2(row))).split(c1(row), -1)
+        }
+      }
+    }
+
+    object splitRegex extends Op2F2(StringNamespace, "splitRegex") {
+      import java.util.regex.Pattern
+
+      val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
+
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::splitRegex") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
+          val tpe = CArrayType(CString)
+          override def isDefinedAt(row: Int): Boolean = {
+            try {
+              if (super.isDefinedAt(row) && c1.isDefinedAt(row) && c2.isDefinedAt(row)) {
+                Pattern.compile(c2(row))
+                true
+              } else {
+                false
+              }
+            } catch {
+              case _: Exception => false
+            }
+          }
+
+          def apply(row: Int): Array[String] =
+            Pattern.compile(c2(row)).split(c1(row), -1)
+        }
+      }
     }
   }
 }

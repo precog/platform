@@ -812,6 +812,66 @@ trait StringLibSpecs[M[+_]] extends Specification
       ).only
     }
   }
+
+  "split" should {
+
+    val o = scala.math.Ordering.by[(Long, _), Long](_._1)
+
+    def mogrify(result: Set[(Vector[Long], SValue)]): List[Vector[String]] =
+      result.toList.map {
+        case (Vector(n), SArray(elems)) => (n, elems)
+      }.sorted(o).map(_._2.map { case SString(s) => s })
+
+    def mktree(f: Op2, path: String, sep: String) =
+      Join(BuiltInFunction2Op(f), CrossLeftSort,
+        dag.LoadLocal(Const(CString(path))(line))(line),
+        Const(CString(sep))(line))(line)
+
+    def tester(f: Op2, path: String, sep: String) =
+      mogrify(testEval(mktree(f, path, sep)))
+    
+    val commaSplitString2 = List(
+      Vector("this", "is", "delimited"),
+      Vector("this is a string"),
+      Vector(""),
+      Vector("also", "delmited"),
+      Vector("", "starts", "with", "comma"),
+      Vector("ends", "with", "comma", ""),
+      Vector("lots", "", "", "", "of", "", "", "", "commas"),
+      Vector("", "", "", "" , "", "", "", ""),
+      Vector("", ""),
+      Vector("", "", "crazy", "", ""),
+      Vector("something", "basically", "reasonable")
+    )
+
+    "split heterogenous data on ," in {
+      tester(split, "/het/strings2", ",") must_== commaSplitString2
+    }
+
+    "splitRegex heterogenous data on ," in {
+      tester(splitRegex, "/het/strings2", ",") must_== commaSplitString2
+    }
+
+    "splitRegex heterogenous data on ,,+" in {
+      tester(splitRegex, "/het/strings2", ",,+") must_== List(
+        Vector("this,is,delimited"),
+        Vector("this is a string"),
+        Vector(""),
+        Vector("also,delmited"),
+        Vector(",starts,with,comma"),
+        Vector("ends,with,comma,"),
+        Vector("lots", "of", "commas"),
+        Vector("", ""),
+        Vector(","),
+        Vector("", "crazy", ""),
+        Vector("something,basically,reasonable")
+      )
+    }
+
+    "splitRegex heterogenous data on invalid regex" in {
+      tester(splitRegex, "/het/strings2", "(99") must_== List()
+    }
+  }
 }
 
 object StringLibSpecs extends StringLibSpecs[test.YId] with test.YIdInstances
