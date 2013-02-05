@@ -2081,6 +2081,17 @@ trait MiscStackSpecs extends EvalStackSpecs {
         fields must haveKey("weight")
       }
     }
+
+    "work when tic-variable and reduction results are inlined" in {
+      val input = """
+        | clicks := //clicks
+        | solve 'c
+        |   {c: 'c, n: count(clicks where clicks = 'c)}
+        | """.stripMargin
+
+      val results = eval(input)
+      results must haveSize(100)
+    }
   }
 }
 
