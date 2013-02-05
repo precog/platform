@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import util.NumericComparisons
+
 import bytecode._
 
 import yggdrasil._
@@ -94,7 +96,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       MillisToISO,
       ChangeTimeZone,
-      ParseDateTime
+      ParseDateTime,
+
+      MinTime,
+      MaxTime
     )
 
     private def isValidISO(str: String): Boolean = {
@@ -121,17 +126,6 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     val textAndDate = JUnionT(JTextT, JDateT)
 
     DateTimeZone.setDefault(DateTimeZone.UTC)
-
-    //object ParseDateTimeBasic extends Op1F1(TimeNamespace, "parseDateTime") {
-    //  val tpe = UnaryOperationType(JTextT, JTextT)
-    //  def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTime") {
-    //    case (c: StrColumn) => new Map1Column(c) with DateColumn {
-    //      override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
-
-    //      def apply(row: Int): DateTime = parseDateTime(c(row), true)
-    //    }
-    //  }
-    //}
 
     object ParseDateTime extends Op2F2(TimeNamespace, "parseDateTime") {
       val tpe = BinaryOperationType(JTextT, JTextT, JDateT)
@@ -183,13 +177,12 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidTimeZone(c2(row))
 
           def apply(row: Int) = {
-            val time = c1(row)
+            val time = parseDateTime(c1(row), true)
             val tz = c2(row)
 
-            val newTime = parseDateTime(time, false)
             val timeZone = DateTimeZone.forID(tz)
 
-            new DateTime(newTime, timeZone)
+            new DateTime(time, timeZone)
           }
         }
         case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
@@ -207,6 +200,71 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    trait ExtremeTime extends Op2F2 {
+      val tpe = BinaryOperationType(textAndDate, textAndDate, JDateT)
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::extremeTime") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = parseDateTime(c2(row), true)
+            
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = c1(row)
+            val time2 = parseDateTime(c2(row), true)
+
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: StrColumn, c2: DateColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = c2(row)
+
+
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: DateColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time1 = c1(row)
+            val time2 = c2(row)
+
+            computeExtreme(time1, time2)
+          }
+        }
+      }
+
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime
+    }
+
+    object MinTime extends Op2F2(TimeNamespace, "minTime") with ExtremeTime { 
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
+        val res: Int = NumericComparisons.compare(t1, t2)
+        if (res < 0) t1
+        else t2
+      }
+    }
+
+    object MaxTime extends Op2F2(TimeNamespace, "maxTime") with ExtremeTime { 
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
+        val res: Int = NumericComparisons.compare(t1, t2)
+        if (res > 0) t1
+        else t2
+      }
+    }
+
     trait TimePlus extends Op2F2 {
       val tpe = BinaryOperationType(textAndDate, JNumberT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
@@ -214,36 +272,30 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
 
           def apply(row: Int) = {
-            val time = c1(row)
+            val time = parseDateTime(c1(row), true)
             val incr = c2(row)
 
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
+            plus(time, incr.toInt)
           }
         }      
         case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
 
           def apply(row: Int) = {
-            val time = c1(row)
+            val time = parseDateTime(c1(row), true)
             val incr = c2(row)
 
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
+            plus(time, incr.toInt)
           }
         }      
         case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
 
           def apply(row: Int) = {
-            val time = c1(row)
+            val time = parseDateTime(c1(row), true)
             val incr = c2(row)
 
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
+            plus(time, incr.toInt)
           }
         }
         case (c1: DateColumn, c2: LongColumn) => new Map2Column(c1, c2) with DateColumn {
@@ -321,13 +373,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
 
           def apply(row: Int) = {
-            val time1 = c1(row)
-            val time2 = c2(row)
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = parseDateTime(c2(row), true)
 
-            val newTime1 = parseDateTime(time1, true)
-            val newTime2 = parseDateTime(time2, true)
-
-            between(newTime1, newTime2)
+            between(time1, time2)
           }
         }
         case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
@@ -335,23 +384,19 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
           def apply(row: Int) = {
             val time1 = c1(row)
-            val time2 = c2(row)
+            val time2 = parseDateTime(c2(row), true)
 
-            val newTime2 = parseDateTime(time2, true)
-
-            between(time1, newTime2)
+            between(time1, time2)
           }
         }
         case (c1: StrColumn, c2: DateColumn) => new Map2Column(c1, c2) with LongColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
 
           def apply(row: Int) = {
-            val time1 = c1(row)
+            val time1 = parseDateTime(c1(row), true)
             val time2 = c2(row)
 
-            val newTime1 = parseDateTime(time1, true)
-
-            between(newTime1, time2)
+            between(time1, time2)
           }
         }
         case (c1: DateColumn, c2: DateColumn) => new Map2Column(c1, c2) with LongColumn {
@@ -473,11 +518,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = { 
-            val time = c(row)
-
+            val time = parseDateTime(c(row), true)
             val format = DateTimeFormat.forPattern("ZZ")
-            val newTime = parseDateTime(time, true)
-            format.print(newTime)
+
+            format.print(time)
           }
         }
         case (c: DateColumn) => new Map1Column(c) with StrColumn {
@@ -485,8 +529,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
           def apply(row: Int) = { 
             val time = c(row)
-
             val format = DateTimeFormat.forPattern("ZZ")
+
             format.print(time)
           }
         }
@@ -502,10 +546,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
-
-            val newTime = parseDateTime(time, true)
-            val day = newTime.dayOfYear.get
+            val time = parseDateTime(c(row), true)
+            val day = time.dayOfYear.get
             
             if (day >= 79 & day < 171) "spring"
             else if (day >= 171 & day < 265) "summer"
@@ -518,7 +560,6 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
           def apply(row: Int) = {
             val time = c(row)
-
             val day = time.dayOfYear.get
             
             if (day >= 79 & day < 171) "spring"
@@ -539,10 +580,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
-
-            val newTime = parseDateTime(time, true)
-            fraction(newTime)
+            val time = parseDateTime(c(row), true)
+            fraction(time)
           }
         }
         case (c: DateColumn) => new Map1Column(c) with LongColumn {
@@ -621,9 +660,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
-            
-            val newTime = parseDateTime(time, true)
+            val newTime = parseDateTime(c(row), true)
             fmt.print(newTime)
           }
         }

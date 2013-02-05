@@ -51,9 +51,10 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
       Const(CString(fmt))(line))(line)
   }
 
-  def parseDateTimeFuzzy(time: String) = {
+  def parseDateTimeFuzzy(time: String) =
     Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), Const(CString(time))(line))(line)
-  }
+
+  def doNotParse(time: String) = Const(CString(time))(line)
 
   def basicComparison(input: DepGraph, expected: Boolean) = {
     val result = testEval(input)
@@ -190,11 +191,120 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
 
   "comparision of two DateTimes input as CDate" should {
     "produce correct results using lt" in {
+      DateTimeZone.setDefault(DateTimeZone.UTC)
+
       val input = Join(Lt, CrossLeftSort,
-        Const(CDate(new DateTime("2010-09-23T18:33:22.520-10:00")))(line),
-        Const(CDate(new DateTime("2011-09-23T18:33:22.520-10:00")))(line))(line)
+        Const(CDate(new DateTime("2010-09-23T18:33:22.520")))(line),
+        Const(CDate(new DateTime("2011-09-23T18:33:22.520")))(line))(line)
 
       basicComparison(input, true)
+    }
+  }
+
+  def extremeComparison(input: DepGraph, expected: String) = {
+    val result = testEval(input)
+    
+    result must haveSize(1)
+    
+    result must haveAllElementsLike {
+      case (ids, SString(str)) =>
+        ids must haveSize(0)
+        str mustEqual(expected)
+    }
+  }
+
+  "comparision of two DateTimes with minTime" should {
+    val smallTime = "2010-09-23T18:33:22.520-10:00"
+    val bigTime =   "2011-09-23T18:33:22.520-10:00"
+
+    "produce correct results when lhs is smaller" in {
+      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+        parseDateTimeFuzzy(smallTime),
+        parseDateTimeFuzzy(bigTime))(line)
+
+      extremeComparison(input, smallTime)
+    }
+
+    "produce correct results when rhs is smaller" in {
+      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+        parseDateTimeFuzzy(bigTime),
+        parseDateTimeFuzzy(smallTime))(line)
+
+      extremeComparison(input, smallTime)
+    }
+
+    "produce correct results when times are equal" in {
+      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+        parseDateTimeFuzzy(bigTime),
+        parseDateTimeFuzzy(bigTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+  }
+
+  "comparision of two DateTimes with maxTime" should {
+    val smallTime = "2010-09-23T18:33:22.520-10:00"
+    val bigTime =   "2011-09-23T18:33:22.520-10:00"
+
+    "produce correct results when lhs is larger" in {
+      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+        parseDateTimeFuzzy(bigTime),
+        parseDateTimeFuzzy(smallTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+
+    "produce correct results when rhs is larger" in {
+      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+        parseDateTimeFuzzy(smallTime),
+        parseDateTimeFuzzy(bigTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+
+    "produce correct results when times are equal" in {
+      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+        parseDateTimeFuzzy(bigTime),
+        parseDateTimeFuzzy(bigTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+  }
+
+  "comparision of two DateTimes when timezones are different" should {
+    val smallTime = "2011-09-23T18:33:22.520-07:00"
+    val bigTime =   "2011-09-23T18:33:22.520-10:00"
+
+    "for maxTime, both parsed" in {
+      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+        parseDateTimeFuzzy(bigTime),
+        parseDateTimeFuzzy(smallTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+
+    "for maxTime, big parsed" in {
+      val input = Join(BuiltInFunction2Op(MaxTime), CrossLeftSort,
+        parseDateTimeFuzzy(smallTime),
+        doNotParse(bigTime))(line)
+
+      extremeComparison(input, bigTime)
+    }
+
+    "for minTime, small parsed" in {
+      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+        doNotParse(bigTime),
+        parseDateTimeFuzzy(smallTime))(line)
+
+      extremeComparison(input, smallTime)
+    }
+
+    "for minTime, neither parsed" in {
+      val input = Join(BuiltInFunction2Op(MinTime), CrossLeftSort,
+        doNotParse(smallTime),
+        doNotParse(bigTime))(line)
+
+      extremeComparison(input, smallTime)
     }
   }
 }

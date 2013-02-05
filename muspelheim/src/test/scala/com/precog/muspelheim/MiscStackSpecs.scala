@@ -46,9 +46,9 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | clicks := //clicks
         | clicks' := clicks with { ISODateTime: std::time::parseDateTimeFuzzy(clicks.timeString) } 
         | 
-        | maxTime := std::time::parseDateTimeFuzzy("2012-02-09T00:31:13.610-09:00")
+        | minTime := std::time::minTime("2012-02-09T00:31:13.610-09:00", clicks'.ISODateTime)
         |
-        | clicks'.ISODateTime where clicks'.ISODateTime <= maxTime
+        | clicks'.ISODateTime where clicks'.ISODateTime <= minTime
         | """.stripMargin
 
       val result = evalE(input)
