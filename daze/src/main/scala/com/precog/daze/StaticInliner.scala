@@ -48,8 +48,8 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
                 
               case child2 @ Const(value) => {
                 op match {
-                  case instructions.WrapArray =>    // TODO currently can't be a cvalue
-                    Operate(op, child2)(graph.loc)
+                  case instructions.WrapArray =>
+                    Const(JArray(value))(graph.loc)
                     
                   case _ => {
                     val newOp1 = op1ForUnOp(op)
@@ -73,7 +73,64 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               case child2 => Operate(op, child2)(graph.loc)
             }
           }
-            
+
+          // Array operations
+          case graph @ Join(JoinArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JArray(l)), Const(JArray(r))) =>
+                Const(JArray(l ++ r))(graph.loc)
+              case _ =>
+                Join(JoinArray, sort, left2, right2)(graph.loc)
+            }
+
+          case graph @ Join(DerefArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JArray(l)), Const(JNum(r))) if r >= 0 && r < l.length =>
+                Const(l(r.intValue))(graph.loc)
+              case _ =>
+                Join(DerefArray, sort, left2, right2)(graph.loc)
+            }
+
+          // Object operations
+          case graph @ Join(WrapObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JString(k)), Const(v)) =>
+                Const(JObject(k -> v))(graph.loc)
+              case _ =>
+                Join(WrapObject, sort, left2, right2)(graph.loc)
+            }
+
+          case graph @ Join(DerefObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JObject(v)), Const(JString(k))) if v contains k =>
+                Const(v(k))(graph.loc)
+              case _ =>
+                Join(DerefObject, sort, left2, right2)(graph.loc)
+            }
+
+          case graph @ Join(JoinObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+
+            (left2, right2) match {
+              case (Const(JObject(l)), Const(JObject(r))) =>
+                Const(JObject(l ++ r))(graph.loc)
+              case _ =>
+                Join(JoinObject, sort, left2, right2)(graph.loc)
+            }
+
           case graph @ Join(op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
             val left2 = recurse(left)
             val right2 = recurse(right)

@@ -134,6 +134,50 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JUndefined)(line)
       }
     }
+
+    "detect and resolve array" >> {
+      val line = Line(1, 1, "")
+
+      "wrap" >> {
+        val input = Operate(WrapArray, Const(JBool(false))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(false)))(line)
+      }
+
+      "deref" >> {
+        val input = Join(DerefArray, CrossLeftSort, Const(JArray(JBool(false), JBool(true)))(line), Const(JNum(1))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JBool(true))(line)
+      }
+
+      "join" >> {
+        val input = Join(JoinArray, CrossLeftSort, Const(JArray(JBool(true)))(line), Const(JArray(JBool(false)))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(true), JBool(false)))(line)
+      }
+    }
+
+    "detect and resolve object" >> {
+      val line = Line(1, 1, "")
+
+      "wrap" >> {
+        val input = Join(WrapObject, CrossLeftSort, Const(JString("k"))(line), Const(JBool(true))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JObject("k" -> JBool(true)))(line)
+      }
+
+      "deref" >> {
+        val input = Join(DerefObject, CrossLeftSort, Const(JObject("k" -> JBool(false)))(line), Const(JString("k"))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JBool(false))(line)
+      }
+
+      "join" >> {
+        val input = Join(JoinObject, CrossLeftSort, Const(JObject("k" -> JBool(true)))(line), Const(JObject("l" -> JBool(false)))(line))(line)
+
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JObject("k" -> JBool(true), "l" -> JBool(false)))(line)
+      }
+    }
   }
 }
 
