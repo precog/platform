@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import org.joda.time.DateTime
+
 import bytecode._
 import bytecode.Library
 import bytecode.Morphism1Like
@@ -853,6 +855,19 @@ object StdLib {
       c1: NumColumn, c2: NumColumn,
       defined: (BigDecimal, BigDecimal) => Boolean,
       f: (BigDecimal, BigDecimal) => Boolean)
+        extends Map2Column(c1, c2)
+        with BoolColumn {
+
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c1(row), c2(row))
+
+      def apply(row: Int) = f(c1(row), c2(row))
+    }
+
+    class DtDt(
+      c1: DateColumn, c2: DateColumn,
+      defined: (DateTime, DateTime) => Boolean,
+      f: (DateTime, DateTime) => Boolean)
         extends Map2Column(c1, c2)
         with BoolColumn {
 

@@ -21,6 +21,10 @@ package com.precog.yggdrasil
 package table
 package cf
 
+import com.precog.util._
+
+import org.joda.time.DateTime
+
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import com.precog.util.{BitSet, BitSetUtil, Loop}
