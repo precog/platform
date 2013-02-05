@@ -16,11 +16,9 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
 
       val result = evalE(input)
-      result must not beEmpty
         
-      forall(result) {
+      result must haveAllElementsLike {
         case (ids, SObject(fields)) => fields must haveKey("a")
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -42,6 +40,33 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
 
       actual mustEqual Set("2012-02-09T00:31:13.610-09:00")
+    }
+
+    "return a DateTime to the user as an ISO8601 String" in {
+      val input = """
+        | clicks := //clicks
+        | std::time::parseDateTimeFuzzy(clicks.timeString)
+        | """.stripMargin
+
+      val expectedInput = """
+        | clicks := //clicks
+        | clicks.timeString
+        | """.stripMargin
+
+      val result = evalE(input)
+      val expectedResult = evalE(expectedInput)
+
+      result.size mustEqual expectedResult.size
+
+      val actual = result collect {
+        case (ids, SString(str)) if ids.length == 1 => str
+      }
+
+      val expected = expectedResult collect {
+        case (ids, SString(str)) if ids.length == 1 => str
+      }
+
+      actual mustEqual expected
     }
 
     "reduce sets" in {
@@ -166,14 +191,13 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
 
           obj.keys mustEqual(Set("min", "max"))
           obj("min") must beLike { case SDecimal(num) => (num.toDouble ~= 862.7464285714286)  must beTrue }
           obj("max") must beLike { case SDecimal(num) => (num.toDouble ~= 941.0645161290323)  must beTrue }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -184,11 +208,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       result must haveSize(1)
 
-      forall(result) {
+      result must haveAllElementsLike {
         case (ids, SDecimal(num)) =>
           ids must haveSize(0)
           (num.toDouble ~= 7.54568543692) mustEqual true
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -208,7 +231,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       result must haveSize(1)
 
-      forall(result) {
+      result must haveAllElementsLike {
         case (ids, SArray(Vector(SObject(map1), SObject(map2)))) =>
           ids must haveSize(0)
 
@@ -221,7 +244,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           map2("min") mustEqual SDecimal(140)
           map2("max") mustEqual SDecimal(208)
           map2("sum") mustEqual SDecimal(175202)
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -242,7 +264,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       result must haveSize(1)
 
-      forall(result) {
+      result must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           
@@ -259,7 +281,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           obj("stdDev") must beLike { case SDecimal(num) => (num.toDouble ~= 0.9076874907113496)  must beTrue }
           obj("count") must beLike { case SDecimal(num)  => (num.toDouble ~= 1019)  must beTrue }
           obj("minmax") must beLike { case SDecimal(num) => (num.toDouble ~= 208)  must beTrue }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -393,14 +414,12 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(26)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => 
           ids must haveSize(1)
           obj must haveSize(2)
           obj must haveKey("userId") or haveKey("pageId")
           obj must haveKey("size")
-        
-        case r => failure("Result has wrong shape: "+r)
       }
 
       val containsUserId = results collect {
@@ -443,11 +462,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -466,11 +484,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -522,11 +539,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -545,11 +561,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           obj mustEqual(Map("min" -> SDecimal(50), "max" -> SDecimal(2768)))
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -568,7 +583,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           
@@ -577,7 +592,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           obj("min") must beLike { case SDecimal(num) => (num.toDouble ~= 50)  must beTrue }
           obj("max") must beLike { case SDecimal(num) => (num.toDouble ~= 2768)  must beTrue }
           obj("stdDev") must beLike { case SDecimal(num) => (num.toDouble ~= 917.6314704474534)  must beTrue }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -596,7 +610,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
           
@@ -605,7 +619,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           obj("min") must beLike { case SDecimal(num) => (num.toDouble ~= 50)  must beTrue }
           obj("max") must beLike { case SDecimal(num) => (num.toDouble ~= 2768)  must beTrue }
           obj("stdDev") must beLike { case SDecimal(num) => (num.toDouble ~= 917.6314704474534)  must beTrue }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -624,12 +637,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(81)  
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(1)
           obj must haveKey("covariance")
           obj must haveKey("count")
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -648,12 +660,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(81)  
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(1)
           obj must haveKey("covariance")
           obj must haveKey("count")
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -671,12 +682,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(81)  
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(1)
           obj must haveKey("covariance")
           obj must haveKey("count")
-        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -691,7 +701,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(10000)
 
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, _) => ids must haveSize(2)
         }
       }
@@ -706,7 +716,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(10000)
 
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, _) => ids must haveSize(2)
         }
       }
@@ -737,13 +747,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
         results must haveSize(46)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SObject(obj)) => 
             ids.length must_== 1
             obj must haveSize(5)
             obj must contain("gender" -> SString("female"))
-        
-          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -756,13 +764,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
         results must haveSize(72)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SObject(obj)) => 
             ids.length must_== 1
             obj must haveSize(5)
             obj must contain("platform" -> SString("android"))
-        
-          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -789,12 +795,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(1)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(d)) => 
             ids.length must_== 0
             d mustEqual 4 
-
-          case r => failure("Result has wrong shape: "+r)
         }
       }
       "constant union" >> {
@@ -803,12 +807,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(2)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(d)) => 
             ids.length must_== 0
             Set(4,5) must contain(d) 
-
-          case r => failure("Result has wrong shape: "+r)
         }
       }
       "empty intersection" >> {
@@ -823,7 +825,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(2)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(d)) => 
             ids.length must_== 0
             d mustEqual 9
@@ -831,8 +833,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           case (ids, SObject(obj)) => 
             ids.length must_== 0
             obj must contain("foo" -> SDecimal(3)) 
-
-          case r => failure("Result has wrong shape: "+r)
         }
       }
       "heterogeneous intersection" >> {
@@ -841,12 +841,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(1)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(d)) => 
             ids.length must_== 0
             d mustEqual 5 
-
-          case r => failure("Result has wrong shape: "+r)
         }
       }
       "intersection of differently sized arrays" >> {
@@ -855,12 +853,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
         results must haveSize(1)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(d)) => 
             ids.length must_== 0
             d mustEqual 1 
-
-          case r => failure("Result has wrong shape: "+r)
         }
       }
       "heterogeneous union doing strange things with identities" >> {
@@ -901,11 +897,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
         results must haveSize(100)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SString(campaign)) =>
             ids.length must_== 1
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
-          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -931,11 +926,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
         results must haveSize(100)
         
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SDecimal(num)) =>
             ids.length must_== 1
             Set(100,39,91,77,96,99,48,67,10,17,90,58,20,38,1,43,49,23,72,42,94,16,9,21,52,5,40,62,4,33,28,54,70,82,76,22,6,12,65,31,80,45,51,89,69) must contain(num)
-          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -958,12 +952,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(72)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => 
           ids.length must_== 1
           obj must haveSize(5)
           obj must contain("platform" -> SString("android"))
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -973,13 +966,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(34)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids.length must_== 1
           obj must haveSize(5)
           obj must contain("cpm" -> SDecimal(1))
-
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -989,13 +980,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(39)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids.length must_== 1
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
-      
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1029,13 +1018,12 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(100)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => {
           ids.length must_== 1
           obj must haveSize(1)
           obj must haveKey("aa")
         }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -1051,14 +1039,13 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(10000)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => {
           ids.length must_== 2
           obj must haveSize(2)
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1076,12 +1063,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(100 * 100)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SBoolean(b)) => {
           ids must haveSize(2)
           b mustEqual true
         }
-        case r => failure("Result has wrong shape: " + r)
       }
     }
 
@@ -1115,11 +1101,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       results must haveSize(100)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SString(gender)) =>
         ids.length must_== 1
           gender must beOneOf("male", "female")
-        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -1276,7 +1261,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = evalE(input)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) =>
           ids must haveSize(0)
 
@@ -1289,7 +1274,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           obj("mean") must beLike { case SDecimal(num) => (num.toDouble ~= 26.371933267909714) must beTrue }
           obj("max") must beLike { case SDecimal(num) => (num.toDouble ~= 2.5)  must beTrue }
           obj("stdDev") must beLike { case SDecimal(num) => (num.toDouble ~= 0.36790736209203007)  must beTrue }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1304,11 +1288,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SDecimal(num)) =>
           ids must haveSize(0)
           num mustEqual(2.5)
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1323,11 +1306,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       results must haveSize(1)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SDecimal(num)) =>
           ids must haveSize(0)
           num mustEqual(2.5)
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1359,7 +1341,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
           case (ids, SDecimal(d)) => 
             ids.length must_== 1
             d.toInt
-          case r => failure("Result has wrong shape: "+r)
         }
 
         results2 must contain(0).only
@@ -1376,7 +1357,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
             case (ids, SDecimal(d)) => 
               ids.length must_== 0
               d.toDouble
-            case r => failure("Result has wrong shape: "+r)
           }
 
           results2 must haveSize(0)
@@ -1411,7 +1391,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
             case (ids, SDecimal(d)) => 
               ids.length must_== 0
               d.toDouble
-            case r => failure("Result has wrong shape: "+r)
           }
           results2 must contain(0)
         }
@@ -1428,7 +1407,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
             case (ids, SObject(fields)) => 
               ids.length must_== 0
               fields
-            case r => failure("Result has wrong shape: "+r)
           }
           results2 must contain(Map("slope" -> SDecimal(0), "intercept" -> SDecimal(10)))
         }
@@ -1449,13 +1427,12 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = evalE(input)
 
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => {
           ids.length must_== 1
           obj must haveSize(5)
           obj must contain("gender" -> SString("male"))
         }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -1504,14 +1481,13 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = evalE(input) 
       results must haveSize(14)
       
-      forall(results) {
+      results must haveAllElementsLike {
         case (ids, SObject(obj)) => {
           ids.length must_== 1
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(25), SDecimal(36))))
           obj must contain("gender" -> SString("female"))
         }
-        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -2081,10 +2057,10 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = eval(input)
       results must not(beEmpty)
       
-      forall(results) { res =>
-        val SObject(fields) = res
-        fields must haveKey("height")
-        fields must haveKey("weight")
+      results must haveAllElementsLike {
+        case SObject(fields) =>
+          fields must haveKey("height")
+          fields must haveKey("weight")
       }
     }
   }
@@ -2094,4 +2070,3 @@ case class Precision(p: Double)
 class AlmostEqual(d: Double) {
   def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
 }
-
