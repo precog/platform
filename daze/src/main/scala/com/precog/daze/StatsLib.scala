@@ -1193,7 +1193,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
     }
 
     abstract class BaseRank(name: String) extends Morphism1(StatsNamespace, name) {
-      val tpe = UnaryOperationType(JNumberT, JNumberT)
+      val tpe = UnaryOperationType(JType.JUniverseT, JNumberT)
       override val retainIds = true
       
       def rankScanner: BaseRankScanner
