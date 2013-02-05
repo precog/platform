@@ -24,9 +24,9 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object KafkaEventServer extends 
-    BlueEyesServer with 
-    EventService with 
+object KafkaEventServer extends
+    BlueEyesServer with
+    EventService with
     AccountManagerClientComponent with
     MongoAPIKeyManagerComponent with
     KafkaEventStoreComponent {
@@ -47,7 +47,7 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
 
     val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
     val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
-    val agent = serviceUID.hostId + serviceUID.serviceId  
+    val agent = serviceUID.hostId + serviceUID.serviceId
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)
 
@@ -69,4 +69,3 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
   )
 
 }
-
