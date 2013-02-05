@@ -62,7 +62,7 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
     val writePerms = Set(WritePermission, DeletePermission).map(_(Path(path), Set()) : Permission)
     newGrant(name, description, issuerKey, parentIds, readPerms ++ writePerms, expiration)
   }
-  
+
   def newStandardAccountGrant(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None): M[Grant] =
     for {
       rk <- rootAPIKey
