@@ -92,7 +92,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
   def clusterInput(dataset: String, k: Long) = {
     dag.Morph2(KMediansClustering,
       dag.LoadLocal(Const(JString(dataset))(line))(line),
-      dag.Const(CLong(k))(line)
+      dag.Const(JNumLong(k))(line)
     )(line)
   }
 
@@ -122,8 +122,8 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
       val clusterIds = (1 to k).map("Cluster" + _).toSet
 
       val input = dag.Morph2(KMediansClustering,
-        dag.Const(CDouble(4.4))(line),
-        dag.Const(CLong(k))(line)
+        dag.Const(JNum(4.4))(line),
+        dag.Const(JNumLong(k))(line)
       )(line)
 
       val result = testEval(input)

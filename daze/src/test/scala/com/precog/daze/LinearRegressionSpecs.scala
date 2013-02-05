@@ -44,8 +44,8 @@ trait LinearRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   def predictionInput(morph: Morphism2, modelData: String, model: String) = {
     val line = Line(0, 0, "")
     dag.Morph2(morph,
-      dag.LoadLocal(Const(CString(modelData))(line))(line),
-      dag.LoadLocal(Const(CString(model))(line))(line)
+      dag.LoadLocal(Const(JString(modelData))(line))(line),
+      dag.LoadLocal(Const(JString(model))(line))(line)
     )(line)
   }
 
