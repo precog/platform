@@ -61,7 +61,21 @@ private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we j
 trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with (Int => Array[A]) { self =>
   def apply(row: Int): Array[A]
 
-  def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowEq(row1: Int, row2: Int): Boolean = {
+    if (!isDefinedAt(row1)) return !isDefinedAt(row2)
+    if (!isDefinedAt(row2)) return false
+
+    val a1 = apply(row1)
+    val a2 = apply(row2)
+    if (a1.length != a2.length) return false
+    val n = a1.length
+    var i = 0
+    while (i < n) {
+      if (a1(i) != a2(i)) return false
+      i += 1
+    }
+    true
+  }
 
   val tpe: CArrayType[A]
 
