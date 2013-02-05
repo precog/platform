@@ -62,8 +62,8 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
 
     val result: M[Table] = tbl.partitionMerge(DerefObjectStatic(Leaf(Source), CPathField("key"))) { table =>
       val reducer = new Reducer[String] {
-        def reduce(columns: JType => Set[Column], range: Range): String = {
-          columns(JTextT).head match {
+        def reduce(schema: CSchema, range: Range): String = {
+          schema.columns(JTextT).head match {
             case col: StrColumn => range.map(col).mkString(";")
           }
         }

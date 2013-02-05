@@ -33,7 +33,7 @@ import blueeyes.json.JNumLong
 
 import scalaz.std.map._
 
-trait ReductionFinderModule[M[+_]] extends DAG with TableModule[M] with TableLibModule[M] with EvaluatorMethodsModule[M] with TransSpecableModule[M] {
+trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] with TransSpecableModule[M] {
   type TS1 = trans.TransSpec1
   import library._
   import trans._
@@ -44,7 +44,7 @@ trait ReductionFinderModule[M[+_]] extends DAG with TableModule[M] with TableLib
 
     case class ReduceInfo(reduce: dag.Reduce, spec: TransSpec1, ancestor: DepGraph)
 
-    def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext) = {
+    def buildReduceInfo(reduce: dag.Reduce, ctx: EvaluationContext): ReduceInfo = {
       val (spec, ancestor) = findTransSpecAndAncestor(reduce.parent, ctx).getOrElse((Leaf(Source), reduce.parent))
       ReduceInfo(reduce, spec, ancestor)
     }

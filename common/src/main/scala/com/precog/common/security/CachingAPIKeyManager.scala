@@ -22,12 +22,15 @@ package security
 
 import com.precog.common.cache.Cache
 
-import java.util.concurrent.TimeUnit._
-import org.joda.time.DateTime
-
 import akka.util.Duration
 
 import blueeyes._
+
+import com.weiglewilczek.slf4s.Logging
+
+import java.util.concurrent.TimeUnit._
+
+import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.syntax.monad._
@@ -37,15 +40,16 @@ case class CachingAPIKeyManagerSettings(
   grantCacheSettings: Seq[Cache.CacheOption[GrantId, Grant]]
 )
 
-class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManager.defaultSettings)
-  (implicit val M: Monad[M]) extends APIKeyManager[M] {
+class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManager.defaultSettings) (implicit val M: Monad[M])
+    extends APIKeyManager[M]
+    with Logging {
 
   private val apiKeyCache = Cache.simple[APIKey, APIKeyRecord](settings.apiKeyCacheSettings: _*)
   private val grantCache = Cache.simple[GrantId, Grant](settings.grantCacheSettings: _*)
 
   def rootGrantId: M[GrantId] = manager.rootGrantId
   def rootAPIKey: M[APIKey] = manager.rootAPIKey
-  
+
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
     manager.newAPIKey(name, description, issuerKey, grants).map { _ ->- add }
 
@@ -59,11 +63,17 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def listDeletedGrants() = manager.listDeletedGrants
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
-    case None => manager.findAPIKey(tid).map { _.map { _ ->- add } }
+    case None =>
+      logger.debug("Cache miss on api key " + tid)
+      manager.findAPIKey(tid).map { _.map { _ ->- add } }
+
     case t    => M.point(t)
   }
   def findGrant(gid: GrantId) = grantCache.get(gid) match {
-    case None        => manager.findGrant(gid).map { _.map { _ ->- add } }
+    case None        =>
+      logger.debug("Cache miss on grant " + gid)
+      manager.findGrant(gid).map { _.map { _ ->- add } }
+
     case s @ Some(_) => M.point(s)
   }
   def findGrantChildren(gid: GrantId) = manager.findGrantChildren(gid)

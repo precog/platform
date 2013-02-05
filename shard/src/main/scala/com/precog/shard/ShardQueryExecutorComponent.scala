@@ -60,7 +60,7 @@ trait ShardQueryExecutorConfig
 trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
+  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
       extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, CharBuffer]] {
 
     type YggConfig <: ShardQueryExecutorConfig
@@ -102,7 +102,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           }
         }
       }
-      
+
       N.point {
         ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[N, CharBuffer]]])
       }
@@ -139,7 +139,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       try {
         val forest = compile(query)
         val validForest = forest filter { _.errors.isEmpty }
-        
+
         if (validForest.size == 1) {
           success(emit(validForest.head))
         } else if (validForest.size > 1) {
@@ -164,7 +164,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
                     :: Nil)
               } toList)
           }
-          
+
           failure(UserError(JArray(nested.toList)))
         }
       } catch {
@@ -208,7 +208,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
     }
 
     private def renderStream(table: Table): N[StreamT[N, CharBuffer]] =
-      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))    
+      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))
   }
 }
 // vim: set ts=4 sw=4 et:

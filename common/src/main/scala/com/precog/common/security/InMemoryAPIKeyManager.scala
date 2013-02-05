@@ -29,28 +29,28 @@ import scalaz.std.option._
 import scalaz.syntax.monad._
 
 class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManager[M] {
-  val (rootAPIKeyRecord, grants, apiKeys) = { 
+  val (rootAPIKeyRecord, grants, apiKeys) = {
     val rootGrantId = APIKeyManager.newGrantId()
     val rootGrant = {
       def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-      
+
       Grant(
         rootGrantId, some("root-grant"), some("The root grant"), None, Set(),
         Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
         None
       )
     }
-    
+
     val rootAPIKey = APIKeyManager.newAPIKey()
-    val rootAPIKeyRecord = 
+    val rootAPIKeyRecord =
       APIKeyRecord(rootAPIKey, some("root-apiKey"), some("The root API key"), None, Set(rootGrantId), true)
-      
+
     (rootAPIKeyRecord, mutable.Map(rootGrantId -> rootGrant), mutable.Map(rootAPIKey -> rootAPIKeyRecord))
   }
 
   def rootAPIKey: M[APIKey] = rootAPIKeyRecord.apiKey.point[M]
-  def rootGrantId: M[GrantId] = rootAPIKeyRecord.grants.head.point[M] 
-    
+  def rootGrantId: M[GrantId] = rootAPIKeyRecord.grants.head.point[M]
+
   private val deletedAPIKeys = mutable.Map.empty[APIKey, APIKeyRecord]
   private val deletedGrants = mutable.Map.empty[GrantId, Grant]
 
@@ -66,7 +66,7 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
     newGrant.point[M]
   }
 
-  def listAPIKeys() = apiKeys.values.toList.point[M] 
+  def listAPIKeys() = apiKeys.values.toList.point[M]
   def listGrants() = grants.values.toList.point[M]
 
   def findAPIKey(apiKey: APIKey) = apiKeys.get(apiKey).point[M]
@@ -83,13 +83,13 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
     }.point[M]
   }
 
-  def listDeletedAPIKeys() = deletedAPIKeys.values.toList.point[M] 
+  def listDeletedAPIKeys() = deletedAPIKeys.values.toList.point[M]
 
-  def listDeletedGrants() = deletedGrants.values.toList.point[M] 
+  def listDeletedGrants() = deletedGrants.values.toList.point[M]
 
-  def findDeletedAPIKey(apiKey: APIKey) = deletedAPIKeys.get(apiKey).point[M] 
+  def findDeletedAPIKey(apiKey: APIKey) = deletedAPIKeys.get(apiKey).point[M]
 
-  def findDeletedGrant(gid: GrantId) = deletedGrants.get(gid).point[M] 
+  def findDeletedGrant(gid: GrantId) = deletedGrants.get(gid).point[M]
 
   def findDeletedGrantChildren(gid: GrantId) =
     deletedGrants.values.filter(_.parentIds.contains(gid)).toSet.point[M]

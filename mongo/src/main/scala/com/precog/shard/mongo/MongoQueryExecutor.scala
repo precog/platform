@@ -75,7 +75,7 @@ class MongoQueryExecutorConfig(val config: Configuration)
   with ShardQueryExecutorConfig
   with IdSourceConfig
   with ShardConfig {
-    
+
   val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
   val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
 
@@ -89,6 +89,8 @@ class MongoQueryExecutorConfig(val config: Configuration)
   def dbAuthParams = config.detach("mongo.dbAuth")
 
   def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
+
+  def includeIdField: Boolean = config[Boolean]("include_ids", false)
 
   val clock = blueeyes.util.Clock.System
 
@@ -105,6 +107,8 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
   type YggConfig = MongoQueryExecutorConfig
 
+  val includeIdField = yggConfig.includeIdField
+
   trait TableCompanion extends MongoColumnarTableCompanion
   object Table extends TableCompanion {
     var mongo: Mongo = _
@@ -120,10 +124,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
 
   val report = LoggingQueryLogger[Future]
 
-  def startup() = Future {
-    Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-    true
-  }
+  Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
 
   def shutdown() = Future {
     Table.mongo.close()
@@ -154,21 +155,21 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {
-          case Nil => 
+          case Nil =>
             val dbs = Table.mongo.getDatabaseNames.asScala.toList
             // TODO: Poor behavior on Mongo's part, returning database+collection names
             // See https://groups.google.com/forum/#!topic/mongodb-user/HbE5wNOfl6k for details
-            
+
             val finalNames = dbs.foldLeft(dbs.toSet) {
               case (acc, dbName) => acc.filterNot { t => t.startsWith(dbName) && t != dbName }
             }.toList.sorted
             Success(finalNames.map {d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
 
-          case dbName :: Nil => 
+          case dbName :: Nil =>
             val db = Table.mongo.getDB(dbName)
             Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
-          case _ => 
+          case _ =>
             Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
         }
       }

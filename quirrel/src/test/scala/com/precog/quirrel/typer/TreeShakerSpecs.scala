@@ -1242,6 +1242,60 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
     
+    "eliminate let when not found in scope in pow" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Pow(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
+      bindRoot(tree, tree)
+
+      val result = shakeTree(tree)
+      result must beLike {
+        case Pow(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")) => ok
+      }
+
+      result.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
+    }
+
+    "preserve let when found in scope in pow" in {
+      {
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Pow(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "24")))
+        bindRoot(tree, tree)
+
+        val result = shakeTree(tree)
+        result must beLike {
+          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Pow(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "24"))) => ok
+        }
+
+        result.errors must beEmpty
+      }
+
+      {
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Pow(LineStream(), NumLit(LineStream(), "24"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())))
+        bindRoot(tree, tree)
+
+        val result = shakeTree(tree)
+        result must beLike {
+          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Pow(LineStream(), NumLit(LineStream(), "24"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))) => ok
+        }
+
+        result.errors must beEmpty
+      }
+    }
+
+    "detect unused formal parameter in pow" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("a", "b"), Pow(LineStream(), Pow(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector(NullLit(LineStream()), NullLit(LineStream()))))
+      bindRoot(tree, tree)
+
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedFormalBinding(Identifier(Vector(), "b")))
+    }
+
+    "detect unused tic-variable from solve in pow" in {
+      val tree = Solve(LineStream(), Vector(TicVar(LineStream(), "'a"), TicVar(LineStream(), "'b")), Pow(LineStream(), Pow(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")))
+      bindRoot(tree, tree)
+
+      val result = shakeTree(tree)
+      result.errors mustEqual Set(UnusedTicVariable("'b"))
+    }
+
     "eliminate let when not found in scope in less-than" in {
       val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Lt(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
       bindRoot(tree, tree)

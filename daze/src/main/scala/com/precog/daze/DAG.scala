@@ -503,9 +503,9 @@ trait DAG extends Instructions {
             lazy val result: dag.Split = dag.Split(spec2, child2)(s.loc)
             result
           }
-          
+            
           case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
-          
+
           case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(graph.loc)
 
           case graph @ dag.Diff(left, right) => dag.Diff(memoized(splits)(left), memoized(splits)(right))(graph.loc)
@@ -600,7 +600,7 @@ trait DAG extends Instructions {
             foldDown0(child, specsAcc |+| f(child))
           else
             specsAcc
-          
+
         case dag.Assert(pred, child) =>
           val acc2 = foldDown0(pred, acc |+| f(pred))
           foldDown0(child, acc2 |+| f(child))
@@ -724,7 +724,7 @@ trait DAG extends Instructions {
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) parent.identities
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort
@@ -736,8 +736,11 @@ trait DAG extends Instructions {
 
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = {
-        if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        if (mor.retainIds) {
+          if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
+          else left.identities ++ right.identities
+        }
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort

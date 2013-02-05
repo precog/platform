@@ -31,7 +31,7 @@ TMPDIR=precog
 mkdir -p $TMPDIR
 rm -rf $TMPDIR/*
 
-java -Xmx2048m -jar tools/proguard.jar @proguard.conf -injars target/mongo-assembly*.jar -outjars $TMPDIR/precog.jar | tee proguard.log 
+java -Xmx2048m -jar ../tools/lib/proguard.jar @proguard.conf -injars target/mongo-assembly*.jar -outjars $TMPDIR/precog.jar | tee proguard.log 
 mkdir web
 cp -R quirrelide/build/* web/
 rm -rf web/index.html web/php web/*.php

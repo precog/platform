@@ -50,7 +50,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 case class EventServiceState(apiKeyManager: APIKeyManager[Future], eventStore: EventStore, ingestPool: ExecutorService)
 
 trait EventService extends BlueEyesServiceBuilder with EventServiceCombinators
-with DecompressCombinators with AkkaDefaults { 
+with DecompressCombinators with AkkaDefaults {
   import DefaultBijections._
 
   val insertTimeout = akka.util.Timeout(10000)
@@ -100,7 +100,7 @@ with DecompressCombinators with AkkaDefaults {
             }
           }
         } ->
-        shutdown { state => 
+        shutdown { state =>
           for {
             _ <- state.eventStore.stop
             _ <- state.apiKeyManager.close()

@@ -23,6 +23,7 @@ package daze
 import com.precog.yggdrasil._
 
 import blueeyes.json._
+import Function._
 
 trait StaticInlinerModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] {
   import dag._
@@ -44,12 +45,12 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
           case graph @ Operate(op, child) => {
             recurse(child) match {
               case child2 @ Const(JUndefined) => Const(JUndefined)(child2.loc)
-
+                
               case child2 @ Const(value) => {
                 op match {
                   case instructions.WrapArray =>    // TODO currently can't be a cvalue
                     Operate(op, child2)(graph.loc)
-
+                    
                   case _ => {
                     val newOp1 = op1ForUnOp(op)
                     newOp1.fold(
@@ -61,57 +62,61 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
                           col <- newOp1.f1(ctx).apply(cvalue)
                           if col isDefinedAt 0
                         } yield col jValue 0
-
+                        
                         Const(result getOrElse JUndefined)(graph.loc)
                       }
                     )
                   }
                 }
               }
-
+                
               case child2 => Operate(op, child2)(graph.loc)
             }
           }
-
+            
           case graph @ Join(op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
             val left2 = recurse(left)
             val right2 = recurse(right)
-
-            op2ForBinOp(op) flatMap { op2 =>
-              (left2, right2) match {
+            
+            val graphM = for {
+              op2 <- op2ForBinOp(op)
+              op2F2 <- op2.fold(op2 = const(None), op2F2 = { Some(_) })
+              result <- (left2, right2) match {
                 case (left2 @ Const(JUndefined), _) =>
                   Some(Const(JUndefined)(left2.loc))
-
+                  
                 case (_, right2 @ Const(JUndefined)) =>
                   Some(Const(JUndefined)(right2.loc))
-
+                  
                 case (left2 @ Const(leftValue), right2 @ Const(rightValue)) => {
                   val result = for {
-                    // Noq Op2F2 that can be applied to a complex JValues
+                    // No Op1F1 that can be applied to a complex JValues
                     leftCValue <- jValueToCValue(leftValue)
                     rightCValue <- jValueToCValue(rightValue)
-                    col <- op2.f2(ctx).partialLeft(leftCValue).apply(rightCValue)
+                    col <- op2F2.f2(ctx).partialLeft(leftCValue).apply(rightCValue)
                     if col isDefinedAt 0
                   } yield col jValue 0
-
+                  
                   Some(Const(result getOrElse JUndefined)(graph.loc))
                 }
-
+                  
                 case _ => None
               }
-            } getOrElse Join(op, sort, left2, right2)(graph.loc)
+            } yield result
+            
+            graphM getOrElse Join(op, sort, left2, right2)(graph.loc)
           }
-
+            
           case graph @ Filter(sort @ (CrossLeftSort | CrossRightSort), left, right) => {
             val left2 = recurse(left)
             val right2 = recurse(right)
-
+            
             val back = (left2, right2) match {
               case (_, right2 @ Const(JTrue)) => Some(left2)
               case (_, right2 @ Const(_)) => Some(Const(JUndefined)(graph.loc))
               case _ => None
             }
-
+            
             back getOrElse Filter(sort, left2, right2)(graph.loc)
           }
         },

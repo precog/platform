@@ -23,11 +23,12 @@ import com.precog.yggdrasil.YggConfigComponent
 
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.daze.QueryLogger
 
 import blueeyes.util.Clock
 import blueeyes.json._
 
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.atomic.AtomicBoolean
 
 import org.joda.time.DateTime
 
@@ -82,6 +83,20 @@ trait ManagedQueryModule extends YggConfigComponent {
 
   trait ShardQueryMonad extends QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
     def jobId: Option[JobId]
+    def Q: JobQueryStateMonad
+  }
+
+  /**
+   * A mix-in for `QueryLogger`s that forcefully aborts a shard query on fatal
+   * errors.
+   */
+  trait ShardQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+    def M: ShardQueryMonad
+
+    abstract override def fatal(pos: P, msg: String): M[Unit] = {
+      M.Q.abort()
+      super.fatal(pos, msg)
+    }
   }
 
   implicit def jobActorSystem: ActorSystem
@@ -98,18 +113,18 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime] = None)(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
+  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime => DateTime])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
     val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now()))
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job =>
-        val mgr = JobQueryStateManager(job.id, expires)
+        val mgr = JobQueryStateManager(job.id, expires map (_(yggConfig.clock.now())))
         mgr.start()
         mgr
-      } getOrElse FakeJobQueryStateManager(expires)
+      } getOrElse FakeJobQueryStateManager(expires map (_(yggConfig.clock.now())))
     } yield (new ShardQueryMonad {
       val jobId = job map (_.id)
-      val Q: SwappableMonad[JobQueryState] = queryStateManager
+      val Q: JobQueryStateMonad = queryStateManager
       val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
     })
   }
@@ -155,52 +170,45 @@ trait ManagedQueryModule extends YggConfigComponent {
 
   // This can be used when the Job service is down.
   private final case class FakeJobQueryStateManager(expires: Option[DateTime]) extends JobQueryStateMonad {
-    def isCancelled() = false
+    private val cancelled: AtomicBoolean = new AtomicBoolean()
+    def abort(): Boolean = { cancelled.set(true); true }
+    def isCancelled() = cancelled.get()
     def hasExpired() = expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
   }
 
   private final case class JobQueryStateManager(jobId: JobId, expires: Option[DateTime]) extends JobQueryStateMonad {
     import JobQueryState._
 
-    private val rwlock = new ReentrantReadWriteLock()
-    private val readLock = rwlock.readLock()
-    private val writeLock = rwlock.writeLock()
-    private var jobStatus: Option[Job] = None
+    private val cancelled: AtomicBoolean = new AtomicBoolean()
 
     private def poll() {
+      import JobState._
+
       jobManager.findJob(jobId) map { job =>
-        writeLock.lock()
-        try {
-          jobStatus = job
-          if (job map (_.state.isTerminal) getOrElse true) {
-            stop()
-          }
-        } finally {
-          writeLock.unlock()
+        if (job map (_.state.isTerminal) getOrElse true) {
+          abort()
+        } else {
+          // We only update cancelled if we have not yet cancelled.
+          cancelled.compareAndSet(false, job map {
+            case Job(_, _, _, _, _, Cancelled(_, _, _)) => true
+            case _ => false
+          } getOrElse false)
         }
       }
+    }
+
+    def abort(): Boolean = {
+      cancelled.set(true)
+      stop()
+      true
     }
 
     def hasExpired(): Boolean = {
       expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
     }
 
-    def isCancelled(): Boolean = {
-      readLock.lock()
-      val status = try {
-        jobStatus
-      } finally {
-        readLock.unlock()
-      }
+    def isCancelled(): Boolean = cancelled.get()
 
-      import JobState._
-      status map {
-        case Job(_, _, _, _, _, Cancelled(_, _, _)) => true
-        case _ => false
-      } getOrElse false
-    }
-
-    // TODO: Should this be explicitly started?
     private var poller: Option[Cancellable] = None
 
     def start(): Unit = synchronized {

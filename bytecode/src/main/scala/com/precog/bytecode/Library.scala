@@ -20,6 +20,12 @@
 package com.precog
 package bytecode
 
+sealed trait IdentityAlignment
+object IdentityAlignment {
+  object CrossAlignment extends IdentityAlignment
+  object MatchAlignment extends IdentityAlignment
+}
+
 trait FunctionLike {
   val namespace: Vector[String]
   val name: String
@@ -41,6 +47,7 @@ object Morphism1Like {
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
   val retainIds: Boolean = false
+  def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
 }
 
 object Morphism2Like {
