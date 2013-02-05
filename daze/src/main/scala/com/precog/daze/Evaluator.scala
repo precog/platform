@@ -53,6 +53,7 @@ import scalaz.StateT.{StateMonadTrans, stateTMonadState}
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.std.map._
+import scalaz.std.set._
 import scalaz.std.partialFunction._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
@@ -98,11 +99,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
     private val transState = StateMonadTrans[EvaluatorState]
     private val monadState = stateTMonadState[EvaluatorState, N]
-
-    private[this] implicit def setMonoid[A] = new Monoid[Set[A]] {
-      def zero = Set()
-      def append(a: Set[A], b: => Set[A]) = a ++ b
-    }
 
     def report: QueryLogger[N, instructions.Line]
   
