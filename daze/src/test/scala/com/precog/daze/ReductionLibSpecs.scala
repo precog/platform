@@ -48,10 +48,14 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   }
 
+  val line = Line(1, 1, "")
+
+  def parseDateTimeFuzzy(time: String) =
+    Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), 
+      dag.LoadLocal(Const(CString(time))(line))(line))(line)
+
   "reduce homogeneous sets" >> {
     "singleton count" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Count, Const(CString("alpha"))(line))(line)
         
       val result = testEval(input)
@@ -66,8 +70,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }   
     
     "count" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -83,8 +85,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "geometricMean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -100,8 +100,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "mean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -110,15 +108,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(29)
     }
     
     "max" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -127,15 +123,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(77)
     }
-    
+
     "min" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -144,15 +138,43 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(1)
     }
+
+    "maxTime" >> {
+      val input = dag.Reduce(MaxTime,
+        parseDateTimeFuzzy("/hom/iso8601"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2012-12-28T22:38:19.430+06:00")
+    }
+
+    "minTime" >> {
+      val input = dag.Reduce(MinTime,
+        parseDateTimeFuzzy("/hom/iso8601"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2010-04-29T09:37:52.599+08:00")
+    }
     
     "standard deviation" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -161,15 +183,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toDouble
       }
       
       result2 must contain(27.575351312358652)
     }
     
     "sum a singleton" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Sum, Const(CLong(18))(line))(line)
         
       val result = testEval(input)
@@ -177,15 +197,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
       
       result2 must contain(18)
     }    
     
     "sum" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -194,15 +212,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d.toInt
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toInt
       }
       
       result2 must contain(145)
     }
     
     "sumSq" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -211,15 +227,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toDouble
       }
       
       result2 must contain(8007)
     }
     
     "variance" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
@@ -228,15 +242,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d.toDouble
+        case (ids, SDecimal(d)) if ids.length == 0 => d.toDouble
       }
       
       result2 must contain(760.4)
     }
     
     "forall" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Forall,
         dag.IUI(true,
           Const(CBoolean(true))(line),
@@ -254,8 +266,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "exists" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Exists,
         dag.IUI(true,
           Const(CBoolean(true))(line),
@@ -275,8 +285,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
 
   "reduce heterogeneous sets" >> {
     "count" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -285,15 +293,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(10)
     }    
     
     "geometricMean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -302,15 +308,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(13.822064739747386)
     }
     
     "mean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -319,15 +323,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(29)
     }
     
     "max" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -336,15 +338,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(77)
     }
     
     "min" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -353,15 +353,43 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.length == 0  => d
+        case (ids, SDecimal(d)) if ids.length == 0 => d
       }
       
       result2 must contain(1)
     }
+
+    "maxTime" >> {
+      val input = dag.Reduce(MaxTime,
+        parseDateTimeFuzzy("/het/iso8601"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2012-12-28T22:38:19.430+06:00")
+    }
+
+    "minTime" >> {
+      val input = dag.Reduce(MinTime,
+        parseDateTimeFuzzy("/het/iso8601"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2010-04-29T09:37:52.599+08:00")
+    }
     
     "standard deviation" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -377,8 +405,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "sum" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -394,8 +420,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }      
   
     "sumSq" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -411,8 +435,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     } 
   
     "variance" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
@@ -430,8 +452,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
 
   "reduce heterogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -447,8 +467,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }    
     
     "geometricMean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -464,8 +482,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "mean" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -481,8 +497,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "max" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -498,8 +512,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "min" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -513,10 +525,38 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       
       result2 must contain(-3)
     }
+
+    "maxTime" >> {
+      val input = dag.Reduce(MaxTime,
+        parseDateTimeFuzzy("/hom/iso8601AcrossSlices"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2012-12-28T22:38:19.430+06:00")
+    }
+
+    "minTime" >> {
+      val input = dag.Reduce(MinTime,
+        parseDateTimeFuzzy("/hom/iso8601AcrossSlices"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2007-02-04T10:58:14.041-01:00")
+    }
     
     "standard deviation" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -532,8 +572,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
     
     "sum" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -549,8 +587,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }      
   
     "sumSq" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -566,8 +602,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     } 
   
     "variance" >> {
-      val line = Line(1, 1, "")
-      
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
@@ -585,8 +619,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   
   "reduce homogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Count,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -602,8 +634,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "geometricMean" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -619,8 +649,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "mean" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Mean,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -636,8 +664,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "max" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Max,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -653,8 +679,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "min" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -668,10 +692,38 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   
       result2 must contain(-14)
     }
+
+    "maxTime" >> {
+      val input = dag.Reduce(MaxTime,
+        parseDateTimeFuzzy("/het/iso8601AcrossSlices"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2012-05-05T08:58:10.171+10:00")
+    }
+
+    "minTime" >> {
+      val input = dag.Reduce(MinTime,
+        parseDateTimeFuzzy("/het/iso8601AcrossSlices"))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(d)) if ids.length == 0 => d
+      }
+      
+      result2 must contain("2007-07-14T03:49:30.311-07:00")
+    }
   
     "standard deviation" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(StdDev,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -687,8 +739,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "sum" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Sum,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -704,8 +754,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "sumSq" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(SumSq,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
@@ -721,8 +769,6 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     }
   
     "variance" >> {
-      val line = Line(1, 1, "")
-  
       val input = dag.Reduce(Variance,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   

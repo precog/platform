@@ -41,12 +41,32 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
-    "filter set based on DateTime comparison" in {
+    "filter set based on DateTime comparison using minTimeOf" in {
       val input = """
         | clicks := //clicks
         | clicks' := clicks with { ISODateTime: std::time::parseDateTimeFuzzy(clicks.timeString) } 
         | 
-        | minTime := std::time::minTime("2012-02-09T00:31:13.610-09:00", clicks'.ISODateTime)
+        | minTime := std::time::minTimeOf("2012-02-09T00:31:13.610-09:00", clicks'.ISODateTime)
+        |
+        | clicks'.ISODateTime where clicks'.ISODateTime <= minTime
+        | """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)
+
+      val actual = result collect {
+        case (ids, SString(str)) if ids.length == 1 => str
+      }
+
+      actual mustEqual Set("2012-02-09T00:31:13.610-09:00")
+    }
+
+    "filter set based on DateTime comparison using reduction" in {
+      val input = """
+        | clicks := //clicks
+        | clicks' := clicks with { ISODateTime: std::time::parseDateTimeFuzzy(clicks.timeString) } 
+        | 
+        | minTime := minTime(clicks'.ISODateTime)
         |
         | clicks'.ISODateTime where clicks'.ISODateTime <= minTime
         | """.stripMargin

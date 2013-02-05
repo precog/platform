@@ -98,8 +98,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       ChangeTimeZone,
       ParseDateTime,
 
-      MinTime,
-      MaxTime
+      MinTimeOf,
+      MaxTimeOf
     )
 
     private def isValidISO(str: String): Boolean = {
@@ -249,7 +249,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def computeExtreme(t1: DateTime, t2: DateTime): DateTime
     }
 
-    object MinTime extends Op2F2(TimeNamespace, "minTime") with ExtremeTime { 
+    object MinTimeOf extends Op2F2(TimeNamespace, "minTimeOf") with ExtremeTime { 
       def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
         val res: Int = NumericComparisons.compare(t1, t2)
         if (res < 0) t1
@@ -257,7 +257,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    object MaxTime extends Op2F2(TimeNamespace, "maxTime") with ExtremeTime { 
+    object MaxTimeOf extends Op2F2(TimeNamespace, "maxTimeOf") with ExtremeTime { 
       def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
         val res: Int = NumericComparisons.compare(t1, t2)
         if (res > 0) t1
