@@ -116,6 +116,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
       if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
 
+    // Have to be idempotent on subgraphs
     def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
       composeOptimizations(optimize, List(
         inlineStatics(_, ctx, splits),
@@ -772,7 +773,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         // run the evaluator on all forcing points *including* the endpoint, in order
         for {
           rewrittenGraph <- preState
-          pendingTable <- prepareEval(rewrittenGraph, splits)
+          stageRewrittenGraph <- stagedOptimizations(rewrittenGraph, ctx, optimize, splitNodes)
+          pendingTable <- prepareEval(stageRewrittenGraph, splits)
           table = pendingTable.table transform liftToValues(pendingTable.trans)
         } yield table
       }
