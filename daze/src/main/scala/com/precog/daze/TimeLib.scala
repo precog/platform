@@ -147,6 +147,9 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+   //ok to `get` because CoerceToDate is defined for StrColumn
+   def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+
     object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
       def checkDefined(c1: Column, c2: StrColumn, row: Int) =
         c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidTimeZone(c2(row))
@@ -154,8 +157,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
         case (c1: StrColumn, c2: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c1)
 
           new DateColumn {
             def isDefinedAt(row: Int) = checkDefined(dateCol, c2, row)
@@ -189,25 +191,22 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(textAndDate, textAndDate, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::extremeTime") {
         case (c1: StrColumn, c2: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
-          val dateCol2 = cf.util.CoerceToDate(c2) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
+          val dateCol2 = createDateCol(c2)
 
           new Map2Column(dateCol1, dateCol2) with DateColumn {
             def apply(row: Int) = computeExtreme(dateCol1(row), dateCol2(row))
           }
 
         case (c1: DateColumn, c2: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol2 = cf.util.CoerceToDate(c2) collect { case (dc: DateColumn) => dc } get
+          val dateCol2 = createDateCol(c2)
 
           new Map2Column(c1, dateCol2) with DateColumn {
             def apply(row: Int) = computeExtreme(c1(row), dateCol2(row))
           }
 
         case (c1: StrColumn, c2: DateColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
 
           new Map2Column(dateCol1, c2) with DateColumn {
             def apply(row: Int) = computeExtreme(dateCol1(row), c2(row))
@@ -241,24 +240,21 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(textAndDate, JNumberT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
         case (c1: StrColumn, c2: LongColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
 
           new Map2Column(dateCol1, c2) with DateColumn {
             def apply(row: Int) = plus(dateCol1(row), c2(row).toInt)
           }      
 
         case (c1: StrColumn, c2: NumColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
 
           new Map2Column(dateCol1, c2) with DateColumn {
             def apply(row: Int) = plus(dateCol1(row), c2(row).toInt)
           }      
 
         case (c1: StrColumn, c2: DoubleColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
 
           new Map2Column(dateCol1, c2) with DateColumn {
             def apply(row: Int) = plus(dateCol1(row), c2(row).toInt)
@@ -317,25 +313,22 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(textAndDate, textAndDate, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
         case (c1: StrColumn, c2: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
-          val dateCol2 = cf.util.CoerceToDate(c2) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
+          val dateCol2 = createDateCol(c2)
 
         new Map2Column(dateCol1, dateCol2) with LongColumn {
           def apply(row: Int) = between(dateCol1(row), dateCol2(row))
         }
 
         case (c1: DateColumn, c2: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol2 = cf.util.CoerceToDate(c2) collect { case (dc: DateColumn) => dc } get
+          val dateCol2 = createDateCol(c2)
 
         new Map2Column(c1, dateCol2) with LongColumn {
           def apply(row: Int) = between(c1(row), dateCol2(row))
         }
 
         case (c1: StrColumn, c2: DateColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol1 = cf.util.CoerceToDate(c1) collect { case (dc: DateColumn) => dc } get
+          val dateCol1 = createDateCol(c1)
 
         new Map2Column(dateCol1, c2) with LongColumn {
           def apply(row: Int) = between(dateCol1(row), c2(row))
@@ -429,8 +422,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(textAndDate, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::getMillis") {
         case (c: StrColumn) =>  
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c)
 
           new Map1Column(dateCol) with LongColumn {
             def apply(row: Int) = dateCol(row).getMillis()
@@ -445,8 +437,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeZone") {
         case (c: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c)
 
           new Map1Column(dateCol) with StrColumn {
             def apply(row: Int) = {
@@ -480,8 +471,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::season") {
         case (c: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c)
 
           new Map1Column(dateCol) with StrColumn {
             def apply(row: Int) = determineSeason(dateCol(row))
@@ -496,8 +486,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(textAndDate, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeFraction") {
         case (c: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c)
 
           new Map1Column(dateCol) with LongColumn {
             def apply(row: Int) = fraction(dateCol(row))
@@ -568,8 +557,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::truncation") {
         case (c: StrColumn) =>
-          //ok to `get` because CoerceToDate is defined for StrColumn
-          val dateCol = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+          val dateCol = createDateCol(c)
 
           new Map1Column(dateCol) with StrColumn {
             def apply(row: Int) = fmt.print(dateCol(row))
