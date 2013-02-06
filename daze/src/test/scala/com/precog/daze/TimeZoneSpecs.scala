@@ -9,8 +9,6 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-import blueeyes.json.JString
-
 import org.joda.time._
 import org.joda.time.format._
 
@@ -29,7 +27,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
   val line = Line(1, 1, "")
   def inputOp1(op: Op1, loadFrom: String) = {
     dag.Operate(BuiltInFunction1Op(op),
-      dag.LoadLocal(Const(JString(loadFrom))(line))(line))(line)
+      dag.LoadLocal(Const(CString(loadFrom))(line))(line))(line)
   }
 
   def testEval(graph: DepGraph): Set[SEvent] = {
@@ -42,8 +40,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
   "changing time zones (homogenous case)" should {
     "change to the correct time zone" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/hom/iso8601"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input) collect {
         case (ids, SString(d)) if ids.length == 1 => d.toString
@@ -54,8 +52,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
     "not modify millisecond value" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/hom/iso8601"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
       
@@ -72,8 +70,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
     "work correctly for fractional zones" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/hom/iso8601"))(line))(line),
-        Const(JString("-10:30"))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        Const(CString("-10:30"))(line))(line)
         
       val result = testEval(input)
       
@@ -90,8 +88,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
   "changing time zones (heterogeneous case)" should {
     "change to the correct time zone" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/het/iso8601"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
       
@@ -106,8 +104,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
     "not modify millisecond value" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/hom/iso8601"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
       
@@ -124,8 +122,8 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
     "work correctly for fractional zones" in {
       val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/het/iso8601"))(line))(line),
-        Const(JString("-10:30"))(line))(line)
+        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        Const(CString("-10:30"))(line))(line)
         
       val result = testEval(input)
       

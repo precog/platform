@@ -90,18 +90,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       SourceKey.Single, Some(TransSpec1.Id), groupId, 
       GroupKeySpecSource(tic_a, SourceValue.Single))
       
-    val result = Table.merge(spec) { (key: JValue, map: GroupId => M[Table]) =>
+    val result = Table.merge(spec) { (key: RValue, map: GroupId => M[Table]) =>
       for {
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        key must beLike {
+        key.toJValue must beLike {
           case jo: JObject => (jo \ "tic_a") match {
             case JNum(i) => set must contain(i)
           }
         }
 
-        val histoKey = key(tic_aj)
+        val histoKey = key.toJValue(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -151,18 +151,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       SourceKey.Single, Some(valueTrans), groupId, 
       GroupKeySpecSource(tic_a, SourceValue.Single))
       
-    val result = Table.merge(spec) { (key: JValue, map: GroupId => M[Table]) =>
+    val result = Table.merge(spec) { (key: RValue, map: GroupId => M[Table]) =>
       for {
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        key must beLike {
+        key.toJValue must beLike {
           case jo: JObject => (jo \ "tic_a") match {
             case JNum(i) => set must contain(i)
           }
         }
         
-        val histoKey = key(tic_aj)
+        val histoKey = key.toJValue(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
       
@@ -207,18 +207,18 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       SourceKey.Single, Some(TransSpec1.Id), groupId, 
       GroupKeySpecSource(tic_a, Map1(SourceValue.Single, mod2)))
       
-    val result = Table.merge(spec) { (key: JValue, map: GroupId => M[Table]) =>
+    val result = Table.merge(spec) { (key: RValue, map: GroupId => M[Table]) =>
       for {
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        key must beLike {
+        key.toJValue must beLike {
           case jo: JObject => (jo \ "tic_a") match {
             case JNum(i) => set.map(_ % 2) must contain(i)
           }
         }
 
-        val histoKey = key(tic_aj)
+        val histoKey = key.toJValue(tic_aj)
         val JNum(histoKey0) = histoKey
         val histoKeyInt = histoKey0.toInt
         
@@ -280,7 +280,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        key must beLike {
+        key.toJValue must beLike {
           case obj: JObject => {
             val a = obj(tic_aj)
             val b = obj(tic_bj)
@@ -340,7 +340,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        key must beLike {
+        key.toJValue must beLike {
           case obj: JObject => {
             val a = obj(tic_aj)
             val b = obj(tic_bj)
@@ -416,7 +416,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        (key(tic_bj)) must beLike {
+        (key.toJValue(tic_bj)) must beLike {
           case JNum(i) => i must_== 7
         }
         
@@ -460,7 +460,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1  <- map(groupId)
         gs1Json <- gs1.toJson
       } yield {
-        (key(tic_bj)) must beLike {
+        (key.toJValue(tic_bj)) must beLike {
           case JUndefined =>
             (gs1Json.head \ "a") must beLike {
               case JNum(i) if i == 12 => ok
@@ -472,7 +472,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
           case JNum(i) if i == 3 => gs1Json must haveSize(1)
         }
 
-        fromJson(Stream(JArray(key :: JNum(gs1Json.size) :: Nil)))
+        fromJson(Stream(JArray(key.toJValue :: JNum(gs1Json.size) :: Nil)))
       }
     }
     
@@ -532,7 +532,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1Json <- gs1.toJson
         gs2Json <- gs2.toJson
       } yield {
-        val JNum(keyBigInt) = key(tic_aj)
+        val JNum(keyBigInt) = key.toJValue(tic_aj)
 
         forall(gs1Json) { row =>
           row must beLike {
@@ -545,7 +545,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
         fromJson(Stream(
           JObject(
-            JField("key", key(tic_aj)) ::
+            JField("key", key.toJValue(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -606,8 +606,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1Json <- gs1.toJson
         gs2Json <- gs2.toJson
       } yield {
-        val JNum(keyBigInt) = key(tic_aj)
-        key(tic_bj) must beLike {
+        val JNum(keyBigInt) = key.toJValue(tic_aj)
+        key.toJValue(tic_bj) must beLike {
           case JNum(_) => ok
         }
         
@@ -628,7 +628,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         fromJson(Stream(
           JObject(
-            JField("key", JArray(key(tic_aj) :: key(tic_bj) :: Nil)) ::
+            JField("key", JArray(key.toJValue(tic_aj) :: key.toJValue(tic_bj) :: Nil)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
       }
     }
@@ -708,8 +708,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         gs1Json <- gs1.toJson
         gs2Json <- gs2.toJson
       } yield {
-        val ka @ JNum(kaValue) = key(tic_aj)
-        val kb = key(tic_bj)
+        val ka @ JNum(kaValue) = key.toJValue(tic_aj)
+        val kb = key.toJValue(tic_bj)
         
         gs1Json must not(beEmpty)
         gs2Json must not(beEmpty)
@@ -726,7 +726,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
         
         val result = fromJson(Stream(
           JObject(
-            JField("key", key(tic_aj)) ::
+            JField("key", key.toJValue(tic_aj)) ::
             JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
 
         elapsed += (System.currentTimeMillis - start)
@@ -851,8 +851,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       bazSpec, GroupingSpec.Intersection)
       
     val forallResult = Table.merge(spec) { (key, map) =>
-      val a = key(tic_aj)
-      val b = key(tic_bj)
+      val a = key.toJValue(tic_aj)
+      val b = key.toJValue(tic_bj)
       
       a mustNotEqual JUndefined
       b mustNotEqual JUndefined

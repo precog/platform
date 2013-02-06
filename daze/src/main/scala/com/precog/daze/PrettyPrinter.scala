@@ -3,8 +3,6 @@ package com.precog.daze
 import org.apache.commons.lang.StringEscapeUtils.escapeJava
 import com.precog.yggdrasil._
 
-import blueeyes.json.JString
-
 trait PrettyPrinter extends DAG {
   import dag._
   import instructions.{ PushNum, PushString }
@@ -55,7 +53,7 @@ trait PrettyPrinter extends DAG {
       else {
         graph match {
           case Const(instr) => "Const("+(instr match {
-            case JString(str) => "JString("+prettyString(str)+")"
+            case CString(str) => "CString("+prettyString(str)+")"
             case other => other
           })+")(line)"
 

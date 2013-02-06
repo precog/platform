@@ -5,8 +5,6 @@ import org.specs2.mutable._
 import com.precog.yggdrasil._
 import com.precog.common.Path
 
-import blueeyes.json.JString
-
 import scalaz._
 
 trait TypeLibSpecs[M[+_]] extends Specification
@@ -31,7 +29,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isNumber),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -51,7 +49,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isBoolean),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -71,7 +69,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isNull),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -91,7 +89,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isString),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -111,7 +109,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isObject),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -131,7 +129,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isArray),
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
