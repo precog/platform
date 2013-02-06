@@ -95,7 +95,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  implicit def executor: ExecutionContext
+  implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)

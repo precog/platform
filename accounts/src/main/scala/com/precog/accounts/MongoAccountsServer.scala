@@ -35,8 +35,8 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDefaults {
-  val executor = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+  val executionContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   val clock = blueeyes.util.Clock.System
 
