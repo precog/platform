@@ -44,6 +44,8 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
 
     def rValueToCValue(rvalue: RValue): Option[CValue] = rvalue match {
       case cvalue: CValue => Some(cvalue)
+      case RArray.empty => Some(CEmptyArray)
+      case RObject.empty => Some(CEmptyObject)
       case _ => None
     }
     

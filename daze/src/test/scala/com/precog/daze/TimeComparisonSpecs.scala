@@ -189,8 +189,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
     }
   }
 
-  // TODO: This functionality requires a Date representation in JValue/RValue.
-  /*"comparision of two DateTimes input as CDate" should {
+  "comparision of two DateTimes input as CDate" should {
     "produce correct results using lt" in {
       DateTimeZone.setDefault(DateTimeZone.UTC)
 
@@ -200,7 +199,7 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
 
       basicComparison(input, true)
     }
-  }*/
+  }
 
   def extremeComparison(input: DepGraph, expected: String) = {
     val result = testEval(input)

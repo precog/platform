@@ -48,7 +48,7 @@ trait RegressionTestSupport[M[+_]] {
     }
     val withJPath = withCPath map { case (cpath, cvalue) => cPathToJPaths(cpath, cvalue) head }  // `head` is only okay if we don't have any homogeneous arrays
     val withJValue = withJPath map { case (jpath, cvalue) => (jpath, cvalue.toJValue) }
-    withJValue.foldLeft(RArray(Nil).asInstanceOf[JValue]) { case (target, (jpath, jvalue)) => target.unsafeInsert(jpath, jvalue) }
+    withJValue.foldLeft(JArray(Nil).asInstanceOf[JValue]) { case (target, (jpath, jvalue)) => target.unsafeInsert(jpath, jvalue) }
   } 
 
   def stdDevMean(values: List[Double]): (Double, Double) = {

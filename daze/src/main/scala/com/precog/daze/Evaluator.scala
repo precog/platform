@@ -358,6 +358,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               case CNull => Table.constNull
               
+              case CDate(d) => Table.constDate(Set(d))
+
               case RObject.empty => Table.constEmptyObject
               case RArray.empty => Table.constEmptyArray
 
