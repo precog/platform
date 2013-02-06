@@ -103,8 +103,11 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
 
             (left2, right2) match {
               case (Const(JArray(l)), Const(JNum(r))) if r >= 0 && r < l.length =>
-                val i = r.intValue
-                Const(JArray(l(i) :: l.take(i) ++ l.drop(i + 1)))(graph.loc)
+                val (beforeIndex, afterIndex) = l.splitAt(r.intValue)
+                val (a, d) = afterIndex.splitAt(1)
+                val (c, b) = beforeIndex.splitAt(1)
+
+                Const(JArray(a ++ b ++ c ++ d))(graph.loc)
               case _ =>
                 Join(ArraySwap, sort, left2, right2)(graph.loc)
             }
