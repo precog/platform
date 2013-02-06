@@ -126,7 +126,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table
 
-    def merge[N[+_]](grouping: GroupingSpec)(body: (JValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
+    def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
     def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] 
   }

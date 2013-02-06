@@ -29,8 +29,6 @@ import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.CLong
 
-import blueeyes.json.JNumLong
-
 import scalaz.std.map._
 
 trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] with TransSpecableModule[M] {
@@ -115,8 +113,8 @@ trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] wi
           dag.Join(DerefArray, CrossLeftSort, 
             dag.Join(DerefArray, CrossLeftSort, 
               left,
-              Const(JNumLong(firstIndex))(graph.loc))(graph.loc),
-            Const(JNumLong(secondIndex))(graph.loc))(graph.loc)
+              Const(CLong(firstIndex))(graph.loc))(graph.loc),
+            Const(CLong(secondIndex))(graph.loc))(graph.loc)
         }
       }}
     }

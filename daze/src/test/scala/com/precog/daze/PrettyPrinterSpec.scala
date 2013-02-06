@@ -24,8 +24,6 @@ import bytecode.RandomLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
-import blueeyes.json._
-
 object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyModule {
   import dag._
   import instructions._
@@ -40,8 +38,8 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
 
       val input =
         Join(DerefObject, CrossLeftSort,
-          dag.LoadLocal(Const(JString("/file"))(line))(line),
-          Const(JString("column"))(line))(line)
+          dag.LoadLocal(Const(CString("/file"))(line))(line),
+          Const(CString("column"))(line))(line)
 
       val result = prettyPrint(input)
       
@@ -51,9 +49,9 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
            |lazy val input =
            |  Join(DerefObject, CrossLeftSort,
            |    LoadLocal(
-           |      Const(JString("/file"))(line)
+           |      Const(CString("/file"))(line)
            |    )(line),
-           |    Const(JString("column"))(line)
+           |    Const(CString("column"))(line)
            |  )(line)
            |""".stripMargin
 
@@ -62,16 +60,16 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
 
     "format a DAG with shared structure" in {
       val line = Line(1, 1, "")
-      val file = dag.LoadLocal(Const(JString("/file"))(line))(line)
+      val file = dag.LoadLocal(Const(CString("/file"))(line))(line)
       
       val input =
         Join(Add, IdentitySort,
           Join(DerefObject, CrossLeftSort, 
             file,
-            Const(JString("time"))(line))(line),
+            Const(CString("time"))(line))(line),
           Join(DerefObject, CrossLeftSort,
             file,
-            Const(JString("height"))(line))(line))(line)
+            Const(CString("height"))(line))(line))(line)
 
       val result = prettyPrint(input)
 
@@ -80,18 +78,18 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
            |
            |lazy val node =
            |  LoadLocal(
-           |    Const(JString("/file"))(line)
+           |    Const(CString("/file"))(line)
            |  )(line)
            |
            |lazy val input =
            |  Join(Add, IdentitySort,
            |    Join(DerefObject, CrossLeftSort,
            |      node,
-           |      Const(JString("time"))(line)
+           |      Const(CString("time"))(line)
            |    )(line),
            |    Join(DerefObject, CrossLeftSort,
            |      node,
-           |      Const(JString("height"))(line)
+           |      Const(CString("height"))(line)
            |    )(line)
            |  )(line)
            |""".stripMargin
@@ -102,7 +100,7 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
     "format a DAG containing a Split" in {
       val line = Line(1, 1, "")
 
-      def clicks = dag.LoadLocal(Const(JString("/file"))(line))(line)
+      def clicks = dag.LoadLocal(Const(CString("/file"))(line))(line)
 
       lazy val input: dag.Split =
         dag.Split(
@@ -112,14 +110,14 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
             UnfixedSolution(0, 
               Join(DerefObject, CrossLeftSort,
                 clicks,
-                Const(JString("column0"))(line))(line))),
+                Const(CString("column0"))(line))(line))),
           Join(Add, IdentitySort,
             Join(DerefObject, CrossLeftSort,
               SplitParam(0)(input)(line),
-              Const(JString("column1"))(line))(line),
+              Const(CString("column1"))(line))(line),
             Join(DerefObject, CrossLeftSort,
               SplitGroup(1, clicks.identities)(input)(line),
-              Const(JString("column2"))(line))(line))(line))(line)
+              Const(CString("column2"))(line))(line))(line))(line)
 
       val result = prettyPrint(input)
       
@@ -128,7 +126,7 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
            |
            |lazy val node =
            |  LoadLocal(
-           |    Const(JString("/file"))(line)
+           |    Const(CString("/file"))(line)
            |  )(line)
            |
            |lazy val input =
@@ -138,18 +136,18 @@ object PrettyPrinterSpecs extends Specification with PrettyPrinter with FNDummyM
            |      UnfixedSolution(0,
            |        Join(DerefObject, CrossLeftSort,
            |          node,
-           |          Const(JString("column0"))(line)
+           |          Const(CString("column0"))(line)
            |        )(line)
            |      )
            |    ),
            |    Join(Add, IdentitySort,
            |      Join(DerefObject, CrossLeftSort,
            |        SplitParam(0)(input)(line),
-           |        Const(JString("column1"))(line)
+           |        Const(CString("column1"))(line)
            |      )(line),
            |      Join(DerefObject, CrossLeftSort,
            |        SplitGroup(1, Vector(LoadIds("/file")))(input)(line),
-           |        Const(JString("column2"))(line)
+           |        Const(CString("column2"))(line)
            |      )(line)
            |    )(line)
            |  )(line)

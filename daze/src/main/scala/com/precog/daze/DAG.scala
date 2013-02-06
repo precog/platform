@@ -22,7 +22,7 @@ package daze
 
 import bytecode._
 
-import blueeyes.json._
+import blueeyes.json.JNum
 
 import com.precog.util.IdGen
 import com.precog.yggdrasil._
@@ -307,27 +307,21 @@ trait DAG extends Instructions {
         }
 
         case instr: RootInstr => {
-          val jvalue = instr match {
-            case PushString(str) => JString(str)
+          val rvalue = instr match {
+            case PushString(str) => CString(str)
             
             // get the numeric coersion
             case PushNum(num) =>
-              // TODO: Move numeric parsing stuff to somewhere sane.
-              val jvalue = JNum(BigDecimal(num, MathContext.UNLIMITED))
-              CType.forJValue(jvalue) match {
-                case Some(CDouble) => JNum(num.toDouble)
-                case Some(CLong) => JNum(num.toLong)
-                case Some(CNum) => jvalue
-              }
+              CType.toCValue(JNum(BigDecimal(num, MathContext.UNLIMITED)))
             
-            case PushTrue => JTrue
-            case PushFalse => JFalse
-            case PushNull => JNull
-            case PushObject => JObject.empty
-            case PushArray => JArray.empty
+            case PushTrue => CBoolean(true)
+            case PushFalse => CBoolean(false)
+            case PushNull => CNull
+            case PushObject => RObject.empty
+            case PushArray => RArray.empty
           }
           
-          loop(loc, Right(Const(jvalue)(loc)) :: roots, splits, stream.tail)
+          loop(loc, Right(Const(rvalue)(loc)) :: roots, splits, stream.tail)
         }
       }
       
@@ -349,27 +343,21 @@ trait DAG extends Instructions {
     
     def findFirstRoot(line: Option[Line], stream: Vector[Instruction]): Either[StackError, (Root, Vector[Instruction])] = {
       def buildConstRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] = {
-        val jvalue = instr match {
-          case PushString(str) => JString(str)
+        val rvalue = instr match {
+          case PushString(str) => CString(str)
           
           // get the numeric coersion
           case PushNum(num) =>
-            // TODO: Move numeric parsing stuff to somewhere sane.
-            val jvalue = JNum(BigDecimal(num, MathContext.UNLIMITED))
-            CType.forJValue(jvalue) match {
-              case Some(CDouble) => JNum(num.toDouble)
-              case Some(CLong) => JNum(num.toLong)
-              case Some(CNum) => jvalue
-            }
+            CType.toCValue(JNum(BigDecimal(num, MathContext.UNLIMITED)))
 
-          case PushTrue => JTrue
-          case PushFalse => JFalse
-          case PushNull => JNull
-          case PushObject => JObject.empty
-          case PushArray => JArray.empty
+          case PushTrue => CBoolean(true)
+          case PushFalse => CBoolean(false)
+          case PushNull => CNull
+          case PushObject => RObject.empty
+          case PushArray => RArray.empty
         }
           
-        line map { ln => Right((Const(jvalue)(ln), stream.tail)) } getOrElse Left(UnknownLine)
+        line map { ln => Right((Const(rvalue)(ln), stream.tail)) } getOrElse Left(UnknownLine)
       }
       
       val back = stream.headOption collect {
@@ -640,16 +628,16 @@ trait DAG extends Instructions {
     
     object ConstString {
       def unapply(graph: Const): Option[String] = graph match {
-        case Const(JString(str)) => Some(str)
+        case Const(CString(str)) => Some(str)
         case _ => None
       }
     }
 
     object ConstDecimal {
       def unapply(graph: Const): Option[BigDecimal] = graph match {
-        case Const(JNum(d)) => Some(d)
-        case Const(JNumLong(d)) => Some(d)
-        case Const(JNumDouble(d)) => Some(d)
+        case Const(CNum(d)) => Some(d)
+        case Const(CLong(d)) => Some(d)
+        case Const(CDouble(d)) => Some(d)
         case _ => None
       }
     }
@@ -678,7 +666,7 @@ trait DAG extends Instructions {
       val containsSplitArg = true
     }
     
-    case class Const(value: JValue)(val loc: Line) extends DepGraph with Root {
+    case class Const(value: RValue)(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
@@ -762,8 +750,8 @@ trait DAG extends Instructions {
     
     case class LoadLocal(parent: DepGraph, jtpe: JType = JType.JUnfixedT)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = parent match {
-        case Const(JString(path)) => Identities.Specs(Vector(LoadIds(path)))
-        case Morph1(expandGlob, Const(JString(path))) => Identities.Specs(Vector(LoadIds(path)))
+        case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
+        case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
         case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
       

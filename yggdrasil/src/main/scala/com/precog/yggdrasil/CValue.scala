@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.util._
+import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -41,10 +42,92 @@ import scala.annotation.tailrec
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
 import _root_.java.math.MathContext
 
-sealed trait CValue {
-  def cType: CType
-
+sealed trait RValue { self =>
   def toJValue: JValue
+
+  def \(fieldName: String): RValue 
+
+  def unsafeInsert(path: CPath, value: RValue): RValue = {
+    RValue.unsafeInsert(self, path, value)
+  }
+}
+
+object RValue {
+  def fromJValue(jv: JValue): RValue = jv match {
+    case JObject(fields) => RObject(fields map { case (k, v) => (k, fromJValue(v)) })
+    case JArray(elements) => RArray(elements map fromJValue)
+    case other => CType.toCValue(other)
+  }
+
+  def unsafeInsert(rootTarget: RValue, rootPath: CPath, rootValue: RValue): RValue = {
+    def rec(target: RValue, path: CPath, value: RValue): RValue = {
+      if ((target == CNull || target == CUndefined) && path == CPath.Identity) value else {
+        def arrayInsert(l: List[RValue], i: Int, rem: CPath, v: RValue): List[RValue] = {
+          def update(l: List[RValue], j: Int): List[RValue] = l match {
+            case x :: xs => (if (j == i) rec(x, rem, v) else x) :: update(xs, j + 1)
+            case Nil => Nil
+          }
+
+          update(l.padTo(i + 1, CUndefined), 0)
+        }
+
+        target match {
+          case obj @ RObject(fields) => path.nodes match {
+            case CPathField(name) :: nodes =>
+              val (child, rest) = (obj.fields(name), obj.fields - name)
+              RObject(rest + (name -> rec(child, CPath(nodes), value)))
+
+            case CPathIndex(_) :: _ => sys.error("Objects are not indexed: attempted to insert " + value + " at " + rootPath + " on " + rootTarget)
+            case _ => sys.error("RValue insert would overwrite existing data: " + target + " cannot be rewritten to " + value + " at " + path +
+                                " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+          }
+
+          case arr @ RArray(elements) => path.nodes match {
+            case CPathIndex(index) :: nodes => RArray(arrayInsert(elements, index, CPath(nodes), value))
+            case CPathField(_) :: _ => sys.error("Arrays have no fields: attempted to insert " + value + " at " + rootPath + " on " + rootTarget)
+            case _ => sys.error("RValue insert would overwrite existing data: " + target + " cannot be rewritten to " + value + " at " + path +
+                                  " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+          }
+
+          case CNull | CUndefined => path.nodes match {
+            case Nil => value
+            case CPathIndex(_) :: _ => rec(RArray.empty, path, value)
+            case CPathField(_) :: _ => rec(RObject.empty, path, value)
+          }
+
+          case x => sys.error("JValue insert would overwrite existing data: " + x + " cannot be updated to " + value + " at " + path +
+                              " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+        }
+      }
+    }
+
+    rec(rootTarget, rootPath, rootValue)
+  }
+}
+
+case class RObject(fields: Map[String, RValue]) extends RValue {
+  def toJValue = JObject(fields map { case (k, v) => (k, v.toJValue) })
+  def \(fieldName: String): RValue = fields(fieldName)
+}
+
+object RObject {
+  val empty = new RObject(Map.empty)
+  def apply(fields: (String, RValue)*): RValue = new RObject(Map(fields: _*))
+}
+
+case class RArray(elements: List[RValue]) extends RValue {
+  def toJValue = JArray(elements map { _.toJValue })
+  def \(fieldName: String): RValue = CUndefined
+}
+
+object RArray {
+  val empty = new RArray(Nil)
+  def apply(elements: RValue*): RValue = new RArray(elements.toList)
+}
+
+sealed trait CValue extends RValue {
+  def cType: CType
+  def \(fieldName: String): RValue = CUndefined
 }
 
 sealed trait CNullValue extends CValue { self: CNullType =>
@@ -385,11 +468,16 @@ case object CString extends CValueType[String] {
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CWrappedValue[Boolean] {
+sealed abstract class CBoolean(val value: Boolean) extends CWrappedValue[Boolean] {
   val cType = CBoolean
 }
 
-case object CBoolean extends CValueType[Boolean] {
+case object CTrue extends CBoolean(true)
+case object CFalse extends CBoolean(false)
+
+object CBoolean extends CValueType[Boolean] {
+  def apply(value: Boolean) = if (value) CTrue else CFalse
+  def unapply(cbool: CBoolean) = Some(cbool.value)
   val manifest: Manifest[Boolean] = implicitly[Manifest[Boolean]]
   def readResolve() = CBoolean
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)

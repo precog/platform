@@ -1428,6 +1428,15 @@ trait Slice { source =>
     }
   }
 
+  def toRValue(row: Int): RValue = {
+    columns.foldLeft[RValue](CUndefined) {
+      case (rv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>
+        rv.unsafeInsert(selector, col.cValue(row))
+
+      case (rv, _) => rv
+    } 
+  }
+
   def toJValue(row: Int) = {
     columns.foldLeft[JValue](JUndefined) {
       case (jv, (ColumnRef(selector, _), col)) if col.isDefinedAt(row) =>

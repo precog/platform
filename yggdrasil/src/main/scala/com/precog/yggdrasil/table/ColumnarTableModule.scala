@@ -298,10 +298,10 @@ trait ColumnarTableModule[M[+_]]
     /**
      * Merge controls the iteration over the table of group key values. 
      */
-    def merge[N[+_]](grouping: GroupingSpec)(body: (JValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
+    def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
       
-      type Key = Seq[JValue]
+      type Key = Seq[RValue]
       type KeySchema = Seq[CPathField]
       
       def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
@@ -327,7 +327,7 @@ trait ColumnarTableModule[M[+_]]
         
         val indicesGroupedBySource = sourceKeys.groupBy(_.groupId).mapValues(_.map(y => (y.index, y.keySchema)).toSeq).values.toSeq
         
-        def unionOfIntersections(indicesGroupedBySource: Seq[Seq[(TableIndex, KeySchema)]]) = {
+        def unionOfIntersections(indicesGroupedBySource: Seq[Seq[(TableIndex, KeySchema)]]): Set[Key] = {
           def allSourceDNF[T](l : Seq[Seq[T]]): Seq[Seq[T]] = {
             l match {
               case Seq(hd) => hd.map(Seq(_))
@@ -344,18 +344,18 @@ trait ColumnarTableModule[M[+_]]
           def normalizedKeys(index: TableIndex, keySchema: KeySchema): collection.Set[Key] = {
             val schemaMap = for(k <- fullSchema) yield keySchema.indexOf(k)
             for(key <- index.getUniqueKeys)
-              yield for(k <- schemaMap) yield if (k == -1) JUndefined else key(k) 
+              yield for(k <- schemaMap) yield if (k == -1) CUndefined else key(k) 
           }
 
           def intersect(keys0: collection.Set[Key], keys1: collection.Set[Key]): collection.Set[Key] = {
             def consistent(key0: Key, key1: Key): Boolean =
               (key0 zip key1).forall {
-                case (k0, k1) => k0 == k1 || k0 == JUndefined || k1 == JUndefined 
+                case (k0, k1) => k0 == k1 || k0 == CUndefined || k1 == CUndefined 
               }
             
             def merge(key0: Key, key1: Key): Key =
               (key0 zip key1).map {
-                case (k0, JUndefined) => k0 
+                case (k0, CUndefined) => k0 
                 case (_,  k1        ) => k1 
               }
   
@@ -383,9 +383,9 @@ trait ColumnarTableModule[M[+_]]
           }
         }
 
-        def jValueFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): JValue = {
+        def jValueFromGroupKey(key: Seq[RValue], cpaths: Seq[CPathField]): RValue = {
           val items = (cpaths zip key).map(t => (t._1.name, t._2))
-          JObject(items.toMap)
+          RObject(items.toMap)
         }
 
         val groupKeys: Set[Key] = unionOfIntersections(indicesGroupedBySource)

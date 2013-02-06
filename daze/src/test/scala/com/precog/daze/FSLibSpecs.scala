@@ -28,10 +28,10 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
 
-import blueeyes.json._
-
 import org.joda.time.DateTime
 import org.specs2.mutable.Specification
+
+import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.monad._

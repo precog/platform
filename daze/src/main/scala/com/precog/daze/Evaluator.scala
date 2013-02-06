@@ -46,8 +46,6 @@ import org.slf4j.LoggerFactory
 
 import akka.dispatch.Future
 
-import blueeyes.json._
-
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.StateT.{StateMonadTrans, stateTMonadState}
 import scalaz.std.anyVal._
@@ -350,22 +348,22 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           
           case Const(value) => 
             val table = value match {
-              case JString(str) => Table.constString(Set(str))
+              case CString(str) => Table.constString(Set(str))
               
-              case JNumLong(ln) => Table.constLong(Set(ln))
-              case JNumDouble(d) => Table.constDouble(Set(d))
-              case JNum(n) => Table.constDecimal(Set(n))
+              case CLong(ln) => Table.constLong(Set(ln))
+              case CDouble(d) => Table.constDouble(Set(d))
+              case CNum(n) => Table.constDecimal(Set(n))
               
-              case JBool(b) => Table.constBoolean(Set(b))
+              case CBoolean(b) => Table.constBoolean(Set(b))
 
-              case JNull => Table.constNull
+              case CNull => Table.constNull
               
-              case JObject.empty => Table.constEmptyObject
-              case JArray.empty => Table.constEmptyArray
+              case RObject.empty => Table.constEmptyObject
+              case RArray.empty => Table.constEmptyArray
 
-              case JUndefined => Table.empty
+              case CUndefined => Table.empty
 
-              case json => Table.fromJson(Stream(json))
+              case rv => Table.fromJson(Stream(rv.toJValue))
             }
 
             val spec = buildConstantWrapSpec(Leaf(Source))
@@ -498,12 +496,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 trans.WrapObject(Leaf(Source), paths.Value.name))
 
               wrapped <- transState liftM table map { _.transform(valueWrapped) }
-              jvalue <- transState liftM result.map(reduction.extractValue)
+              rvalue <- transState liftM result.map(reduction.extractValue)
 
               _ <- monadState.modify { state =>
                 state.copy(
                   assume = state.assume + (m -> wrapped),
-                  reductions = state.reductions + (m -> jvalue)
+                  reductions = state.reductions + (m -> rvalue)
                 )
               }
             } yield {
@@ -792,7 +790,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * Takes a graph, a node and a value. Replaces the node (and
      * possibly its parents) with the value into the graph.
      */
-    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: JValue, splits: Set[dag.Split]) = {
+    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: RValue, splits: Set[dag.Split]) = {
       val replacements = graph.foldDown(true) {
         case join@Join(
           DerefArray,
@@ -801,8 +799,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             DerefArray,
             CrossLeftSort,
             `from`,
-            Const(JNumLong(index1))),
-          Const(JNumLong(index2))) =>
+            Const(CLong(index1))),
+          Const(CLong(index2))) =>
 
           List(
             (join, Const(result)(from.loc))
@@ -1068,7 +1066,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
-      reductions: Map[DepGraph, Option[JValue]] = Map.empty,
+      reductions: Map[DepGraph, Option[RValue]] = Map.empty,
       extraCount: Int = 0
     )
     

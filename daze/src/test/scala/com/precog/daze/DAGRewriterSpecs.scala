@@ -25,8 +25,6 @@ import com.precog.common.Path
 import com.precog.yggdrasil._
 import org.joda.time.DateTime
 
-import blueeyes.json._
-
 import scalaz.{ FirstOption, NaturalTransformation, Tag }
 import scalaz.std.anyVal.booleanInstance.disjunction
 import scalaz.std.option.optionFirst
@@ -48,7 +46,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
     "compute identities given a relative path" in {
       val line = Line(1, 1, "")
 
-      val input = dag.LoadLocal(Const(JString("/numbers"))(line))(line)
+      val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val result = fullRewriteDAG(true, ctx)(input)
@@ -64,18 +62,18 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
       val line = Line(1, 1, "")
 
-      val t1 = dag.LoadLocal(Const(JString("/hom/pairs"))(line))(line)
+      val t1 = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
 
       val input =
         Join(Add, IdentitySort,
           Join(Add, CrossLeftSort,
             Join(DerefObject, CrossLeftSort,
               t1,
-              Const(JString("first"))(line))(line),
+              Const(CString("first"))(line))(line),
             dag.Reduce(Count, t1)(line))(line),
           Join(DerefObject, CrossLeftSort,
             t1,
-            Const(JString("second"))(line))(line))(line)
+            Const(CString("second"))(line))(line))(line)
 
       val ctx = EvaluationContext("testAPIKey", Path.Root, new DateTime())
       val optimize = true
@@ -91,7 +89,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val rewritten = inlineNodeValue(
         optimizedDAG,
         megaReduce.get,
-        JNum(42),
+        CNum(42),
         Set.empty
       )
 
@@ -99,7 +97,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
         case m@MegaReduce(_, _) => true
       }(disjunction)
       val hasConst = rewritten.foldDown(false) {
-        case m@Const(JNum(n)) if n == 42 => true
+        case m@Const(CNum(n)) if n == 42 => true
       }(disjunction)
 
       // Must be turned into a Const node

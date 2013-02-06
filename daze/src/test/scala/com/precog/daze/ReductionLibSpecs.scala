@@ -24,8 +24,6 @@ import org.specs2.mutable._
 import com.precog.yggdrasil._
 import com.precog.common.Path
 
-import blueeyes.json._
-
 import scala.Function._
   
 import scalaz._
@@ -66,46 +64,46 @@ trait ReductionLibSpecs[M[+_]] extends Specification
 
   def parseDateTimeFuzzy(time: String) =
     Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), 
-      dag.LoadLocal(Const(JString(time))(line))(line))(line)
+      dag.LoadLocal(Const(CString(time))(line))(line))(line)
 
   "reduce homogeneous sets" >> {
     "singleton count" >> {
-      val input = dag.Reduce(Count, Const(JString("alpha"))(line))(line)
+      val input = dag.Reduce(Count, Const(CString("alpha"))(line))(line)
         
       determineResult(input, 1)
     }   
     
     "count" >> {
       val input = dag.Reduce(Count,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
 
       determineResult(input, 5)
     }
     
     "geometricMean" >> {
       val input = dag.Reduce(GeometricMean,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 13.822064739747386)
     }
     
     "mean" >> {
       val input = dag.Reduce(Mean,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 29)
     }
     
     "max" >> {
       val input = dag.Reduce(Max,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 77)
     }
 
     "min" >> {
       val input = dag.Reduce(Min,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
 
       determineResult(input, 1)
     }
@@ -142,34 +140,34 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     
     "standard deviation" >> {
       val input = dag.Reduce(StdDev,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 27.575351312358652)
     }
     
     "sum a singleton" >> {
-      val input = dag.Reduce(Sum, Const(JNumLong(18))(line))(line)
+      val input = dag.Reduce(Sum, Const(CLong(18))(line))(line)
         
       determineResult(input, 18)
     }    
     
     "sum" >> {
       val input = dag.Reduce(Sum,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 145)
     }
     
     "sumSq" >> {
       val input = dag.Reduce(SumSq,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 8007)
     }
     
     "variance" >> {
       val input = dag.Reduce(Variance,
-        dag.LoadLocal(Const(JString("/hom/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 760.4)
     }
@@ -177,8 +175,8 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     "forall" >> {
       val input = dag.Reduce(Forall,
         dag.IUI(true,
-          Const(JTrue)(line),
-          Const(JFalse)(line))(line))(line)
+          Const(CTrue)(line),
+          Const(CFalse)(line))(line))(line)
       
       val result = testEval(input)
       
@@ -194,8 +192,8 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     "exists" >> {
       val input = dag.Reduce(Exists,
         dag.IUI(true,
-          Const(JTrue)(line),
-          Const(JFalse)(line))(line))(line)
+          Const(CTrue)(line),
+          Const(CFalse)(line))(line))(line)
       
       val result = testEval(input)
       
@@ -212,35 +210,35 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   "reduce heterogeneous sets" >> {
     "count" >> {
       val input = dag.Reduce(Count,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
 
       determineResult(input, 10)
     }    
     
     "geometricMean" >> {
       val input = dag.Reduce(GeometricMean,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
 
       determineResult(input, 13.822064739747386)
     }
     
     "mean" >> {
       val input = dag.Reduce(Mean,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 29)
     }
     
     "max" >> {
       val input = dag.Reduce(Max,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 77)
     }
     
     "min" >> {
       val input = dag.Reduce(Min,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 1)
     }
@@ -277,28 +275,28 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     
     "standard deviation" >> {
       val input = dag.Reduce(StdDev,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 27.575351312358652)
     }
     
     "sum" >> {
       val input = dag.Reduce(Sum,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 145)
     }      
   
     "sumSq" >> {
       val input = dag.Reduce(SumSq,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 8007)
     } 
   
     "variance" >> {
       val input = dag.Reduce(Variance,
-        dag.LoadLocal(Const(JString("/het/numbers"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
         
       determineResult(input, 760.4)
     }
@@ -307,35 +305,35 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   "reduce heterogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
       val input = dag.Reduce(Count,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 22)
     }    
     
     "geometricMean" >> {
       val input = dag.Reduce(GeometricMean,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 0)
     }
     
     "mean" >> {
       val input = dag.Reduce(Mean,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 1.8888888888888888)
     }
     
     "max" >> {
       val input = dag.Reduce(Max,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
 
       determineResult(input, 12) 
     }
     
     "min" >> {
       val input = dag.Reduce(Min,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, -3) 
     }
@@ -372,28 +370,28 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     
     "standard deviation" >> {
       val input = dag.Reduce(StdDev,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 4.121608220220312) 
     }
     
     "sum" >> {
       val input = dag.Reduce(Sum,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 17) 
     }      
   
     "sumSq" >> {
       val input = dag.Reduce(SumSq,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 185) 
     } 
   
     "variance" >> {
       val input = dag.Reduce(Variance,
-        dag.LoadLocal(Const(JString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
         
       determineResult(input, 16.987654320987655) 
     }
@@ -402,35 +400,35 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   "reduce homogeneous sets across two slice boundaries (22 elements)" >> {
     "count" >> {
       val input = dag.Reduce(Count,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 22) 
     }
   
     "geometricMean" >> {
       val input = dag.Reduce(GeometricMean,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 0) 
     }
   
     "mean" >> {
       val input = dag.Reduce(Mean,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 0.9090909090909090909090909090909091) 
     }
   
     "max" >> {
       val input = dag.Reduce(Max,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 15) 
     }
   
     "min" >> {
       val input = dag.Reduce(Min,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, -14) 
     }
@@ -467,28 +465,28 @@ trait ReductionLibSpecs[M[+_]] extends Specification
   
     "standard deviation" >> {
       val input = dag.Reduce(StdDev,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 10.193175483934386) 
     }
   
     "sum" >> {
       val input = dag.Reduce(Sum,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 20) 
     }
   
     "sumSq" >> {
       val input = dag.Reduce(SumSq,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 2304) 
     }
   
     "variance" >> {
       val input = dag.Reduce(Variance,
-        dag.LoadLocal(Const(JString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
   
       determineResult(input, 103.9008264462809917355371900826446) 
     }

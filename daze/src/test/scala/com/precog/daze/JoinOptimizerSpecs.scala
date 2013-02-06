@@ -30,8 +30,6 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
 
-import blueeyes.json._
-
 import scala.Function._
 
 import scalaz.Failure
@@ -66,13 +64,13 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
         
       val line = Line(1, 1, "")
-      val users = dag.LoadLocal(Const(JString("/hom/users"))(line), JUnfixedT)(line)
-      val heightWeight = dag.LoadLocal(Const(JString("/hom/heightWeight"))(line), JUnfixedT)(line)
-      val height = Const(JString("height"))(line)
-      val name = Const(JString("name"))(line)
-      val userId = Const(JString("userId"))(line)
-      val key = Const(JString("key"))(line)
-      val value = Const(JString("value"))(line)
+      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
+      val height = Const(CString("height"))(line)
+      val name = Const(CString("name"))(line)
+      val userId = Const(CString("userId"))(line)
+      val key = Const(CString("key"))(line)
+      val value = Const(CString("value"))(line)
 
       val liftedLHS =
         SortBy(
@@ -132,14 +130,14 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height, weight: b.weight } where a.userId = b.userId """.stripMargin
         
       val line = Line(1, 1, "")
-      val users = dag.LoadLocal(Const(JString("/users"))(line))(line)
-      val heightWeight = dag.LoadLocal(Const(JString("/heightWeight"))(line))(line)
-      val userId = Const(JString("userId"))(line)
-      val name = Const(JString("name"))(line)
-      val height = Const(JString("height"))(line)
-      val weight = Const(JString("weight"))(line)
-      val key = Const(JString("key"))(line)
-      val value = Const(JString("value"))(line)
+      val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
+      val userId = Const(CString("userId"))(line)
+      val name = Const(CString("name"))(line)
+      val height = Const(CString("height"))(line)
+      val weight = Const(CString("weight"))(line)
+      val key = Const(CString("key"))(line)
+      val value = Const(CString("value"))(line)
       
       val liftedLHS =
         SortBy(
@@ -211,12 +209,12 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       val line = Line(1, 1, "")
       
-      lazy val users = dag.LoadLocal(Const(JString("/users"))(line))(line)
-      lazy val heightWeight = dag.LoadLocal(Const(JString("/heightWeight"))(line))(line)
-      lazy val userId = Const(JString("userId"))(line)
-      lazy val name = Const(JString("name"))(line)
-      lazy val key = Const(JString("key"))(line)
-      lazy val value = Const(JString("value"))(line)
+      lazy val users = dag.LoadLocal(Const(CString("/users"))(line))(line)
+      lazy val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
+      lazy val userId = Const(CString("userId"))(line)
+      lazy val name = Const(CString("name"))(line)
+      lazy val key = Const(CString("key"))(line)
+      lazy val value = Const(CString("value"))(line)
       
       lazy val input =
         Filter(IdentitySort,
@@ -276,77 +274,77 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
        
       val line = Line(1, 1, "")
       
-      val medals = dag.LoadLocal(Const(JString("/summer_games/london_medals"))(line))(line)
-      val athletes = dag.LoadLocal(Const(JString("/summer_games/athletes"))(line))(line)
+      val medals = dag.LoadLocal(Const(CString("/summer_games/london_medals"))(line))(line)
+      val athletes = dag.LoadLocal(Const(CString("/summer_games/athletes"))(line))(line)
       
       val medalsP = Join(JoinObject, IdentitySort,
         medals,
         Join(WrapObject, CrossRightSort,
-          Const(JString("name"))(line),
+          Const(CString("name"))(line),
           Operate(BuiltInFunction1Op(toLowerCase),
-            Join(DerefObject, CrossLeftSort, medals, Const(JString("name"))(line))(line))(line))(line))(line)
+            Join(DerefObject, CrossLeftSort, medals, Const(CString("name"))(line))(line))(line))(line))(line)
           
       val athletesP = Join(JoinObject, IdentitySort,
         athletes,
         Join(WrapObject, CrossRightSort,
-          Const(JString("name"))(line),
+          Const(CString("name"))(line),
           Operate(BuiltInFunction1Op(toLowerCase),
-            Join(DerefObject, CrossLeftSort, athletes, Const(JString("name"))(line))(line))(line))(line))(line)
+            Join(DerefObject, CrossLeftSort, athletes, Const(CString("name"))(line))(line))(line))(line))(line)
             
       val input = Filter(IdentitySort,
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossRightSort,
-            Const(JString("winner"))(line),
+            Const(CString("winner"))(line),
             Join(DerefObject, CrossLeftSort,
               medalsP,
-              Const(JString("Medal winner"))(line))(line))(line),
+              Const(CString("Medal winner"))(line))(line))(line),
           Join(WrapObject, CrossRightSort,
-            Const(JString("country"))(line),
+            Const(CString("country"))(line),
             Join(DerefObject, CrossLeftSort,
               athletesP,
-              Const(JString("Countryname"))(line))(line))(line))(line),
+              Const(CString("Countryname"))(line))(line))(line))(line),
         Join(Eq, CrossLeftSort,
           Join(DerefObject, CrossLeftSort,
             medalsP,
-            Const(JString("name"))(line))(line),
+            Const(CString("name"))(line))(line),
           Join(DerefObject, CrossLeftSort,
             athletesP,
-            Const(JString("name"))(line))(line))(line))(line)
+            Const(CString("name"))(line))(line))(line))(line)
             
       val result = optimizeJoins(input, Set.empty, new IdGen)
       
       val expected =
         Join(JoinObject, ValueSort(0),
           Join(WrapObject, CrossRightSort,
-            Const(JString("winner"))(line),
+            Const(CString("winner"))(line),
             Join(DerefObject, CrossLeftSort,
               SortBy(
                 Join(JoinObject, IdentitySort,
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("key"))(line),
+                    Const(CString("key"))(line),
                     Join(DerefObject, CrossLeftSort,
                       medalsP,
-                      Const(JString("name"))(line))(line))(line),
+                      Const(CString("name"))(line))(line))(line),
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("value"))(line),
+                    Const(CString("value"))(line),
                     medalsP)(line))(line),
                 "key", "value", 0),
-              Const(JString("Medal winner"))(line))(line))(line),
+              Const(CString("Medal winner"))(line))(line))(line),
           Join(WrapObject, CrossRightSort,
-            Const(JString("country"))(line),
+            Const(CString("country"))(line),
             Join(DerefObject, CrossLeftSort,
               SortBy(
                 Join(JoinObject, IdentitySort,
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("key"))(line),
+                    Const(CString("key"))(line),
                     Join(DerefObject, CrossLeftSort,
                       athletesP,
-                      Const(JString("name"))(line))(line))(line),
+                      Const(CString("name"))(line))(line))(line),
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("value"))(line),
+                    Const(CString("value"))(line),
                     athletesP)(line))(line),
                 "key", "value", 0),
-              Const(JString("Countryname"))(line))(line))(line))(line)
+              Const(CString("Countryname"))(line))(line))(line))(line)
             
       result mustEqual expected
     }
@@ -362,7 +360,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val line = Line(1, 1, "")
       
-      lazy val clicks = dag.LoadLocal(Const(JString("/clicks"))(line))(line)
+      lazy val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       lazy val clicksP = dag.New(clicks)(line)
       
       lazy val input =
@@ -370,27 +368,27 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           Join(JoinObject, CrossLeftSort,
             Join(JoinObject, IdentitySort,
               Join(WrapObject, CrossLeftSort,
-                Const(JString("a"))(line),
+                Const(CString("a"))(line),
                 clicks
               )(line),
               Join(WrapObject, CrossLeftSort,
-                Const(JString("c"))(line),
+                Const(CString("c"))(line),
                 clicks
               )(line)
             )(line),
             Join(WrapObject, CrossLeftSort,
-              Const(JString("b"))(line),
+              Const(CString("b"))(line),
               clicksP
             )(line)
           )(line),
           Join(Eq, CrossLeftSort,
             Join(DerefObject, CrossLeftSort,
               clicks,
-              Const(JString("pageId"))(line)
+              Const(CString("pageId"))(line)
             )(line),
             Join(DerefObject, CrossLeftSort,
               clicksP,
-              Const(JString("pageId"))(line)
+              Const(CString("pageId"))(line)
             )(line)
           )(line)
         )(line)
@@ -399,14 +397,14 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           SortBy(
             Join(JoinObject, IdentitySort,
               Join(WrapObject, CrossLeftSort,
-                Const(JString("key"))(line),
+                Const(CString("key"))(line),
                 Join(DerefObject, CrossLeftSort,
                   clicks,
-                  Const(JString("pageId"))(line)
+                  Const(CString("pageId"))(line)
                 )(line)
               )(line),
               Join(WrapObject, CrossLeftSort,
-                Const(JString("value"))(line),
+                Const(CString("value"))(line),
                 clicks
               )(line)
             )(line),
@@ -417,27 +415,27 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           Join(JoinObject, ValueSort(0),
             Join(JoinObject, ValueSort(0),
               Join(WrapObject, CrossLeftSort,
-                Const(JString("a"))(line),
+                Const(CString("a"))(line),
                 clickPages
               )(line),
               Join(WrapObject, CrossLeftSort,
-                Const(JString("c"))(line),
+                Const(CString("c"))(line),
                 clickPages
               )(line)
             )(line),
             Join(WrapObject, CrossLeftSort,
-              Const(JString("b"))(line),
+              Const(CString("b"))(line),
               SortBy(
                 Join(JoinObject, IdentitySort,
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("key"))(line),
+                    Const(CString("key"))(line),
                     Join(DerefObject, CrossLeftSort,
                       clicksP,
-                      Const(JString("pageId"))(line)
+                      Const(CString("pageId"))(line)
                     )(line)
                   )(line),
                   Join(WrapObject, CrossLeftSort,
-                    Const(JString("value"))(line),
+                    Const(CString("value"))(line),
                     clicksP
                   )(line)
                 )(line),

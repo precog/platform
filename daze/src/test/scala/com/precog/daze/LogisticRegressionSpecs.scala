@@ -22,8 +22,6 @@ package com.precog.daze
 import scala.util.Random
 import scala.collection.mutable
 
-import blueeyes.json._
-
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.Path
@@ -46,8 +44,8 @@ trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   def predictionInput(morph: Morphism2, modelData: String, model: String) = {
     val line = Line(0, 0, "")
     dag.Morph2(morph,
-      dag.LoadLocal(Const(JString(modelData))(line))(line),
-      dag.LoadLocal(Const(JString(model))(line))(line)
+      dag.LoadLocal(Const(CString(modelData))(line))(line),
+      dag.LoadLocal(Const(CString(model))(line))(line)
     )(line)
   }
 
@@ -134,11 +132,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(0))(line))(line),
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -195,11 +193,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(0))(line))(line),
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -266,11 +264,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogisticRegression,
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(0))(line))(line),
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(0))(line))(line),
         dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(JString(pointsString))(line))(line),
-          dag.Const(JNumLong(1))(line))(line))(line)
+          dag.LoadLocal(Const(CString(pointsString))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
       tmpFile.delete()

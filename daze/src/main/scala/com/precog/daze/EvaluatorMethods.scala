@@ -28,8 +28,6 @@ import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule.paths
 
-import blueeyes.json._
-
 import scalaz.std.map._
 
 trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLibModule[M] with OpFinderModule[M] {
@@ -44,32 +42,24 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
 
-    def jValueToCValue(jvalue: JValue): Option[CValue] = jvalue match {
-      case JString(s) => Some(CString(s))
-      case JNumLong(l) => Some(CLong(l))
-      case JNumDouble(d) => Some(CDouble(d))
-      case JNumBigDec(d) => Some(CNum(d))
-      case JBool(b) => Some(CBoolean(b))
-      case JNull => Some(CNull)
-      case JUndefined => Some(CUndefined)
-      case JObject.empty => Some(CEmptyObject)
-      case JArray.empty => Some(CEmptyArray)
+    def rValueToCValue(rvalue: RValue): Option[CValue] = rvalue match {
+      case cvalue: CValue => Some(cvalue)
       case _ => None
     }
     
-    def transJValue[A <: SourceType](jvalue: JValue, target: TransSpec[A]): TransSpec[A] = {
-      jValueToCValue(jvalue) map { cvalue =>
+    def transRValue[A <: SourceType](rvalue: RValue, target: TransSpec[A]): TransSpec[A] = {
+      rValueToCValue(rvalue) map { cvalue =>
         trans.ConstLiteral(cvalue, target)
       } getOrElse {
-        jvalue match {
-          case JArray(elements) => InnerArrayConcat(elements map {
-            element => trans.WrapArray(transJValue(element, target))
+        rvalue match {
+          case RArray(elements) => InnerArrayConcat(elements map {
+            element => trans.WrapArray(transRValue(element, target))
           }: _*)
-          case JObject(fields) => InnerObjectConcat(fields.toSeq map {
-            case (key, value) => trans.WrapObject(transJValue(value, target), key)
+          case RObject(fields) => InnerObjectConcat(fields.toSeq map {
+            case (key, value) => trans.WrapObject(transRValue(value, target), key)
           }: _*)
           case _ =>
-            sys.error("Can't handle JType")
+            sys.error("Can't handle RValue")
         }
       }
     }

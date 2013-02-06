@@ -28,8 +28,6 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-import blueeyes.json.JString
-
 import org.joda.time._
 import org.joda.time.format._
 
@@ -48,7 +46,7 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   val line = Line(1, 1, "")
   def inputOp1(op: Op1, loadFrom: String) = {
     dag.Operate(BuiltInFunction1Op(op),
-      dag.LoadLocal(Const(JString(loadFrom))(line))(line))(line)
+      dag.LoadLocal(Const(CString(loadFrom))(line))(line))(line)
   }
 
   def testEval(graph: DepGraph): Set[SEvent] = {
@@ -93,8 +91,8 @@ trait TimeMillisSpecs[M[+_]] extends Specification
  "converting a millis value to an ISO time string (homogeneous case)" should {
     "return the correct time string" in {
       val input = Join(BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/hom/millisSinceEpoch"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/hom/millisSinceEpoch"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
       
@@ -114,8 +112,8 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   "converting a millis value to an ISO time string (heterogeneous set)" should {
     "return the correct time string" in {
       val input = Join(BuiltInFunction2Op(MillisToISO), CrossLeftSort,
-        dag.LoadLocal(Const(JString("/het/millisSinceEpoch"))(line))(line),
-        Const(JString("-10:00"))(line))(line)
+        dag.LoadLocal(Const(CString("/het/millisSinceEpoch"))(line))(line),
+        Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
       

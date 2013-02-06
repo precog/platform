@@ -28,8 +28,6 @@ import scalaz.std.list._
 
 import com.precog.util.IdGen
 
-import blueeyes.json.JString
-
 import org.joda.time._
 import org.joda.time.format._
 
@@ -49,14 +47,14 @@ trait TimeComparisonSpecs[M[+_]] extends Specification
 
   def parseDateTime(time: String, fmt: String) = {
     Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
-      Const(JString(time))(line),
-      Const(JString(fmt))(line))(line)
+      Const(CString(time))(line),
+      Const(CString(fmt))(line))(line)
   }
 
   def parseDateTimeFuzzy(time: String) =
-    Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), Const(JString(time))(line))(line)
+    Operate(BuiltInFunction1Op(ParseDateTimeFuzzy), Const(CString(time))(line))(line)
 
-  def doNotParse(time: String) = Const(JString(time))(line)
+  def doNotParse(time: String) = Const(CString(time))(line)
 
   def basicComparison(input: DepGraph, expected: Boolean) = {
     val result = testEval(input)

@@ -25,8 +25,6 @@ import org.specs2.mutable._
 import yggdrasil._
 import yggdrasil.test._
 
-import blueeyes.json._
-
 trait StaticInlinerSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] {
       
@@ -39,10 +37,10 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(JNumLong(42))(line),
-        Const(JNum(3.14))(line))(line)
+        Const(CLong(42))(line),
+        Const(CNum(3.14))(line))(line)
         
-      val expected = Const(JNum(45.14))(line)
+      val expected = Const(CNum(45.14))(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
@@ -51,53 +49,53 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(JNumLong(42))(line),
+        Const(CLong(42))(line),
         Join(Mul, CrossRightSort,
-          Const(JNum(3.14))(line),
-          Const(JNumLong(2))(line))(line))(line)
+          Const(CNum(3.14))(line),
+          Const(CLong(2))(line))(line))(line)
         
-      val expected = Const(JNum(48.28))(line)
+      val expected = Const(CNum(48.28))(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "produce JUndefined in cases where the operation is undefined" in {
+    "produce CUndefined in cases where the operation is undefined" in {
       val line = Line(1, 1, "")
       
       val input = Join(Div, CrossLeftSort,
-        Const(JNumLong(42))(line),
-        Const(JNumLong(0))(line))(line)
+        Const(CLong(42))(line),
+        Const(CLong(0))(line))(line)
         
-      val expected = Const(JUndefined)(line)
+      val expected = Const(CUndefined)(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "propagate through static computations JUndefined when produced at depth" in {
+    "propagate through static computations CUndefined when produced at depth" in {
       val line = Line(1, 1, "")
       
       val input = Join(Add, CrossLeftSort,
-        Const(JNumLong(42))(line),
+        Const(CLong(42))(line),
         Join(Div, CrossRightSort,
-          Const(JNum(3.14))(line),
-          Const(JNumLong(0))(line))(line))(line)
+          Const(CNum(3.14))(line),
+          Const(CLong(0))(line))(line))(line)
         
-      val expected = Const(JUndefined)(line)
+      val expected = Const(CUndefined)(line)
       
       inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
     }
     
-    "propagate through non-singleton computations JUndefined when produced at depth" >> {
+    "propagate through non-singleton computations CUndefined when produced at depth" >> {
       val line = Line(1, 1, "")
       
       "left" >> {
         val input = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(JString("/foo"))(line))(line),
+          dag.LoadLocal(Const(CString("/foo"))(line))(line),
           Join(Div, CrossRightSort,
-            Const(JNum(3.14))(line),
-            Const(JNumLong(0))(line))(line))(line)
+            Const(CNum(3.14))(line),
+            Const(CLong(0))(line))(line))(line)
           
-        val expected = Const(JUndefined)(line)
+        val expected = Const(CUndefined)(line)
         
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
       }
@@ -105,11 +103,11 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "right" >> {
         val input = Join(Add, CrossLeftSort,
           Join(Div, CrossRightSort,
-            Const(JNum(3.14))(line),
-            Const(JNumLong(0))(line))(line),
-          dag.LoadLocal(Const(JString("/foo"))(line))(line))(line)
+            Const(CNum(3.14))(line),
+            Const(CLong(0))(line))(line),
+          dag.LoadLocal(Const(CString("/foo"))(line))(line))(line)
           
-        val expected = Const(JUndefined)(line)
+        val expected = Const(CUndefined)(line)
         
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
       }
@@ -120,18 +118,18 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "true" >> {
         val input = Filter(CrossLeftSort,
-          dag.LoadLocal(Const(JString("/foo"))(line))(line),
-          Const(JBool(true))(line))(line)
+          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          Const(CTrue)(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual dag.LoadLocal(Const(JString("/foo"))(line))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual dag.LoadLocal(Const(CString("/foo"))(line))(line)
       }
       
       "false" >> {
         val input = Filter(CrossLeftSort,
-          dag.LoadLocal(Const(JString("/foo"))(line))(line),
-          Const(JBool(false))(line))(line)
+          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          Const(CBoolean(false))(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JUndefined)(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CUndefined)(line)
       }
     }
 
@@ -139,27 +137,27 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       "wrap" >> {
-        val input = Operate(WrapArray, Const(JBool(false))(line))(line)
+        val input = Operate(WrapArray, Const(CBoolean(false))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(false)))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CBoolean(false)))(line)
       }
 
       "deref" >> {
-        val input = Join(DerefArray, CrossLeftSort, Const(JArray(JBool(false), JBool(true)))(line), Const(JNum(1))(line))(line)
+        val input = Join(DerefArray, CrossLeftSort, Const(RArray(CBoolean(false), CTrue))(line), Const(CNum(1))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JBool(true))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CTrue)(line)
       }
 
       "join" >> {
-        val input = Join(JoinArray, CrossLeftSort, Const(JArray(JBool(true)))(line), Const(JArray(JBool(false)))(line))(line)
+        val input = Join(JoinArray, CrossLeftSort, Const(RArray(CTrue))(line), Const(RArray(CBoolean(false)))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(true), JBool(false)))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CTrue, CBoolean(false)))(line)
       }
 
       "swap" >> {
-        val input = Join(ArraySwap, CrossLeftSort, Const(JArray(JBool(true), JBool(false), JString("TEST")))(line), Const(JNum(1))(line))(line)
+        val input = Join(ArraySwap, CrossLeftSort, Const(RArray(CTrue, CBoolean(false), CString("TEST")))(line), Const(CNum(1))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JArray(JBool(false), JBool(true), JString("TEST")))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CBoolean(false), CTrue, CString("TEST")))(line)
       }
     }
 
@@ -167,21 +165,21 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       "wrap" >> {
-        val input = Join(WrapObject, CrossLeftSort, Const(JString("k"))(line), Const(JBool(true))(line))(line)
+        val input = Join(WrapObject, CrossLeftSort, Const(CString("k"))(line), Const(CTrue)(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JObject("k" -> JBool(true)))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RObject("k" -> CTrue))(line)
       }
 
       "deref" >> {
-        val input = Join(DerefObject, CrossLeftSort, Const(JObject("k" -> JBool(false)))(line), Const(JString("k"))(line))(line)
+        val input = Join(DerefObject, CrossLeftSort, Const(RObject("k" -> CBoolean(false)))(line), Const(CString("k"))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JBool(false))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CBoolean(false))(line)
       }
 
       "join" >> {
-        val input = Join(JoinObject, CrossLeftSort, Const(JObject("k" -> JBool(true)))(line), Const(JObject("l" -> JBool(false)))(line))(line)
+        val input = Join(JoinObject, CrossLeftSort, Const(RObject("k" -> CTrue))(line), Const(RObject("l" -> CBoolean(false)))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(JObject("k" -> JBool(true), "l" -> JBool(false)))(line)
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RObject("k" -> CTrue, "l" -> CBoolean(false)))(line)
       }
     }
   }
