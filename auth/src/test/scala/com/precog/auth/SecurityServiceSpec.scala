@@ -76,7 +76,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
 
   override val configuration = "services { auth { v1 { " + config + " } } }"
   
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  def apiKeyManager: APIKeyManager[Future]
   val clock = blueeyes.util.Clock.System
 
   override def APIKeyManager(config: Configuration) = (apiKeyManager, Stoppable.Noop)
@@ -84,6 +84,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
 
 class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
   val authService: HttpClient[JValue] = client.contentType[JValue](application/(MimeTypes.json))
+  val apiKeyManager = new InMemoryAPIKeyManager[Future]
 
   val tc = new AsyncHttpTranscoder[JValue, JValue] {
     def apply(a: HttpRequest[JValue]): HttpRequest[JValue] = a

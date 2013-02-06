@@ -50,7 +50,7 @@ import scalaz.std.set._
 
 object WebAPIKeyFinder {
   def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyFinder[Future] = {
-    new WebAPIKeyFinder(
+    new RealWebAPIKeyFinder(
       config[String]("protocol", "http"),
       config[String]("host", "localhost"),
       config[Int]("port", 80),
@@ -60,10 +60,14 @@ object WebAPIKeyFinder {
   }
 }
 
-class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, rootAPIKey: APIKey)(implicit executor: ExecutionContext) 
-    extends WebClient(protocol, host, port, path) with APIKeyFinder[Future] {
-
+class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey)(implicit val executor: ExecutionContext) 
+    extends WebClient(protocol, host, port, path) with WebAPIKeyFinder {
   implicit val M = new FutureMonad(executor)
+}
+
+trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
+  implicit def executor: ExecutionContext
+  def rootAPIKey: APIKey
 
   def findAPIKey(apiKey: APIKey): Future[Option[v1.APIKeyDetails]] = {
     withJsonClient { client =>
@@ -122,7 +126,7 @@ class WebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, r
     val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, None, None)
 
     withJsonClient { client => 
-      client.query("apiKey", rootAPIKey).post[JValue]("apiKeys/")(keyRequest.serialize) map {
+      client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
           wrappedKey.validated[v1.APIKeyDetails] valueOr { error =>
             logger.error("Unable to deserialize response from auth service: " + error.message)

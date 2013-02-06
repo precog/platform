@@ -37,13 +37,12 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
   def withAPIKeyFinder[A](mgr: APIKeyManager[M])(f: APIKeyFinder[M] => A): A
 
-  def validAccountId: AccountId
-  def emptyAPIKeyManager = new InMemoryAPIKeyManager[M]()
+  private def emptyAPIKeyManager = new InMemoryAPIKeyManager[M]()
 
   "API key finders" should {
     "create and find API keys" in {
       withAPIKeyFinder(emptyAPIKeyManager) { keyFinder =>
-        val v1.APIKeyDetails(apiKey0, _, _, _) = keyFinder.newAPIKey(validAccountId, Path("/some-path")).copoint
+        val v1.APIKeyDetails(apiKey0, _, _, _) = keyFinder.newAPIKey("Anything works.", Path("/some-path")).copoint
         val Some(v1.APIKeyDetails(apiKey1, _, _, _)) = keyFinder.findAPIKey(apiKey0).copoint
         apiKey0 must_== apiKey1
       }
@@ -147,7 +146,6 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 class DirectAPIKeyFinderSpec extends Specification {
   include(new APIKeyFinderSpec[Need] {
     val M = Need.need
-    val validAccountId = "Erkel"
     def withAPIKeyFinder[A](mgr: APIKeyManager[Need])(f: APIKeyFinder[Need] => A): A = {
       f(new DirectAPIKeyFinder(mgr))
     }
