@@ -232,6 +232,9 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
           case (c1: NumColumn, c2: NumColumn) =>
             new BoolFrom.NN(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
+
+          case (c1: DateColumn, c2: DateColumn) =>
+            new BoolFrom.DtDt(c1, c2, (x, y) => true, (x, y) => f(compare(x, y)))
         }
       }
 

@@ -472,32 +472,30 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         Map2Cross(WrapObject),
         Map2Cross(JoinObject),
         Merge))
-  
-        val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
 
         val expectedSpec = IntersectBucketSpec(
           IntersectBucketSpec(
               dag.Group(0,
                   Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JUniverseT)(line),
+                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                       Const(CString("revenue"))(line))(line),
                   UnfixedSolution(1,
                       Join(DerefObject,CrossLeftSort,
-                          dag.LoadLocal(Const(CString("/organizations"))(line), JUniverseT)(line),
+                          dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                           Const(CString("revenue"))(line))(line))),
               dag.Group(2,
                   Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JUniverseT)(line),
+                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                       Const(CString("campaign"))(line))(line),
                   UnfixedSolution(3,
                       Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JUniverseT)(line),
+                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                       Const(CString("campaign"))(line))(line)))),
           dag.Group(4,
-              dag.LoadLocal(Const(CString("/campaigns"))(line), JUniverseT)(line),
+              dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
               UnfixedSolution(3,
                   Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/campaigns"))(line), JUniverseT)(line),
+                      dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
                       Const(CString("campaign"))(line))(line))))
     
     lazy val expectedSplit: dag.Split = dag.Split(expectedSpec, expectedTarget)(line)
