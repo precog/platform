@@ -45,7 +45,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, regexMatch, compareTo, compareToIgnoreCase, equals, indexOf, split, splitRegex)
+      matches, regexMatch, compareTo, compareToIgnoreCase, compare, compareIgnoreCase, equals, indexOf, split, splitRegex)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -271,9 +271,16 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    @deprecated
     object compareTo extends Op2SSL("compareTo", _ compareTo _)
 
+    object compare extends Op2SSL("compare", _ compareTo _)
+
+    @deprecated
     object compareToIgnoreCase extends Op2SSL("compareToIgnoreCase",
+      _ compareToIgnoreCase _)
+
+    object compareIgnoreCase extends Op2SSL("compareIgnoreCase",
       _ compareToIgnoreCase _)
 
     object indexOf extends Op2SSL("indexOf", _ indexOf _)
