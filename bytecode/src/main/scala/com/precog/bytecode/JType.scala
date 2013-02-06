@@ -29,6 +29,7 @@ case object JNumberT extends JPrimitiveType
 case object JTextT extends JPrimitiveType
 case object JBooleanT extends JPrimitiveType
 case object JNullT extends JPrimitiveType
+case object JDateT extends JPrimitiveType
 
 sealed trait JArrayT extends JType
 case class JArrayHomogeneousT(jType: JType) extends JArrayT
@@ -44,15 +45,15 @@ case class JUnionT(left: JType, right: JType) extends JType {
     if (this == JType.JUniverseT)
       "JUniverseT"
     else
-      super.toString
+      "JUnionT" + "(" + left + ", " + right + ")"
   }
 }
 
 object JType {
   // TODO JArrayHomogeneousT can't go in here. Is this just used for tests?
-  val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT
+  val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT | JDateT
   val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
-  val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT),JNullT), JObjectUnfixedT), JArrayUnfixedT)
+  val JUniverseT = JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JUnionT(JNumberT, JTextT), JBooleanT), JNullT), JDateT), JObjectUnfixedT), JArrayUnfixedT)
 }
 
 case class UnaryOperationType(arg: JType, result: JType)
