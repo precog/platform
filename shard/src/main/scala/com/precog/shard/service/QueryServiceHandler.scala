@@ -37,6 +37,7 @@ import java.nio.CharBuffer
 
 import com.precog.daze._
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
@@ -125,7 +126,7 @@ Takes a quirrel query and returns the result of evaluating the query.
   }
 
   def describe(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.structure(apiKey, p).map {
+    platform.metadataClient.structure(apiKey, p, CPath.Identity).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }

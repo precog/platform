@@ -63,8 +63,11 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
+import scalaz.syntax.foldable._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+import scalaz.std.iterable._
+import scalaz.std.anyVal._
 
 import org.streum.configrity.Configuration
 
@@ -170,44 +173,7 @@ trait JDBMQueryExecutorComponent  {
         }
       }
 
-      val metadataClient = new MetadataClient[Future] {
-        def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-          storage.userMetadataView(userUID).findChildren(path) map {
-            case paths => success(JArray(paths.map( p => JString(p.toString)).toSeq: _*))
-          }
-        }
-
-        def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-          val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
-
-          def transform(children: Set[PathMetadata]): JObject = {
-            // Rewrite with collect or fold?
-            val (primitives, compounds) = children.partition {
-              case PathValue(_, _, _) => true
-              case _                  => false
-            }
-
-            val fields = compounds.map {
-              case PathIndex(i, children) =>
-                val path = "[%d]".format(i)
-                JField(path, transform(children))
-              case PathField(f, children) =>
-                val path = "." + f
-                JField(path, transform(children))
-              case _ => throw new MatchError("Non-compound in compounds")
-            }.toList
-
-            val types = JArray(primitives.map {
-              case PathValue(t, _, _) => JString(CType.nameOf(t))
-              case _ => throw new MatchError("Non-primitive in primitives")
-            }.toList)
-
-            JObject(fields :+ JField("types", types))
-          }
-
-          futRoot.map { pr => Success(transform(pr.children)) }
-        }
-      }
+      val metadataClient = new StorageMetadataClient(storage)
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 

@@ -177,18 +177,20 @@ object FileMetadataStorage extends Logging {
   final val nextFilename = "projection_metadata.next"
 
   def load(baseDir: File, archiveDir: File, fileOps: FileOps): IO[FileMetadataStorage] = {
+    val checkBaseDir = IO {
+      if (!baseDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
+      if (!baseDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
+      if (!baseDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write base directory " + baseDir)
+      
+      // Don't require the existence of the archiveDir, just ensure that it can be created.
+      val archiveParentDir = archiveDir.getParentFile
+      if (!archiveParentDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its archive".format(archiveDir))
+      if (!archiveParentDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read archive directory " + archiveDir)
+      if (!archiveParentDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write archive directory " + archiveDir)
+    }
+
     for {
-      _  <- IO {
-              if (!baseDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
-              if (!baseDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
-              if (!baseDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write base directory " + baseDir)
-              
-              // Don't require the existence of the archiveDir, just ensure that it can be created.
-              val archiveParentDir = archiveDir.getParentFile
-              if (!archiveParentDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its archive".format(archiveDir))
-              if (!archiveParentDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read archive directory " + archiveDir)
-              if (!archiveParentDir.canWrite) throw new IllegalArgumentException("FileMetadataStorage cannot write archive directory " + archiveDir)
-            }
+      _ <- checkBaseDir
       locations <- loadDescriptors(baseDir)
     } yield {
       new FileMetadataStorage(baseDir, archiveDir, fileOps, locations)
