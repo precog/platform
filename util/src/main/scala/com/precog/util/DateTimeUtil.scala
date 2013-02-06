@@ -61,4 +61,22 @@ object DateTimeUtil {
   } catch {
     case e: Exception => false
   }
+
+  def isValidISO(str: String): Boolean = try {
+    parseDateTime(str, true); true
+  } catch {
+    case e:IllegalArgumentException => { false }
+  }
+
+  def isValidTimeZone(str: String): Boolean = try {
+    DateTimeZone.forID(str); true
+  } catch {
+    case e:IllegalArgumentException => { false }
+  }
+  
+  def isValidFormat(time: String, fmt: String): Boolean = try {
+    DateTimeFormat.forPattern(fmt).withOffsetParsed().parseDateTime(time); true
+  } catch {
+    case e: IllegalArgumentException => { false }
+  }
 }

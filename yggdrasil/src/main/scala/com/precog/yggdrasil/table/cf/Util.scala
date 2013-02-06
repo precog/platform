@@ -26,6 +26,8 @@ import org.apache.commons.collections.primitives.ArrayIntList
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import com.precog.util.DateTimeUtil._
+
 object util {
 
   /**
@@ -169,16 +171,25 @@ object util {
     }
   }
 
-  //it would be nice to generalize this to `CoerceTo[A]` so we can coerce to BigDecimal as well
+  //it would be nice to generalize these to `CoerceTo[A]`
   def CoerceToDouble = CF1P("builtin:ct:coerceToDouble") {
-    case c: DoubleColumn => c
+    case (c: DoubleColumn) => c
 
-    case c: LongColumn => new Map1Column(c) with DoubleColumn {
+    case (c: LongColumn) => new Map1Column(c) with DoubleColumn {
       def apply(row: Int) = c(row).toDouble
     }
 
-    case c: NumColumn => new Map1Column(c) with DoubleColumn {
+    case (c: NumColumn) => new Map1Column(c) with DoubleColumn {
       def apply(row: Int) = c(row).toDouble
+    }
+  }
+
+  def CoerceToDate = CF1P("builtin:ct:coerceToDate") {
+    case (c: DateColumn) => c
+
+    case (c: StrColumn) => new DateColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+      def apply(row: Int) = parseDateTime(c(row), true)
     }
   }
 

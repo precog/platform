@@ -52,8 +52,6 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] with InfixLibModule
        case c: LongColumn => new DoubleFrom.L(c, defined, f)
        case c: NumColumn => new DoubleFrom.N(c, defined, f)
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
   
     object sinh extends Op1DD("sinh", doubleIsDefined, Math.sinh)
