@@ -575,6 +575,16 @@ trait DAG extends Instructions {
       }
     }
 
+    /**
+     * Performs a scoped node substitution on this DepGraph.
+     * 
+     * The substitution is represented as a pair from -> to both of type E. The replacement is performed everywhere in
+     * the DAG below the scope node of type S. Both S and E are constained to be one of DepGraph or BucketSpec by
+     * the availability of instances of the type classes EditUpdate[E] and ScopeUpdate[S] as defined above.
+     * 
+     * @return A pair of the whole rewritten DAG and the rewritten scope node.
+     */  
+    
     def substituteDown[S: ScopeUpdate, E: EditUpdate](scope: S, edit: (E, E)): (DepGraph, S) = {
       import ScopeUpdate._
       import EditUpdate._
