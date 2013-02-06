@@ -55,12 +55,13 @@ object WebAPIKeyFinder {
       config[String]("host", "localhost"),
       config[Int]("port", 80),
       config[String]("path", "/security/v1/"),
-      config[String]("rootKey")
+      config[String]("rootKey"),
+      config[String]("rootGrantId")
     )
   }
 }
 
-class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey)(implicit val executor: ExecutionContext) 
+class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey, val rootGrantId: GrantId)(implicit val executor: ExecutionContext) 
     extends WebClient(protocol, host, port, path) with WebAPIKeyFinder {
   implicit val M = new FutureMonad(executor)
 }
@@ -68,6 +69,7 @@ class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: Strin
 trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
   implicit def executor: ExecutionContext
   def rootAPIKey: APIKey
+  def rootGrantId: GrantId
 
   def findAPIKey(apiKey: APIKey): Future[Option[v1.APIKeyDetails]] = {
     withJsonClient { client =>
@@ -99,7 +101,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
   private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Future[Set[Permission]] = {
     withJsonClient { client0 =>
       val client = at map (fmt.print(_)) map (client0.query("at", _)) getOrElse client0
-      client.query("apiKey", apiKey).get[JValue]("/permissions/fs/" + path) map {
+      client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           jvalue.validated[Set[Permission]] getOrElse Set.empty
         case res =>
@@ -123,7 +125,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
   }
 
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Future[v1.APIKeyDetails] = {
-    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, None, None)
+    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set(rootGrantId))
 
     withJsonClient { client => 
       client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {

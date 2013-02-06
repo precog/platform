@@ -46,9 +46,7 @@ class WebAPIKeyFinderSpec extends APIKeyFinderSpec[Future] with AkkaDefaults { s
     val testService = new TestAPIKeyService {
       val apiKeyManager = mgr
     }
-    println("Starting server...")
     val (service, stoppable) = testService.server(Configuration.parse(testService.config), executionContext).start.get.copoint
-    println("Server started!")
     val client = new HttpClient[ByteChunk] {
       def isDefinedAt(req: HttpRequest[ByteChunk]) = true
       def apply(req: HttpRequest[ByteChunk]) =
@@ -58,19 +56,16 @@ class WebAPIKeyFinderSpec extends APIKeyFinderSpec[Future] with AkkaDefaults { s
     val apiKeyFinder = new WebAPIKeyFinder {
       val M = self.M
       val rootAPIKey = self.M.copoint(mgr.rootAPIKey)
+      val rootGrantId = self.M.copoint(mgr.rootGrantId)
       val executor = self.executionContext
       protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client.path("/"))
     }
 
-    println("Running tests with apiKeyFinder...")
     val result = f(apiKeyFinder)
-    println("Ran tests with apiKeyFinder!\nStopping server...")
 
     stoppable foreach { stop =>
       Stoppable.stop(stop, Duration(1, "minutes")).copoint
     }
-
-    println("Server stopped!")
     result
   }
 }
