@@ -183,7 +183,8 @@ trait Instructions {
     }
     
     trait NumericComparisonOperation extends BinaryOperation {
-      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      val dateAndNum = JUnionT(JNumberT, JDateT)
+      val tpe = BinaryOperationType(dateAndNum, dateAndNum, JBooleanT)
     }
 
     trait BooleanBinaryOperation extends BinaryOperation {

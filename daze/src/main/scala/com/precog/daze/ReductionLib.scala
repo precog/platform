@@ -20,6 +20,10 @@
 package com.precog
 package daze
 
+import org.joda.time._
+
+import util.NumericComparisons
+
 import bytecode._
 
 import yggdrasil._
@@ -71,7 +75,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     import BigDecimalOperations._
     val ReductionNamespace = Vector()
 
-    override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Forall, Exists)
+    override def _libReduction = super._libReduction ++ Set(Count, Max, Min, MaxTime, MinTime, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Forall, Exists)
 
     val CountMonoid = implicitly[Monoid[Count.Result]]
     object Count extends Reduction(ReductionNamespace, "count") {
@@ -96,6 +100,102 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def extract(res: Result): Table = Table.constLong(Set(res))
 
       def extractValue(res: Result) = Some(JNum(res))
+    }
+
+    object MaxTime extends Reduction(ReductionNamespace, "maxTime") {
+      type Result = Option[DateTime]
+
+      implicit val monoid = new Monoid[Result] {
+        def zero = None
+        def append(left: Result, right: => Result): Result = {
+          (for { 
+            l <- left
+            r <- right
+          } yield {
+            val res = NumericComparisons.compare(l, r) 
+            if (res > 0) l
+            else r
+          }) orElse left orElse right
+        }
+      }
+
+      val tpe = UnaryOperationType(JDateT, JDateT)
+      
+      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val maxs = schema.columns(JDateT) map {
+            case col: DateColumn =>
+              var zmax: DateTime = {
+                val init = new DateTime(0)
+                val min = -292275054 - 1970   //the smallest Int value jodatime accepts
+
+                init.plus(Period.years(min))
+              }
+              val seen = RangeUtil.loopDefined(range, col) { i =>
+                val z = col(i)
+                if (NumericComparisons.compare(z, zmax) > 0) zmax = z
+              }
+              if (seen) Some(zmax) else None
+
+            case _ => None
+          }
+
+          if (maxs.isEmpty) None else maxs.suml(monoid)
+        }
+      }
+
+      def extract(res: Result): Table =
+        res map { dt => Table.constDate(Set(dt)) } getOrElse Table.empty
+
+      def extractValue(res: Result) = res map { dt: DateTime => JString(dt.toString) }
+    }
+
+    object MinTime extends Reduction(ReductionNamespace, "minTime") {
+      type Result = Option[DateTime]
+
+      implicit val monoid = new Monoid[Result] {
+        def zero = None
+        def append(left: Result, right: => Result): Result = {
+          (for { 
+            l <- left
+            r <- right
+          } yield {
+            val res = NumericComparisons.compare(l, r) 
+            if (res < 0) l
+            else r
+          }) orElse left orElse right
+        }
+      }
+
+      val tpe = UnaryOperationType(JDateT, JDateT)
+      
+      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val maxs = schema.columns(JDateT) map {
+            case col: DateColumn =>
+              var zmax: DateTime = {
+                val init = new DateTime(0)
+                val max = 292278993 - 1970    //the largest Int value jodatime accepts
+
+                init.plus(Period.years(max))
+              }
+              val seen = RangeUtil.loopDefined(range, col) { i =>
+                val z = col(i)
+                if (NumericComparisons.compare(z, zmax) < 0) zmax = z
+              }
+              if (seen) Some(zmax) else None
+
+            case _ => None
+          }
+
+          if (maxs.isEmpty) None else maxs.suml(monoid)
+        }
+      }
+
+      def extract(res: Result): Table =
+        res map { dt => Table.constDate(Set(dt)) } getOrElse Table.empty
+
+      def extractValue(res: Result) = res map { dt => JString(dt.toString) }
     }
 
     object Max extends Reduction(ReductionNamespace, "max") {

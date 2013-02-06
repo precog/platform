@@ -40,6 +40,7 @@ object Schema {
     case JTextT => Set(CString)
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
+    case JDateT => Set(CDate)
     case _ => Set.empty
   }
 
@@ -48,7 +49,7 @@ object Schema {
       case JArrayFixedT(indices) => indices flatMap { case (idx, tpe) => CPath(CPathIndex(idx)) combine cpath(tpe) } toSeq
       case JObjectFixedT(fields) => fields flatMap { case (name, tpe) => CPath(CPathField(name)) combine cpath(tpe) } toSeq
       case JArrayHomogeneousT(elemType) => Seq(CPath(CPathArray))
-      case JNumberT | JTextT | JBooleanT | JNullT => Nil
+      case JNumberT | JTextT | JBooleanT | JNullT | JDateT => Nil
       case _ => Nil
     }
 
@@ -60,7 +61,7 @@ object Schema {
     case CString => Some(JTextT)
     case CLong | CDouble | CNum => Some(JNumberT)
     case CArrayType(elemType) => fromCValueType(elemType) map (JArrayHomogeneousT(_))
-    case CDate => None
+    case CDate => Some(JDateT)
   }
 
   
@@ -123,6 +124,7 @@ object Schema {
       case JBooleanT => handleRoot(Seq(CBoolean), cols)
       case JTextT => handleRoot(Seq(CString), cols)
       case JNullT => handleRoot(Seq(CNull), cols)
+      case JDateT => handleRoot(Seq(CDate), cols)
 
       case JObjectUnfixedT => handleUnfixed(CEmptyObject, _.isInstanceOf[CPathField], cols)
       case JArrayUnfixedT => handleUnfixed(CEmptyArray, _.isInstanceOf[CPathIndex], cols)
@@ -230,6 +232,8 @@ object Schema {
 
     case (JNullT, (CPath.Identity, CNull))=> true
 
+    case (JDateT, (CPath.Identity, CDate))=> true
+
     case (JObjectUnfixedT, (CPath.Identity, CEmptyObject)) => true
     case (JObjectUnfixedT, (CPath(CPathField(_), _*), _)) => true
     case (JObjectFixedT(fields), (CPath.Identity, CEmptyObject)) if fields.isEmpty => true
@@ -274,6 +278,8 @@ object Schema {
     case JBooleanT => ctpes.contains(CPath.Identity, CBoolean)
 
     case JNullT => ctpes.contains(CPath.Identity, CNull)
+
+    case JDateT => ctpes.contains(CPath.Identity, CDate)
 
     case JObjectUnfixedT if ctpes.contains(CPath.Identity, CEmptyObject) => true
     case JObjectUnfixedT => ctpes.exists {
