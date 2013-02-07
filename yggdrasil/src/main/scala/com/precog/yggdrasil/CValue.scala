@@ -74,7 +74,7 @@ object RValue {
         target match {
           case obj @ RObject(fields) => path.nodes match {
             case CPathField(name) :: nodes =>
-              val (child, rest) = (obj.fields(name), obj.fields - name)
+              val (child, rest) = (fields.get(name).getOrElse(CUndefined), fields - name)
               RObject(rest + (name -> rec(child, CPath(nodes), value)))
 
             case CPathIndex(_) :: _ => sys.error("Objects are not indexed: attempted to insert " + value + " at " + rootPath + " on " + rootTarget)
@@ -95,7 +95,7 @@ object RValue {
             case CPathField(_) :: _ => rec(RObject.empty, path, value)
           }
 
-          case x => sys.error("JValue insert would overwrite existing data: " + x + " cannot be updated to " + value + " at " + path +
+          case x => sys.error("RValue insert would overwrite existing data: " + x + " cannot be updated to " + value + " at " + path +
                               " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
         }
       }
