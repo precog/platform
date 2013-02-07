@@ -131,7 +131,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
     val report = LoggingQueryLogger[Future, instructions.Line](M)
-    def warn(warning: JValue) = report.warn(warning, "warning")
+    // def warn(warning: JValue) = report.warn(warning, "warning")
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {

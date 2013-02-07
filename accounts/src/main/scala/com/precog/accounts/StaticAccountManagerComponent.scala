@@ -22,7 +22,7 @@ package accounts
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -31,6 +31,7 @@ import org.streum.configrity.Configuration
 import scalaz.Monad
 
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 trait StaticAccountManagerClientComponent {
   implicit def asyncContext: ExecutionContext
@@ -38,28 +39,21 @@ trait StaticAccountManagerClientComponent {
   // For cases where we want to absolutely hard-code the account programmatically
   def hardCodedAccount: Option[String] = None
 
-  def accountManagerFactory(config: Configuration): BasicAccountManager[Future] = {
+  def accountManagerFactory(config: Configuration): AccountFinder[Future] = {
     hardCodedAccount.orElse(config.get[String]("service.hardcoded_account")).orElse(config.get[String]("service.static_account")).map { accountId =>
-      new StaticAccountManager(accountId)(asyncContext)
+      new StaticAccountFinder(accountId)(asyncContext)
     }.get
   }
 }
 
-class StaticAccountManager(accountId: AccountId)(implicit asyncContext: ExecutionContext)
-    extends BasicAccountManager[Future]
+class StaticAccountFinder(accountId: AccountId)(implicit asyncContext: ExecutionContext)
+    extends AccountFinder[Future]
     with Logging {
   logger.debug("Starting new static account manager. All queries resolve to \"%s\"".format(accountId))
 
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit lazy val M: Monad[Future] = new FutureMonad(asyncContext)
 
-  def listAccountIds(apiKey: APIKey) : Future[Set[AccountId]] = Promise.successful(Set(accountId))
-
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] = {
-    val singleton = Set(accountId)
-    Promise.successful {
-      apiKeys.map { key => (key, singleton) }.toMap
-    }
-  }
+  def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
 
   def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
 

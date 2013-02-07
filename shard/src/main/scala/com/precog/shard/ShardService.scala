@@ -177,8 +177,6 @@ trait ShardService extends
             options {
               (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
             }
-          } map { f => 
-            (a: APIKeyRecord, p: Path) => f(a, p) map { r => r.copy(content = r.content map queryResult2byteChunk) } 
           }
         } ~
         dataPath("/meta/fs") {

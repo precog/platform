@@ -23,13 +23,15 @@ package jdbc
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
+import blueeyes.bkka._
 
 import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
 import com.precog.standalone.StandaloneShardServer
+
+import com.precog.common.security._
 
 object JDBCShardServer extends StandaloneShardServer {
   val caveatMessage = Some("""
@@ -52,7 +54,7 @@ Please note that path globs are not yet supported in Precog for PostgreSQL
 
   val actorSystem = ActorSystem("ExecutorSystem")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit lazy val M: Monad[Future] = new FutureMonad(asyncContext)
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))

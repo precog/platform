@@ -1061,9 +1061,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private def zip[A](table1: StateT[N, EvaluatorState, A], table2: StateT[N, EvaluatorState, A]): StateT[N, EvaluatorState, (A, A)] =
       monadState.apply2(table1, table2) { (_, _) }
     
-    private def liftToValues(trans: TransSpec1): TransSpec1 =
-      makeTableTrans(Map(paths.Value -> trans))
-
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
       reductions: Map[DepGraph, Option[CValue]] = Map.empty,

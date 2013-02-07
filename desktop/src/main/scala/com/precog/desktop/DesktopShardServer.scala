@@ -23,7 +23,7 @@ package desktop
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
+import blueeyes.bkka._
 
 import scalaz.Monad
 
@@ -41,7 +41,7 @@ object DesktopShardServer
 
   val actorSystem = ActorSystem("desktopExecutorActorSystem")
   val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit lazy val M: Monad[Future] = new FutureMonad(asyncContext)
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyManager = apiKeyManagerFactory(config.detach("security"))

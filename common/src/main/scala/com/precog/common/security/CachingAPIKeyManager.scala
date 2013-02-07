@@ -90,7 +90,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
     case None =>
       logger.debug("Cache miss on api key " + tid)
-      manager.findAPIKey(tid).map { _.map { _ ->- add } }
+      manager.findAPIKey(tid).map { _ tap { _ foreach add } }
 
     case t    => M.point(t)
   }
@@ -98,7 +98,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def findGrant(gid: GrantId) = grantCache.get(gid) match {
     case None        =>
       logger.debug("Cache miss on grant " + gid)
-      manager.findGrant(gid).map { _.map { _ ->- add } }
+      manager.findGrant(gid).map { _ tap { _ foreach add } }
 
     case s @ Some(_) => M.point(s)
   }

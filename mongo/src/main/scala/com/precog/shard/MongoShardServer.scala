@@ -23,13 +23,15 @@ package mongo
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
+import blueeyes.bkka._
 
 import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
 import com.precog.standalone.StandaloneShardServer
+
+import com.precog.common.security._
 
 object MongoShardServer extends StandaloneShardServer {
   val caveatMessage = Some("""

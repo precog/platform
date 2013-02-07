@@ -88,7 +88,7 @@ trait ManagedQueryModule extends YggConfigComponent {
    * A mix-in for `QueryLogger`s that forcefully aborts a shard query on fatal
    * errors.
    */
-  trait ShardQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+  trait ShardQueryLogger[M[+_], P] extends QueryLogger[M, P] {
     def M: ShardQueryMonad
 
     abstract override def fatal(pos: P, msg: String): M[Unit] = {

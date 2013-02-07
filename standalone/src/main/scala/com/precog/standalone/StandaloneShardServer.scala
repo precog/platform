@@ -22,7 +22,7 @@ package com.precog.standalone
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.BlueEyesServer
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.json.JValue
@@ -35,16 +35,14 @@ import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, Handle
 
 import scalaz.Monad
 
-import com.precog.accounts.StaticAccountManagerClientComponent
-import com.precog.common.security.StaticAPIKeyManagerComponent
+import com.precog.accounts._
+import com.precog.common.security._
 import com.precog.shard.ShardService
 
 
 trait StandaloneShardServer
     extends BlueEyesServer
-    with ShardService
-    with StaticAPIKeyManagerComponent
-    with StaticAccountManagerClientComponent {
+    with ShardService {
   val clock = Clock.System
 
   implicit def asyncContext: ExecutionContext
