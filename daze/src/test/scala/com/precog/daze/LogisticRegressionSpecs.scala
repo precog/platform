@@ -85,6 +85,19 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
     }
   }
 
+  def makeDAG(points: String) = {
+    val line = Line(1, 1, "")
+
+    dag.Morph2(LogisticRegression,
+      dag.Join(DerefArray, CrossLeftSort,
+        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.Const(CLong(1))(line))(line),
+      dag.Join(DerefArray, CrossLeftSort,
+        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.Const(CLong(0))(line))(line))(line)
+  }
+
+
   def testTrivial = {
     val line = Line(1, 1, "")
 
@@ -111,13 +124,7 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(LogisticRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+      val input = makeDAG(pointsString)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -172,13 +179,7 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(LogisticRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+      val input = makeDAG(pointsString) 
 
       val result = testEval(input)
       tmpFile.delete()
@@ -243,13 +244,7 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - suffix.length)
       
-      val input = dag.Morph2(LogisticRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+      val input = makeDAG(pointsString)
 
       val result = testEval(input)
       tmpFile.delete()

@@ -54,6 +54,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     with StaticInlinerModule[M] 
     with ReductionFinderModule[M]
     with TransSpecableModule[M]
+    with PredicatePullupsModule[M]
     with TableModule[M] // Remove this explicit dep!
     with TableLibModule[M] {
 
@@ -66,7 +67,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
-  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with YggConfigComponent {
+  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with PredicatePullups with YggConfigComponent {
     type YggConfig <: EvaluatorConfig
 
     import library._  
@@ -102,11 +103,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
       composeOptimizations(optimize, List(
+        predicatePullups(_, ctx),
         inferTypes(JType.JUnfixedT),
         { g => megaReduce(g, findReductions(g, ctx)) },
         memoize
       ))
-  
+
     /**
      * The entry point to the evaluator.  The main implementation of the evaluator
      * is comprised by the inner functions, `fullEval` (the main evaluator function)

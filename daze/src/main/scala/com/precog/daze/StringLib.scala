@@ -26,7 +26,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, regexMatch, compareTo, compareToIgnoreCase, equals, indexOf, split, splitRegex)
+      matches, regexMatch, compareTo, compareToIgnoreCase, compare, compareIgnoreCase, equals, indexOf, split, splitRegex)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -42,8 +42,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::op1ss::" + name) {
         case c: StrColumn => new StrFrom.S(c, _ != null, f)
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     object trim extends Op1SS("trim", _.trim)
@@ -59,8 +57,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::isEmpty") {
         case c: StrColumn => new BoolFrom.S(c, _ != null, _.isEmpty)
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     def neitherNull(x: String, y: String) = x != null && y != null
@@ -70,8 +66,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::length") {
         case c: StrColumn => new LongFrom.S(c, _ != null, _.length)
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     class Op2SSB(name: String, f: (String, String) => Boolean)
@@ -252,9 +246,16 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    @deprecated
     object compareTo extends Op2SSL("compareTo", _ compareTo _)
 
+    object compare extends Op2SSL("compare", _ compareTo _)
+
+    @deprecated
     object compareToIgnoreCase extends Op2SSL("compareToIgnoreCase",
+      _ compareToIgnoreCase _)
+
+    object compareIgnoreCase extends Op2SSL("compareIgnoreCase",
       _ compareToIgnoreCase _)
 
     object indexOf extends Op2SSL("indexOf", _ indexOf _)
@@ -279,8 +280,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           def apply(row: Int) = BigDecimal(c(row))
         }
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     object numToString extends Op1F1(StringNamespace, "numToString") {
@@ -290,8 +289,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         case c: DoubleColumn => new StrFrom.D(c, _ => true, _.toString)
         case c: NumColumn => new StrFrom.N(c, _ => true, _.toString)
       }
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     object split extends Op2F2(StringNamespace, "split") {
