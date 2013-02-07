@@ -288,7 +288,7 @@ trait DAG extends Instructions {
         }
 
         case instr: RootInstr => {
-          val cvalue = instr match {
+          val rvalue = instr match {
             case PushString(str) => CString(str)
             
             // get the numeric coersion
@@ -298,11 +298,11 @@ trait DAG extends Instructions {
             case PushTrue => CBoolean(true)
             case PushFalse => CBoolean(false)
             case PushNull => CNull
-            case PushObject => CEmptyObject
-            case PushArray => CEmptyArray
+            case PushObject => RObject.empty
+            case PushArray => RArray.empty
           }
           
-          loop(loc, Right(Const(cvalue)(loc)) :: roots, splits, stream.tail)
+          loop(loc, Right(Const(rvalue)(loc)) :: roots, splits, stream.tail)
         }
       }
       
@@ -324,21 +324,21 @@ trait DAG extends Instructions {
     
     def findFirstRoot(line: Option[Line], stream: Vector[Instruction]): Either[StackError, (Root, Vector[Instruction])] = {
       def buildConstRoot(instr: RootInstr): Either[StackError, (Root, Vector[Instruction])] = {
-        val cvalue = instr match {
+        val rvalue = instr match {
           case PushString(str) => CString(str)
           
           // get the numeric coersion
           case PushNum(num) =>
             CType.toCValue(JNum(BigDecimal(num, MathContext.UNLIMITED)))
-          
+
           case PushTrue => CBoolean(true)
           case PushFalse => CBoolean(false)
           case PushNull => CNull
-          case PushObject => CEmptyObject
-          case PushArray => CEmptyArray
+          case PushObject => RObject.empty
+          case PushArray => RArray.empty
         }
           
-        line map { ln => Right((Const(cvalue)(ln), stream.tail)) } getOrElse Left(UnknownLine)
+        line map { ln => Right((Const(rvalue)(ln), stream.tail)) } getOrElse Left(UnknownLine)
       }
       
       val back = stream.headOption collect {
@@ -424,8 +424,10 @@ trait DAG extends Instructions {
     /**
      * NOTE: Does ''not'' work with `Split` rewrites!  Do not attempt!  Do not
      * even ''think'' of attempting!  The badness that follows will be...bewildering.
+     *
+     * If body takes a Split child, it can be rewritten by giving its parents as `splits`.
      */
-    def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
+    def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph], splits: Set[dag.Split] = Set.empty): DepGraph = {
       val memotable = mutable.Map[DepGraph, DepGraph]()
 
       def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {
@@ -514,7 +516,7 @@ trait DAG extends Instructions {
         }
       }
 
-      memoized(Map())(this)
+      memoized(splits.zip(splits)(collection.breakOut))(this)
     }
     
     trait ScopeUpdate[S] {
@@ -900,7 +902,7 @@ trait DAG extends Instructions {
       val containsSplitArg = true
     }
     
-    case class Const(value: CValue)(val loc: Line) extends DepGraph with Root {
+    case class Const(value: RValue)(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Specs.empty
       
       val sorting = IdentitySort

@@ -15,6 +15,8 @@ import scala.util.Random
 
 import scala.annotation.tailrec
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -197,7 +199,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
             val spec = TransSpec.concatChildren(tree)
 
-            val theta = Table.constArray(Set(CArray[Double](finalTheta)))
+            val theta = Table.fromJson(Stream(JArray(finalTheta.map(JNum(_)).toList)))
 
             val result = theta.transform(spec)
 

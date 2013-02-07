@@ -5,10 +5,10 @@ import bytecode.RandomLibrary
 import common.Path
 import yggdrasil._
 
-import blueeyes.json.{ JPath, JPathField, JPathIndex }
-
 import org.specs2.execute.Result
 import org.specs2.mutable._
+
+import blueeyes.json._
 
 import scalaz._
 

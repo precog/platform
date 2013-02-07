@@ -12,6 +12,8 @@ import TableModule._
 import Jama._
 import Jama.Matrix._
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.syntax.monad._
 import scalaz.std.list._
@@ -125,8 +127,8 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
         val tree = CPath.makeTree(cpaths, Range(1, res.length).toSeq :+ 0)
 
         val spec = TransSpec.concatChildren(tree)
-
-        val theta = Table.constArray(Set(CArray[Double](res)))
+  
+        val theta = Table.fromJson(Stream(JArray(res.map(JNum(_)).toList)))
 
         val result = theta.transform(spec)
 

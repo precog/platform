@@ -3,8 +3,6 @@ package com.precog.daze
 import scala.util.Random
 import scala.collection.mutable
 
-import blueeyes.json._
-
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.Path

@@ -17,8 +17,6 @@ import com.precog.bytecode._
 import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
-import blueeyes.json._
-
 import java.io._
 import java.util.concurrent.Executors
 
@@ -35,6 +33,8 @@ import org.specs2.specification.Fragment
 import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
+
+import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with BaseBlockStoreTestModule[M]
@@ -196,7 +196,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_true" >> {
         val line = Line(1, 1, "")
-        val input = Const(CBoolean(true))(line)
+        val input = Const(CTrue)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -211,7 +211,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_false" >> {
         val line = Line(1, 1, "")
-        val input = Const(CBoolean(false))(line)
+        val input = Const(CFalse)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -236,8 +236,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_object" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyObject)(line)
-        
+        val input = Const(RObject.empty)(line)
+
         testEval(input) { result =>
           result must haveSize(1)
           
@@ -251,7 +251,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_array" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyArray)(line)
+        val input = Const(RArray.empty)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -1663,7 +1663,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Assert(
-        Const(CBoolean(true))(line),
+        Const(CTrue)(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -1675,7 +1675,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Assert(
-        Const(CBoolean(false))(line),
+        Const(CFalse)(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -1689,8 +1689,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Assert(
         dag.IUI(
           true,
-          Const(CBoolean(false))(line),
-          Const(CBoolean(true))(line))(line),
+          Const(CFalse)(line),
+          Const(CTrue)(line))(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -2295,7 +2295,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(RArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2316,7 +2316,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(RObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2482,7 +2482,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(RArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2504,7 +2504,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(RObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -3383,6 +3383,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             Const(CString("time"))(line))(line))(line))(line)
           
       testEval(input) { _ must not(beEmpty) }
+    }
+
+    "correctly evaluate a constant array" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(RArray(CNum(1), CTrue, CString("three")))(line)
+
+      testEval(input) { _ must haveSize(1) }
+    }
+
+    "correctly evaluate a constant object" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(RObject("a" -> CNum(1), "b" -> CTrue, "c" -> CString("true")))(line)
+
+      testEval(input) { _ must haveSize(1) }
     }
   }
 
