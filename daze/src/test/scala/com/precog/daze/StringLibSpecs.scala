@@ -358,6 +358,34 @@ trait StringLibSpecs[M[+_]] extends Specification
       
       result2 must contain(0, 2, -4, -73, -81, -6)
     }
+    "determine compare" in {
+      val input = op2Input(compare, CString("quirky"), homStrings) //todo put regex here!
+        
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -36, -73, -81, -6)
+    }
+    "determine compareIgnoreCase" in {
+      val input = Join(BuiltInFunction2Op(compareIgnoreCase), CrossLeftSort,
+        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        Const(CString("QUIRKY"))(line))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -4, -73, -81, -6)
+    }
     "determine equals" in {
       val input = Join(BuiltInFunction2Op(library.equals), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
@@ -709,6 +737,30 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareToIgnoreCase" in {
       val input = op2Input(compareToIgnoreCase, CString("QUIRKY"), hetStrings) 
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -4, -73, -81, -6)
+    }
+    "determine compare" in {
+      val input = op2Input(compare, CString("quirky"), hetStrings) 
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -36, -73, -81, -6)
+    }
+    "determine compareIgnoreCase" in {
+      val input = op2Input(compareIgnoreCase, CString("QUIRKY"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)

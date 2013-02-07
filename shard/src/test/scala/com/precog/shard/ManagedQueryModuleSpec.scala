@@ -21,6 +21,7 @@ package com.precog.shard
 
 import com.precog.common._
 import com.precog.common.jobs._
+import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
@@ -282,7 +283,7 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
 
   val metadataClient = new MetadataClient[TestFuture] {
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-    def structure(apiKey: APIKey, path: Path) = sys.error("I'm an amorphous blob you insensitive clod!")
+    def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
   }
 
   def startup = Pointed[TestFuture].point { true }

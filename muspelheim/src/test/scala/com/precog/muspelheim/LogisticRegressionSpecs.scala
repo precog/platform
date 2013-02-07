@@ -29,7 +29,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
           medals := //summer_games/london_medals
           gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
           
-          std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+          std::stats::logisticRegression(gender, { height: medals.HeightIncm })
         """.stripMargin
 
       val results = evalE(input)
@@ -57,7 +57,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
         medals := //summer_games/london_medals
         
         gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
-        model := std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+        model := std::stats::logisticRegression(gender, { height: medals.HeightIncm })
 
         std::stats::predictLogistic({height: 34, other: 35}, model)
       """.stripMargin
@@ -80,7 +80,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
         medals := //summer_games/london_medals
         
         gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
-        model := std::stats::logisticRegression({ HeightIncm: medals.HeightIncm }, gender)
+        model := std::stats::logisticRegression(gender, { HeightIncm: medals.HeightIncm })
 
         predictions := std::stats::predictLogistic(medals, model)
 
@@ -119,7 +119,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
         medals := //summer_games/london_medals
         
         gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
-        model := std::stats::logisticRegression({ height: medals.HeightIncm }, gender)
+        model := std::stats::logisticRegression(gender, { height: medals.HeightIncm })
 
         std::stats::predictLogistic({baz: 34, bar: 35}, model)
       """.stripMargin
@@ -133,7 +133,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       val input = """
           medals := //summer_games/london_medals
           
-          std::stats::logisticRegression(medals, medals.S)
+          std::stats::logisticRegression(medals.S, medals)
         """.stripMargin
 
       val results = evalE(input)
@@ -149,7 +149,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
 
     "return something when fed constants" in {
       val input = """
-          std::stats::logisticRegression(4, 0)
+          std::stats::logisticRegression(0, 4)
         """.stripMargin
 
       val results = evalE(input)
@@ -162,7 +162,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
                medals := //summer_games/london_medals
                medals' := medals with { gender: (1 where medals.Sex = "F") union (0 where medals.Sex = "M") }
                
-               std::stats::logisticRegression({height: medals'.HeightIncm}, {gender: medals'.gender})
+               std::stats::logisticRegression({gender: medals'.gender}, {height: medals'.HeightIncm})
                """.stripMargin
 
       evalE(input) must beEmpty
@@ -173,7 +173,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
                medals := //summer_games/london_medals
                medals' := medals with { gender: (1 where medals.Sex = "F") union (0 where medals.Sex = "M") }
                
-               std::stats::logisticRegression({height: medals'.HeightIncm}, 5)
+               std::stats::logisticRegression(5, {height: medals'.HeightIncm})
                """.stripMargin
 
       evalE(input) must beEmpty
@@ -183,7 +183,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       val input = """
           medals := //summer_games/london_medals
           
-          std::stats::logisticRegression(medals.Country, medals.WeightIncm)
+          std::stats::logisticRegression(medals.WeightIncm, medals.Country)
         """.stripMargin
 
       evalE(input) must beEmpty
@@ -193,7 +193,7 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       val input = """
           medals := //summer_games/london_medals
           
-          std::stats::logisticRegression(medals.WeightIncm, medals.Country)
+          std::stats::logisticRegression(medals.Country, medals.WeightIncm)
         """.stripMargin
 
       evalE(input) must beEmpty

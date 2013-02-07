@@ -176,7 +176,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
       }
     }
 
-    def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
+    def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
       Success(JObject.empty) // TODO: Implement somehow?
     )
   }
