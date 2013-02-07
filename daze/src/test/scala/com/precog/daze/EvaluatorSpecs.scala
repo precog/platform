@@ -846,6 +846,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2 must contain(-1)
         }
       }
+
+      "pow" >> {
+        val line = Line(1, 1, "")
+
+        val input = Join(Pow, CrossLeftSort,
+          Const(CLong(11))(line),
+          Const(CLong(3))(line))(line)
+
+        testEval(input) { result =>
+          result must haveSize(1)
+
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 0 => d.toDouble
+          }
+
+          result2 must contain(1331)
+        }
+      }
     }
     
     "evaluate a binary numeric operation mapped over heterogeneous numeric set" >> {
@@ -3095,14 +3113,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
     "evaluate with on the results of a histogram function" in {
       val line = Line(1, 1, "")
-      
       // 
       // clicks := //clicks
       // histogram('user) :=
       //   { user: 'user, num: count(clicks where clicks.user = 'user) }
       // histogram with {rank: std::stats::rank(histogram.num)}
-      // 
-
+      //
+    
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
        
       lazy val histogram: dag.Split = dag.Split(
@@ -3137,16 +3154,16 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           case (ids, sv) if ids.length == 1 => sv
         }
 
-        results must contain(SObject(Map("user" -> SString("daniel"), "num" -> SDecimal(BigDecimal("9")), "rank" -> SDecimal(BigDecimal("5")))))
-        results must contain(SObject(Map("user" -> SString("kris"), "num" -> SDecimal(BigDecimal("8")), "rank" -> SDecimal(BigDecimal("4")))))
-        results must contain(SObject(Map("user" -> SString("derek"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
-        results must contain(SObject(Map("user" -> SString("nick"), "num" -> SDecimal(BigDecimal("17")), "rank" -> SDecimal(BigDecimal("10")))))
-        results must contain(SObject(Map("user" -> SString("john"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
-        results must contain(SObject(Map("user" -> SString("alissa"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("2")))))
-        results must contain(SObject(Map("user" -> SString("franco"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
-        results must contain(SObject(Map("user" -> SString("matthew"), "num" -> SDecimal(BigDecimal("10")), "rank" -> SDecimal(BigDecimal("6")))))
-        results must contain(SObject(Map("user" -> SString("jason"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("7")))))
-        results must contain(SObject(Map("user" -> SNull, "num" -> SDecimal(BigDecimal("3")), "rank" -> SDecimal(BigDecimal("1")))))
+        results must contain(SObject(Map("user" -> SString("daniel"), "num" -> SDecimal(BigDecimal("9")), "rank" -> SDecimal(BigDecimal("4")))))
+        results must contain(SObject(Map("user" -> SString("kris"), "num" -> SDecimal(BigDecimal("8")), "rank" -> SDecimal(BigDecimal("3")))))
+        results must contain(SObject(Map("user" -> SString("derek"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("1")))))
+        results must contain(SObject(Map("user" -> SString("nick"), "num" -> SDecimal(BigDecimal("17")), "rank" -> SDecimal(BigDecimal("9")))))
+        results must contain(SObject(Map("user" -> SString("john"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("6")))))
+        results must contain(SObject(Map("user" -> SString("alissa"), "num" -> SDecimal(BigDecimal("7")), "rank" -> SDecimal(BigDecimal("1")))))
+        results must contain(SObject(Map("user" -> SString("franco"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("6")))))
+        results must contain(SObject(Map("user" -> SString("matthew"), "num" -> SDecimal(BigDecimal("10")), "rank" -> SDecimal(BigDecimal("5")))))
+        results must contain(SObject(Map("user" -> SString("jason"), "num" -> SDecimal(BigDecimal("13")), "rank" -> SDecimal(BigDecimal("6")))))
+        results must contain(SObject(Map("user" -> SNull, "num" -> SDecimal(BigDecimal("3")), "rank" -> SDecimal(BigDecimal("0")))))
       }
     }
     

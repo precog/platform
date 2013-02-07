@@ -20,13 +20,15 @@
 package com.precog
 package daze
 
-import bytecode.{ BinaryOperationType, UnaryOperationType, JTextT, JNumberT, JBooleanT }
+import bytecode._
 import bytecode.Library
-
-import java.lang.String
-
+import common.json._
 import yggdrasil._
 import yggdrasil.table._
+
+import com.precog.util._
+
+import java.lang.String
 
 import TransSpecModule._
 
@@ -43,7 +45,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, compareTo, compareToIgnoreCase, equals, indexOf)
+      matches, regexMatch, compareTo, compareToIgnoreCase, compare, compareIgnoreCase, equals, indexOf, split, splitRegex)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -92,7 +94,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     class Op2SSB(name: String, f: (String, String) => Boolean)
-    extends Op2(StringNamespace, name) {
+    extends Op2F2(StringNamespace, name) {
       val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ss" + name) {
         case (c1: StrColumn, c2: StrColumn) =>
@@ -111,8 +113,92 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object endsWith extends Op2SSB("endsWith", _ endsWith _)
 
     object matches extends Op2SSB("matches", _ matches _)
+    
+    object regexMatch extends Op2(StringNamespace, "regexMatch") {
+      import trans._
+      
+      val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
+      
+      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+        trans.Scan(
+          trans.InnerArrayConcat(
+            trans.WrapArray(left),
+            trans.WrapArray(right)),
+          scanner)
+      }
+      
+      object scanner extends CScanner {
+        type A = Unit
+        
+        def init = ()
+        
+        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val targetM = columns get ColumnRef(CPath.Identity \ 0, CString)
+          val regexM = columns get ColumnRef(CPath.Identity \ 1, CString)
+          
+          val columns2M = for (targetRaw <- targetM; regexRaw <- regexM) yield {
+            val target = targetRaw.asInstanceOf[StrColumn]
+            val regex = regexRaw.asInstanceOf[StrColumn]
+            
+            val table = new Array[Array[String]](range.length)
+            val defined = new BitSet(range.length)
+            var maxLength = 0
+            
+            RangeUtil.loop(range) { i =>
+              if (target.isDefinedAt(i) && regex.isDefinedAt(i)) {
+                val str = target(i)
+                
+                try {
+                  val reg = regex(i).r
+                  
+                  str match {
+                    case reg(capture @ _*) => {
+                      val capture2 = capture map { str =>
+                        if (str == null)
+                          ""
+                        else
+                          str
+                      }
+                      
+                      table(i) = capture2.toArray
+                      defined.set(i)
+                      maxLength = maxLength max table(i).length
+                    }
+                    
+                    case _ =>
+                  }
+                } catch {
+                  case _: java.util.regex.PatternSyntaxException =>   // yay, scala 
+                }
+              }
+            }
+            
+            if (maxLength > 0) {
+              val pairs = 0 until maxLength map { idx =>
+                val col = new StrColumn {
+                  def isDefinedAt(row: Int) =
+                    defined.get(row) && idx < table(row).length
+                  
+                  def apply(row: Int) = table(row)(idx)
+                }
+                
+                val ref = ColumnRef(CPath.Identity \ idx, CString)
+                
+                ref -> col
+              }
+              
+              Map(pairs: _*)
+            } else {
+              Map[ColumnRef, Column]()
+            }
+          }
+          
+          ((), columns2M getOrElse Map[ColumnRef, Column]())
+        }
+      }
+    }
 
-    object concat extends Op2(StringNamespace, "concat") {
+    object concat extends Op2F2(StringNamespace, "concat") {
       val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::concat") {
         case (c1: StrColumn, c2: StrColumn) =>
@@ -122,7 +208,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     class Op2SLL(name: String,
       defined: (String, Long) => Boolean,
-      f: (String, Long) => Long) extends Op2(StringNamespace, name) {
+      f: (String, Long) => Long) extends Op2F2(StringNamespace, name) {
       val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2sll::" + name) {
         case (c1: StrColumn, c2: DoubleColumn) =>
@@ -148,7 +234,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       (s, n) => n >= 0 && s.length > n,
       (s, n) => s.codePointBefore(n.toInt))
 
-    class Substring(name: String)(f: (String, Int) => String) extends Op2(StringNamespace, name) {
+    class Substring(name: String)(f: (String, Int) => String) extends Op2F2(StringNamespace, name) {
       val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring::" + name) {
         case (c1: StrColumn, c2: LongColumn) =>
@@ -177,7 +263,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     })
 
     class Op2SSL(name: String, f: (String, String) => Long)
-    extends Op2(StringNamespace, name) {
+    extends Op2F2(StringNamespace, name) {
       val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ssl::" + name) {
         case (c1: StrColumn, c2: StrColumn) =>
@@ -185,9 +271,16 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    @deprecated
     object compareTo extends Op2SSL("compareTo", _ compareTo _)
 
+    object compare extends Op2SSL("compare", _ compareTo _)
+
+    @deprecated
     object compareToIgnoreCase extends Op2SSL("compareToIgnoreCase",
+      _ compareToIgnoreCase _)
+
+    object compareIgnoreCase extends Op2SSL("compareIgnoreCase",
       _ compareToIgnoreCase _)
 
     object indexOf extends Op2SSL("indexOf", _ indexOf _)
@@ -225,6 +318,50 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
       def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
         transSpec => trans.Map1(transSpec, f1(ctx))
+    }
+
+    object split extends Op2F2(StringNamespace, "split") {
+      import java.util.regex.Pattern
+
+      val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
+
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::split") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
+          val tpe = CArrayType(CString)
+          override def isDefinedAt(row: Int): Boolean =
+            super.isDefinedAt(row) && c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int): Array[String] =
+            Pattern.compile(Pattern.quote(c2(row))).split(c1(row), -1)
+        }
+      }
+    }
+
+    object splitRegex extends Op2F2(StringNamespace, "splitRegex") {
+      import java.util.regex.Pattern
+
+      val tpe = BinaryOperationType(JTextT, JTextT, JArrayHomogeneousT(JTextT))
+
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::splitRegex") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
+          val tpe = CArrayType(CString)
+          override def isDefinedAt(row: Int): Boolean = {
+            try {
+              if (super.isDefinedAt(row) && c1.isDefinedAt(row) && c2.isDefinedAt(row)) {
+                Pattern.compile(c2(row))
+                true
+              } else {
+                false
+              }
+            } catch {
+              case _: Exception => false
+            }
+          }
+
+          def apply(row: Int): Array[String] =
+            Pattern.compile(c2(row)).split(c1(row), -1)
+        }
+      }
     }
   }
 }

@@ -255,6 +255,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       (Mod(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
     }
     
+    case Pow(loc, left, right) => {
+      val (left2, leftNames, leftVars, leftErrors) = performShake(left)
+      val (right2, rightNames, rightVars, rightErrors) = performShake(right)
+
+      (Pow(loc, left2, right2), leftNames ++ rightNames, leftVars ++ rightVars, leftErrors ++ rightErrors)
+    }
+
     case Lt(loc, left, right) => {
       val (left2, leftNames, leftVars, leftErrors) = performShake(left)
       val (right2, rightNames, rightVars, rightErrors) = performShake(right)

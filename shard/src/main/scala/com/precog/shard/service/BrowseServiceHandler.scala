@@ -30,6 +30,7 @@ import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
+import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.util.Clock
 
 import akka.dispatch.Future
@@ -38,6 +39,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.std.string._
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.validation._
 import scalaz.syntax.apply._
 

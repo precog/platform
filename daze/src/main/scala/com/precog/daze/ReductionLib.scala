@@ -20,6 +20,10 @@
 package com.precog
 package daze
 
+import org.joda.time._
+
+import util.NumericComparisons
+
 import bytecode._
 
 import yggdrasil._
@@ -38,43 +42,6 @@ import scalaz.syntax.std.boolean._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-
-object RangeUtil {
-  /**
-   * Loops through a Range much more efficiently than Range#foreach, running
-   * the provided callback 'f' on each position. Assumes that step is 1.
-   */
-  def loop(r: Range)(f: Int => Unit) {
-    var i = r.start
-    val limit = r.end
-    while (i < limit) {
-      f(i)
-      i += 1
-    }
-  }
-
-  /**
-   * Like loop but also includes a built-in check for whether the given Column
-   * is defined for this particular row.
-   */
-  def loopDefined(r: Range, col: Column)(f: Int => Unit): Boolean = {
-    @tailrec def unseen(i: Int, limit: Int): Boolean = if (i < limit) {
-      if (col.isDefinedAt(i)) { f(i); seen(i + 1, limit) }
-      else unseen(i + 1, limit)
-    } else {
-      false
-    }
-
-    @tailrec def seen(i: Int, limit: Int): Boolean = if (i < limit) {
-      if (col.isDefinedAt(i)) f(i)
-      seen(i + 1, limit)
-    } else {
-      true
-    }
-
-    unseen(r.start, r.end)
-  }
-}
 
 class LongAdder {
   var t = 0L
@@ -106,7 +73,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     import BigDecimalOperations._
     val ReductionNamespace = Vector()
 
-    override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Forall, Exists)
+    override def _libReduction = super._libReduction ++ Set(Count, Max, Min, MaxTime, MinTime, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Forall, Exists)
 
     val CountMonoid = implicitly[Monoid[Count.Result]]
     object Count extends Reduction(ReductionNamespace, "count") {
@@ -118,8 +85,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JType.JUnfixedT, JNumberT)
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range) = {
-          val cx = cols(JType.JUnfixedT).toArray
+        def reduce(schema: CSchema, range: Range) = {
+          val cx = schema.columns(JType.JUnfixedT).toArray
           var count = 0L
           RangeUtil.loop(range) { i =>
             if (Column.isDefinedAt(cx, i)) count += 1L
@@ -131,6 +98,102 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def extract(res: Result): Table = Table.constDecimal(Set(CNum(res)))
 
       def extractValue(res: Result) = Some(CNum(res))
+    }
+
+    object MaxTime extends Reduction(ReductionNamespace, "maxTime") {
+      type Result = Option[DateTime]
+
+      implicit val monoid = new Monoid[Result] {
+        def zero = None
+        def append(left: Result, right: => Result): Result = {
+          (for { 
+            l <- left
+            r <- right
+          } yield {
+            val res = NumericComparisons.compare(l, r) 
+            if (res > 0) l
+            else r
+          }) orElse left orElse right
+        }
+      }
+
+      val tpe = UnaryOperationType(JDateT, JDateT)
+      
+      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val maxs = schema.columns(JDateT) map {
+            case col: DateColumn =>
+              var zmax: DateTime = {
+                val init = new DateTime(0)
+                val min = -292275054 - 1970   //the smallest Int value jodatime accepts
+
+                init.plus(Period.years(min))
+              }
+              val seen = RangeUtil.loopDefined(range, col) { i =>
+                val z = col(i)
+                if (NumericComparisons.compare(z, zmax) > 0) zmax = z
+              }
+              if (seen) Some(zmax) else None
+
+            case _ => None
+          }
+
+          if (maxs.isEmpty) None else maxs.suml(monoid)
+        }
+      }
+
+      def extract(res: Result): Table =
+        extractValue(res) map { v => Table.constDate(Set(v)) } getOrElse Table.empty
+
+      def extractValue(res: Result) = res map { CDate(_) }
+    }
+
+    object MinTime extends Reduction(ReductionNamespace, "minTime") {
+      type Result = Option[DateTime]
+
+      implicit val monoid = new Monoid[Result] {
+        def zero = None
+        def append(left: Result, right: => Result): Result = {
+          (for { 
+            l <- left
+            r <- right
+          } yield {
+            val res = NumericComparisons.compare(l, r) 
+            if (res < 0) l
+            else r
+          }) orElse left orElse right
+        }
+      }
+
+      val tpe = UnaryOperationType(JDateT, JDateT)
+      
+      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val maxs = schema.columns(JDateT) map {
+            case col: DateColumn =>
+              var zmax: DateTime = {
+                val init = new DateTime(0)
+                val max = 292278993 - 1970    //the largest Int value jodatime accepts
+
+                init.plus(Period.years(max))
+              }
+              val seen = RangeUtil.loopDefined(range, col) { i =>
+                val z = col(i)
+                if (NumericComparisons.compare(z, zmax) < 0) zmax = z
+              }
+              if (seen) Some(zmax) else None
+
+            case _ => None
+          }
+
+          if (maxs.isEmpty) None else maxs.suml(monoid)
+        }
+      }
+
+      def extract(res: Result): Table =
+        extractValue(res) map { v => Table.constDate(Set(v)) } getOrElse Table.empty
+
+      def extractValue(res: Result) = res map { CDate(_) }
     }
 
     object Max extends Reduction(ReductionNamespace, "max") {
@@ -146,8 +209,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
-          val maxs = cols(JNumberT) map {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val maxs = schema.columns(JNumberT) map {
             case col: LongColumn =>
               // for longs, we'll use a Boolean to track whether zmax was really
               // seen or not.
@@ -205,8 +268,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
-          val mins = cols(JNumberT) map {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val mins = schema.columns(JNumberT) map {
             case col: LongColumn =>
               // for longs, we'll use a Boolean to track whether zmin was really
               // seen or not.
@@ -260,9 +323,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range) = {
+        def reduce(schema: CSchema, range: Range) = {
 
-          val sum = cols(JNumberT) map {
+          val sum = schema.columns(JNumberT) map {
 
             case col: LongColumn =>
               val ls = new LongAdder()
@@ -304,8 +367,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
       def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
-          val results = cols(JNumberT) map {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val results = schema.columns(JNumberT) map {
 
             case col: LongColumn =>
               val ls = new LongAdder()
@@ -365,8 +428,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
       def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
-          val results = cols(JNumberT) map {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val results = schema.columns(JNumberT) map {
             case col: LongColumn =>
               var prod = BigDecimal(1)
               var count = 0L
@@ -423,8 +486,8 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
       def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range): Result = {
-          val result = cols(JNumberT) map {
+        def reduce(schema: CSchema, range: Range): Result = {
+          val result = schema.columns(JNumberT) map {
 
             case col: LongColumn =>
               val ls = new LongAdder()
@@ -461,9 +524,9 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     class CountSumSumSqReducer extends Reducer[Option[(Long, BigDecimal, BigDecimal)]] {
-      def reduce(cols: JType => Set[Column], range: Range):
+      def reduce(schema: CSchema, range: Range):
         Option[(Long, BigDecimal, BigDecimal)] = {
-        val result = cols(JNumberT) map {
+        val result = schema.columns(JNumberT) map {
           case col: LongColumn =>
             var count = 0L
             var sum = new LongAdder()
@@ -572,14 +635,14 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range) = {
+        def reduce(schema: CSchema, range: Range) = {
           if (range.isEmpty) {
             None
           } else {
             var back = true
             var defined = false
             
-            cols(JBooleanT) foreach { c =>
+            schema.columns(JBooleanT) foreach { c =>
               val bc = c.asInstanceOf[BoolColumn]
               var acc = back
               
@@ -628,14 +691,14 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
-        def reduce(cols: JType => Set[Column], range: Range) = {
+        def reduce(schema: CSchema, range: Range) = {
           if (range.isEmpty) {
             None
           } else {
             var back = false
             var defined = false
             
-            cols(JBooleanT) foreach { c =>
+            schema.columns(JBooleanT) foreach { c =>
               val bc = c.asInstanceOf[BoolColumn]
               var acc = back
               

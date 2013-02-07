@@ -489,9 +489,9 @@ trait DAG extends Instructions {
             lazy val result: dag.Split = dag.Split(spec2, child2)(s.loc)
             result
           }
-          
+            
           case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
-          
+
           case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(graph.loc)
 
           case graph @ dag.Diff(left, right) => dag.Diff(memoized(splits)(left), memoized(splits)(right))(graph.loc)
@@ -535,7 +535,262 @@ trait DAG extends Instructions {
 
       memoized(Map())(this)
     }
+    
+    trait ScopeUpdate[S] {
+      def update(node: DepGraph): Option[S] = None
+      def update(spec: dag.BucketSpec): Option[S] = None
+    }
+    object ScopeUpdate {
+      def scopeUpdate[S : ScopeUpdate] = implicitly[ScopeUpdate[S]]
+      
+      implicit def depGraphScopeUpdate = new ScopeUpdate[DepGraph] {
+        override def update(node: DepGraph) = Some(node) 
+      }
+      implicit def bucketSpecScopeUpdate = new ScopeUpdate[dag.BucketSpec] {
+        override def update(spec: dag.BucketSpec) = Some(spec)
+      }
+    }
+    
+    trait EditUpdate[E] {
+      def edit[T](inScope: Boolean, from: DepGraph, edit: (E, E), replace: DepGraph => T, retain: DepGraph => T): T
+      def edit[T](inScope: Boolean, from: dag.BucketSpec, edit: (E, E), replace: dag.BucketSpec => T, retain: dag.BucketSpec => T): T
+      def bimap[T](e: E)(fg: DepGraph => T, fs: dag.BucketSpec => T): T
+    }
+    object EditUpdate {
+      def editUpdate[E : EditUpdate] = implicitly[EditUpdate[E]]
+      
+      implicit def depGraphEditUpdate = new EditUpdate[DepGraph] {
+        def edit[T](inScope: Boolean, from: DepGraph, edit: (DepGraph, DepGraph), replace: DepGraph => T, retain: DepGraph => T): T =
+          if(inScope && from == edit._1) replace(edit._2) else retain(from) 
+        def edit[T](inScope: Boolean, from: dag.BucketSpec, edit: (DepGraph, DepGraph), replace: dag.BucketSpec => T, retain: dag.BucketSpec => T): T = retain(from)
+        
+        def bimap[T](e: DepGraph)(fg: DepGraph => T, fs: dag.BucketSpec => T): T = fg(e)
+      }
+      implicit def bucketSpecEditUpdate = new EditUpdate[dag.BucketSpec] {
+        def edit[T](inScope: Boolean, from: DepGraph, edit: (dag.BucketSpec, dag.BucketSpec), replace: DepGraph => T, retain: DepGraph => T): T = retain(from)
+        def edit[T](inScope: Boolean, from: dag.BucketSpec, edit: (dag.BucketSpec, dag.BucketSpec), replace: dag.BucketSpec => T, retain: dag.BucketSpec => T): T =
+          if(inScope && from == edit._1) replace(edit._2) else retain(from)
+          
+        def bimap[T](e: dag.BucketSpec)(fg: DepGraph => T, fs: dag.BucketSpec => T): T = fs(e)
+      }
+    }
 
+    /**
+     * Performs a scoped node substitution on this DepGraph.
+     * 
+     * The substitution is represented as a pair from -> to both of type E. The replacement is performed everywhere in
+     * the DAG below the scope node of type S. Both S and E are constained to be one of DepGraph or BucketSpec by
+     * the availability of instances of the type classes EditUpdate[E] and ScopeUpdate[S] as defined above.
+     * 
+     * @return A pair of the whole rewritten DAG and the rewritten scope node.
+     */  
+    
+    def substituteDown[S: ScopeUpdate, E: EditUpdate](scope: S, edit: (E, E)): (DepGraph, S) = {
+      import ScopeUpdate._
+      import EditUpdate._
+      
+      class SubstitutionState(val inScope: Boolean, val rewrittenScope: Option[S], splits0: => Map[dag.Split, dag.Split]) { outer =>
+        lazy val splits = splits0
+        
+        def copy(inScope: Boolean = outer.inScope, rewrittenScope: Option[S] = outer.rewrittenScope, splits: => Map[dag.Split, dag.Split] = outer.splits) =
+          new SubstitutionState(inScope, rewrittenScope, splits)
+      }
+      
+      object SubstitutionState {
+        def apply(inScope: Boolean, rewrittenScope: Option[S] = None, splits: => Map[dag.Split, dag.Split] = Map.empty) = new SubstitutionState(inScope, rewrittenScope, splits)
+      }
+      
+      val monadState = StateT.stateMonad[SubstitutionState]
+      val init = SubstitutionState(this == scope)
+      
+      val memotable = mutable.Map.empty[DepGraph, State[SubstitutionState, DepGraph]]
+      
+      def memoized(node: DepGraph): State[SubstitutionState, DepGraph] = {
+
+        def inner(graph: DepGraph): State[SubstitutionState, DepGraph] = {
+          
+          val inScopeM =
+            for {
+              state <- monadState.gets(identity)
+              inScope = state.inScope || graph == scope
+              _ <- monadState.modify(_.copy(inScope = inScope))
+            } yield inScope
+
+          val rewritten =
+            inScopeM.flatMap { inScope =>
+              editUpdate[E].edit(inScope, graph, edit, (rep: DepGraph) => for { state <- monadState.gets(identity) } yield rep,
+                (_: DepGraph) match {
+                  // not using extractors due to bug
+                  case s: dag.SplitParam =>
+                    for { state <- monadState.gets(identity) } yield dag.SplitParam(s.id)(state.splits(s.parent))(s.loc)
+        
+                  // not using extractors due to bug
+                  case s: dag.SplitGroup =>
+                    for { state <- monadState.gets(identity) } yield dag.SplitGroup(s.id, s.identities)(state.splits(s.parent))(s.loc)
+                  
+                  case graph @ dag.Const(_) =>
+                    for { _ <- monadState.gets(identity) } yield graph
+        
+                  case graph @ dag.Undefined() =>
+                    for { _ <- monadState.gets(identity) } yield graph
+        
+                  case graph @ dag.New(parent) =>
+                    for { newParent <- memoized(parent) } yield dag.New(newParent)(graph.loc)
+                  
+                  case graph @ dag.Morph1(m, parent) =>
+                    for { newParent <- memoized(parent) } yield dag.Morph1(m, newParent)(graph.loc)
+        
+                  case graph @ dag.Morph2(m, left, right) =>
+                    for {
+                      newLeft <- memoized(left)
+                      newRight <- memoized(right)
+                    } yield dag.Morph2(m, newLeft, newRight)(graph.loc)
+        
+                  case graph @ dag.Distinct(parent) =>
+                    for { newParent <- memoized(parent) } yield dag.Distinct(newParent)(graph.loc)
+        
+                  case graph @ dag.LoadLocal(parent, jtpe) =>
+                    for { newParent <- memoized(parent) } yield dag.LoadLocal(newParent, jtpe)(graph.loc)
+        
+                  case graph @ dag.Operate(op, parent) =>
+                    for { newParent <- memoized(parent) } yield dag.Operate(op, newParent)(graph.loc)
+        
+                  case graph @ dag.Reduce(red, parent) =>
+                    for { newParent <- memoized(parent) } yield dag.Reduce(red, newParent)(graph.loc)
+        
+                  case dag.MegaReduce(reds, parent) =>
+                    for { newParent <- memoized(parent) } yield dag.MegaReduce(reds, newParent)
+          
+                  case s @ dag.Split(spec, child) => {
+                    lazy val result: State[SubstitutionState, dag.Split] = 
+                      for {
+                        _ <- monadState.modify(st => st.copy(splits = st.splits + (s -> result.eval(init))))
+                        newSpec <- memoizedSpec(spec)
+                        newChild <- memoized(child)
+                      } yield dag.Split(newSpec, newChild)(s.loc)
+                    
+                    result
+                  }
+                  
+                  case graph @ dag.Assert(pred, child) => 
+                    for {
+                      newPred <- memoized(pred)
+                      newChild <- memoized(child)
+                    } yield dag.Assert(newPred, newChild)(graph.loc)
+                  
+                  case graph @ dag.IUI(union, left, right) =>
+                    for {
+                      newLeft <- memoized(left)
+                      newRight <- memoized(right)
+                    } yield dag.IUI(union, newLeft, newRight)(graph.loc)
+        
+                  case graph @ dag.Diff(left, right) =>
+                    for {
+                      newLeft <- memoized(left)
+                      newRight <- memoized(right)
+                    } yield dag.Diff(newLeft, newRight)(graph.loc)
+        
+                  case graph @ dag.Join(op, joinSort, left, right) =>
+                    for {
+                      newLeft <- memoized(left)
+                      newRight <- memoized(right)
+                    } yield dag.Join(op, joinSort, newLeft, newRight)(graph.loc)
+        
+                  case graph @ dag.Filter(joinSort, target, boolean) =>
+                    for {
+                      newTarget <- memoized(target)
+                      newBoolean <- memoized(boolean)
+                    } yield dag.Filter(joinSort, newTarget, newBoolean)(graph.loc)
+        
+                  case dag.Sort(parent, indexes) =>
+                    for { newParent <- memoized(parent) } yield dag.Sort(newParent, indexes)
+        
+                  case dag.SortBy(parent, sortField, valueField, id) =>
+                    for { newParent <- memoized(parent) } yield dag.SortBy(newParent, sortField, valueField, id)
+        
+                  case dag.ReSortBy(parent, id) =>
+                    for { newParent <- memoized(parent) } yield dag.ReSortBy(newParent, id)
+        
+                  case dag.Memoize(parent, priority) =>
+                    for { newParent <- memoized(parent) } yield dag.Memoize(newParent, priority)
+                }
+              )
+            }
+          
+          if(graph != scope)
+            rewritten
+          else
+            for {
+              node <- rewritten
+              _ <- monadState.modify(_.copy(rewrittenScope = scopeUpdate[S].update(node)))
+            } yield node
+        }
+        
+        memotable.get(node) getOrElse {
+          val result = inner(node)
+          memotable += (node -> result)
+          result
+        }
+      }
+
+      def memoizedSpec(spec: dag.BucketSpec): State[SubstitutionState, dag.BucketSpec] = {
+        val inScopeM =
+          for {
+            state <- monadState.gets(identity)
+            inScope = state.inScope || spec == scope
+            _ <- monadState.modify(_.copy(inScope = inScope))
+          } yield inScope
+          
+        val rewritten =
+          inScopeM.flatMap { inScope =>
+            editUpdate[E].edit(inScope, spec, edit, (rep: dag.BucketSpec) => for { state <- monadState.gets(identity) } yield rep,
+              (_: dag.BucketSpec) match {
+                case dag.UnionBucketSpec(left, right) =>
+                  for {
+                    newLeft <- memoizedSpec(left)
+                    newRight <- memoizedSpec(right)
+                  } yield dag.UnionBucketSpec(newLeft, newRight)
+                
+                case dag.IntersectBucketSpec(left, right) =>
+                  for {
+                    newLeft <- memoizedSpec(left)
+                    newRight <- memoizedSpec(right)
+                  } yield dag.IntersectBucketSpec(newLeft, newRight)
+                
+                case dag.Group(id, target, child) =>
+                  for {
+                    newTarget <- memoized(target)
+                    newChild <- memoizedSpec(child)
+                  } yield dag.Group(id, newTarget, newChild)
+                
+                case dag.UnfixedSolution(id, target) =>
+                  for { newTarget <- memoized(target) } yield dag.UnfixedSolution(id, newTarget)
+                
+                case dag.Extra(target) =>
+                  for { newTarget <- memoized(target) } yield dag.Extra(newTarget)
+              }
+            )
+          }
+          
+        if(spec != scope)
+          rewritten
+        else
+          for {
+            node <- rewritten
+            _ <- monadState.modify(_.copy(rewrittenScope = scopeUpdate[S].update(node)))
+          } yield node
+      }
+      
+      val resultM =
+        for {
+          preMemo <- editUpdate[E].bimap(edit._2)(memoized _, memoizedSpec _)
+          result <- memoized(this)
+        } yield result
+      
+      val (state, graph) = resultM(init)
+      (graph, state.rewrittenScope.getOrElse(scope))
+    }
+    
     def foldDown[Z](enterSplitChild: Boolean)(f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
       val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
 
@@ -586,7 +841,7 @@ trait DAG extends Instructions {
             foldDown0(child, specsAcc |+| f(child))
           else
             specsAcc
-          
+
         case dag.Assert(pred, child) =>
           val acc2 = foldDown0(pred, acc |+| f(pred))
           foldDown0(child, acc2 |+| f(child))
@@ -710,7 +965,7 @@ trait DAG extends Instructions {
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = {
         if (mor.retainIds) parent.identities
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort
@@ -722,8 +977,11 @@ trait DAG extends Instructions {
 
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = {
-        if (mor.retainIds) sys.error("not implemented yet") //TODO need to retain only the identities that are being used in the match
-        else Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        if (mor.retainIds) {
+          if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
+          else left.identities ++ right.identities
+        }
+        else Identities.Specs.empty
       }
       
       val sorting = IdentitySort

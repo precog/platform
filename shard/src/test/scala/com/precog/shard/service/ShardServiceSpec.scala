@@ -27,6 +27,7 @@ import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.common.json._
 import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
@@ -328,6 +329,10 @@ class ShardServiceSpec extends TestShardService {
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
+
+  def structure(apiKey: Option[String] = Some(testAPIKey), path: String = "/test", cpath: CPath = CPath.Identity): Future[HttpResponse[QueryResult]] = {
+    apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).query("type", "structure").query("property", cpath.toString).get(path)
+  }
  
   "Shard browse service" should {
     "handle browse for API key accessible path" in {
@@ -424,13 +429,14 @@ trait TestPlatform extends ManagedPlatform { self =>
       }
     }
     
-    def structure(apiKey: APIKey, path: Path) = {
+    def structure(apiKey: APIKey, path: Path, cpath: CPath) = {
       accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-        if(allowed) {
-          success(JObject(List(
-            JField("test1", JString("foo")),
-            JField("test2", JString("bar"))
-          )))
+        if (allowed) {
+          success(JObject(
+            "structure" -> JObject(
+              "foo" -> JNum(123)
+            )
+          ))
         } else {
           failure("The specified API key may not browse this location")
         }

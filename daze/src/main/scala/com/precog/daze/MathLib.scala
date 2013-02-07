@@ -27,8 +27,8 @@ import yggdrasil._
 import yggdrasil.table._
 import TransSpecModule._
 
-trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  trait MathLib extends ColumnarTableLib {
+trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] with InfixLibModule[M] {
+  trait MathLib extends ColumnarTableLib with InfixLib {
     import trans._
   
     val MathNamespace = Vector("std", "math")
@@ -40,6 +40,10 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     import StdLib.{DoubleFrom, doubleIsDefined}
     import java.lang.Math
   
+    object pow extends Op2F2(MathNamespace, "pow") with Infix.Power {
+      val cf2pName = "builtin::math::op2dd::pow"
+    }
+
     abstract class Op1DD(name: String, defined: Double => Boolean, f: Double => Double)
     extends Op1F1(MathNamespace, name) {
       val tpe = UnaryOperationType(JNumberT, JNumberT)
@@ -114,7 +118,7 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object ulp extends Op1DD("ulp", doubleIsDefined, Math.ulp)
   
     abstract class Op2DDD(name: String, defined:(Double, Double) => Boolean,
-      f:(Double, Double) => Double) extends Op2(MathNamespace, name) {
+      f:(Double, Double) => Double) extends Op2F2(MathNamespace, name) {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::math::op2dd::" + name) {
         case (c1: DoubleColumn, c2: DoubleColumn) =>
@@ -154,9 +158,7 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object min extends Op2DDD("min", bothDefined, Math.min)
   
     object hypot extends Op2DDD("hypot", bothDefined, Math.hypot)
-  
-    object pow extends Op2DDD("pow", bothDefined, Math.pow)
-  
+
     object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
   
     @deprecated

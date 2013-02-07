@@ -23,49 +23,16 @@ package mongo
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import com.precog.common.security._
-import com.precog.common.accounts._
-import com.precog.daze._
+import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
 
-import blueeyes.bkka._
-import blueeyes.BlueEyesServer
-import blueeyes.bkka._
-import blueeyes.core.data.ByteChunk
-import blueeyes.core.http._
-import blueeyes.util.Clock
-
-import akka.actor.ActorSystem
-import akka.dispatch.{ExecutionContext, Future, Promise}
-
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-import org.eclipse.jetty.server.{Handler, Request, Server}
-import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
-
-import scalaz._
+import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
-object MongoShardServer extends BlueEyesServer with ShardService {
-  val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] = new FutureMonad(executionContext)
+import com.precog.standalone.StandaloneShardServer
 
-  val clock = Clock.System
-
-  def configureShardState(config: Configuration) = Future {
-    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
-  }
-
-  val jettyService = this.service("labcoat", "1.0") { context =>
-    startup {
-      val rootConfig = context.rootConfig
-      val config = rootConfig.detach("services.quirrel.v1")
-      val serverPort = config[Int]("labcoat.port", 8000)
-      val quirrelPort = rootConfig[Int]("server.port", 8888)
-      val rootKey = config[String]("security.masterAccount.apiKey")
-
-      logger.warn("""
+object MongoShardServer extends StandaloneShardServer {
+  val caveatMessage = Some("""
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Precog for MongoDB is a free product that Precog provides to the
 MongoDB community for doing data analysis on MongoDB.
@@ -81,39 +48,15 @@ Please note that path globs are not yet supported in Precog for MongoDB
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 """)
 
-      val server = new Server(serverPort)
-      val resourceHandler = new ResourceHandler
-      resourceHandler.setDirectoriesListed(false)
-      resourceHandler.setWelcomeFiles(new Array[String](0))
-      resourceHandler.setResourceBase(this.getClass.getClassLoader.getResource("web").toString)
+  override def hardCodedAccount = Some("mongo")
 
-      val rootHandler = new AbstractHandler {
-        def handle(target: String,
-                   baseRequest: Request,
-                   request: HttpServletRequest,
-                   response: HttpServletResponse): Unit = {
-          if (target == "/") {
-            val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase.split(':').head).getOrElse("localhost")
-            response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false&useJsonp=true".format(requestedHost, serverPort, rootKey, quirrelPort))
-          }
-        }
-      }
+  val actorSystem = ActorSystem("mongoExecutorActorSystem")
+  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-      val handlers = new HandlerList
 
-      handlers.setHandlers(Array[Handler](rootHandler, resourceHandler, new DefaultHandler))
-      server.setHandler(handlers)
-      server.start()
-
-      Future(server)
-    } -> 
-    request { (server: Server) =>
-      get {
-        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())
-      }
-    } ->
-    shutdown { (server: Server) =>
-      Future(server.stop())
-    }
+  def configureShardState(config: Configuration) = M.point {
+    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(asyncContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 }

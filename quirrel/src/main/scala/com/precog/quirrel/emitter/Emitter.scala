@@ -630,6 +630,9 @@ trait Emitter extends AST
         case ast.Mod(loc, left, right) => 
           emitMap(left, right, Mod, dispatches)
         
+        case ast.Pow(loc, left, right) =>
+          emitMap(left, right, Pow, dispatches)
+
         case ast.Lt(loc, left, right) => 
           emitMap(left, right, Lt, dispatches)
         

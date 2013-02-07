@@ -129,11 +129,11 @@ class WebAccountFinder(settings: WebAccountFinderSettings)(implicit executor: Ex
             throw HttpException(BadGateway, "Unexpected response to find account request: " + err)
          }
 
-        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
+        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) =>
           logger.error("Fatal error attempting to find account: " + failure + ": " + content)
           throw HttpException(failure, reason)
 
-        case other => 
+        case other =>
           logger.error("Unexpected response from accounts service: " + other)
           throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
       }
@@ -141,7 +141,7 @@ class WebAccountFinder(settings: WebAccountFinderSettings)(implicit executor: Ex
   }
 
   def invoke[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb 
+    val client = new HttpClientXLightWeb
     val auth = HttpHeaders.Authorization("Basic "+new String(Base64.encodeBase64((user+":"+password).getBytes("UTF-8")), "UTF-8"))
     f(client.protocol(protocol).host(host).port(port).path(path).header(auth))
   }

@@ -26,6 +26,7 @@ import com.precog.common.cache.Cache
 import akka.util.Duration
 import java.util.concurrent.TimeUnit._
 import com.weiglewilczek.slf4s.Logging
+
 import org.joda.time.DateTime
 
 import scalaz._
@@ -49,7 +50,8 @@ object CachingAPIKeyManagerSettings {
   )
 }
 
-class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManagerSettings.Default) extends APIKeyManager[M] {
+class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAPIKeyManagerSettings = CachingAPIKeyManagerSettings.Default) extends APIKeyManager[M]
+    with Logging {
   implicit val M = manager.M
 
   private val apiKeyCache = Cache.simple[APIKey, APIKeyRecord](settings.apiKeyCacheSettings: _*)
@@ -78,7 +80,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
 
   def rootGrantId: M[GrantId] = manager.rootGrantId
   def rootAPIKey: M[APIKey] = manager.rootAPIKey
-  
+
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
     manager.newAPIKey(name, description, issuerKey, grants) map { _ tap add }
 
@@ -86,13 +88,19 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
     manager.newGrant(name, description, issuerKey, parentIds, perms, expiration) map { _ tap add }
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
-    case None => manager.findAPIKey(tid) map { _ tap { _ foreach add } }
+    case None =>
+      logger.debug("Cache miss on api key " + tid)
+      manager.findAPIKey(tid).map { _.map { _ ->- add } }
+
     case t    => M.point(t)
   }
 
   def findGrant(gid: GrantId) = grantCache.get(gid) match {
-    case None => manager.findGrant(gid) map { _ tap { _ foreach add } }
-    case s    => M.point(s)
+    case None        =>
+      logger.debug("Cache miss on grant " + gid)
+      manager.findGrant(gid).map { _.map { _ ->- add } }
+
+    case s @ Some(_) => M.point(s)
   }
 
   def findAPIKeyChildren(apiKey: APIKey): M[Set[APIKeyRecord]] = childCache.get(apiKey) match {

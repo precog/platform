@@ -78,9 +78,9 @@ case class BasicShardState(
   apiKeyFinder: APIKeyFinder[Future],
   stoppable: Stoppable) extends ShardState
 
-trait ShardService extends 
-    BlueEyesServiceBuilder with 
-    ShardServiceCombinators with 
+trait ShardService extends
+    BlueEyesServiceBuilder with
+    ShardServiceCombinators with
     Logging {
 
   implicit val timeout = akka.util.Timeout(120000) //for now
@@ -177,6 +177,8 @@ trait ShardService extends
             options {
               (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
             }
+          } map { f => 
+            (a: APIKeyRecord, p: Path) => f(a, p) map { r => r.copy(content = r.content map queryResult2byteChunk) } 
           }
         } ~
         dataPath("/meta/fs") {
@@ -189,7 +191,7 @@ trait ShardService extends
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
           }//): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[ByteChunk]]]
         }
-      } 
+      }
     }
   }
 

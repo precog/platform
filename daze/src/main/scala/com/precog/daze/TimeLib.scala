@@ -20,7 +20,9 @@
 package com.precog
 package daze
 
-import bytecode.{ Library, BinaryOperationType, UnaryOperationType, JTextT, JNumberT }
+import util.NumericComparisons
+
+import bytecode._
 
 import yggdrasil._
 import yggdrasil.table._
@@ -29,6 +31,7 @@ import org.joda.time._
 import org.joda.time.format._
 
 import com.precog.util.DateTimeUtil.{parseDateTime, parseDateTimeFlexibly, isDateTimeFlexibly}
+import com.precog.util.BitSet
 
 import TransSpecModule._
 
@@ -93,7 +96,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       MillisToISO,
       ChangeTimeZone,
-      ParseDateTime
+      ParseDateTime,
+
+      MinTimeOf,
+      MaxTimeOf
     )
 
     private def isValidISO(str: String): Boolean = {
@@ -117,31 +123,31 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
+    val textAndDate = JUnionT(JTextT, JDateT)
+
     DateTimeZone.setDefault(DateTimeZone.UTC)
 
-    object ParseDateTime extends Op2(TimeNamespace, "parseDateTime") {
-      val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
+    object ParseDateTime extends Op2F2(TimeNamespace, "parseDateTime") {
+      val tpe = BinaryOperationType(JTextT, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
-        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidFormat(c1(row), c2(row))
 
-          def apply(row: Int) = {
+          def apply(row: Int): DateTime = {
             val time = c1(row)
             val fmt = c2(row)
 
             val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
-            val ISO = format.parseDateTime(time)
-
-            ISO.toString()
+            format.parseDateTime(time)
           }
         }
       }
     }
 
     object ParseDateTimeFuzzy extends Op1(TimeNamespace, "parseDateTimeFuzzy") {
-      val tpe = UnaryOperationType(JTextT, JTextT)
+      val tpe = UnaryOperationType(JTextT, JDateT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTimeFuzzy") {
-        case (c: StrColumn) => new Map1Column(c) with StrColumn {
+        case (c: StrColumn) => new Map1Column(c) with DateColumn {
           override def isDefinedAt(row: Int): Boolean = if (!c.isDefinedAt(row)) {
             false
           } else {
@@ -151,130 +157,256 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           def apply(row: Int) = {
             val s = c(row)
             try {
-              parseDateTime(s, true).toString
+              parseDateTime(s, true)
             } catch {
               case e: IllegalArgumentException =>
-                parseDateTimeFlexibly(s).toString
+                parseDateTimeFlexibly(s)
             }
           }
         }
       }
 
-      def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
-        transSpec => trans.Map1(transSpec, f1(ctx))
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        trans.Map1(source, f1(ctx))
     }
 
-    object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
-      val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
+    object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
+      val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
-        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidTimeZone(c2(row))
+
+          def apply(row: Int) = {
+            val time = parseDateTime(c1(row), true)
+            val tz = c2(row)
+
+            val timeZone = DateTimeZone.forID(tz)
+
+            new DateTime(time, timeZone)
+          }
+        }
+        case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidTimeZone(c2(row))
 
           def apply(row: Int) = {
             val time = c1(row)
             val tz = c2(row)
 
-            val newTime = parseDateTime(time, false)
             val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(newTime, timeZone)
 
-            dateTime.toString()
+            new DateTime(time, timeZone)
           }
         }
       }
     }
 
-    trait TimePlus extends Op2 {
-      val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
-        case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
-
-          def apply(row: Int) = {
-            val time = c1(row)
-            val incr = c2(row)
-
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
-          }
-        }      
-        case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with StrColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
-
-          def apply(row: Int) = {
-            val time = c1(row)
-            val incr = c2(row)
-
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
-          }
-        }      
-        case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with StrColumn {
-          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
-
-          def apply(row: Int) = {
-            val time = c1(row)
-            val incr = c2(row)
-
-            val newTime = parseDateTime(time, true)
-
-            plus(newTime, incr.toInt)
-          }
-        }
-      }
-
-      def plus(d: DateTime, i: Int): String
-    }
-
-    object YearsPlus extends Op2(TimeNamespace, "yearsPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.years(i)).toString()
-    }
-
-    object MonthsPlus extends Op2(TimeNamespace, "monthsPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.months(i)).toString()
-    }
-
-    object WeeksPlus extends Op2(TimeNamespace, "weeksPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.weeks(i)).toString()
-    }
-
-    object DaysPlus extends Op2(TimeNamespace, "daysPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.days(i)).toString()
-    }
-
-    object HoursPlus extends Op2(TimeNamespace, "hoursPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.hours(i)).toString()
-    }
-
-    object MinutesPlus extends Op2(TimeNamespace, "minutesPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.minutes(i)).toString()
-    }
-
-    object SecondsPlus extends Op2(TimeNamespace, "secondsPlus") with TimePlus{ 
-      def plus(d: DateTime, i: Int) = d.plus(Period.seconds(i)).toString()
-    }
-
-    object MillisPlus extends Op2(TimeNamespace, "millisPlus") with TimePlus{
-      def plus(d: DateTime, i: Int) = d.plus(Period.millis(i)).toString()
-    }
-    
-
-    trait TimeBetween extends Op2 {
-      val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
-        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+    trait ExtremeTime extends Op2F2 {
+      val tpe = BinaryOperationType(textAndDate, textAndDate, JDateT)
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::extremeTime") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = parseDateTime(c2(row), true)
+            
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = c1(row)
+            val time2 = parseDateTime(c2(row), true)
+
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: StrColumn, c2: DateColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = c2(row)
+
+
+            computeExtreme(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: DateColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 
           def apply(row: Int) = {
             val time1 = c1(row)
             val time2 = c2(row)
 
-            val newTime1 = parseDateTime(time1, true)
-            val newTime2 = parseDateTime(time2, true)
+            computeExtreme(time1, time2)
+          }
+        }
+      }
 
-            between(newTime1, newTime2)
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime
+    }
+
+    object MinTimeOf extends Op2F2(TimeNamespace, "minTimeOf") with ExtremeTime { 
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
+        val res: Int = NumericComparisons.compare(t1, t2)
+        if (res < 0) t1
+        else t2
+      }
+    }
+
+    object MaxTimeOf extends Op2F2(TimeNamespace, "maxTimeOf") with ExtremeTime { 
+      def computeExtreme(t1: DateTime, t2: DateTime): DateTime = {
+        val res: Int = NumericComparisons.compare(t1, t2)
+        if (res > 0) t1
+        else t2
+      }
+    }
+
+    trait TimePlus extends Op2F2 {
+      val tpe = BinaryOperationType(textAndDate, JNumberT, JDateT)
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
+        case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time = parseDateTime(c1(row), true)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }      
+        case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time = parseDateTime(c1(row), true)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }      
+        case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time = parseDateTime(c1(row), true)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }
+        case (c1: DateColumn, c2: LongColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time = c1(row)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }      
+        case (c1: DateColumn, c2: NumColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time = c1(row)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }      
+        case (c1: DateColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DateColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time = c1(row)
+            val incr = c2(row)
+
+            plus(time, incr.toInt)
+          }
+        }
+      }
+
+      def plus(d: DateTime, i: Int): DateTime
+    }
+
+    object YearsPlus extends Op2F2(TimeNamespace, "yearsPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.years(i))
+    }
+
+    object MonthsPlus extends Op2F2(TimeNamespace, "monthsPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.months(i))
+    }
+
+    object WeeksPlus extends Op2F2(TimeNamespace, "weeksPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.weeks(i))
+    }
+
+    object DaysPlus extends Op2F2(TimeNamespace, "daysPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.days(i))
+    }
+
+    object HoursPlus extends Op2F2(TimeNamespace, "hoursPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.hours(i))
+    }
+
+    object MinutesPlus extends Op2F2(TimeNamespace, "minutesPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.minutes(i))
+    }
+
+    object SecondsPlus extends Op2F2(TimeNamespace, "secondsPlus") with TimePlus{ 
+      def plus(d: DateTime, i: Int) = d.plus(Period.seconds(i))
+    }
+
+    object MillisPlus extends Op2F2(TimeNamespace, "millisPlus") with TimePlus{
+      def plus(d: DateTime, i: Int) = d.plus(Period.millis(i))
+    }
+    
+
+    trait TimeBetween extends Op2F2 {
+      val tpe = BinaryOperationType(textAndDate, textAndDate, JNumberT)
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
+        case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = parseDateTime(c2(row), true)
+
+            between(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c2(row))
+
+          def apply(row: Int) = {
+            val time1 = c1(row)
+            val time2 = parseDateTime(c2(row), true)
+
+            between(time1, time2)
+          }
+        }
+        case (c1: StrColumn, c2: DateColumn) => new Map2Column(c1, c2) with LongColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))
+
+          def apply(row: Int) = {
+            val time1 = parseDateTime(c1(row), true)
+            val time2 = c2(row)
+
+            between(time1, time2)
+          }
+        }
+        case (c1: DateColumn, c2: DateColumn) => new Map2Column(c1, c2) with LongColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time1 = c1(row)
+            val time2 = c2(row)
+
+            between(time1, time2)
           }
         }
       }
@@ -282,42 +414,42 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def between(d1: DateTime, d2: DateTime): Long
     }
 
-    object YearsBetween extends Op2(TimeNamespace, "yearsBetween") with TimeBetween{
+    object YearsBetween extends Op2F2(TimeNamespace, "yearsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
     }
 
-    object MonthsBetween extends Op2(TimeNamespace, "monthsBetween") with TimeBetween{
+    object MonthsBetween extends Op2F2(TimeNamespace, "monthsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
     }
 
-    object WeeksBetween extends Op2(TimeNamespace, "weeksBetween") with TimeBetween{
+    object WeeksBetween extends Op2F2(TimeNamespace, "weeksBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
     }
 
-    object DaysBetween extends Op2(TimeNamespace, "daysBetween") with TimeBetween{
+    object DaysBetween extends Op2F2(TimeNamespace, "daysBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
     }
 
-    object HoursBetween extends Op2(TimeNamespace, "hoursBetween") with TimeBetween{
+    object HoursBetween extends Op2F2(TimeNamespace, "hoursBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
     }
 
-    object MinutesBetween extends Op2(TimeNamespace, "minutesBetween") with TimeBetween{
+    object MinutesBetween extends Op2F2(TimeNamespace, "minutesBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
     }
 
-    object SecondsBetween extends Op2(TimeNamespace, "secondsBetween") with TimeBetween{
+    object SecondsBetween extends Op2F2(TimeNamespace, "secondsBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
     }
 
-    object MillisBetween extends Op2(TimeNamespace, "millisBetween") with TimeBetween{
+    object MillisBetween extends Op2F2(TimeNamespace, "millisBetween") with TimeBetween{
       def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
     }
 
-    object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
-      val tpe = BinaryOperationType(JNumberT, JTextT, JTextT)
+    object MillisToISO extends Op2F2(TimeNamespace, "millisToISO") {
+      val tpe = BinaryOperationType(JNumberT, JTextT, textAndDate)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::millisToIso") {
-        case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
 
           def apply(row: Int) = { 
@@ -325,12 +457,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             val tz = c2(row)
 
             val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(time.toLong, timeZone)
-
-            dateTime.toString()
+            new DateTime(time.toLong, timeZone)
           }
         }      
-        case (c1: NumColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        case (c1: NumColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
 
           def apply(row: Int) = { 
@@ -338,12 +468,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             val tz = c2(row)
 
             val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(time.toLong, timeZone)
-
-            dateTime.toString()
+            new DateTime(time.toLong, timeZone)
           }
         }      
-        case (c1: DoubleColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        case (c1: DoubleColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
           override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
 
           def apply(row: Int) = { 
@@ -351,18 +479,16 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             val tz = c2(row)
 
             val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(time.toLong, timeZone)
-
-            dateTime.toString()
+            new DateTime(time.toLong, timeZone)
           }
         }
       }
     }
 
     object GetMillis extends Op1F1(TimeNamespace, "getMillis") {
-      val tpe = UnaryOperationType(JTextT, JNumberT)
+      val tpe = UnaryOperationType(textAndDate, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::getMillis") {
-        case c: StrColumn => new Map1Column(c) with LongColumn {
+        case (c: StrColumn) => new Map1Column(c) with LongColumn {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
@@ -372,23 +498,40 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             newTime.getMillis()
           }
         }
+        case (c: DateColumn) => new Map1Column(c) with LongColumn {
+          override def isDefinedAt(row: Int) = c.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time = c(row)
+            time.getMillis()
+          }
+        }
       }
       def spec[A <: SourceType](ctx: EvaluationContext): TransSpec[A] => TransSpec[A] =
         transSpec => trans.Map1(transSpec, f1(ctx))
     }
 
     object TimeZone extends Op1F1(TimeNamespace, "timeZone") {
-      val tpe = UnaryOperationType(JTextT, JTextT)
+      val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeZone") {
-        case c: StrColumn => new Map1Column(c) with StrColumn {
+        case (c: StrColumn) => new Map1Column(c) with StrColumn {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = { 
-            val time = c(row)
-
+            val time = parseDateTime(c(row), true)
             val format = DateTimeFormat.forPattern("ZZ")
-            val newTime = parseDateTime(time, true)
-            format.print(newTime)
+
+            format.print(time)
+          }
+        }
+        case (c: DateColumn) => new Map1Column(c) with StrColumn {
+          override def isDefinedAt(row: Int) = c.isDefinedAt(row)
+
+          def apply(row: Int) = { 
+            val time = c(row)
+            val format = DateTimeFormat.forPattern("ZZ")
+
+            format.print(time)
           }
         }
       }
@@ -397,16 +540,27 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     object Season extends Op1F1(TimeNamespace, "season") {
-      val tpe = UnaryOperationType(JTextT, JTextT)
+      val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::season") {
-        case c: StrColumn => new Map1Column(c) with StrColumn {
+        case (c: StrColumn) => new Map1Column(c) with StrColumn {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
+            val time = parseDateTime(c(row), true)
+            val day = time.dayOfYear.get
+            
+            if (day >= 79 & day < 171) "spring"
+            else if (day >= 171 & day < 265) "summer"
+            else if (day >= 265 & day < 355) "fall"
+            else "winter"
+          }
+        }
+        case (c: DateColumn) => new Map1Column(c) with StrColumn {
+          override def isDefinedAt(row: Int) = c.isDefinedAt(row)
 
-            val newTime = parseDateTime(time, true)
-            val day = newTime.dayOfYear.get
+          def apply(row: Int) = {
+            val time = c(row)
+            val day = time.dayOfYear.get
             
             if (day >= 79 & day < 171) "spring"
             else if (day >= 171 & day < 265) "summer"
@@ -420,16 +574,22 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     } 
 
     trait TimeFraction extends Op1F1 {
-      val tpe = UnaryOperationType(JTextT, JNumberT)
+      val tpe = UnaryOperationType(textAndDate, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeFraction") {
-        case c: StrColumn => new Map1Column(c) with LongColumn {
+        case (c: StrColumn) => new Map1Column(c) with LongColumn {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
+            val time = parseDateTime(c(row), true)
+            fraction(time)
+          }
+        }
+        case (c: DateColumn) => new Map1Column(c) with LongColumn {
+          override def isDefinedAt(row: Int) = c.isDefinedAt(row)
 
-            val newTime = parseDateTime(time, true)
-            fraction(newTime)
+          def apply(row: Int) = {
+            val time = c(row)
+            fraction(time)
           }
         }
       }
@@ -494,16 +654,22 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     trait TimeTruncation extends Op1F1 {
-      val tpe = UnaryOperationType(JTextT, JTextT)
+      val tpe = UnaryOperationType(textAndDate, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::truncation") {
-        case c: StrColumn => new Map1Column(c) with StrColumn {
+        case (c: StrColumn) => new Map1Column(c) with StrColumn {
           override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
 
           def apply(row: Int) = {
-            val time = c(row)
-            
-            val newTime = parseDateTime(time, true)
+            val newTime = parseDateTime(c(row), true)
             fmt.print(newTime)
+          }
+        }
+        case (c: DateColumn) => new Map1Column(c) with StrColumn {
+          override def isDefinedAt(row: Int) = c.isDefinedAt(row)
+
+          def apply(row: Int) = {
+            val time = c(row)
+            fmt.print(time)
           }
         }
       }

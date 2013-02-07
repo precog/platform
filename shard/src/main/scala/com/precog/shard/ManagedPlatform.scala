@@ -29,6 +29,8 @@ import com.precog.muspelheim._
 
 import akka.dispatch.{ Future, ExecutionContext }
 
+import org.joda.time.DateTime
+
 import java.nio.charset._
 import java.nio.channels.WritableByteChannel
 import java.nio.{ CharBuffer, ByteBuffer, ReadOnlyBufferException }
@@ -80,7 +82,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
         def apply[A](fa: Future[A]) = fa.liftM[JobQueryT]
       }
 
-      new JobQueryLogger[ShardQuery, A] {
+      new JobQueryLogger[ShardQuery, A] with ShardQueryLogger[ShardQuery, A] {
         val M = shardQueryMonad
         val jobManager = self.jobManager.withM[ShardQuery](lift, implicitly, shardQueryMonad.M, shardQueryMonad)
         val jobId = jobId0
@@ -88,7 +90,9 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
         val decomposer = decomposer0
       }
     } getOrElse {
-      LoggingQueryLogger[ShardQuery, A]
+      new LoggingQueryLogger[ShardQuery, A] with ShardQueryLogger[ShardQuery, A] {
+        val M = shardQueryMonad
+      }
     }
   }
 
@@ -121,7 +125,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
       val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
-      val expires = opts.timeout map (yggConfig.clock.now().plus(_))
+      val expires = opts.timeout map { to => { (time: DateTime) => time.plus(to) } }
+
       createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
         import JobQueryState._
 

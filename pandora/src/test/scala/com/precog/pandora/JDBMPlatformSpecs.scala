@@ -114,7 +114,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
-    }
+  }
 
   val rawProjectionModule = new JDBMProjectionModule {
     type YggConfig = self.YggConfig
@@ -162,6 +162,10 @@ class JDBMBasicValidationSpecs extends BasicValidationSpecs with JDBMPlatformSpe
 class JDBMHelloQuirrelSpecs extends HelloQuirrelSpecs with JDBMPlatformSpecs
 
 class JDBMLogisticRegressionSpecs extends LogisticRegressionSpecs with JDBMPlatformSpecs
+
+class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformSpecs
+
+class JDBMClusteringSpecs extends ClusteringSpecs with JDBMPlatformSpecs
 
 class JDBMMiscStackSpecs extends MiscStackSpecs with JDBMPlatformSpecs
 

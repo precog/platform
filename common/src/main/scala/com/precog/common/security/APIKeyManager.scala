@@ -50,9 +50,9 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
 
   def rootGrantId: M[GrantId]
   def rootAPIKey:  M[APIKey]
- 
+
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant]
-  
+
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord]
 
   def newAccountGrant(accountId: AccountId, name: Option[String] = None, description: Option[String] = None, issuerKey: APIKey, parentIds: Set[GrantId], expiration: Option[DateTime] = None): M[Grant] = {
@@ -82,6 +82,7 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
   }
   
   def listAPIKeys: M[Seq[APIKeyRecord]]
+
   def findAPIKey(apiKey: APIKey): M[Option[APIKeyRecord]]
   def findAPIKeyChildren(apiKey: APIKey): M[Set[APIKeyRecord]]
   def findAPIKeyAncestry(apiKey: APIKey): M[List[APIKeyRecord]] = {
@@ -121,7 +122,7 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
         }
       }.getOrElse(None.point[M])
     }
-  
+
   def validGrants(apiKey: APIKey, at: Option[DateTime] = None): M[Set[Grant]] = {
     logger.trace("Checking grant validity for apiKey " + apiKey)
     findAPIKey(apiKey).flatMap(_.map { apiKeyRecord =>

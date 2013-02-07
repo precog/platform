@@ -33,7 +33,7 @@ import scalaz.syntax.monad._
 
 class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountManager[M] {
   val accounts = new mutable.HashMap[AccountId, Account]
-  
+
   def updateAccount(account: Account): M[Boolean] = {
     findAccountById(account.accountId).map {
       case Some(acct) => accounts.put(account.accountId, account) ; true
@@ -53,8 +53,8 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
   }
 
   def findAccountById(accountId: AccountId): M[Option[Account]] = accounts.get(accountId).point[M]
-  
+
   def findAccountByEmail(email: String) : M[Option[Account]] = accounts.values.find(_.email == email).point[M]
-  
+
   def deleteAccount(accountId: AccountId): M[Option[Account]] = accounts.remove(accountId).point[M]
 }

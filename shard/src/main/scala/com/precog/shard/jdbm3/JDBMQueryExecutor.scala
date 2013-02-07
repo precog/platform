@@ -18,7 +18,7 @@
  *
  */
 package com.precog.shard
-package jdbm3 
+package jdbm3
 
 import blueeyes.json._
 
@@ -62,22 +62,25 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
+import scalaz.syntax.foldable._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+import scalaz.std.iterable._
+import scalaz.std.anyVal._
 
 import org.streum.configrity.Configuration
 
 trait JDBMQueryExecutorConfig
     extends ShardQueryExecutorConfig
-    with BlockStoreColumnarTableModuleConfig 
+    with BlockStoreColumnarTableModuleConfig
     with JDBMProjectionModuleConfig
     with ManagedQueryModuleConfig
     with ActorStorageModuleConfig
-    with ActorProjectionModuleConfig 
-    with IdSourceConfig 
+    with ActorProjectionModuleConfig
+    with IdSourceConfig
     with EvaluatorConfig
     with KafkaIngestActorProjectionSystemConfig {
-      
+
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
   lazy val jobPollFrequency: Duration = config[Int]("precog.evaluator.poll.cancellation", 3) seconds
@@ -90,7 +93,7 @@ trait JDBMQueryExecutorComponent  {
     new ManagedPlatform 
         with ShardQueryExecutorPlatform[Future]
         with SliceColumnarTableModule[Future, Array[Byte]]
-        with ActorProjectionModule[Array[Byte], table.Slice] 
+        with ActorProjectionModule[Array[Byte], table.Slice]
         with KafkaIngestActorProjectionSystem
         with ActorStorageModule { platform =>
 
@@ -164,44 +167,7 @@ trait JDBMQueryExecutorComponent  {
         }
       }
 
-      val metadataClient = new MetadataClient[Future] {
-        def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
-          storage.userMetadataView(userUID).findChildren(path) map {
-            case paths => success(JArray(paths.map( p => JString(p.toString)).toSeq: _*))
-          }
-        }
-
-        def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
-          val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, CPath(""))
-
-          def transform(children: Set[PathMetadata]): JObject = {
-            // Rewrite with collect or fold?
-            val (primitives, compounds) = children.partition {
-              case PathValue(_, _, _) => true
-              case _                  => false
-            }
-
-            val fields = compounds.map {
-              case PathIndex(i, children) =>
-                val path = "[%d]".format(i)
-                JField(path, transform(children))
-              case PathField(f, children) =>
-                val path = "." + f
-                JField(path, transform(children))
-              case _ => throw new MatchError("Non-compound in compounds")
-            }.toList
-
-            val types = JArray(primitives.map { 
-              case PathValue(t, _, _) => JString(CType.nameOf(t))
-              case _ => throw new MatchError("Non-primitive in primitives")
-            }.toList)
-
-            JObject(fields :+ JField("types", types))
-          }
-
-          futRoot.map { pr => Success(transform(pr.children)) } 
-        }
-      }
+      val metadataClient = new StorageMetadataClient(storage)
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 
@@ -227,7 +193,7 @@ trait JDBMQueryExecutorComponent  {
 
       override def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
         implicit val mn = new (Future ~> ShardQuery) {
-          def apply[A](fut: Future[A]) = fut.liftM[JobQueryT] 
+          def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
         }
 
         new ShardQueryExecutor[ShardQuery](shardQueryMonad) with IdSourceScannerModule {
@@ -235,8 +201,12 @@ trait JDBMQueryExecutorComponent  {
           def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
           type YggConfig = JDBMQueryExecutorConfig
           val yggConfig = platform.yggConfig
+          
+          def warn(warning: JValue): ShardQuery[Unit] =
+            jsonReport.warn(warning, "warning")
 
           val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
+          val jsonReport = errorReport[JValue]
         }
       }
 

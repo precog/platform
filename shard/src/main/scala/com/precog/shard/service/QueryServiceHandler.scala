@@ -71,13 +71,13 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
     case UserError(errorData) =>
       HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData)))
-  
+
     case AccessDenied(reason) =>
       HttpResponse[QueryResult](HttpStatus(Unauthorized, reason))
-  
+
     case TimeoutError =>
       HttpResponse[QueryResult](RequestEntityTooLarge)
-  
+
     case SystemError(error) =>
       error.printStackTrace()
       logger.error("An error occurred processing the query: " + qt, error)
@@ -116,7 +116,7 @@ Takes a quirrel query and returns the result of evaluating the query.
     """
   ))
 
-  
+
   def list(apiKey: APIKey, p: Path) = {
     platform.metadataClient.browse(apiKey, p).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
@@ -125,7 +125,7 @@ Takes a quirrel query and returns the result of evaluating the query.
   }
 
   def describe(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.structure(apiKey, p).map {
+    platform.metadataClient.structure(apiKey, p, CPath.Identity).map {
       case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
       case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
     }

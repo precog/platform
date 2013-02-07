@@ -1658,6 +1658,35 @@ object EmitterSpecs extends Specification
       result must contain(Map2Match(JoinObject))
       result must not(contain(Map2Cross(JoinObject)))
     }
+    
+    // regression test for PLATFORM-909
+    "produce valid bytecode for double-constrained group set should produce" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo' := foo where foo = 'a
+        |   count(foo' where foo' = 'a)
+        | """.stripMargin
+        
+      testEmit(input)(Vector(
+        PushString("/foo"),
+        Morph1(BuiltInMorphism1(expandGlob)),
+        LoadLocal,
+        Dup,
+        KeyPart(1),
+        Swap(1),
+        Group(0),
+        Split,
+        PushGroup(0),
+        Dup,
+        Swap(1),
+        PushKey(1),
+        Map2Cross(Eq),
+        FilterMatch,
+        Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+        Merge))
+    }
   }
   
   val exampleDir = new File("quirrel/examples")

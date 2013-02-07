@@ -19,6 +19,8 @@
  */
 package com.precog.util
 
+import org.joda.time.DateTime
+
 object NumericComparisons {
 
   @inline def compare(a: Long, b: Long): Int = if (a < b) -1 else if (a == b) 0 else 1
@@ -41,11 +43,18 @@ object NumericComparisons {
 
   @inline def compare(a: Double, b: BigDecimal): Int = BigDecimal(a) compare b
 
-  @inline def compare(a: BigDecimal, b:Long): Int = a compare BigDecimal(b)
+  @inline def compare(a: BigDecimal, b: Long): Int = a compare BigDecimal(b)
 
-  @inline def compare(a: BigDecimal, b:Double): Int = a compare BigDecimal(b)
+  @inline def compare(a: BigDecimal, b: Double): Int = a compare BigDecimal(b)
 
-  @inline def compare(a: BigDecimal, b:BigDecimal): Int = a compare b
+  @inline def compare(a: BigDecimal, b: BigDecimal): Int = a compare b
+
+  @inline def compare(a: DateTime, b: DateTime): Int = {
+    val res: Int = a compareTo b
+    if (res < 0) -1
+    else if (res > 0) 1
+    else 0
+  }
 
   @inline def eps(b: Double): Double = math.abs(b * 2.220446049250313E-16)
 
@@ -76,12 +85,15 @@ object NumericComparisons {
   @inline def order(a: Double, b: BigDecimal): scalaz.Ordering =
     scalaz.Ordering.fromInt(compare(a, b))
 
-  @inline def order(a: BigDecimal, b:Long): scalaz.Ordering =
+  @inline def order(a: BigDecimal, b: Long): scalaz.Ordering =
     scalaz.Ordering.fromInt(compare(a, b))
 
-  @inline def order(a: BigDecimal, b:Double): scalaz.Ordering =
+  @inline def order(a: BigDecimal, b: Double): scalaz.Ordering =
     scalaz.Ordering.fromInt(compare(a, b))
 
-  @inline def order(a: BigDecimal, b:BigDecimal): scalaz.Ordering =
+  @inline def order(a: BigDecimal, b: BigDecimal): scalaz.Ordering =
+    scalaz.Ordering.fromInt(compare(a, b))
+
+  @inline def order(a: DateTime, b: DateTime): scalaz.Ordering =
     scalaz.Ordering.fromInt(compare(a, b))
 }

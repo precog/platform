@@ -43,6 +43,7 @@ object JDBMShardServer extends BlueEyesServer
     with ShardService 
     with JDBMQueryExecutorComponent {
   import WebJobManager._
+
   val clock = Clock.System
 
   val actorSystem = ActorSystem("PrecogShard")

@@ -41,7 +41,7 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
-object KafkaEventServer extends BlueEyesServer with AkkaDefaults {
+object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
   val clock = Clock.System
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
@@ -54,7 +54,7 @@ object KafkaEventServer extends BlueEyesServer with AkkaDefaults {
 
     val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
     val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
-    val agent = serviceUID.hostId + serviceUID.serviceId  
+    val agent = serviceUID.hostId + serviceUID.serviceId
 
     val localConfig = config.detach("local")
 
@@ -74,4 +74,3 @@ object KafkaEventServer extends BlueEyesServer with AkkaDefaults {
     sys.error("Invalid configuration eventStore.%s required".format(key))
   }
 }
-

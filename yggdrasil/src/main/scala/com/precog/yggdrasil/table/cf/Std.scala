@@ -21,6 +21,8 @@ package com.precog.yggdrasil
 package table
 package cf
 
+import com.precog.util.NumericComparisons
+
 object std {
   val Eq = CF2P("builtin::ct::eq") {
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
@@ -57,7 +59,11 @@ object std {
       def apply(row: Int) = c1(row) == c2(row)
     }
     case (c1: DateColumn, c2: DateColumn) => new Map2Column(c1, c2) with BoolColumn {
-      def apply(row: Int) = c1(row) == c2(row)
+      def apply(row: Int) = {
+        val res = NumericComparisons.compare(c1(row), c2(row))
+        if (res == 0) true
+        else false
+      }
     }
     case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = true // always true where both columns are defined
