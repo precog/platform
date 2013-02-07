@@ -28,7 +28,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        std::stats::linearRegression({ height: medals.HeightIncm }, medals.Weight)
+        std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
       """.stripMargin
 
       val results = evalE(input)
@@ -55,7 +55,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        model := std::stats::linearRegression({ height: medals.HeightIncm }, medals.Weight)
+        model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
         std::stats::predictLinear({height: 34, other: 35}, model)
       """.stripMargin
 
@@ -76,7 +76,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        model := std::stats::linearRegression({ HeightIncm: medals.HeightIncm }, medals.Weight)
+        model := std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
         predictions := std::stats::predictLinear(medals, model)
 
         { height: medals.HeightIncm, predictedWeight: predictions }
@@ -111,7 +111,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        model := std::stats::linearRegression({ height: medals.HeightIncm }, medals.Weight)
+        model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
         std::stats::predictLinear({weight: 34, other: 35}, model)
       """.stripMargin
 
@@ -124,7 +124,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
           medals := //summer_games/london_medals
           
-          std::stats::linearRegression(medals, medals.S)
+          std::stats::linearRegression(medals.S, medals)
         """.stripMargin
 
       val results = evalE(input)
@@ -140,7 +140,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "return empty set when fed rank deficient data" in {
       val input = """
-        std::stats::linearRegression(4, 0)
+        std::stats::linearRegression(0, 4)
       """.stripMargin
 
       evalE(input) must throwA[IllegalArgumentException]
@@ -150,7 +150,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        std::stats::linearRegression({height: medals.HeightIncm}, {weight: medals.Weight})
+        std::stats::linearRegression({weight: medals.Weight}, {height: medals.HeightIncm})
       """.stripMargin
 
       evalE(input) must beEmpty
@@ -160,7 +160,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        std::stats::linearRegression(medals.Country, medals.WeightIncm)
+        std::stats::linearRegression(medals.WeightIncm, medals.Country)
       """.stripMargin
 
       evalE(input) must beEmpty
@@ -170,7 +170,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       val input = """
         medals := //summer_games/london_medals
         
-        std::stats::linearRegression(medals.WeightIncm, medals.Country)
+        std::stats::linearRegression(medals.Country, medals.WeightIncm)
       """.stripMargin
 
       evalE(input) must beEmpty

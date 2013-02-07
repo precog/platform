@@ -45,7 +45,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
     override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression, LinearPrediction)
 
     object MultiLinearRegression extends Morphism2(Stats2Namespace, "linearRegression") {
-      val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JNumberT, JType.JUniverseT, JObjectUnfixedT)
 
       lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
@@ -98,7 +98,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
           val values: Set[Option[Array[Array[Double]]]] = features map {
             case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
-              val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => 1.0 +: c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
+              val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
               Some(mapped)
             case other => 
               logger.warn("Features were not correctly put into a homogeneous array of doubles; returning empty.")
@@ -110,7 +110,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
             else values.suml(resultMonoid)
           }
 
-          val xs = arrays map { _ map { arr => java.util.Arrays.copyOf(arr, arr.length - 1) } }
+          val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
           val y0 = arrays map { _ map { _.last } }
 
           val matrixX = xs map { case arr => new Matrix(arr) }
@@ -157,13 +157,15 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
       private val morph1 = new Morph1Apply {
         def apply(table0: Table, ctx: EvaluationContext) = {
-          val leftSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
-          val rightSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
+          val ySpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
+          val xsSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
 
-          val leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-          val rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+          val ySpec = trans.Map1(ySpec0, cf.util.CoerceToDouble)
+          val xsSpec = trans.DeepMap1(xsSpec0, cf.util.CoerceToDouble)
 
-          val table = table0.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+          // `arraySpec` generates the schema in which the final results of the regression are returned
+          val arraySpec = InnerArrayConcat(trans.WrapArray(xsSpec), trans.WrapArray(ySpec))
+          val table = table0.transform(arraySpec)
 
           val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
           
@@ -191,11 +193,9 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
             _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
           }
 
-          val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
-
           val objectTables: M[Seq[Table]] = reducedTables map { 
-            _ map { tbl =>
-              val modelId = "Model" + defaultNumber.getAndIncrement.toString
+            _.zipWithIndex map { case (tbl, idx) =>
+              val modelId = "Model" + (idx + 1)
               tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
             }
           }

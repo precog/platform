@@ -59,7 +59,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
     override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression, LogisticPrediction)
 
     object LogisticRegression extends Morphism2(Stats2Namespace, "logisticRegression") with ReductionHelper {
-      val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JNumberT, JType.JUniverseT, JObjectUnfixedT)
 
       lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
@@ -230,13 +230,15 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
       private val morph1 = new Morph1Apply {
         def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
-          val leftSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
-          val rightSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
+          val ySpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
+          val xsSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
 
-          val leftSpec = trans.DeepMap1(leftSpec0, cf.util.CoerceToDouble)
-          val rightSpec = trans.Map1(rightSpec0, cf.util.CoerceToDouble)
+          val ySpec = trans.Map1(ySpec0, cf.util.CoerceToDouble)
+          val xsSpec = trans.DeepMap1(xsSpec0, cf.util.CoerceToDouble)
 
-          val table = table0.transform(InnerArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
+          // `arraySpec` generates the schema in which the final results of the regression are returned
+          val arraySpec = InnerArrayConcat(trans.WrapArray(xsSpec), trans.WrapArray(ySpec))
+          val table = table0.transform(arraySpec)
 
           val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
           
@@ -260,11 +262,9 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
             _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
           }
 
-          val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)
-
           val objectTables: M[Seq[Table]] = reducedTables map { 
-            _ map { tbl =>
-              val modelId = "Model" + defaultNumber.getAndIncrement.toString
+            _.zipWithIndex map { case (tbl, idx) =>
+              val modelId = "Model" + (idx + 1)
               tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
             }
           }
