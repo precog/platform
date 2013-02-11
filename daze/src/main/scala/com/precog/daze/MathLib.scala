@@ -4,6 +4,7 @@ package daze
 import bytecode.{ BinaryOperationType, UnaryOperationType, JNumberT }
 import bytecode.Library
 
+import com.precog.common._
 import yggdrasil._
 import yggdrasil.table._
 import TransSpecModule._
