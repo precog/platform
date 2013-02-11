@@ -23,6 +23,7 @@ package cf
 
 import org.apache.commons.collections.primitives.ArrayIntList
 
+import com.precog.common._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 

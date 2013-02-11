@@ -23,8 +23,7 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
-
-import com.precog.yggdrasil.CString
+import com.precog.common._
 
 trait JoinOptimizer extends DAGTransform {
   import dag._

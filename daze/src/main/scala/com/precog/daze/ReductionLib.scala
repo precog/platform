@@ -24,6 +24,7 @@ import org.joda.time._
 
 import util.NumericComparisons
 
+import com.precog.common._
 import bytecode._
 
 import yggdrasil._

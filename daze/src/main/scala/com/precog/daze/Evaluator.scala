@@ -22,6 +22,7 @@ package daze
 
 import annotation.tailrec
 
+import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule._
 import com.precog.yggdrasil.table._

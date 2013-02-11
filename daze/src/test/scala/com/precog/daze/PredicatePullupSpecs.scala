@@ -20,6 +20,7 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 

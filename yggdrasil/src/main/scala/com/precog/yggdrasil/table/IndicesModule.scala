@@ -24,6 +24,7 @@ import scala.annotation.tailrec
 
 import blueeyes.json._
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._

@@ -32,7 +32,7 @@ import org.scalacheck.{Arbitrary,Gen}
 
 import blueeyes.json._
 
-import com.precog.common.{Path,VectorCase}
+import com.precog.common._
 import com.precog.common.json._
 
 import com.precog.util.IOUtils

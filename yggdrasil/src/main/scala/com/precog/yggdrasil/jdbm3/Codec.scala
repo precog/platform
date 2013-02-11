@@ -22,6 +22,7 @@ package jdbm3
 
 import scalaz._
 
+import com.precog.common._
 import com.precog.yggdrasil.table._
 import com.precog.util._
 

@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.yggdrasil.test._

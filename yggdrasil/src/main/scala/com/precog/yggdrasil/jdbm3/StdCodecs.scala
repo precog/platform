@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common._
 import com.precog.util._
 
 import org.joda.time.DateTime

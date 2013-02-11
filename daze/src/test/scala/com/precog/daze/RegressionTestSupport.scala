@@ -22,6 +22,7 @@ package com.precog.daze
 import scala.util.Random
 import scala.collection.mutable
 
+import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.json._

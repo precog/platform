@@ -23,8 +23,8 @@ import scala.collection.mutable
 
 import blueeyes.json._
 
+import com.precog.common._
 import com.precog.common.json._
-import com.precog.common.VectorCase
 
 import org.specs2.mutable.Specification
 import org.scalacheck.Gen

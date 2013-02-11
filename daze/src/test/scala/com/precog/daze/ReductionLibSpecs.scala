@@ -21,6 +21,7 @@ package com.precog.daze
 
 import org.specs2.mutable._
 
+import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.common.Path
 

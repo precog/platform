@@ -20,6 +20,7 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import bytecode._
 import bytecode.Library
 import common.json._

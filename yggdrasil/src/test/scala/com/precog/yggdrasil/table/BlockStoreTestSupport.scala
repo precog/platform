@@ -20,10 +20,9 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common._
 import com.precog.bytecode.JType
-import com.precog.common.Path
 import com.precog.common.json._
-import com.precog.common.VectorCase
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.util._
 import jdbm3._

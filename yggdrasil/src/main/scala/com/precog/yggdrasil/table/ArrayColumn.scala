@@ -22,6 +22,7 @@ package table
 
 import org.joda.time.DateTime
 
+import com.precog.common._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 
 import scala.{ specialized => spec }
