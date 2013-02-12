@@ -17,13 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package jdbm3
+package com.precog.common
 
 import scalaz._
 
-import com.precog.common._
-import com.precog.yggdrasil.table._
 import com.precog.util._
 
 import org.joda.time.DateTime
@@ -31,7 +28,6 @@ import org.joda.time.DateTime
 import java.nio.{ ByteBuffer, CharBuffer }
 import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 
-import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
 import scala.annotation.tailrec
