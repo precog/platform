@@ -217,7 +217,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         case node @ Operate(op, parent) =>
           alg.Op1(node)(loop(parent), op)
 
-        case node => alg.unmatched(node)
+        case node =>
+          alg.unmatched(node)
       }
 
       loop(to)
