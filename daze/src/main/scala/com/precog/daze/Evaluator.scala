@@ -122,7 +122,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
       composeOptimizations(optimize, List(
-        predicatePullups(_, ctx),
+        // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
+        //predicatePullups(_, ctx),
         inferTypes(JType.JUnfixedT),
         { g => megaReduce(g, findReductions(g, ctx)) },
         memoize
