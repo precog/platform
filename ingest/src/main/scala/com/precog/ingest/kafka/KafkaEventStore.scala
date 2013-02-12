@@ -40,20 +40,7 @@ import com.weiglewilczek.slf4s._
 
 import scalaz._
 
-class LocalKafkaEventStore(config: Configuration)(implicit executor: ExecutionContext) extends EventStore with Logging {
-  private val localTopic = config[String]("topic")
-  private val localProperties = {
-    val props = JProperties.configurationToProperties(config)
-    val host = config[String]("broker.host")
-    val port = config[Int]("broker.port")
-    props.setProperty("broker.list", "0:%s:%d".format(host, port))
-    props
-  }
-
-  private val producer = new Producer[String, Message](new ProducerConfig(localProperties))
-
-  def start(): Future[PrecogUnit] = Promise.successful(PrecogUnit)
-
+class LocalKafkaEventStore(producer: Producer[String, Message])(implicit executor: ExecutionContext) extends EventStore with Logging {
   def save(event: Event, timeout: Timeout) = Future {
     producer send {
       new ProducerData[String, Message](localTopic, new Message(EventEncoding.toMessageBytes(event)))
@@ -61,6 +48,23 @@ class LocalKafkaEventStore(config: Configuration)(implicit executor: ExecutionCo
 
     PrecogUnit
   }
+}
 
-  def stop(): Future[PrecogUnit] = Future { producer.close; PrecogUnit } 
+object LocalKafkaEventStore {
+  def apply(config: Configuration): Option[(EventStore, Stoppable)] = {
+    val localTopic = config[String]("topic")
+
+    val localProperties = {
+      val props = JProperties.configurationToProperties(config)
+      val host = config[String]("broker.host")
+      val port = config[Int]("broker.port")
+      props.setProperty("broker.list", "0:%s:%d".format(host, port))
+      props
+    }
+
+    val producer = new Producer[String, Message](new ProducerConfig(localProperties))
+    val stoppable = Stoppable.fromFuture(Future { producer.close })
+
+    Some(new LocalKafkaEventStore(producer) -> stoppable)
+  }
 }

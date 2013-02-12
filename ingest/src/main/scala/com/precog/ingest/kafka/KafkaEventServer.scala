@@ -41,36 +41,43 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 
+object KafkaEventStore {
+  def apply(config: Configuration, accountFinder: AccountFinder[Future]): Option[(EventStore[Future], Stoppable)] = {
+    for (centralZookeeperHosts <- config.get[String]("central.zk.connect")) yield {
+      val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
+      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
+      val agent = serviceUID.hostId + serviceUID.serviceId
+
+      val localConfig = config.detach("local")
+
+      val eventIdSeq = new SystemEventIdSequence(agent, coordination)
+      val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
+      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, config.detach("central"))
+
+      (eventStore, esStop.parent(raStop))
+    }
+  }
+}
+
 object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
   val clock = Clock.System
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
-  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config)
-  def AccountFinder(config: Configuration) = WebAccountFinder(config)
-  def JobManager(config: Configuration) = WebJobManager(config).withM[Future]
-  def EventStore(config: Configuration): EventStore = {
-    val centralZookeeperHosts = getConfig(config, "central.zk.connect")
+  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
+    val accountFinder0 = WebAccountFinder(config.detach("accounts"))
 
-    val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-    val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
-    val agent = serviceUID.hostId + serviceUID.serviceId
-
-    val localConfig = config.detach("local")
-
-    val eventIdSeq = new SystemEventIdSequence(agent, coordination)
-    val accountFinder = AccountFinder(config.detach("accountFinder"))
-    val eventStore = new LocalKafkaEventStore(localConfig)
-    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, config.detach("central"))
-
-    new EventStore {
-      def save(action: Event, timeout: Timeout) = eventStore.save(action, timeout)
-      def start() = relayAgent.start flatMap { _ => eventStore.start }
-      def stop() = eventStore.stop flatMap { _ => relayAgent.stop }
+    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder) getOrElse {
+      sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
-  }
 
-  def getConfig(cfg: Configuration, key: String): String = cfg.get[String](key) getOrElse {
-    sys.error("Invalid configuration eventStore.%s required".format(key))
+    val deps = EventServiceDeps[Future]( 
+      apiKeyFinder = WebAPIKeyFinder(config.detach("security")),
+      accountFinder = accountFinder0,
+      eventStore = eventStore0,
+      jobManager = WebJobManager(config.detach("jobs"))
+    )
+
+    (deps, stoppable)
   }
 }

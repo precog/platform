@@ -25,10 +25,6 @@ import com.precog.util.PrecogUnit
 import akka.dispatch.Future
 import akka.util.Timeout
 
-trait EventStore {
-  // Returns a Future that completes when the storage layer has taken ownership of and
-  // acknowledged the receipt of the data.
-  def save(action: Event, timeout: Timeout): Future[PrecogUnit]
-  def start: Future[PrecogUnit]
-  def stop: Future[PrecogUnit]
+trait EventStore[M[+_]] {
+  def save(action: Event, timeout: Timeout): M[PrecogUnit]
 }

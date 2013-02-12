@@ -39,15 +39,21 @@ object StandaloneIngestServer
     extends BlueEyesServer
     with EventService
     with AkkaDefaults {
+  val executionContext = defaultFutureDispatch
+  implicit val M: Monad[Future] = new FutureMonad(asyncContext)
+
   val clock = Clock.System
 
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
-    = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-  def AccountFinder(config: Configuration): AccountFinder[Future] = sys.error("todo")
-  def EventStore(config: Configuration): EventStore = sys.error("todo")
-  def JobManager(config: Configuration): JobManager[Future] = sys.error("todo")
+  def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = 
+    new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
 
-  val executionContext = defaultFutureDispatch
-  def asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(asyncContext)
+  def AccountFinder(config: Configuration): AccountFinder[Future] = 
+    new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
+
+  def EventStore(config: Configuration): EventStore = KafkaEventStore(config) getOrElse {
+    sys.error("Invalid configuration: eventStore.central.zk.connect required")
+  }
+
+  def JobManager(config: Configuration): JobManager[Future] = 
+    new InMemoryJobManager()
 }

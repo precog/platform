@@ -70,7 +70,7 @@ class IngestServiceHandler(
     accessControl: AccessControl[Future], 
     jobManager: JobManager[Future], 
     clock: Clock, 
-    eventStore: EventStore, 
+    eventStore: EventStore[Future], 
     ingestTimeout: Timeout, 
     batchSize: Int)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] 

@@ -52,14 +52,13 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
+case class EventServiceDeps[M[+_]](apiKeyFinder: APIKeyFinder[M], accountFinder: AccountFinder[M], eventStore: EventStore[M], jobManager: JobManager[M])
+
 trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators { 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
-  def AccountFinder(config: Configuration): AccountFinder[Future]
-  def EventStore(config: Configuration): EventStore
-  def JobManager(config: Configuration): JobManager[Future]
+  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
 
   val eventService = this.service("ingest", "1.0") {
     requestLogging {
@@ -67,10 +66,8 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         startup {
           import context._
 
-          val eventStore = EventStore(config.detach("eventStore"))
-          val apiKeyFinder = APIKeyFinder(config.detach("security"))
-          val accountFinder = AccountFinder(config.detach("accounts"))
-          val jobManager = JobManager(config.detach("jobs"))
+          val (deps, stoppable) = configure(config)
+          import deps._
 
           val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
           val ingestBatchSize = config[Int]("ingest.batch_size", 500)

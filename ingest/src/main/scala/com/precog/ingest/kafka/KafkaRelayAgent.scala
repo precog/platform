@@ -48,135 +48,130 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 
-class KafkaRelayAgent(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext) extends Logging {
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+/** An independent agent that will consume records using the specified consumer,
+  * augment them with record identities, then send them with the specified producer. */
+final class KafkaRelayAgent(
+    accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence,
+    consumer: SimpleConsumer, topic: String, 
+    producer: Producer[String, Message], 
+    bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
+    maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
-  private final class KafkaMessageConsumer(host: String, port: Int, topic: String, producer: Producer[String, Message], bufferSize: Int = 1024 * 1024) extends Runnable with Logging {
-    val retryDelay = 5000
-    val maxDelay = 100.0
-    val waitCountFactor = 25
+  @volatile private var runnable = false;
+  private val stopPromise = Promise[PrecogUnit]()
 
-    private lazy val consumer = new SimpleConsumer(host, port, 5000, 64 * 1024)
+  def stop: Future[PrecogUnit] = Future({ runnable = false }) flatMap { _ => stopPromise }
 
-    @volatile private var runnable = false;
-    private val stopPromise = Promise[PrecogUnit]()
+  override def run() {
+    while (runnable) {
+      val offset = eventIdSeq.getLastOffset
+      logger.debug("Kafka consumer starting from offset: " + offset)
 
-    def stop: Future[PrecogUnit] = {
-      runnable = false
-      stopPromise map { _ => consumer.close; PrecogUnit }
+      try {
+        ingestBatch(offset, 0, 0, 0)
+      } catch {
+        case ex => logger.error("Error in kafka consumer.", ex)
+      }
+
+      Thread.sleep(retryDelay)
     }
 
-    override def run() {
-      while (runnable) {
-        val offset = eventIdSeq.getLastOffset
-        logger.debug("Kafka consumer starting from offset: " + offset)
+    stopPromise.success(PrecogUnit)
+  }
 
-        try {
-          ingestBatch(offset, 0, 0, 0)
-        } catch {
-          case ex => logger.error("Error in kafka consumer.", ex)
-        }
+  @tailrec
+  private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
+    if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
+    val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
 
-        Thread.sleep(retryDelay)
-      }
+    val messages = consumer.fetch(fetchRequest)
 
-      stopPromise.success(PrecogUnit)
+    // A future optimizatin would be to move this to another thread (or maybe actors)
+    val outgoing = messages.toList
+
+    if(outgoing.size > 0) {
+      processor(outgoing)
     }
 
-    @tailrec
-    def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
-      if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-      val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
+    val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
-      val messages = consumer.fetch(fetchRequest)
-
-      // A future optimizatin would be to move this to another thread (or maybe actors)
-      val outgoing = messages.toList
-
-      if(outgoing.size > 0) {
-        processor(outgoing)
-      }
-
-      val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
-
-      val (newOffset, newWaitCount) = if(messages.size > 0) {
-        val o: Long = messages.last.offset
-        logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
-        (o, 0L)
-      } else {
-        (offset, waitCount + 1)
-      }
-
-      Thread.sleep(newDelay)
-
-      ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
+    val (newOffset, newWaitCount) = if(messages.size > 0) {
+      val o: Long = messages.last.offset
+      logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
+      (o, 0L)
+    } else {
+      (offset, waitCount + 1)
     }
 
-    def delayStrategy(messageBytes: Int, currentDelay: Long, waitCount: Long): Long = {
-      if(messageBytes == 0) {
-        val boundedWaitCount = if(waitCount > waitCountFactor) waitCountFactor else waitCount
-        (maxDelay * boundedWaitCount / waitCountFactor).toLong
-      } else {
-        (maxDelay * (1.0 - messageBytes.toDouble / bufferSize)).toLong
-      }
-    }
+    Thread.sleep(newDelay)
 
-    def processor(messages: List[MessageAndOffset]) = {
-      val outgoing: List[Validation[Error, Future[Message]]] = messages map { msg => 
-        EventEncoding.read(msg.message.buffer) map { identify(_, msg.offset) } map { _ map { em => new Message(EventMessageEncoding.toMessageBytes(em)) } }
-      }
+    ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
+  }
 
-      outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Message]] map { messageFutures =>
-        messageFutures.sequence[Future, Message] map { messages => 
-          producer.send(new ProducerData[String, Message](centralTopic, messages))
-        } onFailure {
-          case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
-        } onSuccess {
-          case _ => eventIdSeq.saveState(messages.last.offset)
-        }
-      } valueOr { error =>
-        logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
-      }
-    }
-
-    private def identify(event: Event, offset: Long): Future[EventMessage] = {
-      event match {
-        case Ingest(apiKey, path, ownerAccountId, data, jobId) =>
-          accountFinder.resolveForWrite(ownerAccountId, apiKey) map {
-            case Some(accountId) =>
-              val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-              IngestMessage(apiKey, path, accountId, ingestRecords, jobId)
-
-            case None =>
-              // cannot relay event without a resolved owner account ID; fail loudly.
-              // this will abort the future, ensuring that state doesn't get corrupted
-              sys.error("Unable to establish owner account ID for ingest " + event)
-          } 
-
-        case archive @ Archive(_, _, _) =>
-          Promise.successful(ArchiveMessage(eventIdSeq.next(offset), archive))
-      }
+  private def delayStrategy(messageBytes: Int, currentDelay: Long, waitCount: Long): Long = {
+    if(messageBytes == 0) {
+      val boundedWaitCount = if (waitCount > waitCountFactor) waitCountFactor else waitCount
+      (maxDelay * boundedWaitCount / waitCountFactor).toLong
+    } else {
+      (maxDelay * (1.0 - messageBytes.toDouble / bufferSize)).toLong
     }
   }
 
-  lazy private val localTopic = localConfig[String]("topic")
-  lazy private val centralTopic = centralConfig[String]("topic")
+  private def processor(messages: List[MessageAndOffset]) = {
+    val outgoing: List[Validation[Error, Future[Message]]] = messages map { msg => 
+      EventEncoding.read(msg.message.buffer) map { identify(_, msg.offset) } map { _ map { em => new Message(EventMessageEncoding.toMessageBytes(em)) } }
+    }
 
-  lazy private val centralProperties = JProperties.configurationToProperties(centralConfig)
-  lazy private val producer = new Producer[String, Message](new ProducerConfig(centralProperties))
-
-  private lazy val batchConsumer = {
-    val hostname = localConfig[String]("broker.host", "localhost")
-    val port = localConfig[String]("broker.port", "9082").toInt
-
-    new KafkaMessageConsumer(hostname, port, localTopic, producer) 
+    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Message]] map { messageFutures =>
+      messageFutures.sequence[Future, Message] map { messages => 
+        producer.send(new ProducerData[String, Message](centralTopic, messages))
+      } onFailure {
+        case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
+      } onSuccess {
+        case _ => eventIdSeq.saveState(messages.last.offset)
+      }
+    } valueOr { error =>
+      logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
+    }
   }
 
-  def start() = Future {
-    new Thread(batchConsumer).start()
-    PrecogUnit
-  }
+  private def identify(event: Event, offset: Long): Future[EventMessage] = {
+    event match {
+      case Ingest(apiKey, path, ownerAccountId, data, jobId) =>
+        accountFinder.resolveForWrite(ownerAccountId, apiKey) map {
+          case Some(accountId) =>
+            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
+            IngestMessage(apiKey, path, accountId, ingestRecords, jobId)
 
-  def stop(): Future[PrecogUnit] = batchConsumer.stop map { _.tap(_ => producer.close) } 
+          case None =>
+            // cannot relay event without a resolved owner account ID; fail loudly.
+            // this will abort the future, ensuring that state doesn't get corrupted
+            sys.error("Unable to establish owner account ID for ingest " + event)
+        } 
+
+      case archive @ Archive(_, _, _) =>
+        Promise.successful(ArchiveMessage(eventIdSeq.next(offset), archive))
+    }
+  }
 }
 
+object KafkaRelayAgent {
+  def apply(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
+
+    val localTopic = localConfig[String]("topic", "local_event_cache")
+    val centralTopic = centralConfig[String]("topic", "central_event_store")
+
+    val centralProperties = JProperties.configurationToProperties(centralConfig)
+    val producer = new Producer[String, Message](new ProducerConfig(centralProperties))
+
+    val consumerHost = localConfig[String]("broker.host", "localhost")
+    val consumerPort = localConfig[String]("broker.port", "9082").toInt
+    val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
+
+    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer) 
+    val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
+
+    new Thread(relayAgent).start()
+    (relayAgent, stoppable)
+  }
+}
