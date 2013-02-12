@@ -135,6 +135,16 @@ sealed trait SValue {
     case SDecimal(n)  => JNum(n)
     case SNull        => JNull
   }
+
+  lazy val toRValue: RValue = this match {
+    case SObject(obj) => RObject(obj.map({ case (k, v) => (k, v.toRValue) }))
+    case SArray(arr)  => RArray(arr.map(_.toRValue)(collection.breakOut): _*)
+    case SString(s)   => CString(s)
+    case STrue        => CBoolean(true)
+    case SFalse       => CBoolean(false)
+    case SDecimal(n)  => CNum(n)
+    case SNull        => CNull
+  }
 }
 
 
@@ -241,6 +251,7 @@ object SValue extends SValueInstances {
     case CDouble(n) => SDecimal(BigDecimal(n))
     case CNum(n) => SDecimal(n)
     case CDate(d) => sys.error("todo") // Should this be SString(d.toString)?
+    case CPeriod(p) => sys.error("todo") // Should this be SString(d.toString)?
     case CArray(as, CArrayType(aType)) =>
       SArray(as.map(a => fromCValue(aType(a)))(collection.breakOut))
     case CNull => SNull
@@ -290,6 +301,7 @@ object SType {
     case CBoolean => SBoolean
     case (_: CNumericType[_]) => SDecimal
     case CDate => sys.error("todo")
+    case CPeriod => sys.error("todo")
     case CNull => SNull
     case CArrayType(_) => SArray
     case CEmptyObject => SObject
