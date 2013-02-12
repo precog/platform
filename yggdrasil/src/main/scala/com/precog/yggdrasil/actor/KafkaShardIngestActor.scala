@@ -329,8 +329,10 @@ abstract class KafkaShardIngestActor(shardId: String,
       )
 
       consumer.fetch(req).toList.map { msgAndOffset =>
-        (msgAndOffset.offset, IngestMessageSerialization.read(msgAndOffset.message.payload))
-      }
+        val message = (msgAndOffset.offset, IngestMessageSerialization.read(msgAndOffset.message.payload))
+        logger.trace("Read message from kafka: " +message)
+        message
+      } 
     } match {
       case Success(messageSet) => 
         accountManager.mapAccountIds(messageSet.collect { case (_, EventMessage(_, event)) => event.apiKey }.toSet).map { apiKeyMap =>
