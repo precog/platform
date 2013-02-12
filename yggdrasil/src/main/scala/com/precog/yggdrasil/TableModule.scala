@@ -124,7 +124,6 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def constEmptyObject: Table
     def constEmptyArray: Table
 
-    //def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table
     def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table
 
     def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]

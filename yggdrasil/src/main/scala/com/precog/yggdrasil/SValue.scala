@@ -119,6 +119,7 @@ sealed trait SValue {
       case STrue | SFalse => List((JPath(), CBoolean))
       case SDecimal(_)    => List((JPath(), CNum))
       case SNull          => List((JPath(), CNull)) 
+      case SUndefined     => List((JPath(), CUndefined))
     }
 
     s.sorted
@@ -134,6 +135,7 @@ sealed trait SValue {
     case SFalse       => JBool(false)
     case SDecimal(n)  => JNum(n)
     case SNull        => JNull
+    case SUndefined   => JUndefined
   }
 
   lazy val toRValue: RValue = this match {
@@ -144,6 +146,7 @@ sealed trait SValue {
     case SFalse       => CBoolean(false)
     case SDecimal(n)  => CNum(n)
     case SNull        => CNull
+    case SUndefined   => CUndefined
   }
 }
 
@@ -177,6 +180,7 @@ trait SValueInstances {
     case SDecimal(_) => 4
     case STrue | SFalse => 1
     case SNull       => 0
+    case SUndefined       => 2
   }
 
   implicit def order: Order[SValue] = new Order[SValue] {

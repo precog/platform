@@ -39,6 +39,8 @@ import com.precog.util.BitSet
 
 import TransSpecModule._
 
+import scala.collection.mutable.ArrayBuffer
+
 trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
   trait TimeLib extends ColumnarTableLib with EvaluatorMethods {
     import trans._
@@ -155,7 +157,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     object ParsePeriod extends Op1F1(TimeNamespace, "parsePeriod") {
       val tpe = UnaryOperationType(JTextT, JPeriodT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parsePeriod") {
-        case (c: StrColumn) => new Map1Column(c) with PeriodColumn {
+        case (c: StrColumn) => new PeriodColumn {
+          def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidPeriod(c(row))
           def apply(row: Int): Period = new Period(c(row))
         }
       }
@@ -206,7 +209,6 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       val end = "end"
       val step = "step"
 
-      // first assuming that only JDateT is supported, will handle JTextT later?
       val tpe = UnaryOperationType(
         JObjectFixedT(Map(
           start -> JDateT,
@@ -221,16 +223,14 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
         def init = ()
 
         def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val filteredCols = cols filter { case (ref, col) =>
-            ((ref.selector == CPath(start) || ref.selector == CPath(end)) && ref.ctype == CDate) ||
-              (ref.selector == CPath(step) && ref.ctype == CPeriod)
-          }
-
           val startCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(start) => col }
           val endCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(end) => col }
           val stepCol = cols collectFirst { case (ref, col: PeriodColumn) if ref.selector == CPath(step) => col }
 
-          val rawCols = filteredCols map { case (_, col) => col } toArray
+          val rawCols: Array[Column] = {
+            if (startCol.isEmpty || endCol.isEmpty || stepCol.isEmpty) Array.empty[Column]
+            else Array(startCol.get, endCol.get, stepCol.get)
+          }
 
           val defined = BitSetUtil.filteredRange(range.start, range.end) {
             i => Column.isDefinedAtAll(rawCols, i)
@@ -246,19 +246,17 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
               val endTime = endCol.get(i)
               val stepPeriod = stepCol.get(i)
 
-              // floor(((endTime - startTime) / stepPeriod) + 1)
-
-              var rowArray = new Array[DateTime](0)
+              var rowAcc = ArrayBuffer(startTime)
               var lastTime = startTime
 
               while (lastTime.plus(stepPeriod).compareTo(endTime) <= 0) {
                 val timePlus = lastTime.plus(stepPeriod)
-                rowArray = rowArray :+ timePlus  //appending to Array ok?
+                rowAcc = rowAcc :+ timePlus
 
                 lastTime = timePlus
               }
 
-              dateTimeArrays(i) = rowArray
+              dateTimeArrays(i) = rowAcc.toArray
             }
             dateTimeArrays
           }
@@ -267,13 +265,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
         }
       }
 
-      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] = {
-        //buildConstantWrapSpec(Scan(source, scanner))
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
         Scan(source, scanner)
-
-        //val tableSpec = Map(paths.Value -> Scan(source, scanner))
-        //makeTableTrans(tableSpec)
-      }
     }
 
     trait ExtremeTime extends Op2F2 {

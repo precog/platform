@@ -370,7 +370,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               case CUndefined => Table.empty
 
-              //case rv => Table.fromJson(Stream(rv.toJValue))
               case rv => Table.fromRValues(Stream(rv))
             }
 

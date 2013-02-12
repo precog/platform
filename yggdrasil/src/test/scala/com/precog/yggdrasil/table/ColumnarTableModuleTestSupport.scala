@@ -52,7 +52,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
    * Given a JValue, an existing map of columnrefs to column data,
    * a sliceIndex, and a sliceSize, return an updated map.
    */
-  def withIdsAndValues(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] = {
+  def updateRefs(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] = {
 
     jv.flattenWithPath.foldLeft(into) {
       case (acc, (jpath, JUndefined)) => acc
@@ -107,7 +107,7 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
       @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
         from match {
           case jv #:: xs =>
-            val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
+            val refs = updateRefs(jv, into, sliceIndex, sliceSize)
             buildColArrays(xs, refs, sliceIndex + 1)
           case _ =>
             (into, sliceIndex)

@@ -470,9 +470,8 @@ trait ColumnarTableModule[M[+_]]
             case CPeriod(p) =>
               acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
 
-            //todo handle types!
-            //case CArray(arr, tpe) =>
-            //  acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(tpe)).asInstanceOf[ArrayHomogeneousArrayColumn[A]].tap { c => c.update(sliceIndex, arr) }
+            case CArray(arr, cType) =>
+              acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(cType)).asInstanceOf[ArrayHomogeneousArrayColumn[cType.tpe]].tap { c => c.update(sliceIndex, arr) }
               
             case CEmptyArray =>
               acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }

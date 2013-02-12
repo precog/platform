@@ -115,6 +115,8 @@ object RValue {
             case Nil => value
             case CPathIndex(_) :: _ => rec(RArray.empty, path, value)
             case CPathField(_) :: _ => rec(RObject.empty, path, value)
+            case CPathArray :: _ => sys.error("todo")
+            case CPathMeta(_) :: _ => sys.error("todo")
           }
 
           case x => sys.error("RValue insert would overwrite existing data: " + x + " cannot be updated to " + value + " at " + path +
@@ -467,6 +469,8 @@ case object CArray {
 case class CArrayType[@spec(Boolean, Long, Double) A](elemType: CValueType[A]) extends CValueType[Array[A]] {
   // Spec. bug: Leave lazy here.
   lazy val manifest: Manifest[Array[A]] = elemType.manifest.arrayManifest
+
+  type tpe = A
 
   def readResolve() = CArrayType(elemType.readResolve())
 

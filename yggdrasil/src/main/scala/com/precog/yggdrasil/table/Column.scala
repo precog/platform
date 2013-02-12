@@ -23,8 +23,7 @@ package table
 import cf._
 
 import blueeyes.json._
-import org.joda.time.DateTime
-import org.joda.time.Period
+import org.joda.time.{DateTime, Period}
 
 import java.math.MathContext
 
