@@ -15,10 +15,9 @@ object FileLock {
       lock.release
       channel.close
 
-      if (removeFile) {
-        lockFile.delete
-      }
+      lockFile.foreach(_.delete)
     }
+  }
 
 
   def apply(target: File, lockPrefix: String = "LOCKFILE"): FileLock = {
@@ -37,15 +36,6 @@ object FileLock {
       throw new FileLockException("Could not lock. Previous lock exists on " + target)
     }
 
-    new FileLock {
-      def release = {
-        lock.release
-        channel.close
-
-        if (removeFile) {
-          lockFile.delete
-        }
-      }
-    }
+    LockHolder(channel, lock, if (removeFile) Some(lockFile) else None)
   }
 }
