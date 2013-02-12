@@ -442,55 +442,7 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    /**
-     * Given a JValue, an existing map of columnrefs to column data,
-     * a sliceIndex, and a sliceSize, return an updated map.
-     */
-    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] = {
-
-      jv.flattenWithPath.foldLeft(into) {
-        case (acc, (jpath, JUndefined)) => acc
-        case (acc, (jpath, v)) =>
-          val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-          val ref = ColumnRef(remapPath.map(_(jpath)).getOrElse(CPath(jpath)), ctype)
-          
-          val updatedColumn: ArrayColumn[_] = v match {
-            case JBool(b) =>
-              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
-              
-            case JNum(d) => ctype match {
-              case CLong =>
-                acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
-
-              case CDouble =>
-                acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
-
-              case CNum =>
-                acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
-
-              case _ => sys.error("non-numeric type reached")
-            }
-              
-            case JString(s) =>
-              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
-              
-            case JArray(Nil) =>
-              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
-              
-            case JObject.empty =>
-              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
-              
-            case JNull        =>
-              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
-
-            case _ => sys.error("non-flattened value reached")
-          }
-          
-          acc + (ref -> updatedColumn)
-      }
-    }
-
-    def xyz(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
+    def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
       rv.flattenWithPath.foldLeft(into) {
         case (acc, (cpath, CUndefined)) => acc
         case (acc, (cpath, cvalue)) =>
@@ -536,44 +488,6 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
-      val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
-  
-      def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
-        val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
-        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
-          from match {
-            case jv #:: xs =>
-              val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
-              buildColArrays(xs, refs, sliceIndex + 1)
-            case _ =>
-              (into, sliceIndex)
-          }
-        }
-    
-        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-        // Slice#typed to fail unless it allows for vacuous success
-        val slice = new Slice {
-          val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
-        }
-    
-        (slice, suffix)
-      }
-      
-      Table(
-        StreamT.unfoldM(values) { events =>
-          M.point {
-            (!events.isEmpty) option {
-              makeSlice(events.toStream)
-            }
-          }
-        },
-        ExactSize(values.length)
-      )
-    }
-
     def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
       
@@ -583,16 +497,13 @@ trait ColumnarTableModule[M[+_]]
         @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
           from match {
             case jv #:: xs =>
-              val refs = xyz(jv, into, sliceIndex, sliceSize)
+              val refs = updateRefs(jv, into, sliceIndex, sliceSize)
               buildColArrays(xs, refs, sliceIndex + 1)
             case _ =>
               (into, sliceIndex)
           }
         }
     
-        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-        // Slice#typed to fail unless it allows for vacuous success
         val slice = new Slice {
           val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
         }
