@@ -181,6 +181,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, cooker
       )
       currentBlocks = computeBlockMap(currentState)
       CookedMap.write(cookedMapFile, currentState.cooked)
+      txLog.completeCook(blockId)
 
     case ProjectionInsert(_, rows) =>
       currentState.rawLog.write(rows)
