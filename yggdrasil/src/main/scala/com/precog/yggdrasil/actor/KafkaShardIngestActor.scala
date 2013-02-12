@@ -340,6 +340,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       case Failure(t) => 
         import context.system
         implicit val executor = ExecutionContext.defaultExecutionContext
+        logger.error("An error occurred reading from the checkpoint " + lastCheckpoint, t)
         Future(Failure[Throwable, (Vector[(Long, IngestMessage)], YggCheckpoint)](t))
     }
   }
