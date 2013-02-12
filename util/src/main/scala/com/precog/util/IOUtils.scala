@@ -31,13 +31,13 @@ import scalaz._
 import scalaz.effect.IO
 
 import scala.collection.JavaConversions.{seqAsJavaList}
- 
+
 object IOUtils {
   final val UTF8 = "UTF-8"
 
   val dotDirs = "." :: ".." :: Nil
-  
-  def isNormalDirectory(f: File) = f.isDirectory && !dotDirs.contains(f.getName) 
+
+  def isNormalDirectory(f: File) = f.isDirectory && !dotDirs.contains(f.getName)
 
   def walkSubdirs(root: File): IO[Seq[File]] = IO {
     if(!root.isDirectory) List.empty else root.listFiles.filter( isNormalDirectory )
@@ -47,8 +47,8 @@ object IOUtils {
     FileUtils.readFileToString(f, UTF8)
   }
 
-  def readPropertiesFile(s: String): IO[Properties] = readPropertiesFile { new File(s) } 
-  
+  def readPropertiesFile(s: String): IO[Properties] = readPropertiesFile { new File(s) }
+
   def readPropertiesFile(f: File): IO[Properties] = IO {
     val props = new Properties
     props.load(new FileReader(f))
@@ -64,7 +64,7 @@ object IOUtils {
     val s = seqAsJavaList(s0)
     FileUtils.writeLines(f, s)
   }
-  
+
   /** Performs a safe write to the file. Returns true
    * if the file was completely written, false otherwise
    */
