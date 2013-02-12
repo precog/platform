@@ -1,5 +1,4 @@
-package com.precog.yggdrasil
-package jdbm3
+package com.precog.common
 
 import com.precog.util.{ ByteBufferPool, RawBitSet }
 
@@ -143,4 +142,3 @@ class CodecSpec extends Specification with ScalaCheck {
   }
   // "CValueCodec" should surviveRoundTrip(Codec.CValueCodec)
 }
-
