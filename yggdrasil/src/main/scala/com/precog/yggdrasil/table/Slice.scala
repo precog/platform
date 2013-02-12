@@ -34,7 +34,7 @@ import TransSpecModule._
 import blueeyes.json._
 import org.apache.commons.collections.primitives.ArrayIntList
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
@@ -1177,6 +1177,16 @@ trait Slice { source =>
           renderString(date.toString)
         }
         
+        @inline
+        def renderPeriod(period: Period) {
+          renderString(period.toString)
+        }
+        
+        @inline
+        def renderArray[A](array: Array[A]) {
+          renderString(array.deep.toString)
+        }
+        
         def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
           case obj: SchemaNode.Obj => {
             val keys = obj.keys
@@ -1378,6 +1388,30 @@ trait Slice { source =>
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderDate(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CPeriod => {
+              val specCol = col.asInstanceOf[PeriodColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderPeriod(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CArrayType(_) => {
+              val specCol = col.asInstanceOf[HomogeneousArrayColumn[_]]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderArray(specCol(row))
                 true
               } else {
                 false

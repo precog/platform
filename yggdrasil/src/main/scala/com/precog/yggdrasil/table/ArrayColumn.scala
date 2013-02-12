@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import org.joda.time.DateTime
+import org.joda.time.Period
 
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 
@@ -56,7 +57,6 @@ object ArrayHomogeneousArrayColumn {
     new ArrayHomogeneousArrayColumn(new BitSet, new Array[Array[A]](size))(CArrayType(elemType))
   }
 }
-
 
 class ArrayBoolColumn(val defined: BitSet, values: BitSet) extends ArrayColumn[Boolean] with BoolColumn {
   def apply(row: Int) = values(row)
@@ -100,7 +100,6 @@ object ArrayLongColumn {
     new ArrayLongColumn(new BitSet, new Array[Long](size))
 }
 
-
 class ArrayDoubleColumn(val defined: BitSet, values: Array[Double]) extends ArrayColumn[Double] with DoubleColumn {
   def apply(row: Int) = values(row)
 
@@ -119,7 +118,6 @@ object ArrayDoubleColumn {
     new ArrayDoubleColumn(new BitSet, new Array[Double](size))
 }
 
-
 class ArrayNumColumn(val defined: BitSet, values: Array[BigDecimal]) extends ArrayColumn[BigDecimal] with NumColumn {
   def apply(row: Int) = values(row)
 
@@ -137,7 +135,6 @@ object ArrayNumColumn {
   def empty(size: Int): ArrayNumColumn =
     new ArrayNumColumn(new BitSet, new Array[BigDecimal](size))
 }
-
 
 class ArrayStrColumn(val defined: BitSet, values: Array[String]) extends ArrayColumn[String] with StrColumn {
   def apply(row: Int) = values(row)
@@ -173,6 +170,24 @@ object ArrayDateColumn {
     new ArrayDateColumn(defined.copy, values)
   def empty(size: Int): ArrayDateColumn =
     new ArrayDateColumn(new BitSet, new Array[DateTime](size))
+}
+
+class ArrayPeriodColumn(val defined: BitSet, values: Array[Period]) extends ArrayColumn[Period] with PeriodColumn {
+  def apply(row: Int) = values(row)
+
+  def update(row: Int, value: Period) = {
+    defined.set(row)
+    values(row) = value
+  }
+}
+
+object ArrayPeriodColumn {
+  def apply(values: Array[Period]) =
+    new ArrayPeriodColumn(BitSetUtil.range(0, values.length), values)
+  def apply(defined: BitSet, values: Array[Period]) =
+    new ArrayPeriodColumn(defined.copy, values)
+  def empty(size: Int): ArrayPeriodColumn =
+    new ArrayPeriodColumn(new BitSet, new Array[Period](size))
 }
 
 class MutableEmptyArrayColumn(val defined: BitSet) extends ArrayColumn[Boolean] with EmptyArrayColumn {

@@ -156,6 +156,23 @@ class DerefSlice(source: Slice, derefBy: PartialFunction[Int, CPathNode]) extend
             }
           }
 
+        case CPeriod =>
+          new PeriodColumn {
+            private var row0: Int = -1
+            private var refCol0: PeriodColumn = _
+            @inline private def refCol(row: Int): PeriodColumn = 
+              derefColumns(derefBy(row)).flatMap(_.get(resultRef)).orNull.asInstanceOf[PeriodColumn]
+
+            def apply(row: Int) = refCol0(row)
+
+            def isDefinedAt(row: Int) = {
+              derefBy.isDefinedAt(row) && { 
+                if (row0 != row) { row0 = row; refCol0 = refCol(row) }
+                refCol0 != null && refCol0.isDefinedAt(row)
+              }
+            }
+          }
+
         case cArrayType: CArrayType[a] =>
           new HomogeneousArrayColumn[a] {
             val tpe = cArrayType
@@ -190,6 +207,8 @@ class DerefSlice(source: Slice, derefBy: PartialFunction[Int, CPathNode]) extend
           new NullColumn {
             def isDefinedAt(row: Int) = derefBy.isDefinedAt(row) && derefColumns(derefBy(row)).exists(cols => cols(resultRef).isDefinedAt(row)) 
           }
+
+        case CUndefined => UndefinedColumn.raw
       }
 
       acc + (resultRef -> acc.getOrElse(resultRef, resultCol))

@@ -467,6 +467,8 @@ trait ColumnarTableModule[M[+_]]
 
               case CNum =>
                 acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+              case _ => sys.error("non-numeric type reached")
             }
               
             case JString(s) =>
@@ -475,10 +477,58 @@ trait ColumnarTableModule[M[+_]]
             case JArray(Nil) =>
               acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
               
-            case JObject(_) =>
+            case JObject.empty =>
               acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
               
             case JNull        =>
+              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
+
+            case _ => sys.error("non-flattened value reached")
+          }
+          
+          acc + (ref -> updatedColumn)
+      }
+    }
+
+    def xyz(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
+      rv.flattenWithPath.foldLeft(into) {
+        case (acc, (cpath, CUndefined)) => acc
+        case (acc, (cpath, cvalue)) =>
+          val ref = ColumnRef(cpath, (cvalue.cType))
+          
+          val updatedColumn: ArrayColumn[_] = cvalue match {
+            case CBoolean(b) =>
+              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
+              
+            case CLong(d) =>
+              acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
+
+            case CDouble(d) =>
+              acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
+
+            case CNum(d) =>
+              acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CString(s) =>
+              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
+
+            case CDate(d) =>
+              acc.getOrElse(ref, ArrayDateColumn.empty(sliceSize)).asInstanceOf[ArrayDateColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CPeriod(p) =>
+              acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
+
+            //todo handle types!
+            //case CArray(arr, tpe) =>
+            //  acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(tpe)).asInstanceOf[ArrayHomogeneousArrayColumn[A]].tap { c => c.update(sliceIndex, arr) }
+              
+            case CEmptyArray =>
+              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CEmptyObject =>
+              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CNull =>
               acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
           }
           
@@ -512,6 +562,44 @@ trait ColumnarTableModule[M[+_]]
         (slice, suffix)
       }
       
+      Table(
+        StreamT.unfoldM(values) { events =>
+          M.point {
+            (!events.isEmpty) option {
+              makeSlice(events.toStream)
+            }
+          }
+        },
+        ExactSize(values.length)
+      )
+    }
+
+    def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
+      val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
+      
+      def makeSlice(data: Stream[RValue]): (Slice, Stream[RValue]) = {
+        val (prefix, suffix) = data.splitAt(sliceSize)
+  
+        @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+          from match {
+            case jv #:: xs =>
+              val refs = xyz(jv, into, sliceIndex, sliceSize)
+              buildColArrays(xs, refs, sliceIndex + 1)
+            case _ =>
+              (into, sliceIndex)
+          }
+        }
+    
+        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
+        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
+        // Slice#typed to fail unless it allows for vacuous success
+        val slice = new Slice {
+          val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
+        }
+    
+        (slice, suffix)
+      }
+
       Table(
         StreamT.unfoldM(values) { events =>
           M.point {
@@ -1392,11 +1480,13 @@ trait ColumnarTableModule[M[+_]]
           case CBoolean => JBooleanT
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
-          case CDate => JTextT
+          case CDate => JDateT
+          case CPeriod => JPeriodT
           case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
+          case CUndefined => sys.error("not supported")
         }
 
         def fresh(paths: List[CPathNode], leaf: JType): Option[JType] = paths match {

@@ -28,6 +28,7 @@ import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import org.joda.time.DateTime
+import org.joda.time.Period
 
 import scalaz._
 import scalaz.Ordering._
@@ -49,6 +50,27 @@ sealed trait RValue { self =>
 
   def unsafeInsert(path: CPath, value: RValue): RValue = {
     RValue.unsafeInsert(self, path, value)
+  }
+
+  def flattenWithPath: Vector[(CPath, CValue)] = {
+    def flatten0(path: CPath)(value: RValue): Vector[(CPath, CValue)] = value match {
+      case RObject(fields) =>
+        fields.foldLeft(Vector.empty[(CPath, CValue)]) {
+          case (acc, field) =>
+            acc ++ flatten0(path \ field._1)(field._2)
+        }
+
+      case RArray(elems) =>
+        Vector(elems: _*).zipWithIndex.flatMap { tuple =>
+          val (elem, idx) = tuple
+
+          flatten0(path \ idx)(elem)
+        }
+
+      case (v: CValue) => Vector((path, v))
+    }
+
+    flatten0(CPath.Identity)(self)
   }
 }
 
@@ -153,6 +175,7 @@ object CValue {
     case (CDouble(ad), CDouble(bd)) => ad.compareTo(bd)
     case (CNum(an), CNum(bn)) => an.compareTo(bn)
     case (CDate(ad), CDate(bd)) => ad.compareTo(bd)
+    case (CPeriod(ad), CPeriod(bd)) => (ad.toStandardDuration).compareTo(bd.toStandardDuration)
     case (CArray(as, CArrayType(atpe)), CArray(bs, CArrayType(btpe))) if atpe == btpe =>
       (as.view zip bs.view) map { case (a, b) =>
         compareValues(atpe(a), btpe(b))
@@ -198,6 +221,7 @@ sealed trait CType extends Serializable {
     case CNull         => 11
 
     case CDate         => 12
+    case CPeriod       => 13
   }
 }
 
@@ -229,6 +253,7 @@ trait CTypeSerialization {
     case CEmptyArray            => "EmptyArray"
     case CArrayType(elemType)   => "Array[%s]" format nameOf(elemType)
     case CDate                  => "Timestamp"
+    case CPeriod                => "Period"
     case CUndefined             => sys.error("CUndefined cannot be serialized")
   } 
 
@@ -248,6 +273,7 @@ trait CTypeSerialization {
       case _ => None
     }
     case "Timestamp"     => Some(CDate)
+    case "Period"     => Some(CPeriod)
     case _ => None
   }
     
@@ -286,6 +312,9 @@ case object CType extends CTypeSerialization {
       case (CNum, CNum)       => Some(CNum)
 
       case (CString, CString) => Some(CString)
+
+      case (CDate, CDate) => Some(CDate)
+      case (CPeriod, CPeriod) => Some(CPeriod)
 
       case (CArrayType(et1), CArrayType(et2)) =>
         unify(et1, et2) flatMap {
@@ -376,6 +405,7 @@ object CValueType {
   implicit def double: CValueType[Double] = CDouble
   implicit def bigDecimal: CValueType[BigDecimal] = CNum
   implicit def dateTime: CValueType[DateTime] = CDate
+  implicit def period: CValueType[Period] = CPeriod
   implicit def array[@spec(Boolean, Long, Double) A](implicit elemType: CValueType[A]) = CArrayType(elemType)
 }
 
@@ -524,7 +554,7 @@ case object CNum extends CNumericType[BigDecimal] {
 }
 
 //
-// Dates
+// Dates and Periods
 //
 case class CDate(value: DateTime) extends CWrappedValue[DateTime] {
   val cType = CDate
@@ -535,6 +565,17 @@ case object CDate extends CValueType[DateTime] {
   def readResolve() = CDate
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
   def jValueFor(v: DateTime) = JString(v.toString)
+}
+
+case class CPeriod(value: Period) extends CWrappedValue[Period] {
+  val cType = CPeriod
+}
+
+case object CPeriod extends CValueType[Period] {
+  val manifest: Manifest[Period] = implicitly[Manifest[Period]]
+  def readResolve() = CPeriod
+  def order(v1: Period, v2: Period) = sys.error("todo")
+  def jValueFor(v: Period) = JString(v.toString)
 }
 
 //

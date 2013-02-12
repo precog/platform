@@ -22,8 +22,11 @@ package daze
 
 import util.NumericComparisons
 import util.DateTimeUtil._
+import util.BitSetUtil
 
 import bytecode._
+
+import common.json._
 
 import yggdrasil._
 import yggdrasil.table._
@@ -36,8 +39,8 @@ import com.precog.util.BitSet
 
 import TransSpecModule._
 
-trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  trait TimeLib extends ColumnarTableLib {
+trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
+  trait TimeLib extends ColumnarTableLib with EvaluatorMethods {
     import trans._
 
     val TimeNamespace = Vector("std", "time")
@@ -46,6 +49,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       GetMillis,
       TimeZone,
       Season,
+      TimeRange,
 
       Year,
       QuarterOfYear,
@@ -73,7 +77,8 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       HourMinute,
       HourMinuteSecond,
 
-      ParseDateTimeFuzzy
+      ParseDateTimeFuzzy,
+      ParsePeriod
     )
 
     override def _lib2 = super._lib2 ++ Set(
@@ -147,8 +152,17 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-   //ok to `get` because CoerceToDate is defined for StrColumn
-   def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+    object ParsePeriod extends Op1F1(TimeNamespace, "parsePeriod") {
+      val tpe = UnaryOperationType(JTextT, JPeriodT)
+      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parsePeriod") {
+        case (c: StrColumn) => new Map1Column(c) with PeriodColumn {
+          def apply(row: Int): Period = new Period(c(row))
+        }
+      }
+    }
+
+    //ok to `get` because CoerceToDate is defined for StrColumn
+    def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
 
     object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
       def checkDefined(c1: Column, c2: StrColumn, row: Int) =
@@ -184,6 +198,81 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             new DateTime(time, timeZone)
           }
         }
+      }
+    }
+
+    object TimeRange extends Op1(TimeNamespace, "range") {
+      val start = "start"
+      val end = "end"
+      val step = "step"
+
+      // first assuming that only JDateT is supported, will handle JTextT later?
+      val tpe = UnaryOperationType(
+        JObjectFixedT(Map(
+          start -> JDateT,
+          end -> JDateT,
+          step -> JPeriodT)),
+        JArrayHomogeneousT(JDateT))
+
+      override val retainIds = true
+
+      def scanner = new CScanner {
+        type A = Unit
+        def init = ()
+
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val filteredCols = cols filter { case (ref, col) =>
+            ((ref.selector == CPath(start) || ref.selector == CPath(end)) && ref.ctype == CDate) ||
+              (ref.selector == CPath(step) && ref.ctype == CPeriod)
+          }
+
+          val startCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(start) => col }
+          val endCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(end) => col }
+          val stepCol = cols collectFirst { case (ref, col: PeriodColumn) if ref.selector == CPath(step) => col }
+
+          val rawCols = filteredCols map { case (_, col) => col } toArray
+
+          val defined = BitSetUtil.filteredRange(range.start, range.end) {
+            i => Column.isDefinedAtAll(rawCols, i)
+          }
+
+          val definedRange = range.filter(defined(_))
+
+          val dateTimeArrays = new Array[Array[DateTime]](range.length)
+
+          val dateTimes: Array[Array[DateTime]] = {
+            definedRange.toArray map { i =>
+              val startTime = startCol.get(i)
+              val endTime = endCol.get(i)
+              val stepPeriod = stepCol.get(i)
+
+              // floor(((endTime - startTime) / stepPeriod) + 1)
+
+              var rowArray = new Array[DateTime](0)
+              var lastTime = startTime
+
+              while (lastTime.plus(stepPeriod).compareTo(endTime) <= 0) {
+                val timePlus = lastTime.plus(stepPeriod)
+                rowArray = rowArray :+ timePlus  //appending to Array ok?
+
+                lastTime = timePlus
+              }
+
+              dateTimeArrays(i) = rowArray
+            }
+            dateTimeArrays
+          }
+          
+          ((), Map(ColumnRef(CPathArray, CArrayType(CDate)) -> ArrayHomogeneousArrayColumn(defined, dateTimes)))
+        }
+      }
+
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] = {
+        //buildConstantWrapSpec(Scan(source, scanner))
+        Scan(source, scanner)
+
+        //val tableSpec = Map(paths.Value -> Scan(source, scanner))
+        //makeTableTrans(tableSpec)
       }
     }
 
@@ -308,7 +397,6 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def plus(d: DateTime, i: Int) = d.plus(Period.millis(i))
     }
     
-
     trait TimeBetween extends Op2F2 {
       val tpe = BinaryOperationType(textAndDate, textAndDate, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
