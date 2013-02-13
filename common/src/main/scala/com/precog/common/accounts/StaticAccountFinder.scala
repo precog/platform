@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
+package com.precog.common
 package accounts
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
@@ -31,12 +31,11 @@ import org.streum.configrity.Configuration
 import scalaz.Monad
 
 import com.precog.common.security._
-import com.precog.common.accounts._
 
-class StaticAccountFinder(accountId: AccountId)(implicit asyncContext: ExecutionContext) extends AccountFinder[Future] with Logging {
-  logger.debug("Starting new static account manager. All queries resolve to \"%s\"".format(accountId))
+class StaticAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
+  logger.debug("Constructed new static account manager. All queries resolve to \"%s\"".format(accountId))
 
-  implicit val M: Monad[Future] = new FutureMonad(asyncContext)
+  implicit val M: Monad[Future] = new FutureMonad(executor)
 
   def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
 
