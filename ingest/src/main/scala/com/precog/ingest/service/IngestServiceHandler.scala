@@ -102,7 +102,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
           ev match {
             case Right(event) if event.flattenWithPath.size <= 250 => futures += ingest(t, p, event)
             case Right(event) => 
-              logger.warn("Rejecting event for %s at %s due to excessive primitive fields (%d)".format(t, p, event.flattenWithPath.size))
+              logger.warn("Rejecting event for %s at %s due to excessive primitive fields (%d). Event = %s".format(t, p, event.flattenWithPath.size, event.renderCompact))
               errors += (i -> "Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience.")
             case Left(error) => 
               logger.warn("Failure on ingest for %s at %s: %s".format(t, p, error))
