@@ -24,6 +24,7 @@ import util._
 
 import com.precog.common.Path
 import com.precog.common.accounts._
+import com.precog.common.client._
 import com.precog.common.ingest._
 import com.precog.common.jobs._
 import com.precog.common.security._
@@ -56,6 +57,7 @@ import com.weiglewilczek.slf4s.Logging
 import au.com.bytecode.opencsv.CSVReader
 
 import scalaz._
+import scalaz.\/._
 import scalaz.Validation._
 import scalaz.std.function._
 import scalaz.std.option._
@@ -68,7 +70,7 @@ import scala.annotation.tailrec
 class IngestServiceHandler(
     accountFinder: AccountFinder[Future], 
     accessControl: AccessControl[Future], 
-    jobManager: JobManager[Future], 
+    jobManager: JobManager[BaseClient.Response], 
     clock: Clock, 
     eventStore: EventStore[Future], 
     ingestTimeout: Timeout, 
@@ -403,7 +405,9 @@ class IngestServiceHandler(
   }
 
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
-    Success { (apiKey: APIKey, path: Path) =>
+    Success { (apiKey: APIKey, path: Path) => {
+      def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id } 
+
       accountFinder.resolveForWrite(request.parameters.get('ownerAccountId), apiKey) flatMap {
         case Some(ownerAccountId) =>
           accessControl.hasCapability(apiKey, Set(WritePermission(path, Set(ownerAccountId))), None) flatMap {
@@ -416,48 +420,51 @@ class IngestServiceHandler(
                 val batchMode = request.parameters.get('mode) exists (_ equalsIgnoreCase "batch") 
                 // assign new job ID for batch-mode queries only
                 for {
-                  batchJob <- batchMode.option(jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id }).sequence
-                  ingestResult <- batchJob map { jobId =>
-                                  val sync =  request.parameters.get('receipt) match {
-                                                case Some(v) => 
-                                                  v equalsIgnoreCase "true" 
-                                                case None =>
-                                                  request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
-                                              }
+                  batchJob <- batchMode.option(createJob.run).sequence
+                  ingestResult <- (batchJob map { 
+                                    _ map { jobId =>
+                                      val sync = request.parameters.get('receipt) match {
+                                        case Some(v) => v equalsIgnoreCase "true" 
+                                        case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
+                                      }
 
-                                    ingestBatch(apiKey, path, ownerAccountId, content, parseDirectives, jobId, sync)
+                                      ingestBatch(apiKey, path, ownerAccountId, content, parseDirectives, jobId, sync)
+                                    }
                                   } getOrElse {
-                                    ingestStreaming(apiKey, path, ownerAccountId, content, parseDirectives)
-                                  }
+                                    right(ingestStreaming(apiKey, path, ownerAccountId, content, parseDirectives))
+                                  }).sequence
                 } yield {
-                  ingestResult match {
-                    case NotIngested(reason) =>
-                      HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
+                  ingestResult.fold(
+                    { message => HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
+                    {
+                      case NotIngested(reason) =>
+                        HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
 
-                    case AsyncSuccess(contentLength) =>
-                      HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
-                  
-                    case BatchSyncResult(total, ingested, errors) =>
-                      val failed = errors.size
-                      val responseContent = JObject(
-                        JField("total", JNum(total)),
-                        JField("ingested", JNum(ingested)),
-                        JField("failed", JNum(failed)),
-                        JField("skipped", JNum(total - ingested - failed)),
-                        JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*))
-                      )
+                      case AsyncSuccess(contentLength) =>
+                        HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
+                    
+                      case BatchSyncResult(total, ingested, errors) =>
+                        val failed = errors.size
+                        val responseContent = JObject(
+                          JField("total", JNum(total)),
+                          JField("ingested", JNum(ingested)),
+                          JField("failed", JNum(failed)),
+                          JField("skipped", JNum(total - ingested - failed)),
+                          JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*))
+                        )
 
-                      if (ingested == 0 && total > 0) {
-                        HttpResponse[JValue](BadRequest, content = Some(responseContent))
-                      } else {
-                        HttpResponse[JValue](OK, content = Some(responseContent))
-                      }
+                        if (ingested == 0 && total > 0) {
+                          HttpResponse[JValue](BadRequest, content = Some(responseContent))
+                        } else {
+                          HttpResponse[JValue](OK, content = Some(responseContent))
+                        }
 
-                    case StreamingSyncResult(ingested, error) =>
-                      val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
-                      val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
-                      HttpResponse(responseCode, content = Some(responseContent))
-                  }
+                      case StreamingSyncResult(ingested, error) =>
+                        val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
+                        val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
+                        HttpResponse(responseCode, content = Some(responseContent))
+                    }
+                  )
                 }
               } getOrElse {
                 M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Missing event data."))))
@@ -470,7 +477,7 @@ class IngestServiceHandler(
         case None =>
           M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Either the ownerAccountId parameter you specified could not be resolved to a known account, or the API key specified was invalid."))))
       }
-    }
+    }}
   }
 
   val metadata = Some(DescriptionMetadata(

@@ -53,12 +53,12 @@ Please note that path globs are not yet supported in Precog for MongoDB
   override def hardCodedAccount = Some("mongo")
 
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(asyncContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(executionContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 }

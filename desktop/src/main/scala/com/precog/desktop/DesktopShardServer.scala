@@ -40,8 +40,8 @@ object DesktopShardServer
   override def hardCodedAccount = Some("desktop")
 
   val actorSystem = ActorSystem("desktopExecutorActorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = new FutureMonad(asyncContext)
+  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit lazy val M: Monad[Future] = new FutureMonad(executionContext)
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyManager = apiKeyManagerFactory(config.detach("security"))

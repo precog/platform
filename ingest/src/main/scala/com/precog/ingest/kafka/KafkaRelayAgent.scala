@@ -52,8 +52,8 @@ import scala.annotation.tailrec
   * augment them with record identities, then send them with the specified producer. */
 final class KafkaRelayAgent(
     accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence,
-    consumer: SimpleConsumer, topic: String, 
-    producer: Producer[String, Message], 
+    consumer: SimpleConsumer, localTopic: String, 
+    producer: Producer[String, Message], centralTopic: String, 
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
@@ -82,7 +82,7 @@ final class KafkaRelayAgent(
   @tailrec
   private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
     if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-    val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
+    val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
 
     val messages = consumer.fetch(fetchRequest)
 
@@ -123,7 +123,7 @@ final class KafkaRelayAgent(
     }
 
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Message]] map { messageFutures =>
-      messageFutures.sequence[Future, Message] map { messages => 
+      Future.sequence(messageFutures) map { messages => 
         producer.send(new ProducerData[String, Message](centralTopic, messages))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
@@ -168,7 +168,7 @@ object KafkaRelayAgent {
     val consumerPort = localConfig[String]("broker.port", "9082").toInt
     val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
 
-    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer) 
+    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
     val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
 
     new Thread(relayAgent).start()

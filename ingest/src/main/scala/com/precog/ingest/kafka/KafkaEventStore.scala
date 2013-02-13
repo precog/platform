@@ -29,6 +29,8 @@ import akka.util.Timeout
 import akka.dispatch.{Future, Promise}
 import akka.dispatch.ExecutionContext
 
+import blueeyes.bkka._
+
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -40,10 +42,10 @@ import com.weiglewilczek.slf4s._
 
 import scalaz._
 
-class LocalKafkaEventStore(producer: Producer[String, Message])(implicit executor: ExecutionContext) extends EventStore with Logging {
+class LocalKafkaEventStore(producer: Producer[String, Message], topic: String)(implicit executor: ExecutionContext) extends EventStore[Future] {
   def save(event: Event, timeout: Timeout) = Future {
     producer send {
-      new ProducerData[String, Message](localTopic, new Message(EventEncoding.toMessageBytes(event)))
+      new ProducerData[String, Message](topic, new Message(EventEncoding.toMessageBytes(event)))
     }
 
     PrecogUnit
@@ -51,7 +53,7 @@ class LocalKafkaEventStore(producer: Producer[String, Message])(implicit executo
 }
 
 object LocalKafkaEventStore {
-  def apply(config: Configuration): Option[(EventStore, Stoppable)] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
     val localTopic = config[String]("topic")
 
     val localProperties = {
@@ -65,6 +67,6 @@ object LocalKafkaEventStore {
     val producer = new Producer[String, Message](new ProducerConfig(localProperties))
     val stoppable = Stoppable.fromFuture(Future { producer.close })
 
-    Some(new LocalKafkaEventStore(producer) -> stoppable)
+    Some(new LocalKafkaEventStore(producer, localTopic) -> stoppable)
   }
 }

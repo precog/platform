@@ -25,8 +25,10 @@ import blueeyes.BlueEyesServer
 import blueeyes.bkka._
 import blueeyes.util.Clock
 
-import scalaz.Monad
+import scalaz._
 
+import com.precog.accounts._
+import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
@@ -40,20 +42,23 @@ object StandaloneIngestServer
     with EventService
     with AkkaDefaults {
   val executionContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(asyncContext)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   val clock = Clock.System
 
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future] = 
-    new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
+  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
+    val accountFinder0 = new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
+    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
+      sys.error("Invalid configuration: eventStore.central.zk.connect required")
+    }
 
-  def AccountFinder(config: Configuration): AccountFinder[Future] = 
-    new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
+    val deps = EventServiceDeps[Future]( 
+      apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey")),
+      accountFinder = accountFinder0,
+      eventStore = eventStore0,
+      jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ]()
+    )
 
-  def EventStore(config: Configuration): EventStore = KafkaEventStore(config) getOrElse {
-    sys.error("Invalid configuration: eventStore.central.zk.connect required")
+    (deps, stoppable)
   }
-
-  def JobManager(config: Configuration): JobManager[Future] = 
-    new InMemoryJobManager()
 }

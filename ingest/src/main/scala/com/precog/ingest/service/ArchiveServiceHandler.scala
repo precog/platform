@@ -39,7 +39,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
-class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit M: Monad[Future])
+class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore[Future], archiveTimeout: Timeout)(implicit M: Monad[Future])
 extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => {
     Success { (apiKey: APIKey, path: Path) =>

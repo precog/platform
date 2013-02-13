@@ -21,6 +21,7 @@ package com.precog.ingest
 
 import service._
 import com.precog.common.accounts._
+import com.precog.common.client._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.security.service._
@@ -52,7 +53,11 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
-case class EventServiceDeps[M[+_]](apiKeyFinder: APIKeyFinder[M], accountFinder: AccountFinder[M], eventStore: EventStore[M], jobManager: JobManager[M])
+case class EventServiceDeps[M[+_]](
+    apiKeyFinder: APIKeyFinder[M], 
+    accountFinder: AccountFinder[M], 
+    eventStore: EventStore[M], 
+    jobManager: JobManager[({type λ[+α] = BaseClient.ResponseM[M, α]})#λ])
 
 trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators { 
   implicit def executionContext: ExecutionContext
@@ -64,21 +69,20 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
     requestLogging {
       healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
-          import context._
+          Future {
+            import context._
 
-          val (deps, stoppable) = configure(config)
-          import deps._
+            val (deps, stoppable) = configure(config)
 
-          val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
-          val ingestBatchSize = config[Int]("ingest.batch_size", 500)
+            val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
+            val ingestBatchSize = config[Int]("ingest.batch_size", 500)
 
-          val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
+            val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
 
-          val ingestHandler = new IngestServiceHandler(accountFinder, apiKeyFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize)
-          val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, deleteTimeout)
+            val ingestHandler = new IngestServiceHandler(deps.accountFinder, deps.apiKeyFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize)
+            val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, deleteTimeout)
 
-          eventStore.start map { _ =>
-            EventServiceState(apiKeyFinder, ingestHandler, archiveHandler, Stoppable.fromFuture(eventStore.stop))
+            EventServiceState(deps.apiKeyFinder, ingestHandler, archiveHandler, stoppable)
           }
         } ->
         request { (state: EventServiceState) =>

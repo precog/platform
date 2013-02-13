@@ -42,7 +42,7 @@ import org.streum.configrity.Configuration
 import scalaz._
 
 object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future]): Option[(EventStore[Future], Stoppable)] = {
+  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
     for (centralZookeeperHosts <- config.get[String]("central.zk.connect")) yield {
       val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
       val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
@@ -59,15 +59,17 @@ object KafkaEventStore {
   }
 }
 
+
 object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
   val clock = Clock.System
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
+
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
     val accountFinder0 = WebAccountFinder(config.detach("accounts"))
 
-    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder) getOrElse {
+    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 
