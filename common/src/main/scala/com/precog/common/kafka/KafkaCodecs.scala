@@ -50,7 +50,7 @@ class KafkaIngestMessageCodec extends Encoder[IngestMessage] with Decoder[Ingest
 
 class KafkaEventCodec extends Encoder[Event] with Decoder[Event] {
   val charset = Charset.forName("UTF-8")
- 
+
   def toMessage(event: Event) = {
     val msgBuffer = charset.encode(event.serialize.renderCompact)
     val byteArray = new Array[Byte](msgBuffer.limit)
@@ -61,7 +61,7 @@ class KafkaEventCodec extends Encoder[Event] with Decoder[Event] {
   def toEvent(msg: Message): Event = {
     val decoder = charset.newDecoder
     val charBuffer = decoder.decode(msg.payload)
-    val jvalue = JParser.parse(charBuffer.toString()) 
+    val jvalue = JParser.parseUnsafe(charBuffer.toString())
     jvalue.validated[Event] match {
       case Success(e) => e
       case Failure(e) => sys.error("Error parsing event: " + e)
@@ -71,7 +71,7 @@ class KafkaEventCodec extends Encoder[Event] with Decoder[Event] {
 
 class KafkaArchiveCodec extends Encoder[Archive] with Decoder[Archive] {
   val charset = Charset.forName("UTF-8")
- 
+
   def toMessage(archive: Archive) = {
     val msgBuffer = charset.encode(archive.serialize.renderCompact)
     val byteArray = new Array[Byte](msgBuffer.limit)
@@ -82,7 +82,7 @@ class KafkaArchiveCodec extends Encoder[Archive] with Decoder[Archive] {
   def toEvent(msg: Message): Archive = {
     val decoder = charset.newDecoder
     val charBuffer = decoder.decode(msg.payload)
-    val jvalue = JParser.parse(charBuffer.toString()) 
+    val jvalue = JParser.parseUnsafe(charBuffer.toString())
     jvalue.validated[Archive] match {
       case Success(a) => a
       case Failure(a) => sys.error("Error parsing archive: " + a)

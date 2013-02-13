@@ -60,6 +60,13 @@ case class EventId(producerId: ProducerId, sequenceId: SequenceId) {
   val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
 }
 
+object EventId {
+  def apply(id: Long): EventId = EventId(producerId(id), sequenceId(id))
+
+  def producerId(id: Long) = (id >> 32).toInt
+  def sequenceId(id: Long) = id.toInt
+}
+
 case class EventMessage(eventId: EventId, event: Event) extends IngestMessage
 
 trait EventMessageSerialization {
@@ -209,7 +216,7 @@ object IngestMessageSerialization {
   def parseJValue(buffer: ByteBuffer): JValue = {
     val decoder = charset.newDecoder()
     val charBuffer = decoder.decode(buffer)
-    JParser.parse(charBuffer.toString())
+    JParser.parseUnsafe(charBuffer.toString())
   }
 }
 
