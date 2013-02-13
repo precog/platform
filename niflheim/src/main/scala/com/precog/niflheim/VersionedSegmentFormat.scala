@@ -71,6 +71,7 @@ case class VersionedSegmentFormat(formats: Map[Int, SegmentFormat]) extends Segm
           while (buffer.remaining() > 0) {
             channel.read(buffer)
           }
+          buffer.flip()
           Success(buffer.getInt())
         } catch { case ioe: IOException =>
           Failure(ioe)

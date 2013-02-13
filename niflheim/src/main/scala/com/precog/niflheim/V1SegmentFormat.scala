@@ -103,7 +103,7 @@ object V1SegmentFormat extends SegmentFormat {
       for {
         header <- readHeader()
         segment <- header match {
-          case SegmentId(blockid, cpath, ctype: CBoolean) =>
+          case SegmentId(blockid, cpath, CBoolean) =>
             readBoolean() map { case (defined, length, values) =>
               BooleanSegment(blockid, cpath, defined, values, length)
             }
@@ -162,7 +162,7 @@ object V1SegmentFormat extends SegmentFormat {
     private def writeSegmentId(channel: WritableByteChannel, segment: Segment): Validation[IOException, PrecogUnit] = {
       val tpeFlag = getFlagFor(segment.ctype)
       val strPath = segment.cpath.toString
-      val maxSize = Codec.Utf8Codec.maxSize(strPath) + tpeFlag.length + 12
+      val maxSize = Codec.Utf8Codec.maxSize(strPath) + tpeFlag.length + 8
 
       writeChunk(channel, maxSize) { buffer =>
         buffer.putLong(segment.blockid)
@@ -248,6 +248,7 @@ object V1SegmentFormat extends SegmentFormat {
       }
     }
 
+    flagForCType(ctype)
     buffer.toArray
   }
 
@@ -260,7 +261,7 @@ object V1SegmentFormat extends SegmentFormat {
     val result = f(buffer)
 
     buffer.flip()
-    buffer.putInt(0, buffer.limit())
+    buffer.putInt(0, buffer.limit() - 4)
 
     try {
       while (buffer.remaining() > 0) {
