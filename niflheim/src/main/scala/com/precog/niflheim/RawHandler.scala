@@ -49,7 +49,7 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
 
   def length: Int = count
 
-  def snapshot: Segments = if (rows.isEmpty) {
+  def snapshot(): Segments = if (rows.isEmpty) {
     segments
   } else {
     val segs = segments.copy
@@ -72,7 +72,7 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
     // end locking here?
   }
 
-  def close: RawReader = {
+  def close(): RawReader = {
     // start locking here?
     ps.close()
     new RawReader(id, log, rows, segments)

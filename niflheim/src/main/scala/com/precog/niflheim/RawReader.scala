@@ -39,7 +39,7 @@ class RawReader private[niflheim] (val id: Long, val log: File, r: Seq[JValue], 
 
   val length = r.length + s.length
 
-  def snapshot: Segments = if (rows.isEmpty) {
+  def snapshot(): Segments = if (rows.isEmpty) {
     segments 
   } else {
     val segs = segments.copy

@@ -30,11 +30,21 @@ import com.precog.util._
 
 object Segments {
   def empty(id: Long): Segments =
-    new Segments(id, 0, mutable.Map.empty[(CPath, CType), Int], mutable.ArrayBuffer.empty[Segment])
+    Segments(id, 0, mutable.Map.empty[(CPath, CType), Int], mutable.ArrayBuffer.empty[Segment])
 }
 
-class Segments(id: Long, var length: Int, m: mutable.Map[(CPath, CType), Int], a: mutable.ArrayBuffer[Segment]) {
+case class Segments(id: Long, var length: Int, m: mutable.Map[(CPath, CType), Int], a: mutable.ArrayBuffer[Segment]) {
   def copy: Segments = new Segments(id, length, m.clone, a.clone)
+
+  override def equals(that: Any): Boolean = that match {
+    case Segments(`id`, length2, m2, a2) =>
+      if (length != length2) return false
+      val x = m.map { case (k, v) => (k, a(v)) }
+      val y = m2.map { case (k, v) => (k, a2(v)) }
+      x == y
+    case _ =>
+      false
+  }
 
   def addNullType(row: Int, cpath: CPath, ct: CNullType) {
     val k = (cpath, ct)
@@ -84,7 +94,7 @@ class Segments(id: Long, var length: Int, m: mutable.Map[(CPath, CType), Int], a
   }
 
   def addString(row: Int, cpath: CPath, s: String) {
-    val k = (cpath, CBoolean)
+    val k = (cpath, CString)
     if (m.contains(k)) {
       val seg = a(m(k)).asInstanceOf[ArraySegment[String]]
       seg.defined.set(row)
