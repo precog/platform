@@ -83,7 +83,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       s1.m.size must_== 0
       s1.a.size must_== 0
 
-      h.write(json("""
+      h.write(16, json("""
 {"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
 {"a": 9999.0, "b": "xyz", "arr": [1,2,3]}
 {"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
@@ -109,7 +109,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       testArraySegment(s2, blockid, CPath(".a"), CNum, tpla)
       testBooleanSegment(s2, blockid, CPath(".b"), CBoolean, List((0, true), (2, false)))
 
-      h.write(json("""
+      h.write(17, json("""
 999
 123.0
 "cat"
@@ -145,11 +145,11 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 {"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
 """.trim
 
-      h1.write(json(js))
+      h1.write(18, json(js))
       val s1 = h1.snapshot()
       h1.close()
 
-      val h2 = RawHandler.load(blockid, tmp2)
+      val (h2, _) = RawHandler.load(blockid, tmp2)
       val s2 = h2.snapshot()
 
       s2 must_== s1
@@ -167,11 +167,13 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 {"a": 9999.0, "b": "xyz", "arr": [1,2,3]}
 {"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
 """.trim
-      h1.write(json(js))
+      h1.write(19, json(js))
 
       val len = h1.length
       val s = h1.snapshot()
-      val r = h1.close()
+      h1.close()
+
+      val (r, _) = RawHandler.load(blockid, tmp1)
 
       r.id must_== blockid
       r.log must_== tmp1

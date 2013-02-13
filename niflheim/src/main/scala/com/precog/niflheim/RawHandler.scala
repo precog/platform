@@ -29,22 +29,25 @@ import com.precog.common.json._
 import com.precog.util._
 
 object RawHandler {
+  // file doesn't exist -> create new file
   def empty(id: Long, f: File): RawHandler = {
     val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    ps.print("[\"rawlog\", " + id.toString + ", 1]\n")
+    RawLoader.writeHeader(ps, id)
     new RawHandler(id, f, Nil, ps)
   }
 
-  def load(id: Long, f: File): RawHandler = {
-    val rows = RawLoader.load(id, f)
+  // file does exist and is ok -> load data
+  def load(id: Long, f: File): (RawHandler, Seq[Long]) = {
+    val (rows, events) = RawLoader.load(id, f)
     val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    new RawHandler(id, f, rows, ps)
+    (new RawHandler(id, f, rows, ps), events)
   }
 }
 
+// TODO: extend derek's reader/writer traits
 class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) {
-  private val rows = mutable.ArrayBuffer.empty[JValue] ++ rs
-  private var segments = Segments.empty(id)
+  private val rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
+  private var segments = Segments.empty(id) // TODO: weakref?
   private var count = rows.length
 
   def length: Int = count
@@ -61,21 +64,30 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
     segs
   }
 
-  def write(values: Seq[JValue]) {
+  /**
+["rawlog", blockid, version]
+...
+
+##rawlog blockid version
+##start <932,123>
+json1
+json2
+json3
+##end <932,123>
+##start <932,9991>
+...
+##end <932,9991>
+##start <123,9923>
+...EOF
+   */
+
+  def write(eventid: Long, values: Seq[JValue]) {
     // start locking here?
     count += values.length
-    values.foreach { j =>
-      ps.print(j.renderCompact)
-      ps.print('\n')
-    }
+    RawLoader.writeEvents(ps, eventid, values)
     rows ++= values
     // end locking here?
   }
 
-  def close(): RawReader = {
-    // start locking here?
-    ps.close()
-    new RawReader(id, log, rows, segments)
-    // end locking here?
-  }
+  def close(): Unit = ps.close()
 }
