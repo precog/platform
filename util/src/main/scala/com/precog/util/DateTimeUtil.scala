@@ -60,4 +60,10 @@ object DateTimeUtil {
   } catch {
     case e: IllegalArgumentException => { false }
   }
+
+  def isValidPeriod(period: String): Boolean = try {
+    new Period(period); true
+  } catch {
+    case e: IllegalArgumentException => { false }
+  }
 }
