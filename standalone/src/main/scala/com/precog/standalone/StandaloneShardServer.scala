@@ -26,7 +26,7 @@ trait StandaloneShardServer
     with ShardService {
   val clock = Clock.System
 
-  implicit def asyncContext: ExecutionContext
+  implicit def executionContext: ExecutionContext
 
   def caveatMessage: Option[String]
 
@@ -64,15 +64,15 @@ trait StandaloneShardServer
       server.setHandler(handlers)
       server.start()
 
-      Future(server)(asyncContext)
+      Future(server)(executionContext)
     } ->
     request { (server: Server) =>
       get {
-        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())(asyncContext)
+        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())(executionContext)
       }
     } ->
     shutdown { (server: Server) =>
-      Future(server.stop())(asyncContext)
+      Future(server.stop())(executionContext)
     }
   }
 }
