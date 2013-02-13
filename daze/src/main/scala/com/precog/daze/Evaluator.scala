@@ -83,8 +83,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   type GroupId = Int
   
   type Evaluator[N[+_]] <: EvaluatorLike[N]
-
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
   abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with PredicatePullups with YggConfigComponent {
     type YggConfig <: EvaluatorConfig

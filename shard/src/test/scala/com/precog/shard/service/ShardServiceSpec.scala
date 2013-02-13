@@ -434,7 +434,7 @@ trait TestPlatform extends ManagedPlatform { self =>
         if(allowed)
           shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
         else
-          shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
+          shardQueryMonad.point(failure(InvalidStateError("No data accessable at the specified path")))
       }
     }
   }

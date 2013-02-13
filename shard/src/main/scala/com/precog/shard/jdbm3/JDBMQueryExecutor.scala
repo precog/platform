@@ -164,15 +164,6 @@ trait JDBMQueryExecutorComponent  {
 
       object Table extends TableCompanion
 
-      def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-        new Evaluator[N](N0) with IdSourceScannerModule {
-          type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
-          val yggConfig = platform.yggConfig
-          // def report = self.report
-          val report = LoggingQueryLogger[N](N0)
-        }
-      }
-
       val metadataClient = new StorageMetadataClient(storage)
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
@@ -208,29 +199,7 @@ trait JDBMQueryExecutorComponent  {
           type YggConfig = JDBMQueryExecutorConfig
           val yggConfig = platform.yggConfig
           
-          def warn(warning: JValue): ShardQuery[Unit] =
-            jsonReport.warn(warning, "warning")
-
-
-/*
-          class Projection(delegate: platform.Projection) extends ProjectionLike[ShardQuery, Array[Byte], Slice] {
-            def descriptor = delegate.descriptor
-            def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor])(implicit M: Monad[ShardQuery]): ShardQuery[Option[BlockProjectionData[Array[Byte], Slice]]] = {
-              delegate.getBlockAfter(id, columns)(shardQueryMonad.M).liftM[JobQueryT]
-            }
-          }
-
-          class ProjectionCompanion extends ProjectionCompanionLike[ShardQuery] {
-            def apply(descriptor: ProjectionDescriptor) = {
-              platform.M.map(platform.Projection(descriptor))(new Projection(_)).liftM[JobQueryT]
-            }
-          }
-
-          val Projection = new ProjectionCompanion
-
-        */
-          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
-          val jsonReport = errorReport[JValue]
+          val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
         }
       }
 

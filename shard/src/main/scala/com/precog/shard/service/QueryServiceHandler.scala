@@ -69,15 +69,6 @@ with Logging {
   private val Command = """:(\w+)\s+(.+)""".r
 
   private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
-    case UserError(errorData) =>
-      HttpResponse[QueryResult](UnprocessableEntity, content = Some(Left(errorData)))
-
-    case AccessDenied(reason) =>
-      HttpResponse[QueryResult](HttpStatus(Unauthorized, reason))
-
-    case TimeoutError =>
-      HttpResponse[QueryResult](RequestEntityTooLarge)
-
     case SystemError(error) =>
       error.printStackTrace()
       logger.error("An error occurred processing the query: " + qt, error)
