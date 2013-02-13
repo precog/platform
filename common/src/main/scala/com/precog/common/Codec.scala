@@ -474,7 +474,7 @@ object Codec {
   }
 
 
-  implicit val JBigDecimalCodec = CompositeCodec[Array[Byte], Long, BigDec](ArrayCodec[Byte], PackedLongCodec,
+  implicit val JBigDecimalCodec = CompositeCodec[Array[Byte], Long, BigDec](arrayCodec[Byte], PackedLongCodec,
     x => (x.unscaledValue.toByteArray, x.scale.toLong),
     (u, s) => new BigDec(new java.math.BigInteger(u), s.toInt))
 
@@ -535,8 +535,76 @@ object Codec {
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
 
   // FIXME: This should have its own codec.
-  implicit def ArrayCodec[A: Codec: Manifest]: Codec[Array[A]] = Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
+  implicit def arrayCodec[@spec(Boolean,Long,Double) A: Codec: Manifest]: Codec[Array[A]] = ArrayCodec(Codec[A])
+  //Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
+  case class ArrayCodec[@spec(Boolean,Long,Double) A: Manifest](elemCodec: Codec[A]) extends Codec[Array[A]] {
+    type S = Either[Array[A], (elemCodec.S, Array[A], Int)]
+
+    override def minSize(as: Array[A]): Int = 5
+    override def maxSize(as: Array[A]): Int = {
+      @tailrec
+      def loop(row: Int, size: Int): Int = if (row < as.length) {
+        loop(row + 1, size + elemCodec.maxSize(as(row)))
+      } else size
+
+      loop(0, 5)
+    }
+
+    def encodedSize(as: Array[A]): Int = {
+      @tailrec
+      def loop(row: Int, size: Int): Int = if (row < as.length) {
+        loop(row + 1, size + elemCodec.encodedSize(as(row)))
+      } else size
+      loop(0, sizePackedInt(as.length))
+    }
+
+    def writeUnsafe(as: Array[A], sink: ByteBuffer) {
+      writePackedInt(as.length, sink)
+      @tailrec
+      def loop(row: Int): Unit = if (row < as.length) {
+        elemCodec.writeUnsafe(as(row), sink)
+        loop(row + 1)
+      }
+      loop(0)
+    }
+
+    @tailrec
+    private def writeArray(as: Array[A], row: Int, sink: ByteBuffer): Option[S] = if (row < as.length) {
+      elemCodec.writeInit(as(row), sink) match {
+        case Some(s) => Some(Right((s, as, row + 1)))
+        case None => writeArray(as, row + 1, sink)
+      }
+    } else None
+
+    def writeInit(as: Array[A], sink: ByteBuffer): Option[S] = {
+      if (sink.remaining < 5) Some(Left(as)) else {
+        writePackedInt(as.length, sink)
+        writeArray(as, 0, sink)
+      }
+    }
+
+    def writeMore(more: S, sink: ByteBuffer): Option[S] = more match {
+      case Left(as) => writeInit(as, sink)
+      case Right((s, as, row)) => elemCodec.writeMore(s, sink) map (s => Right((s, as, row))) orElse writeArray(as, row, sink)
+    }
+
+    def read(src: ByteBuffer): Array[A] = {
+      val dst = new Array[A](readPackedInt(src))
+      var row = 0
+      while (row < dst.length) {
+        dst(row) = elemCodec.read(src)
+        row += 1
+      }
+      dst
+    }
+
+    override def skip(buf: ByteBuffer) {
+      val length = readPackedInt(buf)
+      var i = 0
+      while (i < length) { elemCodec.skip(buf); i += 1 }
+    }
+  }
 
   /** A Codec that can (un)wrap CValues of type CValueType. */
   case class CValueCodec[A](cType: CValueType[A])(implicit val codec: Codec[A])
@@ -569,7 +637,7 @@ object Codec {
     val codec = _codec
   }).init(a, sink)
 
-  implicit val BitSetCodec = ArrayCodec[Long](LongCodec, implicitly).as[BitSet](_.getBits, BitSetUtil.fromArray)
+  implicit val BitSetCodec = ArrayCodec[Long](LongCodec)(implicitly).as[BitSet](_.getBits, BitSetUtil.fromArray)
 
   case class SparseBitSetCodec(size: Int) extends Codec[BitSet] {
 
