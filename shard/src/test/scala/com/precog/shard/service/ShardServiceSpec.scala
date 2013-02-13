@@ -277,19 +277,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case `expected` => ok
       }}
     }
-    "reject absolute inaccessible query from root path" in {
-      query(inaccessibleAbsoluteQuery) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
-      }}
-    }
     "handle relative query from accessible non-root path" in {
       query(relativeQuery, path = "/test") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
-      }}
-    }
-    "reject relative query from inaccessible non-root path" in {
-      query(relativeQuery, path = "/inaccessible") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
     "reject query when no API key provided" in {
@@ -300,11 +290,6 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
-      }}
-    }
-    "reject query when grant is expired" in {
-      query(accessibleAbsoluteQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
     "return warnings/errors if format is 'detailed'" in {
@@ -426,15 +411,7 @@ trait TestPlatform extends ManagedPlatform { self =>
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
-        val allowed = Await.result(Future.sequence(requiredPaths.map {
-          path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
-        }).map(_.forall(identity)), to)
-        
-        if(allowed)
-          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
-        else
-          shardQueryMonad.point(failure(InvalidStateError("No data accessable at the specified path")))
+        shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
       }
     }
   }
