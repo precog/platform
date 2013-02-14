@@ -31,11 +31,11 @@ import scalaz._
 import scalaz.syntax.traverse._
 import scalaz.std.list._
 
-case class Prepare(blockid: Long, seqId: Long, file: File)
+case class Prepare(blockid: Long, seqId: Long, root: File, file: File)
 case class Spoilt(blockid: Long, seqId: Long)
-case class Cooked(blockid: Long, seqId: Long, files: Seq[File])
+case class Cooked(blockid: Long, seqId: Long, root: File, files: Seq[File])
 
-final case  class Chef(root: File, format: SegmentFormat) extends Actor {
+final case  class Chef(format: SegmentFormat) extends Actor {
   private def typeCode(ctype: CType): String = CType.nameOf(ctype)
 
   def prefix(id: Segment): String = {
@@ -43,7 +43,7 @@ final case  class Chef(root: File, format: SegmentFormat) extends Actor {
     id.blockid + "-" + pathHash + "-" + typeCode(id.ctype)
   }
 
-  def cook(segments: List[Segment]): ValidationNEL[IOException, List[File]] = {
+  def cook(root: File, segments: List[Segment]): ValidationNEL[IOException, List[File]] = {
     val files = segments map { seg =>
       val file = File.createTempFile(prefix(seg), ".cooked", root)
       val channel: WritableByteChannel = new FileOutputStream(file).getChannel()
@@ -56,11 +56,11 @@ final case  class Chef(root: File, format: SegmentFormat) extends Actor {
   }
 
   def receive = {
-    case Prepare(blockid, seqId, file) =>
+    case Prepare(blockid, seqId, root, file) =>
       val (handler, _) = RawHandler.load(blockid, file)
-      cook(handler.snapshot.segments) match {
+      cook(root, handler.snapshot.segments) match {
         case Success(files) =>
-          sender ! Cooked(blockid, seqId, files)
+          sender ! Cooked(blockid, seqId, root, files)
         case Failure(_) =>
           sender ! Spoilt(blockid, seqId)
       }
