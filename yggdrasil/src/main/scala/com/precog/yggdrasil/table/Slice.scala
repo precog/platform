@@ -1546,3 +1546,52 @@ object Slice {
     final case class Leaf(tpe: CType, col: Column) extends SchemaNode
   }
 }
+
+import com.precog.niflheim._
+
+object SegmentsWrapper {
+  def apply(segments: Seq[Segment]): Slice = new SegmentsWrapper(segments)
+}
+
+class SegmentsWrapper(segments: Seq[Segment]) extends Slice {
+
+  private def buildColumnRef(seg: Segment) = ColumnRef(seg.cpath, seg.ctype)
+
+  private def buildColumn(seg: Segment): Column = seg match {
+    case segment: ArraySegment[a] =>
+      val ctype: CValueType[a] = segment.ctype
+      val defined: BitSet = segment.defined
+      val values: Array[a] = segment.values
+      ctype match {
+        case CString => new ArrayStrColumn(defined, values)
+        case CDate => new ArrayDateColumn(defined, values)
+        case CNum => new ArrayNumColumn(defined, values)
+        case CDouble => new ArrayDoubleColumn(defined, values)
+        case CLong => new ArrayLongColumn(defined, values)
+        case cat: CArrayType[_] => new ArrayHomogeneousArrayColumn(defined, values)(cat)
+        case CBoolean => sys.error("impossible")
+      }
+
+    case BooleanSegment(_, _, defined, values, _) =>
+      new ArrayBoolColumn(defined, values)
+
+    case NullSegment(_, _, ctype, defined, _) => ctype match {
+      case CNull =>
+        NullColumn(defined)
+      case CEmptyObject =>
+        new MutableEmptyObjectColumn(defined)
+      case CEmptyArray =>
+        new MutableEmptyArrayColumn(defined)
+      case CUndefined =>
+        sys.error("also impossible")
+    }
+  }
+
+  private def buildMap(segments: Seq[Segment]): Map[ColumnRef, Column] =
+    segments.map(seg => (buildColumnRef(seg), buildColumn(seg))).toMap
+
+  private val cols: Map[ColumnRef, Column] = buildMap(segments)
+
+  val size: Int = segments.foldLeft(0)(_ max _.length)
+  def columns: Map[ColumnRef, Column] = cols
+}

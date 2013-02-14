@@ -61,7 +61,7 @@ private[niflheim] object RawLoader {
    * This method assumes the header line has already been parsed, and
    * expects to see zero-or-more of the following groups:
    */
-  def load1(id: Long, f: File, reader: BufferedReader): (Seq[JValue], Seq[Long]) = {
+  def load1(id: Long, f: File, reader: BufferedReader): (Seq[JValue], Seq[Long], Boolean) = {
     val rows = mutable.ArrayBuffer.empty[JValue]
     val events = mutable.ArrayBuffer.empty[(Long, Int)]
     var line = reader.readLine()
@@ -73,18 +73,20 @@ private[niflheim] object RawLoader {
           val count = loadEvents1(reader, eventid, rows)
           if (count < 0) {
             ok = false
-            events.append((eventid, count))
           } else {
+            events.append((eventid, count))
             line = reader.readLine()
           }
         } catch {
           case _: Exception =>
             ok = false
         }
+      } else {
+        ok = false
       }
     }
     if (!ok) recover1(id, f, rows, events)
-    (rows, events.map(_._1))
+    (rows, events.map(_._1), ok)
   }
 
   /**
@@ -137,7 +139,7 @@ private[niflheim] object RawLoader {
 
     var line = reader.readLine()
     var going = true
-    var ok = true
+    var ok = false
     var count = 0
 
     while (going && line != null) {
@@ -151,7 +153,6 @@ private[niflheim] object RawLoader {
           line = reader.readLine()
         } catch {
           case _: Exception =>
-            ok = false
             going = false
         }
       }
@@ -164,7 +165,7 @@ private[niflheim] object RawLoader {
     }
   }
 
-  def load(id: Long, f: File): (Seq[JValue], Seq[Long]) = {
+  def load(id: Long, f: File): (Seq[JValue], Seq[Long], Boolean) = {
     val reader = new BufferedReader(new InputStreamReader(new FileInputStream(f), utf8))
     try {
       val header = reader.readLine()

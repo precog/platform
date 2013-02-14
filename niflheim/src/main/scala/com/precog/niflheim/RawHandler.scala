@@ -31,38 +31,49 @@ import com.precog.util._
 object RawHandler {
   // file doesn't exist -> create new file
   def empty(id: Long, f: File): RawHandler = {
+    if (f.exists)
+      sys.error("rawlog %s already exists!" format f)
     val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
     RawLoader.writeHeader(ps, id)
     new RawHandler(id, f, Nil, ps)
   }
 
   // file does exist and is ok -> load data
-  def load(id: Long, f: File): (RawHandler, Seq[Long]) = {
-    val (rows, events) = RawLoader.load(id, f)
+  def load(id: Long, f: File): (RawHandler, Seq[Long], Boolean) = {
+    val (rows, events, ok) = RawLoader.load(id, f)
     val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    (new RawHandler(id, f, rows, ps), events)
+    (new RawHandler(id, f, rows, ps), events, ok)
   }
 }
 
 // TODO: extend derek's reader/writer traits
-class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) {
+class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) extends StorageReader {
   private val rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
   private var segments = Segments.empty(id) // TODO: weakref?
   private var count = rows.length
 
+  def structure = snapshot(None).map { seg => (seg.cpath, seg.ctype) }
+
   def length: Int = count
 
-  def snapshot(): Segments = if (rows.isEmpty) {
-    segments
-  } else {
-    val segs = segments.copy
-    segs.extendWithRows(rows)
-    // start locking here?
-    rows.clear()
-    segments = segs
-    // end locking here?
-    segs
+  def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
+    val segs = if (rows.isEmpty) {
+      segments
+    } else {
+      val segs = segments.copy
+      segs.extendWithRows(rows)
+      // start locking here?
+      rows.clear()
+      segments = segs
+      // end locking here?
+      segs
+    }
+
+    pathConstraint.map { cpaths =>
+      segs.a.filter { seg => cpaths(seg.cpath) }
+    }.getOrElse(segs.a.clone)
   }
+
 
   /**
 ["rawlog", blockid, version]

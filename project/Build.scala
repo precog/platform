@@ -160,7 +160,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util, logging % "test->test")
 
   lazy val yggdrasil = Project(id = "yggdrasil", base = file("yggdrasil")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util, accounts, auth, logging % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util, niflheim, accounts, auth, logging % "test->test")
 
   lazy val yggdrasilProf = Project(id = "yggdrasilProf", base = file("yggdrasilProf")).
     settings(commonNexusSettings ++ jprofilerSettings ++ Seq(fullRunInputTask(profileTask, Test, "com.precog.yggdrasil.test.Run")): _*).dependsOn(yggdrasil % "compile->compile;compile->test", logging % "test->test")

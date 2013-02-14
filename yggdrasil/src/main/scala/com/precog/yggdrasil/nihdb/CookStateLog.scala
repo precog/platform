@@ -48,6 +48,7 @@ class CookStateLog(baseDir: File) extends Logging {
     if (pendingCookIds0.size > 0) {
       logger.warn("Closing txLog with pending cooks: " + pendingCookIds0.keys.mkString("[", ", ", "]"))
     }
+    txLog.close()
     workLock.release
   }
 
