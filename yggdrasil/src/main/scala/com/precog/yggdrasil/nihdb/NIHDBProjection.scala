@@ -49,6 +49,7 @@ import java.io.{File, FileNotFoundException}
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.SortedMap
+import scala.collection.JavaConverters._
 
 sealed trait NIHActorMessage
 
@@ -67,7 +68,7 @@ object CookedReader {
   *
   * @param cookThreshold The threshold, in rows, of raw data for cooking a raw store file
   */
-class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, chef: ActorRef, cookThreshold: Long, actorSystem: ActorSystem, actorTimeout: Duration)
+class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, chef: ActorRef, cookThreshold: Int, actorSystem: ActorSystem, actorTimeout: Duration)
     extends RawProjectionLike[Future, Long, Slice]
     with AskSupport
     with GracefulStopSupport
@@ -99,7 +100,7 @@ class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, c
   }
 }
 
-class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: ActorRef, cookThreshold: Long)
+class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: ActorRef, cookThreshold: Int)
     extends Actor
     with Logging {
   private case class BlockState(cooked: List[CookedReader], pending: Map[Long, StorageReader], rawLog: RawHandler)
@@ -121,6 +122,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
       throw t
   }.unsafePerformIO
 
+  println("Opening log in " + baseDir)
   private[this] val txLog = new CookStateLog(baseDir)
 
   private[this] var currentState =
@@ -172,7 +174,9 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
   }
 
   override def postStop() = {
-    IO { txLog.close }.except {
+    IO {
+      txLog.close
+    }.except {
       case t: Throwable => IO { logger.error("Error during close", t) }
     }.unsafePerformIO
 
@@ -235,8 +239,9 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
     case ProjectionGetBlock(_, id, _) =>
       val blocks = id.map { i => currentBlocks.from(i).drop(1) }.getOrElse(currentBlocks)
-      sender ! blocks.headOption.map {
-        case (id, reader) => BlockProjectionData(id, id, SegmentsWrapper(reader.snapshot))
+      sender ! blocks.headOption.flatMap {
+        case (id, reader) if reader.length > 0 => Some(BlockProjectionData(id, id, SegmentsWrapper(reader.snapshot)))
+        case _                                 => None
       }
   }
 }

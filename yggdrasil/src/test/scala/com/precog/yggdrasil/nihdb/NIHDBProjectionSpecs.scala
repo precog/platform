@@ -35,36 +35,49 @@ import blueeyes.json._
 import org.specs2.mutable.{After, Specification}
 import org.specs2.specification.{Fragments, Step}
 
+import scalaz.effect.IO
+
+import java.io.File
+
+
 class NIHDBProjectionSpecs extends Specification with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
   val chef = actorSystem.actorOf(Props(new Chef(VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
+  def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
+
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
   trait TempContext extends After {
     val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+    var projection = newProjection(workDir)
 
-    def after = IOUtils.recursiveDelete(workDir).unsafePerformIO
-  }
+    def close(proj: NIHDBProjection) = Await.result(proj.close(), Duration(50, "seconds")) 
 
-  "NIHDBProjections" should {
-    "Properly initialize and close" in new TempContext {
-      val projection = new NIHDBProjection(workDir, null, chef, 1000, actorSystem, Duration(60, "seconds"))
-
-      projection.close()
+    def after = {
+      (for {
+        _ <- IO { close(projection) }
+        _ <- IOUtils.recursiveDelete(workDir)
+      } yield ()).unsafePerformIO
     }
   }
 
   "NIHDBProjections" should {
+    "Properly initialize and close" in new TempContext {
+      val results = projection.getBlockAfter(None)
+
+      results must whenDelivered(beNone)
+    }
+
     "Insert and retrieve values below the cook threshold" in new TempContext {
-      val projection = new NIHDBProjection(workDir, null, chef, 1000, actorSystem, Duration(60, "seconds"))
+      val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val results =
         for {
-          _ <- projection.insert(Array(0l), Seq(JNum(0l)))
-          _ <- projection.insert(Array(1l), Seq(JNum(1l)))
-          _ <- projection.insert(Array(2l), Seq(JNum(2l)))
+          _ <- projection.insert(Array(0l), Seq(JNum(0L)))
+          _ <- projection.insert(Array(1l), Seq(JNum(1L)))
+          _ <- projection.insert(Array(2l), Seq(JNum(2L)))
           result <- projection.getBlockAfter(None)
         } yield result
 
@@ -73,9 +86,29 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           min mustEqual 0l
           max mustEqual 0l
           data.size mustEqual 3
+          data.toJsonElements must containAllOf(expected).only.inOrder
       })
+    }
 
-      Await.result(projection.close(), Duration(50, "seconds"))
+    "Insert, close and re-read values below the cook threshold" in new TempContext {
+      val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
+
+      projection.insert(Array(0l), Seq(JNum(0L)))
+      projection.insert(Array(1l), Seq(JNum(1L)))
+      projection.insert(Array(2l), Seq(JNum(2L)))
+
+      val result = projection.close().flatMap { _ =>
+        projection = newProjection(workDir)
+        projection.getBlockAfter(None)
+      }
+
+      result must whenDelivered (beLike {
+        case Some(BlockProjectionData(min, max, data)) =>
+          min mustEqual 0l
+          max mustEqual 0l
+          data.size mustEqual 3
+          data.toJsonElements must containAllOf(expected).only.inOrder
+      })
     }
   }
 
