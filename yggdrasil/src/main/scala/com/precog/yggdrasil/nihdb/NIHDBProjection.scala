@@ -82,7 +82,7 @@ abstract class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDesc
 
   private[this] val actor = actorSystem.actorOf(Props(new NIHDBActor(baseDir, descriptor, cooker, cookThreshold)))
 
-  def getBlockAfter(id: Option[Long], columns: Set[ColumnDescriptor] = Set())(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
+  def getBlockAfter(id: Option[Long], columns: Set[ColumnDescriptor])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
     (actor ? ProjectionGetBlock(descriptor, id, columns)).mapTo[Option[BlockProjectionData[Long, Slice]]]
   }
 
@@ -94,8 +94,8 @@ abstract class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDesc
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
 
-  def close = {
-    gracefulStop(actor, actorTimeout)(actorSystem)
+  def close() = {
+    gracefulStop(actor, actorTimeout)(actorSystem).map {_ => PrecogUnit }
   }
 }
 
