@@ -104,8 +104,8 @@ else
     echo "Skipping clean/compile"
 fi
 
-if [ ! -f "yggdrasil/target/yggdrasil-assembly-$(git describe).jar" ]; then
-    run_sbt yggdrasil/assembly
+if [ ! -f "ratatoskr/target/ratatoskr-assembly-$(git describe).jar" ]; then
+    run_sbt ratatoskr/assembly
 fi
 
 # For the runs, we don't want to terminate early if a particular project fails
@@ -115,7 +115,7 @@ then
 fi
 
 if [ -z "$SKIPTEST" ]; then
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil shard pandora mongo jdbc; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard pandora mongo jdbc; do
 	run_sbt "$PROJECT/${SCCT}test"
     done
     if [ -n "$COVERAGE" ]; then
@@ -125,7 +125,7 @@ fi
 
 if [ $SUCCESS -eq 0 ]; then
     echo "Building assemblies"
-    run_sbt accounts/assembly auth/assembly ingest/assembly yggdrasil/assembly shard/assembly heimdall/assembly
+    run_sbt accounts/assembly auth/assembly ingest/assembly ratatoskr/assembly shard/assembly heimdall/assembly
 fi
 
 if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
