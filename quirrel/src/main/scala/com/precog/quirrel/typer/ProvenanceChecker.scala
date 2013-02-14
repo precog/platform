@@ -29,16 +29,24 @@ trait ProvenanceChecker extends parser.AST with Binder {
       
       val unified = unifyProvenance(relations)(left.provenance, right.provenance)
       
-      val (provenance, contribErrors, contribConstr) = if (left.provenance.isParametric || right.provenance.isParametric) {
-        val provenance = UnifiedProvenance(left.provenance, right.provenance)
-        
-        if (unified.isDefined)
-          (unified.get, Set(), Set())
-        else
-          (provenance, Set(), Set(Related(left.provenance, right.provenance)))
-      } else {
-        val provenance = unified getOrElse NullProvenance
-        (provenance, if (unified.isDefined) Set() else Set(Error(expr, OperationOnUnrelatedSets)), Set())
+      val (provenance, contribErrors, contribConstr) = {
+        if ((left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) &&
+          (expr.isInstanceOf[BooleanOp] || expr.isInstanceOf[EqualityOp] || expr.isInstanceOf[Where] || expr.isInstanceOf[With])) {
+          val provenance = NullProvenance
+          val errors = Set(Error(expr, CannotUseDistributionWithoutSampling))
+          
+          (provenance, errors, Set())
+        } else if (left.provenance.isParametric || right.provenance.isParametric) {
+          val provenance = UnifiedProvenance(left.provenance, right.provenance)
+          
+          if (unified.isDefined)
+            (unified.get, Set(), Set())
+          else
+            (provenance, Set(), Set(Related(left.provenance, right.provenance)))
+        } else {
+          val provenance = unified getOrElse NullProvenance
+          (provenance, if (unified.isDefined) Set() else Set(Error(expr, OperationOnUnrelatedSets)), Set())
+        }
       }
       
       (provenance, (leftErrors ++ rightErrors ++ contribErrors, leftConstr ++ rightConstr ++ contribConstr))
@@ -87,7 +95,10 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val leftCard = left.cardinality
       val rightCard = right.cardinality
 
-      if (left == UndefinedProvenance) {
+      if (left == InfiniteProvenance || right == InfiniteProvenance) {
+        println("case reached!!!!!!!!!!!!!!!")
+        (NullProvenance, Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
+      } else if (left == UndefinedProvenance) {
         (right, Set(), Set())
       } else if (right == UndefinedProvenance) {
         (left, Set(), Set())
@@ -132,6 +143,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val (provenance, errors, constr) = if (pred.provenance == NullProvenance || left.provenance == NullProvenance || right.provenance == NullProvenance) {
         val provenance = NullProvenance
         (provenance, Set(), Set())
+      } else if (pred.provenance == InfiniteProvenance || left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) {
+        (NullProvenance, Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
       } else {
         val leftUnified = unifyProvenance(relations)(pred.provenance, left.provenance)
         val rightUnified = unifyProvenance(relations)(pred.provenance, right.provenance)
@@ -151,6 +164,10 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val (provenance, errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
         val provenance = NullProvenance
         (provenance, Set(), Set())
+      } else if (left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) {
+        val provenance = NullProvenance
+        val errors = Set(Error(expr, CannotUseDistributionWithoutSampling))
+        (provenance, errors, Set())
       } else {
         handleUnionLike(left.provenance, right.provenance)
       }
@@ -165,6 +182,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val sameCardinality = left.provenance.cardinality == right.provenance.cardinality
 
       val (provenance, errors, constr) = (left.provenance, right.provenance) match {
+        case (InfiniteProvenance, _) | (_, InfiniteProvenance) =>
+          (NullProvenance, Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
+
         case (NullProvenance, _) | (_, NullProvenance) =>
           (NullProvenance, Set(), Set())
 
@@ -216,7 +236,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
         
         case Solve(_, solveConstr, child) => {
           val (errorsVec, constrVec) = solveConstr map { loop(_, relations, constraints) } unzip
-          
+
+          val constraintProvs = solveConstr map { _.provenance }
+
           val constrErrors = errorsVec reduce { _ ++ _ }
           val constrConstr = constrVec reduce { _ ++ _ }
           
@@ -232,19 +254,51 @@ trait ProvenanceChecker extends parser.AST with Binder {
         case Assert(_, pred, child) => {
           val (predErrors, predConst) = loop(pred, relations, constraints)
           val (childErrors, childConst) = loop(child, relations, constraints)
-          
-          if (pred.provenance != NullProvenance)
+
+          val assertErrors = {
+            if (pred.provenance == InfiniteProvenance)
+              Set(Error(expr, CannotUseDistributionWithoutSampling))
+            else 
+              Set()
+          }
+
+          if (pred.provenance != NullProvenance && pred.provenance != InfiniteProvenance)
             expr.provenance = child.provenance
           else
             expr.provenance = NullProvenance
           
-          (predErrors ++ childErrors, predConst ++ childConst)
+          (predErrors ++ childErrors ++ assertErrors, predConst ++ childConst)
+        }
+        
+        case Observe(_, data, samples) => {
+          val (dataErrors, dataConst) = loop(data, relations, constraints)
+          val (samplesErrors, samplesConst) = loop(samples, relations, constraints)
+
+          val observeDataErrors = if (data.provenance == InfiniteProvenance) {
+            Set(Error(expr, CannotUseDistributionWithoutSampling))
+          } else {
+            Set()
+          }
+          
+          val observeSamplesErrors = if (samples.provenance != InfiniteProvenance) {
+            Set(Error(expr, CannotUseDistributionWithoutSampling))
+          } else {
+            Set()
+          }
+          
+          if (data.provenance != InfiniteProvenance && samples.provenance == InfiniteProvenance)
+            expr.provenance = data.provenance
+          else
+            expr.provenance = NullProvenance
+
+          (dataErrors ++ samplesErrors ++ observeDataErrors ++ observeSamplesErrors, dataConst ++ samplesConst)
         }
         
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
 
           if (errors.nonEmpty) expr.provenance = NullProvenance
+          else if (child.provenance == InfiniteProvenance) expr.provenance = InfiniteProvenance
           else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
 
           (errors, constr)
@@ -256,7 +310,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
           
           val unified = unifyProvenance(relations)(from.provenance, to.provenance)
 
-          val (contribErrors, contribConstr) = if (from.provenance.isParametric || to.provenance.isParametric) {
+          val (contribErrors, contribConstr) = if (from.provenance == InfiniteProvenance || to.provenance == InfiniteProvenance) {
+            (Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
+          } else if (from.provenance.isParametric || to.provenance.isParametric) {
             (Set(), Set(NotRelated(from.provenance, to.provenance)))
           } else {
             if (unified.isDefined && unified != Some(NullProvenance))
@@ -272,10 +328,12 @@ trait ProvenanceChecker extends parser.AST with Binder {
           
           val (inErrors, inConstr) = loop(in, relations3, constraints2)
           
-          if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
+          if (from.provenance == NullProvenance || to.provenance == NullProvenance || from.provenance == InfiniteProvenance || to.provenance == InfiniteProvenance) {
             expr.provenance = NullProvenance
           } else if (unified.isDefined || unified == Some(NullProvenance)) {
             expr.provenance = NullProvenance
+          } else if (in.provenance == InfiniteProvenance) {
+            expr.provenance = InfiniteProvenance
           } else {
             expr.provenance = in.provenance
           }
@@ -378,14 +436,38 @@ trait ProvenanceChecker extends parser.AST with Binder {
             
             case ReductionBinding(_) => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
-              expr.provenance = ValueProvenance
-              (errors, constr)
+
+              val reductionErrors = if (actuals.head.provenance == InfiniteProvenance) {
+                Set(Error(expr, CannotUseDistributionWithoutSampling))
+              } else {
+                Set()
+              }
+
+              if (actuals.head.provenance == InfiniteProvenance) {
+                expr.provenance = NullProvenance
+              } else {
+                expr.provenance = ValueProvenance
+              }
+
+              (errors ++ reductionErrors, constr)
             }
             
             case DistinctBinding => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
-              expr.provenance = DynamicProvenance(currentId.getAndIncrement())
-              (errors, constr)
+
+              val distinctErrors = if (actuals.head.provenance == InfiniteProvenance) {
+                Set(Error(expr, CannotUseDistributionWithoutSampling))
+              } else {
+                Set()
+              }
+
+              if (actuals.head.provenance == InfiniteProvenance) {
+                expr.provenance = NullProvenance
+              } else {
+                expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+              }
+
+              (errors ++ distinctErrors, constr)
             }
             
             case LoadBinding => {
@@ -412,7 +494,11 @@ trait ProvenanceChecker extends parser.AST with Binder {
             
             case Morphism1Binding(morph1) => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
-              expr.provenance = if (morph1.retainIds) actuals.head.provenance else ValueProvenance
+              expr.provenance = {
+                if (morph1.namespace == Vector("std", "random")) InfiniteProvenance
+                else if (morph1.retainIds) actuals.head.provenance 
+                else ValueProvenance
+              }
               (errors, constr)
             }
             
@@ -529,6 +615,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
           val (errors, constr) = if (left.provenance == NullProvenance || right.provenance == NullProvenance) {
             expr.provenance = NullProvenance
             (Set(), Set())
+          } else if (left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) {
+            expr.provenance = NullProvenance
+            (Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
           } else if (dynamicPossibility || isParametric || hasCommonality) {
             val leftCard = left.provenance.cardinality
             val rightCard = right.provenance.cardinality
@@ -574,7 +663,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           result
         }
       }
-      
+
       expr.constrainingExpr = constraints get expr.provenance
       expr.relations = relations
       
@@ -582,8 +671,13 @@ trait ProvenanceChecker extends parser.AST with Binder {
     }
     
     val (errors, constraints) = loop(expr, Map(), Map())
+
+    val lastErrors = {
+      if (expr.provenance == InfiniteProvenance) Set(Error(expr, CannotUseDistributionWithoutSampling))
+      else Set()
+    }
     
-    errors
+    errors ++ lastErrors
   }
   
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
@@ -730,7 +824,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case DynamicDerivedProvenance(left, right) =>
       DynamicDerivedProvenance(resolveUnifications(relations)(left), resolveUnifications(relations)(right))
     
-    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | UndefinedProvenance | NullProvenance =>
+    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | UndefinedProvenance | NullProvenance | InfiniteProvenance =>
       prov
   }
   
@@ -866,6 +960,10 @@ trait ProvenanceChecker extends parser.AST with Binder {
         case (UndefinedProvenance, _) => GT
         case (_, UndefinedProvenance) => LT
 
+        case (InfiniteProvenance, InfiniteProvenance) => EQ
+        case (InfiniteProvenance, _) => GT
+        case (_, InfiniteProvenance) => LT
+
         case (NullProvenance, NullProvenance) => EQ
       }
     }
@@ -918,6 +1016,11 @@ trait ProvenanceChecker extends parser.AST with Binder {
   
   case object ValueProvenance extends Provenance {
     override val toString = "<value>"
+    val isParametric = false
+  }
+  
+  case object InfiniteProvenance extends Provenance {
+    override val toString = "<infinite>"
     val isParametric = false
   }
   
