@@ -137,14 +137,6 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     Future(Success(executor))
   }
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-    new Evaluator[N](N0) with IdSourceScannerModule {
-      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
-      val yggConfig = platform.yggConfig
-      val report = LoggingQueryLogger[N, instructions.Line](N0)
-    }
-  }
-
   val metadataClient = new MetadataClient[Future] {
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
