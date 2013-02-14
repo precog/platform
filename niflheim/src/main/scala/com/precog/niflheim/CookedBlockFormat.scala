@@ -29,9 +29,11 @@ import java.nio.channels.{ ReadableByteChannel, WritableByteChannel }
 
 import scalaz._
 
+case class CookedBlockMetadata(blockid: Long, length: Int, segments: Array[(SegmentId, File)])
+
 trait CookedBlockFormat {
-  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, Array[(SegmentId, File)]]
-  def writeCookedBlock(channel: WritableByteChannel, segments: Array[(SegmentId, File)]): Validation[IOException, PrecogUnit]
+  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, CookedBlockMetadata]
+  def writeCookedBlock(channel: WritableByteChannel, metadata: CookedBlockMetadata): Validation[IOException, PrecogUnit]
 }
 
 object V1CookedBlockFormat extends CookedBlockFormat with Chunker {
@@ -52,15 +54,24 @@ object V1CookedBlockFormat extends CookedBlockFormat with Chunker {
     Codec.CompositeCodec[SegmentId, File, (SegmentId, File)](SegmentIdCodec, FileCodec, identity, _ -> _)
   })
 
-  def writeCookedBlock(channel: WritableByteChannel, segments: Array[(SegmentId, File)]) = {
-    write(channel, SegmentsCodec.maxSize(segments)) { buffer =>
-      SegmentsCodec.writeUnsafe(segments, buffer)
+  def writeCookedBlock(channel: WritableByteChannel, metadata: CookedBlockMetadata) = {
+    val maxSize = SegmentsCodec.maxSize(metadata.segments) + 12
+
+    write(channel, maxSize) { buffer =>
+      buffer.putLong(metadata.blockid)
+      buffer.putInt(metadata.length)
+      SegmentsCodec.writeUnsafe(metadata.segments, buffer)
       PrecogUnit
     }
   }
 
-  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, Array[(SegmentId, File)]] = {
-    read(channel) map (SegmentsCodec.read)
+  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, CookedBlockMetadata] = {
+    read(channel) map { buffer =>
+      val blockid = buffer.getLong()
+      val length = buffer.getInt()
+      val segments = SegmentsCodec.read(buffer)
+      CookedBlockMetadata(blockid, length, segments)
+    }
   }
 }
 
@@ -71,14 +82,14 @@ case class VersionedCookedBlockFormat(formats: Map[Int, CookedBlockFormat]) exte
     (ver.toShort, fmt)
   }
 
-  def writeCookedBlock(channel: WritableByteChannel, segments: Array[(SegmentId, File)]) = {
+  def writeCookedBlock(channel: WritableByteChannel, segments: CookedBlockMetadata) = {
     for {
       _ <- writeVersion(channel)
       _ <- format.writeCookedBlock(channel, segments)
     } yield PrecogUnit
   }
 
-  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, Array[(SegmentId, File)]] = {
+  def readCookedBlock(channel: ReadableByteChannel): Validation[IOException, CookedBlockMetadata] = {
     readVersion(channel) flatMap { version =>
       formats get version map { format =>
         format.readCookedBlock(channel)

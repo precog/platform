@@ -43,7 +43,10 @@ import java.io.File
 class NIHDBProjectionSpecs extends Specification with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
-  val chef = actorSystem.actorOf(Props(new Chef(VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
+  val chef = actorSystem.actorOf(Props(new Chef(
+    VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)),
+    VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))
+  ))
 
   def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
 

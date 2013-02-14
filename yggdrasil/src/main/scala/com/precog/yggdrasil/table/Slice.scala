@@ -1550,10 +1550,10 @@ object Slice {
 import com.precog.niflheim._
 
 object SegmentsWrapper {
-  def apply(segments: Segments): Slice = new SegmentsWrapper(segments)
+  def apply(segments: Seq[Segment]): Slice = new SegmentsWrapper(segments)
 }
 
-class SegmentsWrapper(segments: Segments) extends Slice {
+class SegmentsWrapper(segments: Seq[Segment]) extends Slice {
 
   private def buildColumnRef(seg: Segment) = ColumnRef(seg.cpath, seg.ctype)
 
@@ -1587,8 +1587,8 @@ class SegmentsWrapper(segments: Segments) extends Slice {
     }
   }
 
-  private def buildMap(segments: Segments): Map[ColumnRef, Column] =
-    segments.a.map(seg => (buildColumnRef(seg), buildColumn(seg))).toMap
+  private def buildMap(segments: Seq[Segment]): Map[ColumnRef, Column] =
+    segments.map(seg => (buildColumnRef(seg), buildColumn(seg))).toMap
 
   private val cols: Map[ColumnRef, Column] = buildMap(segments)
 

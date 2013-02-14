@@ -52,21 +52,28 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
   private var segments = Segments.empty(id) // TODO: weakref?
   private var count = rows.length
 
-  def structure = snapshot().m.keys
+  def structure = snapshot(None).map { seg => (seg.cpath, seg.ctype) }
 
   def length: Int = count
 
-  def snapshot(): Segments = if (rows.isEmpty) {
-    segments
-  } else {
-    val segs = segments.copy
-    segs.extendWithRows(rows)
-    // start locking here?
-    rows.clear()
-    segments = segs
-    // end locking here?
-    segs
+  def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
+    val segs = if (rows.isEmpty) {
+      segments
+    } else {
+      val segs = segments.copy
+      segs.extendWithRows(rows)
+      // start locking here?
+      rows.clear()
+      segments = segs
+      // end locking here?
+      segs
+    }
+
+    pathConstraint.map { cpaths =>
+      segs.a.filter { seg => cpaths(seg.cpath) }
+    }.getOrElse(segs.a.clone)
   }
+
 
   /**
 ["rawlog", blockid, version]

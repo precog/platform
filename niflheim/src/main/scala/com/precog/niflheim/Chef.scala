@@ -33,9 +33,9 @@ import scalaz.std.list._
 
 case class Prepare(blockid: Long, seqId: Long, root: File, source: StorageReader)
 case class Spoilt(blockid: Long, seqId: Long)
-case class Cooked(blockid: Long, seqId: Long, root: File, files: Seq[(SegmentId, File)])
+case class Cooked(blockid: Long, seqId: Long, root: File, metadata: File)
 
-final case  class Chef(format: SegmentFormat) extends Actor {
+final case  class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) extends Actor {
   private def typeCode(ctype: CType): String = CType.nameOf(ctype)
 
   def prefix(id: Segment): String = {
@@ -43,23 +43,36 @@ final case  class Chef(format: SegmentFormat) extends Actor {
     id.blockid + "-" + pathHash + "-" + typeCode(id.ctype)
   }
 
-  def cook(root: File, segments: List[Segment]): ValidationNEL[IOException, List[(SegmentId, File)]] = {
-    val files = segments map { seg =>
+  def cook(root: File, reader: StorageReader): ValidationNEL[IOException, File] = {
+    val files0 = reader.snapshot(None) map { seg =>
       val file = File.createTempFile(prefix(seg), ".cooked", root)
       val channel: WritableByteChannel = new FileOutputStream(file).getChannel()
-      val result = format.writer.writeSegment(channel, seg) map { _ => (seg.id, file) }
-      channel.close()
+      val result = try {
+        format.writer.writeSegment(channel, seg) map { _ => (seg.id, file) }
+      } finally {
+        channel.close()
+      }
       result.toValidationNEL
     }
 
-    files.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (SegmentId, File)]
+    val files = files0.toList.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (SegmentId, File)]
+    files flatMap { segs =>
+      val metadata = CookedBlockMetadata(reader.id, reader.length, segs.toArray)
+      val mdFile = File.createTempFile(reader.id.toString, ".cookedmeta", root)
+      val channel = new FileOutputStream(mdFile).getChannel()
+      try {
+        blockFormat.writeCookedBlock(channel, metadata).toValidationNEL.map { _ : PrecogUnit => mdFile }
+      } finally {
+        channel.close()
+      }
+    }
   }
 
   def receive = {
     case Prepare(blockid, seqId, root, source) =>
-      cook(root, source.snapshot.segments) match {
-        case Success(files) =>
-          sender ! Cooked(blockid, seqId, root, files)
+      cook(root, source) match {
+        case Success(file) =>
+          sender ! Cooked(blockid, seqId, root, file)
         case Failure(_) =>
           sender ! Spoilt(blockid, seqId)
       }

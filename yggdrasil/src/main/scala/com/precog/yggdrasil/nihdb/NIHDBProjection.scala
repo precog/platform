@@ -55,7 +55,7 @@ sealed trait NIHActorMessage
 
 // FIXME: dedup this
 case class ProjectionInsert(descriptor: ProjectionDescriptor, id: Identities, values: Seq[JValue])
-case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Long], columns: Set[ColumnDescriptor])
+case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Long], columns: Option[Set[CPath]])
 
 case object ProjectionGetStats
 case class ProjectionStats(cooked: Int, pending: Int, rawSize: Int)
@@ -77,7 +77,9 @@ class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, c
   private[this] val actor = actorSystem.actorOf(Props(new NIHDBActor(baseDir, descriptor, chef, cookThreshold)))
 
   def getBlockAfter(id: Option[Long], columns: Set[ColumnDescriptor])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
-    (actor ? ProjectionGetBlock(descriptor, id, columns)).mapTo[Option[BlockProjectionData[Long, Slice]]]
+    // FIXME: We probably want to change this semantic throughout Yggdrasil
+    val constraint = if (columns.size > 0) Some(columns.map(_.selector)) else None
+    (actor ? ProjectionGetBlock(descriptor, id, constraint)).mapTo[Option[BlockProjectionData[Long, Slice]]]
   }
 
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Future[PrecogUnit] = {
@@ -203,15 +205,21 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
   }
 
   override def receive = {
-    case Cooked(id, _, _, files) =>
+    case Cooked(id, _, _, file) =>
       // This could be a replacement for an existing id, so we
       // ned to remove/close any existing cooked block with the same
       // ID
       blockState = blockState.copy(
-        cooked = CookedReader.load(id, files) :: blockState.cooked.filterNot(_.id == id),
+        cooked = CookedReader.load(file) :: blockState.cooked.filterNot(_.id == id),
         pending = blockState.pending - id
       )
+
       currentBlocks = computeBlockMap(blockState)
+
+      currentState = currentState.copy(
+        cookedMap = currentState.cookedMap + (id -> file.getName)
+      )
+
       ProjectionState.toFile(currentState, cookedMapFile)
       txLog.completeCook(id)
 
@@ -243,20 +251,23 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
       }
 
 
-    case ProjectionGetBlock(_, id, _) =>
+    case ProjectionGetBlock(_, id, selectors) =>
       val blocks = id.map { i => currentBlocks.from(i).drop(1) }.getOrElse(currentBlocks)
       sender ! blocks.headOption.flatMap {
-        case (id, reader) if reader.length > 0 => Some(BlockProjectionData(id, id, SegmentsWrapper(reader.snapshot)))
-        case _                                 => None
+        case (id, reader) if reader.length > 0 => Some(BlockProjectionData(id, id, SegmentsWrapper(reader.snapshot(selectors))))
+        case _ => None
       }
 
     case ProjectionGetStats => sender ! ProjectionStats(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
   }
 }
 
-case class ProjectionState(producerThresholds: Map[Int, Int], cookedMap: Map[Long, List[String]]) {
+case class ProjectionState(producerThresholds: Map[Int, Int], cookedMap: Map[Long, String]) {
   def readers(baseDir: File): List[CookedReader] =
-    cookedMap.map { case (id, files) => CookedReader.load(id, files.map { new File(baseDir, _) }) }.toList
+    cookedMap.map { 
+      case (id, metadataFile) => 
+        CookedReader.load(new File(baseDir, metadataFile)) 
+    }.toList
 }
 
 object ProjectionState {
