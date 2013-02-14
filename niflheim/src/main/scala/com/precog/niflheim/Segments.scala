@@ -36,6 +36,8 @@ object Segments {
 case class Segments(id: Long, var length: Int, m: mutable.Map[(CPath, CType), Int], a: mutable.ArrayBuffer[Segment]) {
   def copy: Segments = new Segments(id, length, m.clone, a.clone)
 
+  def segments: List[Segment] = a.toList
+
   override def equals(that: Any): Boolean = that match {
     case Segments(`id`, length2, m2, a2) =>
       if (length != length2) return false
