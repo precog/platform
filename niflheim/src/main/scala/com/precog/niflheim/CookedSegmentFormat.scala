@@ -34,12 +34,12 @@ trait CookedBlockFormat {
   def writeCookedBlock(channel: WritableByteChannel, segments: Array[(SegmentId, File)]): Validation[IOException, PrecogUnit]
 }
 
-object V1CookedBlockFormat extends Chunker {
+object V1CookedBlockFormat extends CookedBlockFormat with Chunker {
   val verify = true
 
   val FileCodec = Codec.Utf8Codec.as[File](_.getCanonicalPath(), new File(_))
   val CPathCodec = Codec.Utf8Codec.as[CPath](_.toString, CPath(_))
-  val CTypeCodec = Codec.Utf8Codec.as[CType](CType.nameOf, CType.fromName(_).get)
+  val CTypeCodec = Codec.ArrayCodec(Codec.ByteCodec).as[CType](CTypeFlags.getFlagFor, CTypeFlags.cTypeForFlag)
   val ColumnRefCodec = Codec.CompositeCodec[CPath, CType, (CPath, CType)](CPathCodec, CTypeCodec,
     identity, { (a: CPath, b: CType) => (a, b) })
 

@@ -126,6 +126,8 @@ trait SegmentFormatSupport {
 
   def genSegment(length: Int): Gen[Segment] =
     oneOf(genArraySegment(length), genBooleanSegment(length), genNullSegment(length))
+
+  def genSegmentId: Gen[SegmentId] = genSegment(0) map (_.id)
 }
 
 trait SegmentFormatMatchers { self: Specification with ScalaCheck =>

@@ -26,20 +26,25 @@ import java.util.zip.Adler32
 
 import scalaz._
 
+/**
+ * This class provides some nice method for writing/reading bytes to channels.
+ * It does this by writing the data out in chunks. These chunks are fixed and
+ * can use a checksum to ensure our data isn't corrupted.
+ */
 trait Chunker {
   def verify: Boolean
   val ChunkSize = 4096
 
   private def allocate(size: Int): ByteBuffer = ByteBuffer.allocate(size)
 
-  def takeChunk(buffer: ByteBuffer): ByteBuffer = {
+  private def takeChunk(buffer: ByteBuffer): ByteBuffer = {
     val bytes = new Array[Byte](ChunkSize)
     val remaining = buffer.remaining()
     val len = math.min(ChunkSize - 12, remaining)
-    buffer.get(bytes, 0, len)
+    buffer.get(bytes, 4, len)
 
     val checksum = new Adler32()
-    checksum.update(bytes, 4, ChunkSize - 8)
+    checksum.update(bytes, 4, ChunkSize - 12)
 
     val chunk = ByteBuffer.wrap(bytes)
     chunk.putInt(0, remaining)
@@ -47,22 +52,24 @@ trait Chunker {
     chunk
   }
 
-  def readChunk(chunk: ByteBuffer, buffer: ByteBuffer): Int = {
-    val remaining = chunk.getInt(0)
-
-    val bytes = new Array[Byte](ChunkSize)
-    val len = math.min(remaining, buffer.remaining())
-    chunk.get(bytes, 0, ChunkSize)
+  private def readChunk(chunk: ByteBuffer, buffer: ByteBuffer): Int = {
+    chunk.mark()
+    val remaining = chunk.getInt()
+    val bytes = new Array[Byte](ChunkSize - 12)
+    val len = math.min(remaining, bytes.length)
+    chunk.get(bytes, 0, len)
+    chunk.reset()
 
     if (verify) {
       val checksum = new Adler32()
-      checksum.update(bytes, 4, ChunkSize - 8)
+      checksum.update(bytes)
       val sum0 = checksum.getValue()
       val sum1 = chunk.getLong(ChunkSize - 8)
-      throw new IOException("Corrupted chunk.")
+      if (sum0 != sum1)
+        throw new IOException("Corrupted chunk.")
     }
 
-    buffer.put(bytes, 4, len)
+    buffer.put(bytes, 0, len)
     remaining - len
   }
 
@@ -90,6 +97,7 @@ trait Chunker {
       while (chunk.remaining() > 0) {
         channel.read(chunk)
       }
+      chunk.flip()
 
       val length = chunk.getInt(0)
       val buffer = allocate(length)
@@ -98,12 +106,13 @@ trait Chunker {
         while (chunk.remaining() > 0) {
           channel.read(chunk)
         }
+        chunk.flip()
       }
-
       buffer.flip()
+
       Success(buffer)
     } catch { case ioe: IOException =>
-        Failure(ioe)
+      Failure(ioe)
     }
   }
 }
