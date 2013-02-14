@@ -43,8 +43,8 @@ case class ArraySegment[A](blockid: Long, cpath: CPath, ctype: CValueType[A], de
   private implicit val m = ctype.manifest
 
   override def equals(that: Any): Boolean = that match {
-    case ArraySegment(`id`, `cp`, ct2, d2, values2) =>
-      if (ct != ct2 || d != d2 || values2.length != values.length) return false
+    case ArraySegment(`blockid`, `cpath`, ct2, d2, values2) =>
+      if (ctype != ct2 || defined != d2 || values2.length != values.length) return false
       var i = 0
       val len = values.length
       while (i < len) {
@@ -78,7 +78,7 @@ case class BooleanSegment(blockid: Long, cpath: CPath, defined: BitSet, values: 
   val ctype = CBoolean
 
   override def equals(that: Any) = that match {
-    case BooleanSegment(`id`, `cp`, d2, values2, `length`) => d == d2 && values == values2
+    case BooleanSegment(`blockid`, `cpath`, d2, values2, `length`) => defined == d2 && values == values2
     case _ => false
   }
 
@@ -95,7 +95,7 @@ case class BooleanSegment(blockid: Long, cpath: CPath, defined: BitSet, values: 
 case class NullSegment(blockid: Long, cpath: CPath, ctype: CNullType, defined: BitSet, length: Int) extends Segment {
 
   override def equals(that: Any) = that match {
-    case NullSegment(`id`, `cp`, `ct`, d2, `length`) => d == d2
+    case NullSegment(`blockid`, `cpath`, `ctype`, d2, `length`) => defined == d2
     case _ => false
   }
 
