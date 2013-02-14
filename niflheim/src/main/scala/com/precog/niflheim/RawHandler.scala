@@ -83,9 +83,11 @@ json3
 
   def write(eventid: Long, values: Seq[JValue]) {
     // start locking here?
-    count += values.length
-    RawLoader.writeEvents(ps, eventid, values)
-    rows ++= values
+    if (!values.isEmpty) {
+      count += values.length
+      RawLoader.writeEvents(ps, eventid, values)
+      rows ++= values
+    }
     // end locking here?
   }
 

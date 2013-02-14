@@ -24,6 +24,7 @@ import scala.{specialized => spec}
 import blueeyes.json._
 import scala.collection.mutable
 import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
 import java.io._
 
 import com.precog.common._
@@ -31,6 +32,8 @@ import com.precog.common.json._
 import com.precog.util._
 
 private[niflheim] object RawLoader {
+  private val fmt = DateTimeFormat.forPattern("yyyyMMddHHmmssSSS")
+
   private val utf8 = java.nio.charset.Charset.forName("UTF-8")
 
   /**
@@ -71,6 +74,7 @@ private[niflheim] object RawLoader {
           if (count < 0) {
             ok = false
             events.append((eventid, count))
+          } else {
             line = reader.readLine()
           }
         } catch {
@@ -83,7 +87,43 @@ private[niflheim] object RawLoader {
     (rows, events.map(_._1))
   }
 
+  /**
+   * Generate a "corrupted" rawlog file name.
+   *
+   * From "/foo/bar" we'l return "/foo/bar-corrupted-20130213155306768"
+   */
+  def getCorruptFile(f: File): File =
+    new File(f.getPath + "-corrupted-" + fmt.print(new DateTime))
+
+  /**
+   * Recovery 
+   */
   def recover1(id: Long, f: File, rows: mutable.ArrayBuffer[JValue], events: mutable.ArrayBuffer[(Long, Int)]) {
+
+    // open a tempfile to write a "corrected" rawlog to, and write the header
+    val tmp = File.createTempFile("nilfheim", "recovery")
+    val ps = new PrintStream(new FileOutputStream(tmp, true), false, "UTF-8")
+    writeHeader(ps, id)
+
+    // for each event, write its rows to the rawlog
+    var row = 0
+    val values = mutable.ArrayBuffer.empty[JValue]
+    events.foreach { case (eventid, count) =>
+      var i = 0
+      while (i < count) {
+        values.append(rows(row))
+        row += 1
+        i += 1
+      }
+      writeEvents(ps, eventid, values)
+      values.clear()
+    }
+
+    // rename the rawlog file to indicate corruption
+    f.renameTo(getCorruptFile(f))
+
+    // rename the tempfile to the rawlog file
+    tmp.renameTo(f)
   }
 
   def isValidEnd1(line: String, eventid: Long): Boolean = try {
