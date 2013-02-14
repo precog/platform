@@ -57,7 +57,7 @@ final case  class Chef(format: SegmentFormat) extends Actor {
 
   def receive = {
     case Prepare(blockid, seqId, root, file) =>
-      val (handler, _) = RawHandler.load(blockid, file)
+      val (handler, _, _) = RawHandler.load(blockid, file)
       cook(root, handler.snapshot.segments) match {
         case Success(files) =>
           sender ! Cooked(blockid, seqId, root, files)

@@ -149,18 +149,16 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val s1 = h1.snapshot()
       h1.close()
 
-      val (h2, _) = RawHandler.load(blockid, tmp2)
+      val (h2, events, true) = RawHandler.load(blockid, tmp2)
       val s2 = h2.snapshot()
 
+      events.toSet must_== Set(18)
       s2 must_== s1
     }
-  }
 
-  "raw reader" should {
-
-    val tmp1 = tempfile()
-    "produce the same snapshots as handler" in new cleanup(tmp1) {
-      val h1 = RawHandler.empty(blockid, tmp1)
+    val tmp3 = tempfile()
+    "produce the same snapshots when reloaded" in new cleanup(tmp3) {
+      val h1 = RawHandler.empty(blockid, tmp3)
 
       val js = """
 {"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
@@ -173,12 +171,42 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val s = h1.snapshot()
       h1.close()
 
-      val (r, _) = RawHandler.load(blockid, tmp1)
+      val (r, events, true) = RawHandler.load(blockid, tmp3)
+      events.toSet must_== Set(19)
 
       r.id must_== blockid
-      r.log must_== tmp1
+      r.log must_== tmp3
       r.length must_== len
       r.snapshot() must_== s
+    }
+
+    def makeps(f: File) = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
+
+    val tmp4 = tempfile()
+    "recover from errors" in new cleanup(tmp4) {
+
+      // write a valid event, then a mal-formed event
+      val ps = makeps(tmp4)
+      RawLoader.writeHeader(ps, blockid)
+      RawLoader.writeEvents(ps, 100, json("""{"a": 1000, "b": 2.0}"""))
+      ps.println("##start 101")
+      ps.println("""{"a": 2000, "b": 3.0}""")
+      ps.close()
+
+      // try to load
+      val (h1, events1, ok1) = RawHandler.load(blockid, tmp4)
+      h1.length must_== 1
+      events1.toSet must_== Set(100)
+      ok1 must_== false
+
+      // close this handler
+      h1.close()
+
+      // open a new handler, we should have sanitized the rawlog
+      val (h2, events2, ok2) = RawHandler.load(blockid, tmp4)
+      h2.length must_== 1
+      events2.toSet must_== Set(100)
+      ok2 must_== true
     }
   }
 } 

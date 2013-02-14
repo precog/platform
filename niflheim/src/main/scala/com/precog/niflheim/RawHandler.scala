@@ -37,10 +37,10 @@ object RawHandler {
   }
 
   // file does exist and is ok -> load data
-  def load(id: Long, f: File): (RawHandler, Seq[Long]) = {
-    val (rows, events) = RawLoader.load(id, f)
+  def load(id: Long, f: File): (RawHandler, Seq[Long], Boolean) = {
+    val (rows, events, ok) = RawLoader.load(id, f)
     val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    (new RawHandler(id, f, rows, ps), events)
+    (new RawHandler(id, f, rows, ps), events, ok)
   }
 }
 
