@@ -64,21 +64,32 @@ case class VersionedSegmentFormat(formats: Map[Int, SegmentFormat]) extends Segm
   }
 
   object reader extends SegmentReader {
-    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
-      def readVersion(): Validation[IOException, Int] = {
-        val buffer = ByteBuffer.allocate(4)
-        try {
-          while (buffer.remaining() > 0) {
-            channel.read(buffer)
-          }
-          buffer.flip()
-          Success(buffer.getInt())
-        } catch { case ioe: IOException =>
-          Failure(ioe)
+    private def readVersion(channel: ReadableByteChannel): Validation[IOException, Int] = {
+      val buffer = ByteBuffer.allocate(4)
+      try {
+        while (buffer.remaining() > 0) {
+          channel.read(buffer)
+        }
+        buffer.flip()
+        Success(buffer.getInt())
+      } catch { case ioe: IOException =>
+        Failure(ioe)
+      }
+    }
+
+    def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] = {
+      readVersion(channel) flatMap { version =>
+        formats get version map { format =>
+          format.reader.readSegmentId(channel)
+        } getOrElse {
+          Failure(new IOException(
+            "Invalid version found. Expected one of %s, found %d." format (formats.keys mkString ",", version)))
         }
       }
+    }
 
-      readVersion() flatMap { version =>
+    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
+      readVersion(channel) flatMap { version =>
         formats get version map { format =>
           format.reader.readSegment(channel)
         } getOrElse {

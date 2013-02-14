@@ -164,6 +164,9 @@ final class StubSegmentFormat extends SegmentFormat {
   val TheOneSegment = NullSegment(42L, CPath("w.t.f"), CNull, BitSetUtil.create(), 100)
 
   object reader extends SegmentReader {
+    def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] =
+      Success(TheOneSegment.id)
+
     def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] =
       Success(TheOneSegment)
   }

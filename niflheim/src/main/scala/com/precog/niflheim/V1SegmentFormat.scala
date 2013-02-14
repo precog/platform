@@ -59,14 +59,14 @@ object V1SegmentFormat extends SegmentFormat {
       Failure(new IOException(e))
     }
 
-    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
-      def readHeader(): Validation[IOException, SegmentId] = for {
-        buffer <- readChunk(channel)
-        blockId <- wrapException(buffer.getLong())
-        cpath <- wrapException(CPath(Codec.Utf8Codec.read(buffer)))
-        ctype <- readCType(buffer)
-      } yield SegmentId(blockId, cpath, ctype)
+    def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] = for {
+      buffer <- readChunk(channel)
+      blockId <- wrapException(buffer.getLong())
+      cpath <- wrapException(CPath(Codec.Utf8Codec.read(buffer)))
+      ctype <- readCType(buffer)
+    } yield SegmentId(blockId, cpath, ctype)
 
+    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
       def readArray[A](ctype: CValueType[A]): Validation[IOException, (BitSet, Array[A])] = for {
         buffer <- readChunk(channel)
       } yield {
@@ -98,7 +98,7 @@ object V1SegmentFormat extends SegmentFormat {
       }
 
       for {
-        header <- readHeader()
+        header <- readSegmentId(channel)
         segment <- header match {
           case SegmentId(blockid, cpath, CBoolean) =>
             readBoolean() map { case (defined, length, values) =>
