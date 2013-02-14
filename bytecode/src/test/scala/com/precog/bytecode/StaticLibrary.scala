@@ -58,6 +58,7 @@ trait StaticLibrary extends Library {
   lazy val libMorphism1 = Set(
     M1,
     Morphism1(Vector(), "bar33", 0x0002),
+    Morphism1(Vector("std", "random"), "foobar", 0x0006),
     Morphism1(Vector(), "denseRank", 0x0003))
     
   lazy val libMorphism2 = Set(

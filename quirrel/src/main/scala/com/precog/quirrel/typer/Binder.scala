@@ -128,6 +128,8 @@ trait Binder extends parser.AST {
       }
       
       case Assert(_, pred, child) => loop(pred, env) ++ loop(child, env)
+
+      case Observe(_, data, samples) => loop(data, env) ++ loop(samples, env)
       
       case New(_, child) => loop(child, env)
       

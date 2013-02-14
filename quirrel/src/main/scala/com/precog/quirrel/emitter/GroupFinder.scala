@@ -26,7 +26,8 @@ trait GroupFinder extends parser.AST with Tracer {
   import ast._
   
   def findGroups(solve: Solve): Set[(Map[Formal, Expr], Where, List[Dispatch])] = {
-    val vars = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
+    val vars0 = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
+    val vars = vars0 map { Some(_) }
     
     // TODO minimize by sigma subsetting
     vars flatMap buildBacktrace(solve.trace) flatMap { btrace =>

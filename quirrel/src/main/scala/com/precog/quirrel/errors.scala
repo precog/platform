@@ -65,6 +65,10 @@ trait LineErrors extends Errors with Phases with parser.AST {
 
 sealed trait ErrorType 
 
+case object CannotUseDistributionWithoutSampling extends ErrorType {
+  override def toString = "cannot use distribution without sampling"
+}
+
 case class UndefinedTicVariable(name: TicId) extends ErrorType {
   override def toString = "undefined tic-variable: %s".format(name)
 }

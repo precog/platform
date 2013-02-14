@@ -135,6 +135,15 @@ trait ColumnarTableModule[M[+_]]
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
     def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
+
+    def uniformDistribution(init: MmixPrng): Table = {
+      val gen: StreamT[M, Slice] = StreamT.unfoldM[M, Slice, MmixPrng](init) { prng =>
+        val (column, nextGen) = Column.uniformDistribution(prng)
+        Some((Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), yggConfig.maxSliceSize), nextGen)).point[M]
+      }
+
+      Table(gen, InfiniteSize)
+    }
     
     def constBoolean(v: collection.Set[Boolean]): Table = {
       val column = ArrayBoolColumn(v.toArray)
@@ -645,6 +654,27 @@ trait ColumnarTableModule[M[+_]]
       val resultSize = TableSize(size.maxSize + t2.size.maxSize)
       val resultSlices = slices ++ t2.slices
       Table(resultSlices, resultSize)
+    }
+
+    def zip(t2: Table): M[Table] = {
+      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
+
+      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice], acc: StreamT[M, Slice]): M[StreamT[M, Slice]] = {
+        slices1.uncons flatMap { 
+          case Some((head1, tail1)) =>
+            slices2.uncons flatMap {
+              case Some((head2, tail2)) => {
+                rec(tail1, tail2, head1.zip(head2) :: acc)
+              }
+              case None => M.point(acc)
+            }
+          case None => M.point(acc)
+        }
+      }
+
+      val resultSlices = rec(slices, t2.slices, StreamT.empty[M, Slice])
+
+      resultSlices map { sl => Table(sl, resultSize) }
     }
 
     def toArray[A](implicit tpe: CValueType[A]): Table = {
