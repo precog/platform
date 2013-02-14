@@ -48,24 +48,24 @@ case class ArchiveData(descriptor: ProjectionDescriptor)
 
 trait RoutingTable {
   def routeEvent(msg: EventMessage): Seq[ProjectionData]
-  
+
   def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData]
 
   def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ShardProjectionAction] = {
     import ProjectionInsert.Row
-    
+
     val updates = events.flatMap {
       case em @ EventMessage(eventId, _) => routeEvent(em).map {
-        case ProjectionData(descriptor, values, metadata) => (descriptor, Row(eventId, values, metadata)) 
+        case ProjectionData(descriptor, values, metadata) => (descriptor, Row(Array(eventId.uid), values, metadata))
       }
-      
-      case am @ ArchiveMessage(archiveId, _) => routeArchive(am, descriptorMap).map { 
+
+      case am @ ArchiveMessage(archiveId, _) => routeArchive(am, descriptorMap).map {
         case ArchiveData(descriptor) => (descriptor, archiveId)
       }
     }
-    
+
     val grouped = updates.groupBy(_._1).mapValues(_.map(_._2))
-    
+
     // Group consecutive inserts into atomic ProjectionInsert messages for batching, but split at any archive requests
     val revBatched = grouped.flatMap {
       case (desc, updates) => updates.foldLeft(List.empty[ShardProjectionAction]) {
@@ -74,7 +74,7 @@ trait RoutingTable {
         case (rest, insert : Row) => ProjectionInsert(desc, Seq(insert)) :: rest
       }
     }
-    
+
     revBatched.map {
       case ProjectionInsert(desc, inserts) => ProjectionInsert(desc, inserts.reverse)
       case archive => archive
@@ -85,17 +85,17 @@ trait RoutingTable {
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
   final def routeEvent(msg: EventMessage): Seq[ProjectionData] = {
-    msg.event.data.flattenWithPath map { 
+    msg.event.data.flattenWithPath map {
       case (selector, value) => toProjectionData(msg, CPath(selector), value)
     }
   }
 
   final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData] = {
     (for {
-      desc <- descriptorMap.get(msg.archive.path).flatten 
+      desc <- descriptorMap.get(msg.archive.path).flatten
     } yield ArchiveData(desc))(collection.breakOut)
   }
-  
+
   @inline
   private final def toProjectionData(msg: EventMessage, selector: CPath, value: JValue): ProjectionData = {
     val authorities = Set.empty + (msg.event.ownerAccountId getOrElse {
@@ -108,7 +108,7 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
 
     val values = Vector1(CType.toCValue(value))
     val metadata: List[Set[Metadata]] = CPathUtils.cPathToJPaths(selector, values.head) map {
-      case (path, _) => 
+      case (path, _) =>
         msg.event.metadata.get(path).getOrElse(Set()).asInstanceOf[Set[Metadata]]       // and now I hate my life...
     }
 

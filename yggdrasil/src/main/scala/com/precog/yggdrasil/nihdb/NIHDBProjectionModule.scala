@@ -18,45 +18,55 @@
  *
  */
 package com.precog.yggdrasil
-package jdbm3
+package nihdb
 
-import table._
+import com.precog.yggdrasil.table._
 import com.precog.util.FileOps
+
+import akka.actor.{ActorRef, ActorSystem}
+import akka.dispatch.{ExecutionContext, Future, Promise}
+import akka.util.Duration
+
+import com.weiglewilczek.slf4s.Logger
 
 import java.io.{File, FileNotFoundException, IOException}
 import java.util.concurrent.{Executors,TimeoutException}
 
 import scala.collection.Iterator
+
 import scalaz.NonEmptyList
 import scalaz.Validation
 import scalaz.effect._
 import scalaz.syntax.validation._
 
-import com.weiglewilczek.slf4s.Logger
-
-trait JDBMProjectionModuleConfig {
+trait NIHDBProjectionModuleConfig {
   def maxSliceSize: Int
+  def projectionTimeout: Duration
 }
 
-trait JDBMProjectionModule extends RawProjectionModule[IO, Array[Byte], Slice] with YggConfigComponent {
-  type YggConfig <: JDBMProjectionModuleConfig
-  val pmLogger = Logger("JDBMProjectionModule")
+trait NIHDBProjectionModule extends RawProjectionModule[Future, Long, Slice] with YggConfigComponent {
+  type YggConfig <: NIHDBProjectionModuleConfig
+  val pmLogger = Logger("NIHDBProjectionModule")
 
-  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor)
-      extends JDBMProjection(baseDir, descriptor, yggConfig.maxSliceSize)
+  def cooker: ActorRef
+  def actorSystem: ActorSystem
+  def asyncContext: ExecutionContext
 
-  trait ProjectionCompanion extends RawProjectionCompanionLike[IO] {
+  class Projection private[NIHDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor)
+      extends NIHDBProjection(baseDir, descriptor, cooker, yggConfig.maxSliceSize, actorSystem, yggConfig.projectionTimeout)
+
+  trait ProjectionCompanion extends RawProjectionCompanionLike[Future] {
     def fileOps: FileOps
 
     // Must return a directory
-    def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File]
+    def ensureBaseDir(descriptor: ProjectionDescriptor): Future[File]
     def findBaseDir(descriptor: ProjectionDescriptor): Option[File]
 
     // Must return a directory
-    def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]]
+    def archiveDir(descriptor: ProjectionDescriptor): Future[Option[File]]
 
-    def apply(descriptor: ProjectionDescriptor): IO[Projection] = {
-      pmLogger.debug("Opening JDBM projection for " + descriptor)
+    def apply(descriptor: ProjectionDescriptor): Future[Projection] = {
+      pmLogger.debug("Opening NIHDB projection for " + descriptor)
       ensureBaseDir(descriptor) map { bd => new Projection(bd, descriptor) }
     }
 
@@ -69,7 +79,7 @@ trait JDBMProjectionModule extends RawProjectionModule[IO, Array[Byte], Slice] w
       pmLogger.debug("Archiving " + descriptor)
       val dirs =
         for {
-          base    <- IO { findBaseDir(descriptor) }
+          base    <- Promise.successful(findBaseDir(descriptor))(asyncContext)
           archive <- archiveDir(descriptor)
         } yield (base, archive)
 
@@ -88,12 +98,12 @@ trait JDBMProjectionModule extends RawProjectionModule[IO, Array[Byte], Slice] w
             throw new IOException("Invalid permissions on archive directory parent: " + archiveParent)
           }
 
-          fileOps.rename(base, timeStampedArchive)
+          Future(fileOps.rename(base, timeStampedArchive).unsafePerformIO)(asyncContext)
 
         case (Some(base), _) =>
           throw new FileNotFoundException("Could not locate archive dir for projection: " + descriptor)
         case _ =>
-          pmLogger.warn("Could not locate base dir for projection: " + descriptor + ", skipping archive"); IO(false)
+          pmLogger.warn("Could not locate base dir for projection: " + descriptor + ", skipping archive"); Promise.successful(false)(asyncContext)
       }
     }
   }
