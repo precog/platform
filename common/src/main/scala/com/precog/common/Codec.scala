@@ -134,8 +134,6 @@ trait Codec[@spec(Boolean, Long, Double) A] { self =>
   }
 }
 
-
-
 object Codec {
 
   @inline final def apply[A](implicit codec: Codec[A]): Codec[A] = codec
