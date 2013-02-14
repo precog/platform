@@ -145,7 +145,8 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
     val currentRawFile = rawFileFor(txLog.currentBlockId)
     val (currentLog, rawLogThresholds) = if (currentRawFile.exists) {
-      RawHandler.load(txLog.currentBlockId, currentRawFile)
+      val (handler, events, ok) = RawHandler.load(txLog.currentBlockId, currentRawFile)
+      (handler, events)
     } else {
       (RawHandler.empty(txLog.currentBlockId, currentRawFile), Seq.empty[Long])
     }
@@ -153,7 +154,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
     thresholds = updatedThresholds(thresholds, rawLogThresholds)
 
     val pendingCooks = txLog.pendingCookIds.map { id =>
-      val (reader, eIds) = RawHandler.load(id, rawFileFor(id))
+      val (reader, eIds, ok) = RawHandler.load(id, rawFileFor(id))
       thresholds = updatedThresholds(thresholds, eIds)
       (id, reader)
     }.toMap
