@@ -26,12 +26,21 @@ import com.precog.util.BitSetUtil.Implicits._
 
 import blueeyes.json._
 
-sealed abstract class Segment(val blockid: Long, val cpath: CPath, val ctype: CType, val defined: BitSet) {
+case class SegmentId(blockid: Long, cpath: CPath, ctype: CType)
+
+sealed trait Segment {
+  def id: SegmentId = SegmentId(blockid, cpath, ctype)
+
+  def blockid: Long
+  def cpath: CPath
+  def ctype: CType
+  def defined: BitSet
   def length: Int
   def extend(amount: Int): Segment
 }
 
-case class ArraySegment[A: ClassManifest](id: Long, cp: CPath, ct: CValueType[A], d: BitSet, val values: Array[A]) extends Segment(id, cp, ct, d) {
+case class ArraySegment[A](blockid: Long, cpath: CPath, ctype: CValueType[A], defined: BitSet, values: Array[A]) extends Segment {
+  private implicit val m = ctype.manifest
 
   override def equals(that: Any): Boolean = that match {
     case ArraySegment(`id`, `cp`, ct2, d2, values2) =>
@@ -48,8 +57,8 @@ case class ArraySegment[A: ClassManifest](id: Long, cp: CPath, ct: CValueType[A]
   }
 
   def ++(rhs: ArraySegment[A]): ArraySegment[A] = rhs match {
-    case ArraySegment(`id`, `cp`, `ct`, d2, values2) =>
-      ArraySegment(id, cp, ct, d ++ d2, (values ++ values2).toArray)
+    case ArraySegment(`blockid`, `cpath`, `ctype`, d2, values2) =>
+      ArraySegment(blockid, cpath, ctype, defined ++ d2, (values ++ values2).toArray)
     case _ =>
       throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
   }
@@ -61,11 +70,12 @@ case class ArraySegment[A: ClassManifest](id: Long, cp: CPath, ct: CValueType[A]
     var i = 0
     val len = values.length
     while (i < len) { arr(i) = values(i); i += 1 }
-    ArraySegment(id, cp, ct, d.copy, arr)
+    ArraySegment(blockid, cpath, ctype, defined.copy, arr)
   }
 }
 
-case class BooleanSegment(id: Long, cp: CPath, d: BitSet, val values: BitSet, val length: Int) extends Segment(id, cp, CBoolean, d) {
+case class BooleanSegment(blockid: Long, cpath: CPath, defined: BitSet, values: BitSet, length: Int) extends Segment {
+  val ctype = CBoolean
 
   override def equals(that: Any) = that match {
     case BooleanSegment(`id`, `cp`, d2, values2, `length`) => d == d2 && values == values2
@@ -73,16 +83,16 @@ case class BooleanSegment(id: Long, cp: CPath, d: BitSet, val values: BitSet, va
   }
 
   def ++(rhs: BooleanSegment): BooleanSegment = rhs match {
-    case BooleanSegment(`id`, `cp`, d2, values2, length2) =>
-      BooleanSegment(id, cp, d ++ d2, values ++ values2, length + length2)
+    case BooleanSegment(`blockid`, `cpath`, d2, values2, length2) =>
+      BooleanSegment(blockid, cpath, defined ++ d2, values ++ values2, length + length2)
     case _ =>
       throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
   }
 
-  def extend(amount: Int) = BooleanSegment(id, cp, d.copy, values.copy, length + amount)
+  def extend(amount: Int) = BooleanSegment(blockid, cpath, defined.copy, values.copy, length + amount)
 }
 
-case class NullSegment(id: Long, cp: CPath, ct: CNullType, d: BitSet, val length: Int) extends Segment(id, cp, ct, d) {
+case class NullSegment(blockid: Long, cpath: CPath, ctype: CNullType, defined: BitSet, length: Int) extends Segment {
 
   override def equals(that: Any) = that match {
     case NullSegment(`id`, `cp`, `ct`, d2, `length`) => d == d2
@@ -90,11 +100,11 @@ case class NullSegment(id: Long, cp: CPath, ct: CNullType, d: BitSet, val length
   }
 
   def ++(rhs: NullSegment): NullSegment = rhs match {
-    case NullSegment(`id`, `cp`, `ct`, d2, length2) =>
-      NullSegment(id, cp, ct, d ++ d2, length + length2)
+    case NullSegment(`blockid`, `cpath`, `ctype`, d2, length2) =>
+      NullSegment(blockid, cpath, ctype, defined ++ d2, length + length2)
     case _ =>
       throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
   }
 
-  def extend(amount: Int) = NullSegment(id, cp, ct, d.copy, length + amount)
+  def extend(amount: Int) = NullSegment(blockid, cpath, ctype, defined.copy, length + amount)
 }

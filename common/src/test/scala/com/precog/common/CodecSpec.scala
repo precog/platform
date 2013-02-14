@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package jdbm3
+package com.precog.common
 
 import com.precog.util.{ ByteBufferPool, RawBitSet }
 
@@ -76,6 +75,13 @@ class CodecSpec extends Specification with ScalaCheck {
 
   implicit def arbIndexedSeq[A](implicit a: Arbitrary[A]): Arbitrary[IndexedSeq[A]] =
     Arbitrary(Gen.listOf(a.arbitrary) map (Vector(_: _*)))
+
+  implicit def arbArray[A: Manifest: Gen]: Arbitrary[Array[A]] = Arbitrary(for {
+    values <- Gen.listOf(implicitly[Gen[A]])
+  } yield {
+    val array: Array[A] = values.toArray
+    array
+  })
 
   val pool = new ByteBufferPool()
   val smallPool = new ByteBufferPool(capacity = 10)
@@ -160,6 +166,19 @@ class CodecSpec extends Specification with ScalaCheck {
       }
     }
   }
+  "ArrayCodec" should {
+    "survive round-trip" in {
+      "with large buffers" in {
+        check { (xs: Array[Long]) => surviveEasyRoundTrip(xs) }
+        check { (xs: Array[Array[Long]]) => surviveEasyRoundTrip(xs) }
+        check { (xs: Array[String]) => surviveEasyRoundTrip(xs) }
+      }
+      "with small buffers" in {
+        check { (xs: Array[Long]) => surviveHardRoundTrip(xs) }
+        check { (xs: Array[Array[Long]]) => surviveHardRoundTrip(xs) }
+        check { (xs: Array[String]) => surviveHardRoundTrip(xs) }
+      }
+    }
+  }
   // "CValueCodec" should surviveRoundTrip(Codec.CValueCodec)
 }
-
