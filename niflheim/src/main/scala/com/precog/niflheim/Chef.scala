@@ -31,7 +31,7 @@ import scalaz._
 import scalaz.syntax.traverse._
 import scalaz.std.list._
 
-case class Prepare(blockid: Long, seqId: Long, root: File, file: File)
+case class Prepare(blockid: Long, seqId: Long, root: File, source: StorageReader)
 case class Spoilt(blockid: Long, seqId: Long)
 case class Cooked(blockid: Long, seqId: Long, root: File, files: Seq[File])
 
@@ -56,9 +56,8 @@ final case  class Chef(format: SegmentFormat) extends Actor {
   }
 
   def receive = {
-    case Prepare(blockid, seqId, root, file) =>
-      val (handler, _, _) = RawHandler.load(blockid, file)
-      cook(root, handler.snapshot.segments) match {
+    case Prepare(blockid, seqId, root, source) =>
+      cook(root, source.snapshot.segments) match {
         case Success(files) =>
           sender ! Cooked(blockid, seqId, root, files)
         case Failure(_) =>
