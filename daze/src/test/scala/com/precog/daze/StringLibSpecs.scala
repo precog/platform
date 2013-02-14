@@ -36,7 +36,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     dag.Operate(BuiltInFunction1Op(op), loadFrom(line))(line)
   }
 
-  def op2Input(op: Op2, const: CValue, loadFrom: Line => dag.LoadLocal) = {
+  def op2Input(op: Op2, const: RValue, loadFrom: Line => dag.LoadLocal) = {
     Join(BuiltInFunction2Op(op), CrossLeftSort, loadFrom(line), Const(const)(line))(line)
   }
         
@@ -133,7 +133,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(101, 32, 34, 115)
     }
     "determine codePointAt with invalid integer" in {
-      val input = op2Input(codePointAt, CDouble(7.5), homStrings)
+      val input = op2Input(codePointAt, CNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -211,7 +211,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(99, 58, 97, 101)
     }
     "determine codePointBefore with invalid integer" in {
-      val input = op2Input(codePointBefore, CDouble(7.5), homStrings)
+      val input = op2Input(codePointBefore, CNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -271,19 +271,19 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), homStrings)
+      val input = op2Input(takeLeft, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), homStrings)
+      val input = op2Input(takeRight, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), homStrings)
+      val input = op2Input(dropLeft, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), homStrings)
+      val input = op2Input(dropRight, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {
@@ -518,7 +518,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     "determine codePointAt with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -608,7 +608,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -677,19 +677,19 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(takeLeft, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), hetStrings)
+      val input = op2Input(takeRight, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(dropLeft, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), hetStrings)
+      val input = op2Input(dropRight, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {

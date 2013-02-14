@@ -67,7 +67,6 @@ trait SortBySerialization {
 object SortBy extends SortBySerialization
 
 case class Authorities(ownerAccountIds: Set[AccountId]) {
-
   @tailrec
   final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
     if(i < l.length) {
@@ -86,7 +85,7 @@ case class Authorities(ownerAccountIds: Set[AccountId]) {
   override def hashCode(): Int = hash
 }
 
-trait AuthoritiesSerialization {
+object Authorities {
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
     override def decompose(authorities: Authorities): JValue = {
       JObject(JField("uids", JArray(authorities.ownerAccountIds.map(JString(_)).toList)) :: Nil)
@@ -97,9 +96,7 @@ trait AuthoritiesSerialization {
     override def validated(obj: JValue): Validation[Error, Authorities] =
       (obj \ "uids").validated[Set[String]].map(Authorities(_))
   }
-}
 
-object Authorities extends AuthoritiesSerialization {
   val None = Authorities(Set())
 }
 
@@ -130,7 +127,9 @@ case class ColumnDescriptor(path: Path, selector: CPath, valueType: CType, autho
 object ColumnDescriptor extends ((Path, CPath, CType, Authorities) => ColumnDescriptor) {
   implicit val iso = Iso.hlist(ColumnDescriptor.apply _, ColumnDescriptor.unapply _)
   val schemaV1 = "path" :: "selector" :: "valueType" :: "authorities" :: HNil
-  implicit val (decomposer, extractor) = IsoSerialization.serialization[ColumnDescriptor](schemaV1)
+
+  implicit val decomposer: Decomposer[ColumnDescriptor] = decomposerV[ColumnDescriptor](schemaV1, Some("1.0"))
+  implicit val extractor: Extractor[ColumnDescriptor] = extractorV[ColumnDescriptor](schemaV1, Some("1.0"))
 
   implicit object briefShow extends Show[ColumnDescriptor] {
     override def shows(d: ColumnDescriptor) = {
@@ -162,15 +161,15 @@ case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]
   def stableHash: String = Hashing.sha256().hashString(this.toString, Charsets.UTF_8).toString
 }
 
-trait ProjectionDescriptorSerialization {
-  implicit val ProjectionDescriptorDecomposer : Decomposer[ProjectionDescriptor] = new Decomposer[ProjectionDescriptor] {
+object ProjectionDescriptor {
+  implicit val decomposer : Decomposer[ProjectionDescriptor] = new Decomposer[ProjectionDescriptor] {
     def decompose(pd: ProjectionDescriptor) : JValue = JObject (
       JField("columns", JArray(pd.columns.map(c => JObject(JField("descriptor", c.jv) :: JField("index", pd.identities.jv) :: Nil)))) :: 
       Nil
     )
   } 
   
-  implicit val ProjectionDescriptorExtractor : Extractor[ProjectionDescriptor] = new Extractor[ProjectionDescriptor] { 
+  implicit val extractor : Extractor[ProjectionDescriptor] = new Extractor[ProjectionDescriptor] { 
     override def validated(obj : JValue) : Validation[Error,ProjectionDescriptor] = {
       (obj \ "columns") match {
         case JArray(elements) => 
@@ -208,7 +207,6 @@ trait ProjectionDescriptorSerialization {
   }
 }
 
-object ProjectionDescriptor extends ProjectionDescriptorSerialization 
 
 
 trait ByteProjection {
