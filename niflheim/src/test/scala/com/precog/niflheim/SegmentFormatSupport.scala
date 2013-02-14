@@ -126,6 +126,8 @@ trait SegmentFormatSupport {
 
   def genSegment(length: Int): Gen[Segment] =
     oneOf(genArraySegment(length), genBooleanSegment(length), genNullSegment(length))
+
+  def genSegmentId: Gen[SegmentId] = genSegment(0) map (_.id)
 }
 
 trait SegmentFormatMatchers { self: Specification with ScalaCheck =>
@@ -164,6 +166,9 @@ final class StubSegmentFormat extends SegmentFormat {
   val TheOneSegment = NullSegment(42L, CPath("w.t.f"), CNull, BitSetUtil.create(), 100)
 
   object reader extends SegmentReader {
+    def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] =
+      Success(TheOneSegment.id)
+
     def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] =
       Success(TheOneSegment)
   }

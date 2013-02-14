@@ -39,19 +39,6 @@ import scalaz.{ Validation, Success, Failure }
 object V1SegmentFormat extends SegmentFormat {
   private val checksum = true
 
-  private object Flags {
-    val FBoolean: Byte = 1
-    val FString: Byte = 2
-    val FLong: Byte = 3
-    val FDouble: Byte = 4
-    val FBigDecimal: Byte = 5
-    val FDate: Byte = 6
-    val FArray: Byte = 7
-    val FNull: Byte = 16
-    val FEmptyArray: Byte = 17
-    val FEmptyObject: Byte = 18
-  }
-
   object reader extends SegmentReader {
     private def wrapException[A](f: => A): Validation[IOException, A] = try {
       Success(f)
@@ -59,14 +46,14 @@ object V1SegmentFormat extends SegmentFormat {
       Failure(new IOException(e))
     }
 
-    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
-      def readHeader(): Validation[IOException, SegmentId] = for {
-        buffer <- readChunk(channel)
-        blockId <- wrapException(buffer.getLong())
-        cpath <- wrapException(CPath(Codec.Utf8Codec.read(buffer)))
-        ctype <- readCType(buffer)
-      } yield SegmentId(blockId, cpath, ctype)
+    def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] = for {
+      buffer <- readChunk(channel)
+      blockId <- wrapException(buffer.getLong())
+      cpath <- wrapException(CPath(Codec.Utf8Codec.read(buffer)))
+      ctype <- CTypeFlags.readCType(buffer)
+    } yield SegmentId(blockId, cpath, ctype)
 
+    def readSegment(channel: ReadableByteChannel): Validation[IOException, Segment] = {
       def readArray[A](ctype: CValueType[A]): Validation[IOException, (BitSet, Array[A])] = for {
         buffer <- readChunk(channel)
       } yield {
@@ -98,7 +85,7 @@ object V1SegmentFormat extends SegmentFormat {
       }
 
       for {
-        header <- readHeader()
+        header <- readSegmentId(channel)
         segment <- header match {
           case SegmentId(blockid, cpath, CBoolean) =>
             readBoolean() map { case (defined, length, values) =>
@@ -116,28 +103,6 @@ object V1SegmentFormat extends SegmentFormat {
             }
         }
       } yield segment
-    }
-
-    def readCType(buffer: ByteBuffer): Validation[IOException, CType] = {
-      import Flags._
-
-      def readCValueType(flag: Byte): Validation[IOException, CValueType[_]] = flag match {
-        case FBoolean => Success(CBoolean)
-        case FString => Success(CString)
-        case FLong => Success(CLong)
-        case FDouble => Success(CDouble)
-        case FBigDecimal => Success(CNum)
-        case FDate => Success(CDate)
-        case FArray => readCValueType(buffer.get()) map (CArrayType(_))
-        case flag => Failure(new IOException("Unexpected segment type flag: %x" format flag))
-      }
-
-      buffer.get() match {
-        case FNull => Success(CNull)
-        case FEmptyArray => Success(CEmptyArray)
-        case FEmptyObject => Success(CEmptyObject)
-        case flag => readCValueType(flag)
-      }
     }
   }
 
@@ -157,7 +122,7 @@ object V1SegmentFormat extends SegmentFormat {
     }
 
     private def writeSegmentId(channel: WritableByteChannel, segment: Segment): Validation[IOException, PrecogUnit] = {
-      val tpeFlag = getFlagFor(segment.ctype)
+      val tpeFlag = CTypeFlags.getFlagFor(segment.ctype)
       val strPath = segment.cpath.toString
       val maxSize = Codec.Utf8Codec.maxSize(strPath) + tpeFlag.length + 8
 
@@ -204,45 +169,6 @@ object V1SegmentFormat extends SegmentFormat {
         PrecogUnit
       }
     }
-  }
-
-  private def getFlagFor(ctype: CType): Array[Byte] = {
-    import Flags._
-
-    val buffer = new mutable.ArrayBuffer[Byte]()
-
-    def flagForCType(t: CType) {
-      @tailrec
-      def flagForCValueType(t: CValueType[_]) {
-        t match {
-          case CString => buffer += FString
-          case CBoolean => buffer += FBoolean
-          case CLong => buffer += FLong
-          case CDouble => buffer += FDouble
-          case CNum => buffer += FBigDecimal
-          case CDate => buffer += FDate
-          case CArrayType(tpe) =>
-            buffer += FArray
-            flagForCValueType(tpe)
-        }
-      }
-
-      t match {
-        case t: CValueType[_] =>
-          flagForCValueType(t)
-        case CNull =>
-          buffer += FNull
-        case CEmptyArray =>
-          buffer += FEmptyArray
-        case CEmptyObject =>
-          buffer += FEmptyObject
-        case CUndefined =>
-          sys.error("Unexpected CUndefined type. Undefined segments don't exist!")
-      }
-    }
-
-    flagForCType(ctype)
-    buffer.toArray
   }
 
   private def allocate(size: Int): ByteBuffer = ByteBuffer.allocate(size)
