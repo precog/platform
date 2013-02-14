@@ -57,11 +57,8 @@ sealed trait NIHActorMessage
 case class ProjectionInsert(descriptor: ProjectionDescriptor, id: Identities, values: Seq[JValue])
 case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Long], columns: Set[ColumnDescriptor])
 
-trait CookedReader extends StorageReader
-
-object CookedReader {
-  def load(id: Long, files: Seq[File]): CookedReader = null
-}
+case object ProjectionGetStats
+case class ProjectionStats(cooked: Int, pending: Int, rawSize: Int)
 
 /**
   *  Projection for NIH DB files
@@ -94,6 +91,8 @@ class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, c
 
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
+
+  def stats: Future[ProjectionStats] = (actor ? ProjectionGetStats).mapTo[ProjectionStats]
 
   def close() = {
     gracefulStop(actor, actorTimeout)(actorSystem).map {_ => PrecogUnit }
@@ -146,6 +145,9 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
     val currentRawFile = rawFileFor(txLog.currentBlockId)
     val (currentLog, rawLogThresholds) = if (currentRawFile.exists) {
       val (handler, events, ok) = RawHandler.load(txLog.currentBlockId, currentRawFile)
+      if (!ok) {
+        logger.warn("Corruption detected and recovery performed on " + currentRawFile)
+      }
       (handler, events)
     } else {
       (RawHandler.empty(txLog.currentBlockId, currentRawFile), Seq.empty[Long])
@@ -155,6 +157,9 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
     val pendingCooks = txLog.pendingCookIds.map { id =>
       val (reader, eIds, ok) = RawHandler.load(id, rawFileFor(id))
+      if (!ok) {
+        logger.warn("Corruption detected and recovery performed on " + currentRawFile)
+      }
       thresholds = updatedThresholds(thresholds, eIds)
       (id, reader)
     }.toMap
@@ -244,6 +249,8 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
         case (id, reader) if reader.length > 0 => Some(BlockProjectionData(id, id, SegmentsWrapper(reader.snapshot)))
         case _                                 => None
       }
+
+    case ProjectionGetStats => sender ! ProjectionStats(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
   }
 }
 

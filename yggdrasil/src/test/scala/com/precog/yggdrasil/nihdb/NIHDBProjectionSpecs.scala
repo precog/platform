@@ -25,7 +25,7 @@ import com.precog.yggdrasil.table._
 import com.precog.util.IOUtils
 
 import akka.actor.{ActorSystem, Props}
-import akka.dispatch.Await
+import akka.dispatch.{Await, Future}
 import akka.util.Duration
 
 import blueeyes.akka_testing.FutureMatchers
@@ -53,7 +53,9 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
     val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
     var projection = newProjection(workDir)
 
-    def close(proj: NIHDBProjection) = Await.result(proj.close(), Duration(50, "seconds")) 
+    def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
+
+    def close(proj: NIHDBProjection) = fromFuture(proj.close())
 
     def after = {
       (for {
@@ -75,16 +77,16 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
       val results =
         for {
-          _ <- projection.insert(Array(0l), Seq(JNum(0L)))
-          _ <- projection.insert(Array(1l), Seq(JNum(1L)))
-          _ <- projection.insert(Array(2l), Seq(JNum(2L)))
+          _ <- projection.insert(Array(0L), Seq(JNum(0L)))
+          _ <- projection.insert(Array(1L), Seq(JNum(1L)))
+          _ <- projection.insert(Array(2L), Seq(JNum(2L)))
           result <- projection.getBlockAfter(None)
         } yield result
 
       results must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 0l
-          max mustEqual 0l
+          min mustEqual 0L
+          max mustEqual 0L
           data.size mustEqual 3
           data.toJsonElements must containAllOf(expected).only.inOrder
       })
@@ -93,9 +95,9 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
     "Insert, close and re-read values below the cook threshold" in new TempContext {
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
-      projection.insert(Array(0l), Seq(JNum(0L)))
-      projection.insert(Array(1l), Seq(JNum(1L)))
-      projection.insert(Array(2l), Seq(JNum(2L)))
+      projection.insert(Array(0L), Seq(JNum(0L)))
+      projection.insert(Array(1L), Seq(JNum(1L)))
+      projection.insert(Array(2L), Seq(JNum(2L)))
 
       val result = projection.close().flatMap { _ =>
         projection = newProjection(workDir)
@@ -104,10 +106,37 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
       result must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 0l
-          max mustEqual 0l
+          min mustEqual 0L
+          max mustEqual 0L
           data.size mustEqual 3
           data.toJsonElements must containAllOf(expected).only.inOrder
+      })
+    }
+
+    "Properly convert raw blocks to cooked" in new TempContext {
+      val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
+
+      expected.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(Array(id.toLong), values) }
+
+      var waits = 10
+
+      while (waits > 0 && fromFuture(projection.stats).pending > 0) {
+        Thread.sleep(200)
+        waits -= 1
+      }
+
+      val stats = fromFuture(projection.stats)
+
+      stats.cooked mustEqual 1
+      stats.pending mustEqual 0
+      stats.rawSize mustEqual 950
+
+      projection.getBlockAfter(None) must whenDelivered (beLike {
+        case Some(BlockProjectionData(min, max, data)) =>
+          min mustEqual 0L
+          max mustEqual 0L
+          data.size mustEqual 1000
+          data.toJsonElements must containAllOf(expected.take(1000)).only.inOrder
       })
     }
   }
