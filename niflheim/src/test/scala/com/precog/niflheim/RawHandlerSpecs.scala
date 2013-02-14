@@ -40,7 +40,11 @@ abstract class cleanup(f: File) extends After {
 
 object RawHandlerSpecs extends Specification with ScalaCheck {
   def blockid = 999
-  def tempfile() = File.createTempFile("niflheim", "rawlog")
+  def tempfile(): File = {
+    val f = File.createTempFile("niflheim", ".rawlog")
+    f.delete()
+    f
+  }
 
   implicit val ordering = scala.math.Ordering.by[(String, CType), String](_.toString)
 
@@ -70,8 +74,15 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
     }
   }
 
+  def makeps(f: File) = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
+
   "raw handler" should {
 
+    /**
+     * Just tests the most basic functionality: generating snapshots
+     * from repeated writes. This is the core of what RawHandler will
+     * normally be doing.
+     */
     val tmp1 = tempfile()
     "generate snapshots from writes" in new cleanup(tmp1) {
       val h = RawHandler.empty(blockid, tmp1)
@@ -135,6 +146,14 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       testArraySegment(s3, blockid, CPath("."), CNum, List((3, BigDecimal(999)), (4, BigDecimal(123.0))))
     }
 
+
+    /**
+     * Test log file writing/reading.
+     *
+     * The RawHandler should support being stopped and then recreated
+     * on its previous log. This test doesn't test the format itself,
+     * but just whether the data written can be read back in correctly.
+     */
     val tmp2 = tempfile()
     "correctly read log files" in new cleanup(tmp2) {
       val h1 = RawHandler.empty(blockid, tmp2)
@@ -156,37 +175,20 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       s2 must_== s1
     }
 
+
+    /**
+     * Test recovery from corrupted rawlog file.
+     *
+     * In this case the log is missing an "##end 101\n" stanza. The
+     * first load() should clean up the file and report the error.
+     * Future loads should load the same data without complaint
+     * (indicating the file has been cleaned).
+     */
     val tmp3 = tempfile()
-    "produce the same snapshots when reloaded" in new cleanup(tmp3) {
-      val h1 = RawHandler.empty(blockid, tmp3)
-
-      val js = """
-{"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
-{"a": 9999.0, "b": "xyz", "arr": [1,2,3]}
-{"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
-""".trim
-      h1.write(19, json(js))
-
-      val len = h1.length
-      val s = h1.snapshot()
-      h1.close()
-
-      val (r, events, true) = RawHandler.load(blockid, tmp3)
-      events.toSet must_== Set(19)
-
-      r.id must_== blockid
-      r.log must_== tmp3
-      r.length must_== len
-      r.snapshot() must_== s
-    }
-
-    def makeps(f: File) = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-
-    val tmp4 = tempfile()
-    "recover from errors" in new cleanup(tmp4) {
+    "recover from errors" in new cleanup(tmp3) {
 
       // write a valid event, then a mal-formed event
-      val ps = makeps(tmp4)
+      val ps = makeps(tmp3)
       RawLoader.writeHeader(ps, blockid)
       RawLoader.writeEvents(ps, 100, json("""{"a": 1000, "b": 2.0}"""))
       ps.println("##start 101")
@@ -194,7 +196,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       ps.close()
 
       // try to load
-      val (h1, events1, ok1) = RawHandler.load(blockid, tmp4)
+      val (h1, events1, ok1) = RawHandler.load(blockid, tmp3)
       h1.length must_== 1
       events1.toSet must_== Set(100)
       ok1 must_== false
@@ -203,10 +205,49 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       h1.close()
 
       // open a new handler, we should have sanitized the rawlog
-      val (h2, events2, ok2) = RawHandler.load(blockid, tmp4)
+      val (h2, events2, ok2) = RawHandler.load(blockid, tmp3)
       h2.length must_== 1
       events2.toSet must_== Set(100)
       ok2 must_== true
     }
+
+
+    /**
+     * Test missing files.
+     *
+     * In case the log is not there, load() must throw an Exception.
+     */
+    val tmp4 = tempfile()
+    "throw an exception when loading empty logs" in new cleanup(tmp4) {
+      RawHandler.load(blockid, tmp4) must throwA[Exception]
+    }
+
+
+    /**
+     * Test file collisions.
+     *
+     * In case the log is already there, empty() must throw an Exception.
+     */
+    val tmp5 = tempfile()
+    "throw an exception when creating already-present logs " in new cleanup(tmp5) {
+      RawHandler.empty(blockid, tmp5).close()
+      RawHandler.empty(blockid, tmp5) must throwA[Exception]
+    }
+
+
+    /**
+     * Empty rawlog.
+     *
+     * It is fine to have a rawlog without any actual events in it.
+     */
+    val tmp6 = tempfile()
+    "load empty files " in new cleanup(tmp6) {
+      RawHandler.empty(blockid, tmp6).close()
+      val (h, es, ok) = RawHandler.load(blockid, tmp6)
+      ok must_== true
+      es.isEmpty must_== true
+      h.length must_== 0
+    }
+
   }
 } 
