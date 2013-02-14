@@ -53,19 +53,19 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
 
       case Some("children") =>
         metadataClient.browse(apiKey, path) map { v =>
-          {s: String => (BadRequest, NonEmptyList(s))} <-: v :-> { a: JArray => JObject("children" -> a) } 
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JArray => JObject("children" -> a) } 
         }
 
       case Some("structure") =>
         val cpath = request.parameters.get('property).map(CPath(_)).getOrElse(CPath.Identity)
         metadataClient.structure(apiKey, path, cpath) map { v => 
-          {s: String => (BadRequest, NonEmptyList(s))} <-: v :-> { o: JObject => JObject("structure" -> o) } 
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { o: JObject => JObject("structure" -> o) } 
         }
 
       case _ =>
         (metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map { 
           case (childrenV, structureV) =>
-            {errs: NonEmptyList[String] => (BadRequest, errs)} <-: { 
+            {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: { 
               (childrenV.toValidationNEL |@| structureV.toValidationNEL) { (children, structure) =>
                 JObject("children" -> children, "structure" -> structure)
               }
@@ -78,7 +78,7 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
         HttpResponse[QueryResult](OK, content = Some(Left(jobj)))
       } valueOr { 
         case (code, errors) =>
-        HttpResponse[QueryResult](code, content = Some(Left(errors.list.distinct.serialize)))
+          HttpResponse[QueryResult](code, content = Some(Left(errors.list.distinct.serialize)))
       }
     }
   })

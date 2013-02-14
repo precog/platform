@@ -100,7 +100,6 @@ trait TestShardService extends
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future]
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
-  //private val accountFinder =  new TestAccountFinder[Future](Map(), Map())
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
 
@@ -171,13 +170,6 @@ trait TestShardService extends
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(3, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
-  
-  /*
-  implicit def AwaitBijection(implicit bi: Bijection[QueryResult, Future[ByteChunk]]): Bijection[QueryResult, ByteChunk] = new Bijection[QueryResult, ByteChunk] {
-    def unapply(chunk: ByteChunk): QueryResult = bi.unapply(Future(chunk))
-    def apply(res: QueryResult) = Await.result(bi(res), Duration(3, "second"))
-  }
-  */
 }
 
 class ShardServiceSpec extends TestShardService {
@@ -326,11 +318,6 @@ class ShardServiceSpec extends TestShardService {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
       }
     }
-    "reject browse for non-API key accessible path" in {
-      browse(path = "").copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
-      }
-    }
     "reject browse when no API key provided" in {
       browse(None).copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
@@ -341,9 +328,10 @@ class ShardServiceSpec extends TestShardService {
         case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
       }
     }
-    "reject browse when grant expired" in {
-      browse(Some(expiredAPIKey), path = "/test").copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
+    "return error response on browse failure" in {
+      browse(path = "/errpath").copoint must beLike {
+        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(JArray(JString(err) :: Nil))), _) => 
+          err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
       }
     }
   }
@@ -396,28 +384,22 @@ trait TestPlatform extends ManagedPlatform { self =>
   }
 
   val metadataClient = new MetadataClient[Future] {
-    def browse(apiKey: APIKey, path: Path) = {
-      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-        if(allowed) {
-          success(JArray(List(JString("foo"), JString("bar"))))
-        } else {
-          failure("The specified API key may not browse this location")
-        }
+    def browse(apiKey: APIKey, path: Path) = Future {
+      if (path == Path("/errpath")) {
+        failure("Bad path; this is just used to stimulate an error response and not duplicate any genuine failure.")
+      } else {
+        success(JArray(List(JString("foo"), JString("bar"))))
       }
     }
     
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = {
-      accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-        if (allowed) {
-          success(JObject(
-            "structure" -> JObject(
-              "foo" -> JNum(123)
-            )
-          ))
-        } else {
-          failure("The specified API key may not browse this location")
-        }
-      }
+    def structure(apiKey: APIKey, path: Path, cpath: CPath) = Future {
+      success(
+        JObject(
+          "structure" -> JObject(
+            "foo" -> JNum(123)
+          )
+        )
+      )
     }
   }
 

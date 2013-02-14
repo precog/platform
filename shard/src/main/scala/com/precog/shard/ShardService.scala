@@ -187,7 +187,7 @@ trait ShardService extends
           } ~
           options {
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
-          }//): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[ByteChunk]]]
+          }
         }
       }
     }
