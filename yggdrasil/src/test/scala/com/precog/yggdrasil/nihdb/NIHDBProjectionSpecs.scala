@@ -102,10 +102,15 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
       projection.insert(Array(1L), Seq(JNum(1L)))
       projection.insert(Array(2L), Seq(JNum(2L)))
 
-      val result = projection.close().flatMap { _ =>
-        projection = newProjection(workDir)
-        projection.getBlockAfter(None)
-      }
+      println("Raw log = " + fromFuture(projection.stats).rawSize)
+
+      val result = for {
+        _ <- projection.close()
+        _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
+        stats <- projection.stats
+        _ = println("Raw log = " + stats.rawSize)
+        r <- projection.getBlockAfter(None)
+      } yield r
 
       result must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
@@ -132,14 +137,22 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
       stats.cooked mustEqual 1
       stats.pending mustEqual 0
-      stats.rawSize mustEqual 950
+      stats.rawSize mustEqual 751
 
       projection.getBlockAfter(None) must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
-          data.size mustEqual 1000
-          data.toJsonElements must containAllOf(expected.take(1000)).only.inOrder
+          data.size mustEqual 1200
+          data.toJsonElements must containAllOf(expected.take(1200)).only.inOrder
+      })
+
+      projection.getBlockAfter(Some(0)) must whenDelivered (beLike {
+        case Some(BlockProjectionData(min, max, data)) =>
+          min mustEqual 1L
+          max mustEqual 1L
+          data.size mustEqual 751
+          data.toJsonElements must containAllOf(expected.drop(1200)).only.inOrder
       })
     }
   }

@@ -1592,6 +1592,6 @@ class SegmentsWrapper(segments: Seq[Segment]) extends Slice {
 
   private val cols: Map[ColumnRef, Column] = buildMap(segments)
 
-  def size: Int = segments.length
+  val size: Int = segments.foldLeft(0)(_ max _.length)
   def columns: Map[ColumnRef, Column] = cols
 }

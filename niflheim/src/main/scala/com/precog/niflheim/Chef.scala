@@ -40,7 +40,7 @@ final case  class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) ex
 
   def prefix(id: Segment): String = {
     val pathHash = id.cpath.hashCode.toString
-    id.blockid + "-" + pathHash + "-" + typeCode(id.ctype)
+    "segment-" + id.blockid + "-" + pathHash + "-" + typeCode(id.ctype)
   }
 
   def cook(root: File, reader: StorageReader): ValidationNEL[IOException, File] = {
@@ -58,7 +58,7 @@ final case  class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) ex
     val files = files0.toList.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (SegmentId, File)]
     files flatMap { segs =>
       val metadata = CookedBlockMetadata(reader.id, reader.length, segs.toArray)
-      val mdFile = File.createTempFile(reader.id.toString, ".cookedmeta", root)
+      val mdFile = File.createTempFile("block-%08x".format(reader.id), ".cookedmeta", root)
       val channel = new FileOutputStream(mdFile).getChannel()
       try {
         blockFormat.writeCookedBlock(channel, metadata).toValidationNEL.map { _ : PrecogUnit => mdFile }
