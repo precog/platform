@@ -34,6 +34,10 @@ class V1CookedBlockFormatSpecs extends CookedBlockFormatSpecs {
   val format = V1CookedBlockFormat
 }
 
+case class VersionedCookedBlockFormatSpecs extends CookedBlockFormatSpecs {
+  val format = VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat))
+}
+
 trait CookedBlockFormatSpecs extends Specification with ScalaCheck with SegmentFormatSupport {
   def format: CookedBlockFormat
 
@@ -59,8 +63,6 @@ trait CookedBlockFormatSpecs extends Specification with ScalaCheck with SegmentF
     }
 
     "roundtrip arbitrary blocks" in {
-      //val f = new File("/a/b/c.cooked")
-      //implicit val arbL = Arbitrary(Gen.listOfN(100, genSegmentId))
       check { files: List[(SegmentId, File)] =>
         surviveRoundTrip(format)(files.toArray)
       }.set(maxDiscarded -> 2000)
