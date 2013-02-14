@@ -81,6 +81,8 @@ private[niflheim] object RawLoader {
           case _: Exception =>
             ok = false
         }
+      } else {
+        ok = false
       }
     }
     if (!ok) recover1(id, f, rows, events)

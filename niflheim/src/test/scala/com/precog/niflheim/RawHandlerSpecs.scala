@@ -23,10 +23,13 @@ import java.io._
 import blueeyes.json._
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.util.BitSet
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
 import org.scalacheck._
+
+import scala.collection.mutable
 
 abstract class cleanup(f: File) extends After {
   def after = {
@@ -247,6 +250,55 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       ok must_== true
       es.isEmpty must_== true
       h.length must_== 0
+    }
+
+
+    /**
+     * Test recovery from totally corrupted rawlog file #2.
+     *
+     * In this case the log is full of garbage; load() should throw an error.
+     */
+    val tmp7 = tempfile()
+    "throw errors when totally corrupted" in new cleanup(tmp7) {
+      val ps = makeps(tmp7)
+      ps.println("jwgeigjewaijgweigjweijew")
+      ps.close()
+      RawHandler.load(blockid, tmp7) must throwA[Exception]
+    }
+
+
+    /**
+     * Test recovery from partially-corrupted rawlog file #3.
+     *
+     * In this case the log is OK until an event ends up full of garbage.
+     */
+    val tmp8 = tempfile()
+    "recover when partially corrupted" in new cleanup(tmp8) {
+      val range = (0 until 20)
+
+      val ps = makeps(tmp8)
+      RawLoader.writeHeader(ps, blockid)
+      def makejson(i: Int) = json("""{"a": %s, "b": %s}""" format (i * 2, i * 3))
+      range.foreach(i => RawLoader.writeEvents(ps, i, makejson(i)))
+      ps.println("biewjgwijgjigiwej")
+      ps.close()
+
+      val (h, events, ok) = RawHandler.load(blockid, tmp8)
+      h.length must_== range.length
+      events.toSet must_== range.toSet
+      ok must_== false
+
+      // double-check the data
+      val cpa = CPath(".a")
+      val cpb = CPath(".b")
+      val bs = new BitSet()
+      range.foreach(i => bs.set(i))
+
+      val sa = ArraySegment(blockid, cpa, CNum, bs.copy, range.map(i => BigDecimal(i * 2)).toArray)
+      val sb = ArraySegment(blockid, cpb, CNum, bs.copy, range.map(i => BigDecimal(i * 3)).toArray)
+
+      val m = mutable.Map[(CPath, CType), Int]((cpa, CNum) -> 0, (cpb, CNum) -> 1)
+      h.snapshot must_== Segments(blockid, range.length, m, mutable.ArrayBuffer(sa, sb))
     }
 
   }
