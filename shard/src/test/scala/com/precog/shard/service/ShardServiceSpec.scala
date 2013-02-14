@@ -27,6 +27,7 @@ import com.precog.daze._
 import com.precog.common.Path
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.common.json._
 import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
@@ -151,22 +152,22 @@ trait TestShardService extends
 
   implicit val queryResultByteChunkTranscoder =
    new AsyncHttpTranscoder[QueryResult, ByteChunk] {
-     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
+     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] = 
        req.copy(content = req.content.map {
          case Left(jv) =>
            Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
          case Right(stream) =>
            Right(stream.map(utf8.encode))
        })
+
      def unapply(res: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
        res.map { r =>
-         val q: Option[QueryResult] = r.content.map {
+         r.copy(content = r.content.map {
            case Left(bb) =>
              Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
            case Right(stream) =>
              Right(stream.map(utf8.decode))
-         }
-         r.copy(content = q)
+         })
        }
    }
 
@@ -276,19 +277,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case `expected` => ok
       }}
     }
-    "reject absolute inaccessible query from root path" in {
-      query(inaccessibleAbsoluteQuery) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
-      }}
-    }
     "handle relative query from accessible non-root path" in {
       query(relativeQuery, path = "/test") must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(_), _) => ok
-      }}
-    }
-    "reject relative query from inaccessible non-root path" in {
-      query(relativeQuery, path = "/inaccessible") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
     "reject query when no API key provided" in {
@@ -299,11 +290,6 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
-      }}
-    }
-    "reject query when grant is expired" in {
-      query(accessibleAbsoluteQuery, Some(expiredAPIKey)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "No data accessable at the specified path"), _, None, _) => ok
       }}
     }
     "return warnings/errors if format is 'detailed'" in {
@@ -338,6 +324,10 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
+
+  def structure(apiKey: Option[String] = Some(testAPIKey), path: String = "/test", cpath: CPath = CPath.Identity): Future[HttpResponse[QueryResult]] = {
+    apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).query("type", "structure").query("property", cpath.toString).get(path)
+  }
  
   "Shard browse service" should {
     "handle browse for API key accessible path" in {
@@ -348,7 +338,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject browse for non-API key accessible path" in {
       browse(path = "") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JArray(JString("The specified API key may not browse this location") :: Nil))), _) => ok
       }}
     }
     "reject browse when no API key provided" in {
@@ -363,7 +353,17 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
     }
     "reject browse when grant expired" in {
       browse(Some(expiredAPIKey), path = "/test") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, "The specified API key may not browse this location"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(JArray(JString("The specified API key may not browse this location") :: Nil))), _) => ok
+      }}
+    }
+  }
+
+  "Shard structure service" should {
+    "handle structure for API key accessible path" in {
+      val obj = JObject("structure" -> JObject("foo" -> JNum(123)))
+
+      structure() must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
       }}
     }
   }
@@ -411,15 +411,7 @@ trait TestPlatform extends ManagedPlatform { self =>
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        val requiredPaths = if(query startsWith "//") Set(prefix / Path(query.substring(1))) else Set.empty[Path]
-        val allowed = Await.result(Future.sequence(requiredPaths.map {
-          path => accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime))
-        }).map(_.forall(identity)), to)
-        
-        if(allowed)
-          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
-        else
-          shardQueryMonad.point(failure(AccessDenied("No data accessable at the specified path")))
+        shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
       }
     }
   }
@@ -435,13 +427,14 @@ trait TestPlatform extends ManagedPlatform { self =>
       }
     }
     
-    def structure(apiKey: APIKey, path: Path) = {
+    def structure(apiKey: APIKey, path: Path, cpath: CPath) = {
       accessControl.hasCapability(apiKey, Set(ReadPermission(path, ownerMap(path))), Some(new DateTime)).map { allowed =>
-        if(allowed) {
-          success(JObject(List(
-            JField("test1", JString("foo")),
-            JField("test2", JString("bar"))
-          )))
+        if (allowed) {
+          success(JObject(
+            "structure" -> JObject(
+              "foo" -> JNum(123)
+            )
+          ))
         } else {
           failure("The specified API key may not browse this location")
         }

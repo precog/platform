@@ -122,7 +122,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
       val clusterIds = (1 to k).map("Cluster" + _).toSet
 
       val input = dag.Morph2(KMediansClustering,
-        dag.Const(CDouble(4.4))(line),
+        dag.Const(CNum(4.4))(line),
         dag.Const(CLong(k))(line)
       )(line)
 
@@ -212,11 +212,11 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
       val GeneratedPointSet(pointsA, centersA) = genPoints(5000, dimensionA, k)
       val GeneratedPointSet(pointsB, centersB) = genPoints(5000, dimensionB, k)
 
-      val jvalsA = pointsToJson(pointsA) map { v => JObject(JField("a", v)) }
-      val jvalsB = pointsToJson(pointsB) map { v => JObject(JField("b", v)) }
+      val jvalsA = pointsToJson(pointsA) map { v => RObject(Map("a" -> v)) }
+      val jvalsB = pointsToJson(pointsB) map { v => RObject(Map("b" -> v)) }
       val jvals = Random.shuffle(jvalsA ++ jvalsB)
 
-      writeJValuesToDataset(jvals) { dataset =>
+      writeRValuesToDataset(jvals) { dataset =>
         val input = clusterInput(dataset, k)
 
         val result = testEval(input)
@@ -281,7 +281,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
     }
   }
 
-  def assign(points: Array[Array[Double]], centers: Array[Array[Double]]): Map[JValue, String] = {
+  def assign(points: Array[Array[Double]], centers: Array[Array[Double]]): Map[RValue, String] = {
     points.map { p =>
       val id = (0 until centers.length) minBy { i => (p - centers(i)).norm }
       pointToJson(p) -> ("Cluster" + (id +  1))
@@ -289,9 +289,9 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
   }
 
   def makeClusters(centers: Array[Array[Double]]) = {
-    JObject(pointsToJson(centers).zipWithIndex map { case (ctr, idx) => 
-      JField("Cluster" + (idx + 1), ctr)
-    })
+    RObject(pointsToJson(centers).zipWithIndex.map { case (ctr, idx) => 
+      ("Cluster" + (idx + 1), ctr)
+    }.toMap)
   }
 
   def createDAG(pointsDataSet: String, modelDataSet: String) = {
@@ -315,10 +315,10 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
       val clusters = makeClusters(centers)
       
-      val model1 = JObject(JField("Model1", clusters) :: Nil)
+      val model1 = RObject(Map("Model1" -> clusters))
       val assignments = assign(points, centers)
 
-      writeJValuesToDataset(List(model1)) { modelDataSet =>
+      writeRValuesToDataset(List(model1)) { modelDataSet =>
         writePointsToDataset(points) { pointsDataSet =>
           val input2 = createDAG(pointsDataSet, modelDataSet)
           val result = testEval(input2)
@@ -328,7 +328,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
             obj.keySet mustEqual Set("point", "Model1")
             val point = obj("point")
             obj("Model1") must beLike { case SString(clusterId) =>
-              clusterId must_== assignments(point.toJValue)
+              clusterId must_== assignments(point.toRValue)
             }
           }
         }
@@ -348,12 +348,12 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
       val clustersA = makeClusters(centersA)
       val clustersB = makeClusters(centersB)
 
-      val model1 = JObject(JField("Model1", clustersA) :: JField("Model2", clustersB) :: Nil)
+      val model1 = RObject(Map("Model1" -> clustersA, "Model2" -> clustersB))
 
       val assignmentsA = assign(pointsA, centersA)
       val assignmentsB = assign(pointsB, centersB)
 
-      writeJValuesToDataset(List(model1)) { modelDataSet =>
+      writeRValuesToDataset(List(model1)) { modelDataSet =>
         writePointsToDataset(points) { pointsDataSet =>
           val input2 = createDAG(pointsDataSet, modelDataSet)
           val result = testEval(input2)
@@ -366,10 +366,10 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
             val point = obj("point")
             obj("Model1") must beLike { case SString(clusterId) =>
-              clusterId must_== assignmentsA(point.toJValue)
+              clusterId must_== assignmentsA(point.toRValue)
             }
             obj("Model2") must beLike { case SString(clusterId) =>
-              clusterId must_== assignmentsB(point.toJValue)
+              clusterId must_== assignmentsB(point.toRValue)
             }
           }
         }
@@ -389,11 +389,11 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
       val clusters = makeClusters(centers)
 
-      val model1 = JObject(JField("Model1", clusters) :: Nil)
+      val model1 = RObject(Map("Model1" -> clusters))
 
       val assignments = assign(points0, centers)
 
-      writeJValuesToDataset(List(model1)) { modelDataSet =>
+      writeRValuesToDataset(List(model1)) { modelDataSet =>
         writePointsToDataset(points) { pointsDataSet =>
           val input2 = createDAG(pointsDataSet, modelDataSet)
           val result = testEval(input2)
@@ -405,7 +405,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
             val point = obj("point")
             obj("Model1") must beLike { case SString(clusterId) =>
-              clusterId must_== assignments(point.toJValue)
+              clusterId must_== assignments(point.toRValue)
             }
           }
         }

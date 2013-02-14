@@ -36,8 +36,6 @@ import com.precog.bytecode._
 import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
-import blueeyes.json._
-
 import java.io._
 import java.util.concurrent.Executors
 
@@ -54,6 +52,8 @@ import org.specs2.specification.Fragment
 import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
+
+import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with BaseBlockStoreTestModule[M]
@@ -215,7 +215,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_true" >> {
         val line = Line(1, 1, "")
-        val input = Const(CBoolean(true))(line)
+        val input = Const(CTrue)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -230,7 +230,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_false" >> {
         val line = Line(1, 1, "")
-        val input = Const(CBoolean(false))(line)
+        val input = Const(CFalse)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -255,8 +255,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_object" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyObject)(line)
-        
+        val input = Const(RObject.empty)(line)
+
         testEval(input) { result =>
           result must haveSize(1)
           
@@ -270,7 +270,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       "push_array" >> {
         val line = Line(1, 1, "")
-        val input = Const(CEmptyArray)(line)
+        val input = Const(RArray.empty)(line)
         
         testEval(input) { result =>
           result must haveSize(1)
@@ -1202,12 +1202,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveSize(1)
-              obj must haveKey("aa")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveSize(1)
+            obj must haveKey("aa")
         }
       }
     }
@@ -1682,7 +1681,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Assert(
-        Const(CBoolean(true))(line),
+        Const(CTrue)(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -1694,7 +1693,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Assert(
-        Const(CBoolean(false))(line),
+        Const(CFalse)(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -1708,8 +1707,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Assert(
         dag.IUI(
           true,
-          Const(CBoolean(false))(line),
-          Const(CBoolean(true))(line))(line),
+          Const(CFalse)(line),
+          Const(CTrue)(line))(line),
         dag.LoadLocal(Const(CString("clicks"))(line))(line))(line)
         
       testEval(input) { result =>
@@ -1734,14 +1733,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(6)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must not haveKey("time")
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must not haveKey("time")
   
-            case (ids, SString(s)) if ids.size == 1 => 
-              s mustEqual "string cheese"
-          }
+          case (ids, SString(s)) => 
+            ids must haveSize(1)
+            s mustEqual "string cheese"
         }
       }
     }
@@ -1766,11 +1765,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(101)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveKey("time")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveKey("time")
         }
       }
     }
@@ -2314,7 +2312,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(RArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2335,7 +2333,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers9,
           Join(Eq, CrossLeftSort,
             numbers9,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(RObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(1)
@@ -2414,13 +2412,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         testEval(input) { result =>
           result must haveSize(1)
 
-          forall(result) {
-            _ must beLike {
-              case (ids, SObject(obj)) if ids.size == 1 => {
-                obj must haveKey("foo")
-                obj must haveValue(SString("bar"))
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SObject(obj)) =>
+              ids must haveSize(1)
+              obj must haveKey("foo")
+              obj must haveValue(SString("bar"))
           }
         }
       }
@@ -2501,7 +2497,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyArray)(line))(line))(line)
+            Const(RArray.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2523,7 +2519,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           numbers,
           Join(NotEq, CrossLeftSort,
             numbers,
-            Const(CEmptyObject)(line))(line))(line)
+            Const(RObject.empty)(line))(line))(line)
           
         testEval(input) { result =>
           result must haveSize(3)
@@ -2927,30 +2923,28 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(10)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => {
-              obj must haveKey("user")
-              obj must haveKey("num")
-              
-              obj("user") must beLike {
-                case SString(str) => {
-                  str must beOneOf("daniel", "kris", "derek", "nick", "john",
-                    "alissa", "franco", "matthew", "jason")
-                }
-                case SNull => ok
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) =>
+            ids must haveSize(1)
+            obj must haveKey("user")
+            obj must haveKey("num")
+            
+            obj("user") must beLike {
+              case SString(str) => {
+                str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                  "alissa", "franco", "matthew", "jason")
               }
-  
-              val user = (obj("user"): @unchecked) match {
-                case SString(user) => user
-                case SNull => SNull
-              }
-                
-              obj("num") must beLike {
-                case SDecimal(d) => d mustEqual Expected(user)
-              }
+              case SNull => ok
             }
-          }
+  
+            val user = (obj("user"): @unchecked) match {
+              case SString(user) => user
+              case SNull => SNull
+            }
+              
+            obj("num") must beLike {
+              case SDecimal(d) => d mustEqual Expected(user)
+            }
         }
       }
     }
@@ -2967,8 +2961,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
         
-        forall(result) {
-          case (ids, SObject(obj)) if ids.size == 1 => 
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
             obj must haveKey("user")
             obj must haveKey("time")
             obj must haveKey("page")
@@ -3016,7 +3011,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           a)(line))(line)
           
       testEval(input) { result =>
-        forall(result) {
+        result must haveAllElementsLike {
           case (ids, SObject(fields)) => fields must haveKey("a")
         }
       }
@@ -3041,12 +3036,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(3)
 
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveKey("user")
-              obj("user") must_== SNull
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveKey("user")
+            obj("user") must_== SNull
         }
       }
     }
@@ -3190,13 +3184,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(10000)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 2 => 
-              obj must haveSize(2)
-              obj must haveKey("aa")
-              obj must haveKey("bb")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids.size mustEqual(2)
+            obj must haveSize(2)
+            obj must haveKey("aa")
+            obj must haveKey("bb")
         }
       }
     }
@@ -3274,13 +3267,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
           decis.sorted mustEqual expectedResult.sorted
 
-          forall(result) { result =>
-            result must beLike {
-              case (ids, SDecimal(d)) => {
-                ids must haveSize(2)
-                expectedResult must contain(d)
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SDecimal(d)) =>
+              ids must haveSize(2)
+              expectedResult must contain(d)
           }
         }
       }
@@ -3351,13 +3341,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           decis.sorted mustEqual expectedResult.sorted
 
           
-          forall(result) { result =>
-            result must beLike {
-              case (ids, SDecimal(d)) => {
-                ids must haveSize(2)
-                expectedResult must contain(d)
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SDecimal(d)) =>
+              ids must haveSize(2)
+              expectedResult must contain(d)
           }
         }
       }
@@ -3402,6 +3389,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             Const(CString("time"))(line))(line))(line))(line)
           
       testEval(input) { _ must not(beEmpty) }
+    }
+
+    "correctly evaluate a constant array" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(RArray(CNum(1), CTrue, CString("three")))(line)
+
+      testEval(input) { _ must haveSize(1) }
+    }
+
+    "correctly evaluate a constant object" in {
+      // No Quirrel for this - only used for Evaluator rewrites
+
+      val line = Line(1, 1, "")
+
+      val input = dag.Const(RObject("a" -> CNum(1), "b" -> CTrue, "c" -> CString("true")))(line)
+
+      testEval(input) { _ must haveSize(1) }
     }
   }
 

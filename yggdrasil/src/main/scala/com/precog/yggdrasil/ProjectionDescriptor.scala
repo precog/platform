@@ -145,6 +145,8 @@ case class ColumnDescriptor(path: Path, selector: CPath, valueType: CType, autho
 }
 
 trait ColumnDescriptorSerialization {
+  implicit private[this] val CTypeDecomposer = CType.CTypeDecomposer
+
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
     def decompose(selector : ColumnDescriptor) : JValue = JObject (
       List(JField("path", selector.path.serialize),

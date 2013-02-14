@@ -71,7 +71,7 @@ trait PartitionMergeSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with S
 
       val derefed = table.transform(DerefObjectStatic(DerefObjectStatic(Leaf(Source), CPathField("value")), CPathField("a")))
       
-      derefed.reduce(reducer).map(s => Table.constString(Set(CString(s))))
+      derefed.reduce(reducer).map(s => Table.constString(Set(s)))
     }
 
     result.flatMap(_.toJson).copoint must_== expected.toStream

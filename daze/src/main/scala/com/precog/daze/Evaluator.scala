@@ -51,6 +51,7 @@ import scalaz.StateT.{StateMonadTrans, stateTMonadState}
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.std.map._
+import scalaz.std.set._
 import scalaz.std.partialFunction._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
@@ -72,6 +73,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     with StaticInlinerModule[M] 
     with ReductionFinderModule[M]
     with TransSpecableModule[M]
+    with PredicatePullupsModule[M]
     with TableModule[M] // Remove this explicit dep!
     with TableLibModule[M] {
 
@@ -81,10 +83,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   type GroupId = Int
   
   type Evaluator[N[+_]] <: EvaluatorLike[N]
-
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
-  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with YggConfigComponent {
+  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with PredicatePullups with YggConfigComponent {
     type YggConfig <: EvaluatorConfig
 
     import library._  
@@ -96,7 +96,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private val evalLogger = LoggerFactory.getLogger("com.precog.daze.Evaluator")
     private val transState = StateMonadTrans[EvaluatorState]
     private val monadState = stateTMonadState[EvaluatorState, N]
-  
+
     def report: QueryLogger[N, instructions.Line]
   
     def freshIdScanner: Scanner
@@ -109,21 +109,24 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
       if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
 
-    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    // Have to be idempotent on subgraphs
+    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
       composeOptimizations(optimize, List(
-        inlineStatics(_, ctx),
-        optimizeJoins(_)
+        inlineStatics(_, ctx, splits),
+        optimizeJoins(_, splits)
       ))
 
     def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
-      stagedRewriteDAG(optimize, ctx) andThen
+      stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
       composeOptimizations(optimize, List(
+        // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
+        //predicatePullups(_, ctx),
         inferTypes(JType.JUnfixedT),
         { g => megaReduce(g, findReductions(g, ctx)) },
         memoize
       ))
-  
+
     /**
      * The entry point to the evaluator.  The main implementation of the evaluator
      * is comprised by the inner functions, `fullEval` (the main evaluator function)
@@ -133,9 +136,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
   
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
-      val stagingPoints = listStagingPoints(Queue(rewrittenDAG))
 
-      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
+      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => 
           for {
             leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -189,8 +191,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       //** only used in resolveTopLevelGroup **/
-      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
-        case UnionBucketSpec(left, right) => 
+      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
+        case UnionBucketSpec(left, right) =>
           for {
             leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
             rightRes <- resolveLowLevelGroup(commonTable, commonGraph, right, splits)
@@ -226,8 +228,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         case dag.Group(_, _, _) => 
           sys.error("assertion error")
       }
-      
-      def prepareEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])]): StateT[N, EvaluatorState, PendingTable] = {
+
+      def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
         def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
@@ -338,41 +340,38 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
           
           case s: SplitParam => 
-            val (key, _) = splits(s.parent)
-            
-            val source = trans.DerefObjectStatic(Leaf(Source), CPathField(s.id.toString))
-            val spec = buildConstantWrapSpec(source)
-            
-            monadState point PendingTable(key transform spec, graph, TransSpec1.Id)
+            sys.error("Inlining of SplitParam failed")
           
           // not using extractors due to bug
           case s: SplitGroup => 
-            val (_, f) = splits(s.parent)
+            val f = splits(s.parent)
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           
           case Const(value) => 
             val table = value match {
-              case str @ CString(_) => Table.constString(Set(str))
+              case CString(str) => Table.constString(Set(str))
               
-              case ln @ CLong(_) => Table.constLong(Set(ln))
-              case d @ CDouble(_) => Table.constDouble(Set(d))
-              case n @ CNum(_) => Table.constDecimal(Set(n))
+              case CLong(ln) => Table.constLong(Set(ln))
+              case CDouble(d) => Table.constDouble(Set(d))
+              case CNum(n) => Table.constDecimal(Set(n))
               
-              case b @ CBoolean(_) => Table.constBoolean(Set(b))
+              case CBoolean(b) => Table.constBoolean(Set(b))
 
-              case d @ CDate(_) => Table.constDate(Set(d))
-              case as @ CArray(_, CArrayType(elemType)) => Table.constArray(Set(as))(elemType)
-              
               case CNull => Table.constNull
               
+              case CDate(d) => Table.constDate(Set(d))
+
+              case RObject.empty => Table.constEmptyObject
+              case RArray.empty => Table.constEmptyArray
               case CEmptyObject => Table.constEmptyObject
               case CEmptyArray => Table.constEmptyArray
 
               case CUndefined => Table.empty
+
+              case rv => Table.fromRValues(Stream(rv))
             }
-          
+
             val spec = buildConstantWrapSpec(Leaf(Source))
-          
             monadState point PendingTable(table.transform(spec), graph, TransSpec1.Id)
 
           case Undefined() =>
@@ -502,12 +501,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 trans.WrapObject(Leaf(Source), paths.Value.name))
 
               wrapped <- transState liftM table map { _.transform(valueWrapped) }
-              cvalue <- transState liftM result.map(reduction.extractValue)
+              rvalue <- transState liftM result.map(reduction.extractValue)
 
               _ <- monadState.modify { state =>
                 state.copy(
                   assume = state.assume + (m -> wrapped),
-                  reductions = state.reductions + (m -> cvalue)
+                  reductions = state.reductions + (m -> rvalue)
                 )
               }
             } yield {
@@ -525,12 +524,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case s @ dag.Split(spec, child) => 
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
 
+            val params = child.foldDown(true) {
+              case param: dag.SplitParam if param.parent == s => Set(param)
+            }
+
             val table = for {
               grouping <- resolveTopLevelGroup(spec, splits)
               state <- monadState.gets(identity)
               grouping2 <- transState liftM grouping
               result <- transState liftM mn(Table.merge(grouping2) { (key, map) =>
-                val back = fullEval(child, splits + (s -> (key -> (map andThen mn))), s :: splits.keys.toList, false)
+                val splits2 = splits + (s -> (map andThen mn))
+                val rewritten = params.foldLeft(child) {
+                  case (child, param) =>
+                    val subKey = key \ param.id.toString
+                    replaceNode(child, param, Const(subKey)(param.loc), splits2.keys.toSet)
+                }
+
+                val back = fullEval(rewritten, splits2, s :: splits.keys.toList)
                 back.eval(state)  //: N[Table]
               })
             } yield {
@@ -742,17 +752,18 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        * graph is considered to be a special forcing point, but as it is the endpoint,
        * it will perforce be evaluated last.
        */
-      def fullEval(graph: DepGraph, splits: Map[dag.Split, (Table, Int => N[Table])], parentSplits: List[dag.Split], optimize: Boolean): StateT[N, EvaluatorState, Table] = {
+      def fullEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
 
         // find the topologically-sorted forcing points (excluding the endpoint)
         // at the current split level
-        val toEval = stagingPoints filter referencesOnlySplit(parentSplits)
-      
+        val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(parentSplits)
+
+        lazy val splitNodes = splits.keys.toSet
         type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
         val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
           case (graph, node) => for {
-            rewrittenGraph <- stagedOptimizations(graph, ctx, optimize)
+            rewrittenGraph <- stagedOptimizations(graph, ctx, optimize, splitNodes)
             _ <- prepareEval(node, splits)
           } yield rewrittenGraph
         }
@@ -760,32 +771,31 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         // run the evaluator on all forcing points *including* the endpoint, in order
         for {
           rewrittenGraph <- preState
-          pendingTable <- prepareEval(rewrittenGraph, splits)
+          stageRewrittenGraph <- stagedOptimizations(rewrittenGraph, ctx, optimize, splitNodes)
+          pendingTable <- prepareEval(stageRewrittenGraph, splits)
           table = pendingTable.table transform liftToValues(pendingTable.trans)
         } yield table
       }
-      
-      val resultState: StateT[N, EvaluatorState, Table] = fullEval(rewrittenDAG, Map(), Nil, optimize)
+    
+      val resultState: StateT[N, EvaluatorState, Table] = fullEval(rewrittenDAG, Map(), Nil)
 
       val resultTable: N[Table] = resultState.eval(EvaluatorState())
       resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
     }
-
-    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean) = {
+  
+    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean, splits: Set[dag.Split]) =
       for {
         reductions <- monadState.gets(_.reductions)
-      } yield stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
-        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
+      } yield stagedRewriteDAG(optimize, ctx, splits)(reductions.toList.foldLeft(graph) {
+        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result, splits)
         case (graph, _) => graph
       })
-    }
-      
 
     /**
      * Takes a graph, a node and a value. Replaces the node (and
      * possibly its parents) with the value into the graph.
      */
-    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: CValue) = {
+    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: RValue, splits: Set[dag.Split]) = {
       val replacements = graph.foldDown(true) {
         case join@Join(
           DerefArray,
@@ -803,12 +813,17 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       replacements.foldLeft(graph) {
-        case (graph, (from, to)) => replaceNode(graph, from, to)
+        case (graph, (from, to)) => replaceNode(graph, from, to, splits)
       }
     }
 
-    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) =
-      graph.mapDown(recurse => { case `from` => to })
+    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph, splits: Set[dag.Split]) =
+      graph.mapDown(
+        recurse => {
+          case `from` => to
+        },
+        splits
+      )
 
     /**
      * Returns all forcing points in the graph, ordered topologically.
@@ -881,11 +896,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     // Takes a list of Splits, head is the current Split, which must be referenced.
     // The rest of the referenced Splits must be in the the list.
     private def referencesOnlySplit(parentSplits: List[dag.Split])(graph: DepGraph): Boolean = {
-      implicit val setMonoid = new Monoid[Set[dag.Split]] {
-        def zero = Set()
-        def append(a: Set[dag.Split], b: => Set[dag.Split]) = a ++ b
-      }
-
       val referencedSplits = graph.foldDown(false) {
         case s: dag.SplitParam => Set(s.parent)
         case s: dag.SplitGroup => Set(s.parent)
@@ -1061,7 +1071,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
-      reductions: Map[DepGraph, Option[CValue]] = Map.empty,
+      reductions: Map[DepGraph, Option[RValue]] = Map.empty,
       extraCount: Int = 0
     )
     

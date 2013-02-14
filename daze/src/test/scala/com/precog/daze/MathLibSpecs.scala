@@ -43,7 +43,7 @@ trait MathLibSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
   val homn4 = "/hom/numbers4"
 
-  def inputOp2(op: Op2, loadFrom: String, const: CValue) = {
+  def inputOp2(op: Op2, loadFrom: String, const: RValue) = {
     Join(BuiltInFunction2Op(op), CrossLeftSort,
       dag.LoadLocal(Const(CString(loadFrom))(line))(line),
       Const(const)(line))(line)

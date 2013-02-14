@@ -24,10 +24,10 @@ import bytecode.RandomLibrary
 import common.Path
 import yggdrasil._
 
-import blueeyes.json.{ JPath, JPathField, JPathIndex }
-
 import org.specs2.execute.Result
 import org.specs2.mutable._
+
+import blueeyes.json._
 
 import scalaz._
 
@@ -124,6 +124,8 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
     }
   }
 
+  val cLiterals = Set(CBoolean, CLong, CDouble, CNum, CString, CNull, CDate, CPeriod)
+
   "type inference" should {
     "propagate structure/type information through a trivial Join/DerefObject node" in {
       val line = Line(1, 1, "")
@@ -136,7 +138,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
+        "/file" -> Map(JPath("column") -> cLiterals)
       )
 
       result must_== expected
@@ -294,7 +296,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val expected = Map(
         "/file0" -> Map(JPath("column0") -> Set(CString)),
-        "/file1" -> Map(JPath("column1") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
+        "/file1" -> Map(JPath("column1") -> cLiterals)
       )
 
       result must_== expected
@@ -339,7 +341,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
+        "/file0" -> Map(JPath("column0") -> cLiterals),
         "/file1" -> Map(JPath("column1") -> Set(CBoolean))
       )
 
@@ -457,8 +459,8 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val expected = Map(
         "/file" -> Map(
-          JPath.Identity -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
-          JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
+          JPath.Identity -> cLiterals,
+          JPath("column0") -> cLiterals,
           JPath("column0.column1") -> Set(CLong, CDouble, CNum),
           JPath("column2") -> Set(CLong, CDouble, CNum)
         )
@@ -493,7 +495,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val expected = Map(
         "/clicks" -> Map(
-          JPath("user") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
+          JPath("user") -> cLiterals
         )
       )
 
@@ -532,8 +534,8 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val expected = Map(
         "/clicks" -> Map(
-          JPath("user") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
-          JPath("age") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
+          JPath("user") -> cLiterals,
+          JPath("age") -> cLiterals
         )
       )
 
@@ -577,7 +579,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/clicks" -> Map(JPath.Identity -> Set(CBoolean, CLong, CDouble, CString, CNum, CNull)))
+        "/clicks" -> Map(JPath.Identity -> cLiterals))
 
       result mustEqual expected
     }
@@ -608,8 +610,8 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       
       val expected = Map(
         "/clicks" -> Map(
-          JPath.Identity -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
-          JPath("time") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)))
+          JPath.Identity -> cLiterals,
+          JPath("time") -> cLiterals))
         
       result mustEqual expected
     }

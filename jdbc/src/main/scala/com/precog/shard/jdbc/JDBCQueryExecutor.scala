@@ -130,8 +130,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
-    val report = LoggingQueryLogger(M)
-    def warn(warning: JValue) = report.warn(warning, "warning")
+    val queryReport = LoggingQueryLogger(M)
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
@@ -182,7 +181,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
       }
     }
 
-    def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = Promise.successful (
+    def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
       Success(JObject.empty) // TODO: Implement from table metadata
     )
   }

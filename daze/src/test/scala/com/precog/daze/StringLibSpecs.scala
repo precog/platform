@@ -55,7 +55,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     dag.Operate(BuiltInFunction1Op(op), loadFrom(line))(line)
   }
 
-  def op2Input(op: Op2, const: CValue, loadFrom: Line => dag.LoadLocal) = {
+  def op2Input(op: Op2, const: RValue, loadFrom: Line => dag.LoadLocal) = {
     Join(BuiltInFunction2Op(op), CrossLeftSort, loadFrom(line), Const(const)(line))(line)
   }
         
@@ -152,7 +152,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(101, 32, 34, 115)
     }
     "determine codePointAt with invalid integer" in {
-      val input = op2Input(codePointAt, CDouble(7.5), homStrings)
+      val input = op2Input(codePointAt, CNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -230,7 +230,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(99, 58, 97, 101)
     }
     "determine codePointBefore with invalid integer" in {
-      val input = op2Input(codePointBefore, CDouble(7.5), homStrings)
+      val input = op2Input(codePointBefore, CNum(7.5), homStrings)
         
       val result = testEval(input)
       
@@ -290,19 +290,19 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), homStrings)
+      val input = op2Input(takeLeft, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), homStrings)
+      val input = op2Input(takeRight, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), homStrings)
+      val input = op2Input(dropLeft, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), homStrings)
+      val input = op2Input(dropRight, CNum(7.5), homStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {
@@ -345,6 +345,34 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareToIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
+        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        Const(CString("QUIRKY"))(line))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -4, -73, -81, -6)
+    }
+    "determine compare" in {
+      val input = op2Input(compare, CString("quirky"), homStrings) //todo put regex here!
+        
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -36, -73, -81, -6)
+    }
+    "determine compareIgnoreCase" in {
+      val input = Join(BuiltInFunction2Op(compareIgnoreCase), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("QUIRKY"))(line))(line)
         
@@ -509,7 +537,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     "determine codePointAt with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -599,7 +627,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
-        Const(CDouble(7.5))(line))(line)
+        Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
       
@@ -668,19 +696,19 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "sols", "Monkey: ", "(\"alpha\", \"beta\", ", "  Whitespace       is   awesome  !").only
     }
     "determine takeLeft with invalid integer" in {
-      val input = op2Input(takeLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(takeLeft, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine takeRight with invalid integer" in {
-      val input = op2Input(takeRight, CDouble(7.5), hetStrings)
+      val input = op2Input(takeRight, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropLeft with invalid integer" in {
-      val input = op2Input(dropLeft, CDouble(7.5), hetStrings)
+      val input = op2Input(dropLeft, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine dropRight with invalid integer" in {
-      val input = op2Input(dropRight, CDouble(7.5), hetStrings)
+      val input = op2Input(dropRight, CNum(7.5), hetStrings)
       testEval(input) must haveSize(0)
     }
     "determine matches" in {
@@ -709,6 +737,30 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareToIgnoreCase" in {
       val input = op2Input(compareToIgnoreCase, CString("QUIRKY"), hetStrings) 
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -4, -73, -81, -6)
+    }
+    "determine compare" in {
+      val input = op2Input(compare, CString("quirky"), hetStrings) 
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      val result2 = result collect {
+        case (ids, SDecimal(d)) if ids.length == 1 => d
+      }
+      
+      result2 must contain(0, 2, -36, -73, -81, -6)
+    }
+    "determine compareIgnoreCase" in {
+      val input = op2Input(compareIgnoreCase, CString("QUIRKY"), hetStrings) 
       val result = testEval(input)
       
       result must haveSize(6)
@@ -810,6 +862,66 @@ trait StringLibSpecs[M[+_]] extends Specification
         "3",
         "4"
       ).only
+    }
+  }
+
+  "split" should {
+
+    val o = scala.math.Ordering.by[(Long, _), Long](_._1)
+
+    def mogrify(result: Set[(Vector[Long], SValue)]): List[Vector[String]] =
+      result.toList.map {
+        case (Vector(n), SArray(elems)) => (n, elems)
+      }.sorted(o).map(_._2.map { case SString(s) => s })
+
+    def mktree(f: Op2, path: String, sep: String) =
+      Join(BuiltInFunction2Op(f), CrossLeftSort,
+        dag.LoadLocal(Const(CString(path))(line))(line),
+        Const(CString(sep))(line))(line)
+
+    def tester(f: Op2, path: String, sep: String) =
+      mogrify(testEval(mktree(f, path, sep)))
+    
+    val commaSplitString2 = List(
+      Vector("this", "is", "delimited"),
+      Vector("this is a string"),
+      Vector(""),
+      Vector("also", "delmited"),
+      Vector("", "starts", "with", "comma"),
+      Vector("ends", "with", "comma", ""),
+      Vector("lots", "", "", "", "of", "", "", "", "commas"),
+      Vector("", "", "", "" , "", "", "", ""),
+      Vector("", ""),
+      Vector("", "", "crazy", "", ""),
+      Vector("something", "basically", "reasonable")
+    )
+
+    "split heterogenous data on ," in {
+      tester(split, "/het/strings2", ",") must_== commaSplitString2
+    }
+
+    "splitRegex heterogenous data on ," in {
+      tester(splitRegex, "/het/strings2", ",") must_== commaSplitString2
+    }
+
+    "splitRegex heterogenous data on ,,+" in {
+      tester(splitRegex, "/het/strings2", ",,+") must_== List(
+        Vector("this,is,delimited"),
+        Vector("this is a string"),
+        Vector(""),
+        Vector("also,delmited"),
+        Vector(",starts,with,comma"),
+        Vector("ends,with,comma,"),
+        Vector("lots", "of", "commas"),
+        Vector("", ""),
+        Vector(","),
+        Vector("", "crazy", ""),
+        Vector("something,basically,reasonable")
+      )
+    }
+
+    "splitRegex heterogenous data on invalid regex" in {
+      tester(splitRegex, "/het/strings2", "(99") must_== List()
     }
   }
 }

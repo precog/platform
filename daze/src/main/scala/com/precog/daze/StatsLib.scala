@@ -147,10 +147,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
         }
       }
 
-      def extract(res: Result): Table = {
-        val setC = res map CNum.apply
-        Table.constDecimal(setC)
-      }
+      def extract(res: Result): Table = Table.constDecimal(res)
 
       def apply(table: Table, ctx: EvaluationContext) = {
         val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
@@ -295,7 +292,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
               val stdDev2 = sqrt(unscaledVar2) / count
               val correlation = cov / (stdDev1 * stdDev2)
 
-              val resultTable = Table.constDecimal(Set(CNum(correlation)))  //TODO the following lines are used throughout. refactor!
+              val resultTable = Table.constDecimal(Set(correlation))  //TODO the following lines are used throughout. refactor!
               val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
               val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
@@ -447,7 +444,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           case (count, sum1, sum2, productSum) => {
             val cov = (productSum - ((sum1 * sum2) / count)) / count
 
-            val resultTable = Table.constDecimal(Set(CNum(cov)))
+            val resultTable = Table.constDecimal(Set(cov))
             val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
             val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
 
@@ -601,8 +598,8 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
             val slope = cov / vari
             val yint = (sum2 / count) - (slope * (sum1 / count))
 
-            val constSlope = Table.constDecimal(Set(CNum(slope)))
-            val constIntercept = Table.constDecimal(Set(CNum(yint)))
+            val constSlope = Table.constDecimal(Set(slope))
+            val constIntercept = Table.constDecimal(Set(yint))
 
             val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
             val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
@@ -806,8 +803,8 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
             val slope = cov / vari
             val yint = (sum2 / count) - (slope * (sum1 / count))
 
-            val constSlope = Table.constDecimal(Set(CNum(slope)))
-            val constIntercept = Table.constDecimal(Set(CNum(yint)))
+            val constSlope = Table.constDecimal(Set(slope))
+            val constIntercept = Table.constDecimal(Set(yint))
 
             val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
             val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")

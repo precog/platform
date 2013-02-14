@@ -136,39 +136,34 @@ trait ColumnarTableModule[M[+_]]
 
     def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
     
-    def constBoolean(v: collection.Set[CBoolean]): Table = {
-      val column = ArrayBoolColumn(v.map(_.value).toArray)
+    def constBoolean(v: collection.Set[Boolean]): Table = {
+      val column = ArrayBoolColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constLong(v: collection.Set[CLong]): Table = {
-      val column = ArrayLongColumn(v.map(_.value).toArray)
+    def constLong(v: collection.Set[Long]): Table = {
+      val column = ArrayLongColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDouble(v: collection.Set[CDouble]): Table = {
-      val column = ArrayDoubleColumn(v.map(_.value).toArray)
+    def constDouble(v: collection.Set[Double]): Table = {
+      val column = ArrayDoubleColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDecimal(v: collection.Set[CNum]): Table = {
-      val column = ArrayNumColumn(v.map(_.value).toArray)
+    def constDecimal(v: collection.Set[BigDecimal]): Table = {
+      val column = ArrayNumColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constString(v: collection.Set[CString]): Table = {
-      val column = ArrayStrColumn(v.map(_.value).toArray)
+    def constString(v: collection.Set[String]): Table = {
+      val column = ArrayStrColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constDate(v: collection.Set[CDate]): Table =  {
-      val column = ArrayDateColumn(v.map(_.value).toArray)
+    def constDate(v: collection.Set[DateTime]): Table =  {
+      val column = ArrayDateColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
-    }
-
-    def constArray[A: CValueType](v: collection.Set[CArray[A]]): Table = {
-      val column = ArrayHomogeneousArrayColumn(v.map(_.value).toArray(CValueType[A].manifest.arrayManifest))
-      Table(Slice(Map(ColumnRef(CPathArray, CArrayType(CValueType[A])) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
     def constNull: Table = 
@@ -303,10 +298,10 @@ trait ColumnarTableModule[M[+_]]
     /**
      * Merge controls the iteration over the table of group key values. 
      */
-    def merge[N[+_]](grouping: GroupingSpec)(body: (Table, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
+    def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
       
-      type Key = Seq[JValue]
+      type Key = Seq[RValue]
       type KeySchema = Seq[CPathField]
       
       def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
@@ -332,7 +327,7 @@ trait ColumnarTableModule[M[+_]]
         
         val indicesGroupedBySource = sourceKeys.groupBy(_.groupId).mapValues(_.map(y => (y.index, y.keySchema)).toSeq).values.toSeq
         
-        def unionOfIntersections(indicesGroupedBySource: Seq[Seq[(TableIndex, KeySchema)]]) = {
+        def unionOfIntersections(indicesGroupedBySource: Seq[Seq[(TableIndex, KeySchema)]]): Set[Key] = {
           def allSourceDNF[T](l : Seq[Seq[T]]): Seq[Seq[T]] = {
             l match {
               case Seq(hd) => hd.map(Seq(_))
@@ -349,18 +344,18 @@ trait ColumnarTableModule[M[+_]]
           def normalizedKeys(index: TableIndex, keySchema: KeySchema): collection.Set[Key] = {
             val schemaMap = for(k <- fullSchema) yield keySchema.indexOf(k)
             for(key <- index.getUniqueKeys)
-              yield for(k <- schemaMap) yield if (k == -1) JUndefined else key(k) 
+              yield for(k <- schemaMap) yield if (k == -1) CUndefined else key(k) 
           }
 
           def intersect(keys0: collection.Set[Key], keys1: collection.Set[Key]): collection.Set[Key] = {
             def consistent(key0: Key, key1: Key): Boolean =
               (key0 zip key1).forall {
-                case (k0, k1) => k0 == k1 || k0 == JUndefined || k1 == JUndefined 
+                case (k0, k1) => k0 == k1 || k0 == CUndefined || k1 == CUndefined 
               }
             
             def merge(key0: Key, key1: Key): Key =
               (key0 zip key1).map {
-                case (k0, JUndefined) => k0 
+                case (k0, CUndefined) => k0 
                 case (_,  k1        ) => k1 
               }
   
@@ -388,10 +383,9 @@ trait ColumnarTableModule[M[+_]]
           }
         }
 
-        def tableFromGroupKey(key: Seq[JValue], cpaths: Seq[CPathField]): Table = {
+        def jValueFromGroupKey(key: Seq[RValue], cpaths: Seq[CPathField]): RValue = {
           val items = (cpaths zip key).map(t => (t._1.name, t._2))
-          val row = JObject(items.toMap)
-          Table.fromJson(row #:: Stream.empty)
+          RObject(items.toMap)
         }
 
         val groupKeys: Set[Key] = unionOfIntersections(indicesGroupedBySource)
@@ -399,7 +393,7 @@ trait ColumnarTableModule[M[+_]]
         // given a groupKey, return an M[Table] which represents running
         // the evaluator on that subgroup.
         def evaluateGroupKey(groupKey: Key): M[Table] = {
-          val groupKeyTable = tableFromGroupKey(groupKey, fullSchema)
+          val groupKeyTable = jValueFromGroupKey(groupKey, fullSchema)
 
           def map(gid: GroupId): M[Table] = {
             val subTableProjections = (sourceKeys.filter(_.groupId == gid).map { indexedSource =>
@@ -473,6 +467,8 @@ trait ColumnarTableModule[M[+_]]
 
               case CNum =>
                 acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+              case _ => sys.error("non-numeric type reached")
             }
               
             case JString(s) =>
@@ -481,10 +477,57 @@ trait ColumnarTableModule[M[+_]]
             case JArray(Nil) =>
               acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
               
-            case JObject(_) =>
+            case JObject.empty =>
               acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
               
             case JNull        =>
+              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
+
+            case _ => sys.error("non-flattened value reached")
+          }
+          
+          acc + (ref -> updatedColumn)
+      }
+    }
+
+    def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
+      rv.flattenWithPath.foldLeft(into) {
+        case (acc, (cpath, CUndefined)) => acc
+        case (acc, (cpath, cvalue)) =>
+          val ref = ColumnRef(cpath, (cvalue.cType))
+          
+          val updatedColumn: ArrayColumn[_] = cvalue match {
+            case CBoolean(b) =>
+              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
+              
+            case CLong(d) =>
+              acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
+
+            case CDouble(d) =>
+              acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
+
+            case CNum(d) =>
+              acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CString(s) =>
+              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
+
+            case CDate(d) =>
+              acc.getOrElse(ref, ArrayDateColumn.empty(sliceSize)).asInstanceOf[ArrayDateColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CPeriod(p) =>
+              acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
+
+            case CArray(arr, cType) =>
+              acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(cType)).asInstanceOf[ArrayHomogeneousArrayColumn[cType.tpe]].tap { c => c.update(sliceIndex, arr) }
+              
+            case CEmptyArray =>
+              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CEmptyObject =>
+              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CNull =>
               acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
           }
           
@@ -492,32 +535,29 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
+    def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
+      
+      def makeSlice(data: Stream[RValue]): (Slice, Stream[RValue]) = {
+        val (prefix, suffix) = data.splitAt(sliceSize)
   
-      def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
-        val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
-        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+        @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
           from match {
             case jv #:: xs =>
-              val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
+              val refs = updateRefs(jv, into, sliceIndex, sliceSize)
               buildColArrays(xs, refs, sliceIndex + 1)
             case _ =>
               (into, sliceIndex)
           }
         }
     
-        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-        // Slice#typed to fail unless it allows for vacuous success
         val slice = new Slice {
           val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
         }
     
         (slice, suffix)
       }
-      
+
       Table(
         StreamT.unfoldM(values) { events =>
           M.point {
@@ -1398,11 +1438,13 @@ trait ColumnarTableModule[M[+_]]
           case CBoolean => JBooleanT
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
-          case CDate => JTextT
+          case CDate => JDateT
+          case CPeriod => JPeriodT
           case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
+          case CUndefined => sys.error("not supported")
         }
 
         def fresh(paths: List[CPathNode], leaf: JType): Option[JType] = paths match {

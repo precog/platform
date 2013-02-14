@@ -26,6 +26,8 @@ import org.apache.commons.collections.primitives.ArrayIntList
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import com.precog.util.DateTimeUtil._
+
 object util {
 
   /**
@@ -63,6 +65,12 @@ object util {
     }
 
     case (c1: DateColumn, c2: DateColumn) => new UnionColumn(c1, c2) with DateColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: PeriodColumn, c2: PeriodColumn) => new UnionColumn(c1, c2) with PeriodColumn { 
       def apply(row: Int) = {
         if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
       } 
@@ -152,6 +160,15 @@ object util {
             }
           })
 
+        case (_, _: PeriodColumn) :: _ if Loop.forall(columns)(_.isInstanceOf[PeriodColumn]) =>
+          val periodColumns = copyCastArray[PeriodColumn](columns)
+          Some(new NConcatColumn(offsets, periodColumns) with PeriodColumn {
+            def apply(row: Int) = {
+              val i = indexOf(row)
+              periodColumns(i)(row - offsets(i))
+            }
+          })
+
         case (_, _: EmptyArrayColumn) :: _ if Loop.forall(columns)(_.isInstanceOf[EmptyArrayColumn]) =>
           val emptyArrayColumns = copyCastArray[EmptyArrayColumn](columns)
           Some(new NConcatColumn(offsets, emptyArrayColumns) with EmptyArrayColumn)
@@ -169,16 +186,25 @@ object util {
     }
   }
 
-  //it would be nice to generalize this to `CoerceTo[A]` so we can coerce to BigDecimal as well
+  //it would be nice to generalize these to `CoerceTo[A]`
   def CoerceToDouble = CF1P("builtin:ct:coerceToDouble") {
-    case c: DoubleColumn => c
+    case (c: DoubleColumn) => c
 
-    case c: LongColumn => new Map1Column(c) with DoubleColumn {
+    case (c: LongColumn) => new Map1Column(c) with DoubleColumn {
       def apply(row: Int) = c(row).toDouble
     }
 
-    case c: NumColumn => new Map1Column(c) with DoubleColumn {
+    case (c: NumColumn) => new Map1Column(c) with DoubleColumn {
       def apply(row: Int) = c(row).toDouble
+    }
+  }
+
+  def CoerceToDate = CF1P("builtin:ct:coerceToDate") {
+    case (c: DateColumn) => c
+
+    case (c: StrColumn) => new DateColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+      def apply(row: Int) = parseDateTime(c(row), true)
     }
   }
 
@@ -204,6 +230,10 @@ object util {
     }
 
     case (c1: DateColumn, c2: DateColumn) => new ConcatColumn(at, c1, c2) with DateColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: PeriodColumn, c2: PeriodColumn) => new ConcatColumn(at, c1, c2) with PeriodColumn { 
       def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
     }
 
@@ -244,6 +274,10 @@ object util {
       def apply(row: Int) = c(row - by)
     }
 
+    case c: PeriodColumn => new ShiftColumn(by, c) with PeriodColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
     case c: HomogeneousArrayColumn[a] => new ShiftColumn(by, c) with HomogeneousArrayColumn[a] { 
       val tpe = c.tpe
       def apply(row: Int) = c(row - by)
@@ -261,6 +295,7 @@ object util {
     case c: NumColumn    => new SparsenColumn(c, idx, toSize) with NumColumn { def apply(row: Int) = c(remap(row)) }
     case c: StrColumn    => new SparsenColumn(c, idx, toSize) with StrColumn { def apply(row: Int) = c(remap(row)) }
     case c: DateColumn   => new SparsenColumn(c, idx, toSize) with DateColumn { def apply(row: Int) = c(remap(row)) }
+    case c: PeriodColumn => new SparsenColumn(c, idx, toSize) with PeriodColumn { def apply(row: Int) = c(remap(row)) }
     case c: HomogeneousArrayColumn[a] => new SparsenColumn(c, idx, toSize) with HomogeneousArrayColumn[a] {
       val tpe = c.tpe
       def apply(row: Int) = c(remap(row))
@@ -278,6 +313,7 @@ object util {
     case c: NumColumn    => new EmptyColumn[NumColumn] with NumColumn
     case c: StrColumn    => new EmptyColumn[StrColumn] with StrColumn
     case c: DateColumn   => new EmptyColumn[DateColumn] with DateColumn
+    case c: PeriodColumn => new EmptyColumn[PeriodColumn] with PeriodColumn
     case c: HomogeneousArrayColumn[a] => new EmptyColumn[HomogeneousArrayColumn[a]] with HomogeneousArrayColumn[a] {
       val tpe = c.tpe
     }
@@ -293,6 +329,7 @@ object util {
     case c: NumColumn    => new RemapColumn(c, f) with NumColumn { def apply(row: Int) = c(f(row)) }
     case c: StrColumn    => new RemapColumn(c, f) with StrColumn { def apply(row: Int) = c(f(row)) }
     case c: DateColumn   => new RemapColumn(c, f) with DateColumn { def apply(row: Int) = c(f(row)) }
+    case c: PeriodColumn => new RemapColumn(c, f) with PeriodColumn { def apply(row: Int) = c(f(row)) }
     case c: HomogeneousArrayColumn[a] => new RemapColumn(c, f) with HomogeneousArrayColumn[a] {
       val tpe = c.tpe
       def apply(row: Int) = c(f(row))
@@ -309,6 +346,7 @@ object util {
     case c: NumColumn    => new RemapFilterColumn(c, filter, offset) with NumColumn { def apply(row: Int) = c(row + offset) }
     case c: StrColumn    => new RemapFilterColumn(c, filter, offset) with StrColumn { def apply(row: Int) = c(row + offset) }
     case c: DateColumn   => new RemapFilterColumn(c, filter, offset) with DateColumn { def apply(row: Int) = c(row + offset) }
+    case c: PeriodColumn => new RemapFilterColumn(c, filter, offset) with PeriodColumn { def apply(row: Int) = c(row + offset) }
     case c: HomogeneousArrayColumn[a] => new RemapFilterColumn(c, filter, offset) with HomogeneousArrayColumn[a] {
       val tpe = c.tpe
       def apply(row: Int) = c(row + offset)
@@ -325,6 +363,7 @@ object util {
     case c: NumColumn    => new RemapIndicesColumn(c, indices) with NumColumn { def apply(row: Int) = c(indices.get(row)) }
     case c: StrColumn    => new RemapIndicesColumn(c, indices) with StrColumn { def apply(row: Int) = c(indices.get(row)) }
     case c: DateColumn   => new RemapIndicesColumn(c, indices) with DateColumn { def apply(row: Int) = c(indices.get(row)) }
+    case c: PeriodColumn => new RemapIndicesColumn(c, indices) with PeriodColumn { def apply(row: Int) = c(indices.get(row)) }
     case c: HomogeneousArrayColumn[a] => new RemapIndicesColumn(c, indices) with HomogeneousArrayColumn[a] {
       val tpe = c.tpe
       def apply(row: Int) = c(indices.get(row))
@@ -341,6 +380,7 @@ object util {
     case c: NumColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with NumColumn { def apply(row: Int) = c(row) }
     case c: StrColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with StrColumn { def apply(row: Int) = c(row) }
     case c: DateColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with DateColumn { def apply(row: Int) = c(row) }
+    case c: PeriodColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with PeriodColumn { def apply(row: Int) = c(row) }
     case c: HomogeneousArrayColumn[a] =>
       new BitsetColumn(definedAt & c.definedAt(from, to)) with HomogeneousArrayColumn[a] {
         val tpe = c.tpe
@@ -381,6 +421,10 @@ object util {
       def apply(row: Int) = c(row)
     }
     case c: DateColumn   => new DateColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+    case c: PeriodColumn => new PeriodColumn {
       def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
       def apply(row: Int) = c(row)
     }
@@ -426,6 +470,10 @@ object util {
         case CDate(d) => new DateColumn {
           def isDefinedAt(row: Int) = c.isDefinedAt(row)
           def apply(row: Int) = d
+        }
+        case CPeriod(p) => new PeriodColumn {
+          def isDefinedAt(row: Int) = c.isDefinedAt(row)
+          def apply(row: Int) = p
         }
         case value: CArray[a] => new HomogeneousArrayColumn[a] {
           val tpe = value.cType

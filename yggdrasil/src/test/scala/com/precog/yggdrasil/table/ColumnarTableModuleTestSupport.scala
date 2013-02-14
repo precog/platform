@@ -24,6 +24,7 @@ import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
 import com.precog.common.json._
+import com.precog.util._
 
 import akka.actor.ActorSystem
 
@@ -47,8 +48,48 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
 
   def defaultSliceSize = 10
 
+  // production-path code uses fromRValues, but all the tests use fromJson
+  // this will need to be changed when our tests support non-json such as CDate and CPeriod
+  def fromJson0(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
+    val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
+  
+    def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
+      val (prefix, suffix) = sampleData.splitAt(sliceSize)
+  
+      @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+        from match {
+          case jv #:: xs =>
+            val refs = Table.withIdsAndValues(jv, into, sliceIndex, sliceSize)
+            buildColArrays(xs, refs, sliceIndex + 1)
+          case _ =>
+            (into, sliceIndex)
+        }
+      }
+  
+      // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
+      // columns won't satisfy sampleData.schema. This will cause the subsumption test in
+      // Slice#typed to fail unless it allows for vacuous success
+      val slice = new Slice {
+        val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
+      }
+  
+      (slice, suffix)
+    }
+    
+    Table(
+      StreamT.unfoldM(values) { events =>
+        M.point {
+          (!events.isEmpty) option {
+            makeSlice(events.toStream)
+          }
+        }
+      },
+      ExactSize(values.length)
+    )
+  }
+
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table =
-    Table.fromJson(values, maxSliceSize orElse Some(defaultSliceSize))
+    fromJson0(values, maxSliceSize orElse Some(defaultSliceSize))
 
   def lookupF1(namespace: List[String], name: String): F1 = {
     val lib = Map[String, CF1](

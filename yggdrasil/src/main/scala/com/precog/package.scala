@@ -35,11 +35,12 @@ package object yggdrasil {
   
   type Identity = Long
   type Identities = Array[Identity]
-  type SEvent = (Identities, SValue)
 
   object Identities {
     val Empty = VectorCase.empty[Identity]
   }
+
+  type SEvent = (Identities, SValue)
 
   object SEvent {
     @inline 

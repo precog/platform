@@ -26,6 +26,8 @@ import yggdrasil.table._
 
 import common.json._
 
+import blueeyes.json._
+
 import spire.implicits._
 import spire.math.Eq
 import spire.ArrayOps
@@ -594,7 +596,9 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
 
         val spec = TransSpec.concatChildren(tree)
 
-        val tables = points map { pt => Table.constArray(Set(CArray[Double](pt))) }
+        val tables = points map { pt =>
+          Table.fromRValues(Stream(RArray(pt.map(CNum(_)).toList)))
+        }
 
         val transformedTables = tables map { table => table.transform(spec) }
 

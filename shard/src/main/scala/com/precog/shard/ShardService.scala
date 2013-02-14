@@ -99,18 +99,22 @@ trait ShardService extends
    */
   def configureShardState(config: Configuration): Future[ShardState]
 
-  def optionsResponse = Promise.successful(
-    HttpResponse[QueryResult](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
-      "Access-Control-Allow-Origin" -> "*",
-      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+  def optionsResponse[A] = Promise.successful(
+    HttpResponse[A](
+      headers = HttpHeaders(Seq(
+        "Allow" -> "GET,POST,OPTIONS",
+        "Access-Control-Allow-Origin" -> "*",
+        "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+        "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")
+      )
+    )
   )
 
   // TODO: maybe some of these implicits should be moved, but for now i
   // don't have the patience to figure out where.
 
   implicit def err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
-    HttpResponse(failure, content = Some(ByteChunk(s.getBytes("UTF-8"))))
+    HttpResponse(failure, content = Some(ByteChunk(JString(s.getBytes("UTF-8")).renderCompact)))
   }
 
   implicit def failureToQueryResult: (HttpFailure, String) => HttpResponse[QueryResult] = { (fail: HttpFailure, msg: String) =>
@@ -191,24 +195,32 @@ trait ShardService extends
   }
 
   private def syncHandler(state: ShardState) = {
-    jsonpcb[QueryResult] {
+    implicit def lift[A](a: A): Future[A] = Promise.successful(a)
+
+    jsonpcb[ByteChunk] {
       apiKey(state.apiKeyManager) {
         dataPath("analytics/fs") {
           query {
             get(syncQueryService(state)) ~
             options {   // Handle OPTIONS requests internally to simplify the standalone service
               (request: HttpRequest[ByteChunk]) => {
-                (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse
+                (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse[QueryResult]
               }
             }
+          } map { f => 
+            (a: APIKeyRecord, p: Path) => f(a, p) map { r => r.copy(content = r.content map queryResult2byteChunk) } 
           }
         } ~
         dataPath("meta/fs") {
-          get(new BrowseServiceHandler(state.platform.metadataClient, state.apiKeyManager)) ~
+          {
+            get(new BrowseServiceHandler(state.platform.metadataClient, state.apiKeyManager)) map { f => 
+              (a: APIKeyRecord, p: Path) => f(a,p) map { r => r.copy(content = r.content map jvalueToChunk) } 
+            }
+          } ~
           // Handle OPTIONS requests internally to simplify the standalone service
           options {
             (request: HttpRequest[ByteChunk]) => {
-              (a: APIKeyRecord, p: Path) => optionsResponse
+              (a: APIKeyRecord, p: Path) => optionsResponse[ByteChunk]
             }
           }
         }

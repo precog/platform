@@ -23,7 +23,7 @@ package table
 import cf._
 
 import blueeyes.json._
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import java.math.MathContext
 
@@ -61,7 +61,21 @@ private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we j
 trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with (Int => Array[A]) { self =>
   def apply(row: Int): Array[A]
 
-  def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowEq(row1: Int, row2: Int): Boolean = {
+    if (!isDefinedAt(row1)) return !isDefinedAt(row2)
+    if (!isDefinedAt(row2)) return false
+
+    val a1 = apply(row1)
+    val a2 = apply(row2)
+    if (a1.length != a2.length) return false
+    val n = a1.length
+    var i = 0
+    while (i < n) {
+      if (a1(i) != a2(i)) return false
+      i += 1
+    }
+    true
+  }
 
   val tpe: CArrayType[A]
 
@@ -119,6 +133,11 @@ object HomogeneousArrayColumn {
       def isDefinedAt(row: Int): Boolean =
         i >= 0 && col.isDefinedAt(row) && i < col(row).length
       def apply(row: Int): DateTime = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CPeriod) => new PeriodColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Period = col(row)(i)
     }
     case col @ HomogeneousArrayColumn(cType: CArrayType[a]) => new HomogeneousArrayColumn[a] {
       val tpe = cType
@@ -209,6 +228,16 @@ trait DateColumn extends Column with (Int => DateTime) {
   override def toString = "DateColumn"
 }
 
+trait PeriodColumn extends Column with (Int => Period) {
+  def apply(row: Int): Period
+  def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+
+  override val tpe = CPeriod
+  override def jValue(row: Int) = JString(this(row).toString)
+  override def cValue(row: Int) = CPeriod(this(row))
+  override def strValue(row: Int): String = this(row).toString
+  override def toString = "PeriodColumn"
+}
 
 trait EmptyArrayColumn extends Column {
   def rowEq(row1: Int, row2: Int): Boolean = true
@@ -308,6 +337,10 @@ object Column {
     def apply(row: Int) = v
   }
 
+  @inline def const(v: Period) = new InfiniteColumn with PeriodColumn {
+    def apply(row: Int) = v
+  }
+
   @inline def const[@spec(Boolean, Long, Double) A: CValueType](v: Array[A]) = new InfiniteColumn with HomogeneousArrayColumn[A] {
     val tpe = CArrayType(CValueType[A])
     def apply(row: Int) = v
@@ -344,6 +377,11 @@ object Column {
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
       def apply(row: Int) = Array(col(row))
     }
+    case col: PeriodColumn => new HomogeneousArrayColumn[Period] {
+      val tpe = CArrayType(CPeriod)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
     case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[Array[a]] {
       val tpe = CArrayType(col.tpe)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
@@ -366,6 +404,18 @@ object Column {
       i += 1
     }
     i < cols.length
+  }
+
+  def isDefinedAtAll(cols: Array[Column], row: Int): Boolean = {
+    if (cols.isEmpty) {
+      false
+    } else {
+      var i = 0
+      while (i < cols.length && cols(i).isDefinedAt(row)) {
+        i += 1
+      }
+      i == cols.length
+    }
   }
 }
   
