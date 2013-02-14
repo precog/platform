@@ -134,6 +134,14 @@ trait ArrayLibModule[M[+_]] extends ColumnarTableLibModule[M] {
               
               ref -> col
             }
+
+            case (ref @ ColumnRef(_, CPeriod), colTable) => {
+              val col = new ModUnionColumn(colTable) with PeriodColumn {
+                def apply(i: Int) = col(i).asInstanceOf[PeriodColumn](row(i))
+              }
+              
+              ref -> col
+            }
             
             case (ref @ ColumnRef(_, arrTpe: CArrayType[a]), colTable) => {
               val col = new ModUnionColumn(colTable) with HomogeneousArrayColumn[a] {

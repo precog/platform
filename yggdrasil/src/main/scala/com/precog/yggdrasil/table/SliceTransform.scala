@@ -698,7 +698,10 @@ trait ObjectConcatHelpers extends ConcatHelpers {
   def buildFields(leftColumns: Map[ColumnRef, Column], rightColumns: Map[ColumnRef, Column]) =
     (filterFields(leftColumns), filterFields(rightColumns))
 
-  def buildEmptyObjects(emptyBits: BitSet) = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+  def buildEmptyObjects(emptyBits: BitSet) = {
+    if (emptyBits.isEmpty) Map.empty[ColumnRef, Column]
+    else Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+  }
 
   def buildNonemptyObjects(leftFields: Map[ColumnRef, Column], rightFields: Map[ColumnRef, Column]) = {
     val (leftInner, leftOuter) = leftFields partition {

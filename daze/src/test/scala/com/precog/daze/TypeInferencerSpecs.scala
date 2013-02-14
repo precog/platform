@@ -24,10 +24,10 @@ import bytecode.RandomLibrary
 import common.Path
 import yggdrasil._
 
-import blueeyes.json.{ JPath, JPathField, JPathIndex }
-
 import org.specs2.execute.Result
 import org.specs2.mutable._
+
+import blueeyes.json._
 
 import scalaz._
 
@@ -124,7 +124,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
     }
   }
 
-  val cLiterals = Set(CBoolean, CLong, CDouble, CNum, CString, CNull, CDate)
+  val cLiterals = Set(CBoolean, CLong, CDouble, CNum, CString, CNull, CDate, CPeriod)
 
   "type inference" should {
     "propagate structure/type information through a trivial Join/DerefObject node" in {

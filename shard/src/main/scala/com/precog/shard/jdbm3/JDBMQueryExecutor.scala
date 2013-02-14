@@ -158,15 +158,6 @@ trait JDBMQueryExecutorComponent  {
 
       object Table extends TableCompanion
 
-      def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-        new Evaluator[N](N0) with IdSourceScannerModule {
-          type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
-          val yggConfig = platform.yggConfig
-          // def report = self.report
-          val report = LoggingQueryLogger[N, instructions.Line](N0)
-        }
-      }
-
       val metadataClient = new StorageMetadataClient(storage)
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
@@ -201,12 +192,7 @@ trait JDBMQueryExecutorComponent  {
           def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey).liftM[JobQueryT]
           type YggConfig = JDBMQueryExecutorConfig
           val yggConfig = platform.yggConfig
-          
-          def warn(warning: JValue): ShardQuery[Unit] =
-            jsonReport.warn(warning, "warning")
-
-          val report = errorReport[instructions.Line](shardQueryMonad, implicitly)
-          val jsonReport = errorReport[JValue]
+          val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
         }
       }
 

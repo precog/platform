@@ -62,12 +62,11 @@ class Path private (val elements: String*) {
   override def toString = path
 }
 
-trait PathSerialization {
-  final implicit val PathDecomposer = StringDecomposer contramap { (_:Path).toString }
-  final implicit val PathExtractor = StringExtractor map { Path(_) }
-}
 
-object Path extends PathSerialization {
+object Path {
+  implicit val PathDecomposer: Decomposer[Path] = StringDecomposer contramap { (_:Path).toString }
+  implicit val PathExtractor: Extractor[Path] = StringExtractor map { Path(_) }
+
   val Root = new Path()
 
   private def cleanPath(string: String): String = string.replaceAll("^/|/$", "").replaceAll("/+", "/")

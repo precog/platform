@@ -129,12 +129,11 @@ trait MergeSpec[M[+_]] extends
           GroupingSpec.Intersection
         )
   
-      def evaluator(groupKey: Table, partition: GroupId => M[Table]) = {
-        val keyJson = groupKey.toJson.copoint.head
-        val K0 = JParser.parseUnsafe("""{"1":0,"2":4}""")
-        val K1 = JParser.parseUnsafe("""{"1":1,"2":5}""")
-        val K2 = JParser.parseUnsafe("""{"1":2,"2":6}""")
-        val K3 = JParser.parseUnsafe("""{"1":3,"2":7}""")
+      def evaluator(key: RValue, partition: GroupId => M[Table]) = {
+        val K0 = RValue.fromJValue(JParser.parse("""{"1":0,"2":4}"""))
+        val K1 = RValue.fromJValue(JParser.parse("""{"1":1,"2":5}"""))
+        val K2 = RValue.fromJValue(JParser.parse("""{"1":2,"2":6}"""))
+        val K3 = RValue.fromJValue(JParser.parse("""{"1":3,"2":7}"""))
         
         val r0Json = """
           | {"key":[5908438637678328470,5908438637678328580],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
@@ -155,7 +154,7 @@ trait MergeSpec[M[+_]] extends
         val r2 = fromJson(JParser.parseManyFromString(r2Json).valueOr(throw _).toStream)
         val r3 = fromJson(JParser.parseManyFromString(r3Json).valueOr(throw _).toStream)
           
-        (keyJson match {
+        (key match {
           case K0 => {
             //println("key: "+keyJson+" partition(0):")
             //partition(0).flatMap(_.toJson).copoint.foreach(println)
@@ -246,12 +245,11 @@ trait MergeSpec[M[+_]] extends
           GroupingSpec.Intersection
         )
 
-      def evaluator(groupKey: Table, partition: GroupId => M[Table]) = {
-        val keyJson = groupKey.toJson.copoint.head
-        val K0 = JParser.parseUnsafe("""{"1":"1996","extra0":true,"extra1":true}""")
-        val K1 = JParser.parseUnsafe("""{"1":"2000","extra0":true,"extra1":true}""")
-        val K2 = JParser.parseUnsafe("""{"1":"2004","extra0":true,"extra1":true}""")
-        val K3 = JParser.parseUnsafe("""{"1":"2008","extra0":true,"extra1":true}""")
+      def evaluator(key: RValue, partition: GroupId => M[Table]) = {
+        val K0 = RValue.fromJValue(JParser.parse("""{"1":"1996","extra0":true,"extra1":true}"""))
+        val K1 = RValue.fromJValue(JParser.parse("""{"1":"2000","extra0":true,"extra1":true}"""))
+        val K2 = RValue.fromJValue(JParser.parse("""{"1":"2004","extra0":true,"extra1":true}"""))
+        val K3 = RValue.fromJValue(JParser.parse("""{"1":"2008","extra0":true,"extra1":true}"""))
         
         val r0Json = """
           | {"key":[],"value":{"year":"1996","ratio":139.0}}
@@ -270,9 +268,8 @@ trait MergeSpec[M[+_]] extends
         val r1 = fromJson(JParser.parseManyFromString(r1Json).valueOr(throw _).toStream)
         val r2 = fromJson(JParser.parseManyFromString(r2Json).valueOr(throw _).toStream)
         val r3 = fromJson(JParser.parseManyFromString(r3Json).valueOr(throw _).toStream)
-          
 
-        (keyJson match {
+        (key match {
           case K0 => {
             //println("key: "+keyJson+" partition(0):")
             //partition(0).flatMap(_.toJson).copoint.foreach(println)

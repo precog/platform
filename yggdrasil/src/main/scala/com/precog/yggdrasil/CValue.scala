@@ -21,12 +21,14 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.util._
+import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import org.joda.time.DateTime
+import org.joda.time.Period
 
 import scalaz._
 import scalaz.Ordering._
@@ -41,10 +43,115 @@ import scala.annotation.tailrec
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
 import _root_.java.math.MathContext
 
-sealed trait CValue {
-  def cType: CType
-
+sealed trait RValue { self =>
   def toJValue: JValue
+
+  def \(fieldName: String): RValue 
+
+  def unsafeInsert(path: CPath, value: RValue): RValue = {
+    RValue.unsafeInsert(self, path, value)
+  }
+
+  def flattenWithPath: Vector[(CPath, CValue)] = {
+    def flatten0(path: CPath)(value: RValue): Vector[(CPath, CValue)] = value match {
+      case RObject(fields) =>
+        fields.foldLeft(Vector.empty[(CPath, CValue)]) {
+          case (acc, field) =>
+            acc ++ flatten0(path \ field._1)(field._2)
+        }
+
+      case RArray(elems) =>
+        Vector(elems: _*).zipWithIndex.flatMap { tuple =>
+          val (elem, idx) = tuple
+
+          flatten0(path \ idx)(elem)
+        }
+
+      case (v: CValue) => Vector((path, v))
+    }
+
+    flatten0(CPath.Identity)(self)
+  }
+}
+
+object RValue {
+  def fromJValue(jv: JValue): RValue = jv match {
+    case JObject(fields) => RObject(fields map { case (k, v) => (k, fromJValue(v)) })
+    case JArray(elements) => RArray(elements map fromJValue)
+    case other => CType.toCValue(other)
+  }
+
+  def unsafeInsert(rootTarget: RValue, rootPath: CPath, rootValue: RValue): RValue = {
+    def rec(target: RValue, path: CPath, value: RValue): RValue = {
+      if ((target == CNull || target == CUndefined) && path == CPath.Identity) value else {
+        def arrayInsert(l: List[RValue], i: Int, rem: CPath, v: RValue): List[RValue] = {
+          def update(l: List[RValue], j: Int): List[RValue] = l match {
+            case x :: xs => (if (j == i) rec(x, rem, v) else x) :: update(xs, j + 1)
+            case Nil => Nil
+          }
+
+          update(l.padTo(i + 1, CUndefined), 0)
+        }
+
+        target match {
+          case obj @ RObject(fields) => path.nodes match {
+            case CPathField(name) :: nodes =>
+              val (child, rest) = (fields.get(name).getOrElse(CUndefined), fields - name)
+              RObject(rest + (name -> rec(child, CPath(nodes), value)))
+
+            case CPathIndex(_) :: _ => sys.error("Objects are not indexed: attempted to insert " + value + " at " + rootPath + " on " + rootTarget)
+            case _ => sys.error("RValue insert would overwrite existing data: " + target + " cannot be rewritten to " + value + " at " + path +
+                                " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+          }
+
+          case arr @ RArray(elements) => path.nodes match {
+            case CPathIndex(index) :: nodes => RArray(arrayInsert(elements, index, CPath(nodes), value))
+            case CPathField(_) :: _ => sys.error("Arrays have no fields: attempted to insert " + value + " at " + rootPath + " on " + rootTarget)
+            case _ => sys.error("RValue insert would overwrite existing data: " + target + " cannot be rewritten to " + value + " at " + path +
+                                  " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+          }
+
+          case CNull | CUndefined => path.nodes match {
+            case Nil => value
+            case CPathIndex(_) :: _ => rec(RArray.empty, path, value)
+            case CPathField(_) :: _ => rec(RObject.empty, path, value)
+            case CPathArray :: _ => sys.error("todo")
+            case CPathMeta(_) :: _ => sys.error("todo")
+          }
+
+          case x => sys.error("RValue insert would overwrite existing data: " + x + " cannot be updated to " + value + " at " + path +
+                              " in unsafeInsert of " + rootValue + " at " + rootPath + " in " + rootTarget)
+        }
+      }
+    }
+
+    rec(rootTarget, rootPath, rootValue)
+  }
+}
+
+case class RObject(fields: Map[String, RValue]) extends RValue {
+  def toJValue = JObject(fields map { case (k, v) => (k, v.toJValue) })
+  def \(fieldName: String): RValue = fields(fieldName)
+}
+
+object RObject {
+  val empty = new RObject(Map.empty)
+  def apply(fields: (String, RValue)*): RValue = new RObject(Map(fields: _*))
+}
+
+case class RArray(elements: List[RValue]) extends RValue {
+  def toJValue = JArray(elements map { _.toJValue })
+  def \(fieldName: String): RValue = CUndefined
+}
+
+object RArray {
+  val empty = new RArray(Nil)
+  def apply(elements: RValue*): RValue = new RArray(elements.toList)
+}
+
+sealed trait CValue extends RValue {
+  def cType: CType
+  def \(fieldName: String): RValue = CUndefined
 }
 
 sealed trait CNullValue extends CValue { self: CNullType =>
@@ -70,6 +177,7 @@ object CValue {
     case (CDouble(ad), CDouble(bd)) => ad.compareTo(bd)
     case (CNum(an), CNum(bn)) => an.compare(bn)
     case (CDate(ad), CDate(bd)) => ad.compareTo(bd)
+    case (CPeriod(ad), CPeriod(bd)) => (ad.toStandardDuration).compareTo(bd.toStandardDuration)
     case (CArray(as, CArrayType(atpe)), CArray(bs, CArrayType(btpe))) if atpe == btpe =>
       (as.view zip bs.view) map { case (a, b) =>
         compareValues(atpe(a), btpe(b))
@@ -115,6 +223,7 @@ sealed trait CType extends Serializable {
     case CNull         => 11
 
     case CDate         => 12
+    case CPeriod       => 13
   }
 }
 
@@ -134,7 +243,7 @@ sealed trait CNumericType[@spec(Long, Double) A] extends CValueType[A] {
   def bigDecimalFor(a: A): BigDecimal
 }
 
-trait CTypeSerialization {
+object CType {
   def nameOf(c: CType): String = c match {
     case CString                => "String"
     case CBoolean               => "Boolean"
@@ -146,6 +255,7 @@ trait CTypeSerialization {
     case CEmptyArray            => "EmptyArray"
     case CArrayType(elemType)   => "Array[%s]" format nameOf(elemType)
     case CDate                  => "Timestamp"
+    case CPeriod                => "Period"
     case CUndefined             => sys.error("CUndefined cannot be serialized")
   } 
 
@@ -165,14 +275,15 @@ trait CTypeSerialization {
       case _ => None
     }
     case "Timestamp"     => Some(CDate)
+    case "Period"     => Some(CPeriod)
     case _ => None
   }
     
-  implicit val CTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
+  implicit val decomposer : Decomposer[CType] = new Decomposer[CType] {
     def decompose(ctype : CType) : JValue = JString(nameOf(ctype))
   }
 
-  implicit val CTypeExtractor : Extractor[CType] = new Extractor[CType] {
+  implicit val extractor : Extractor[CType] = new Extractor[CType] {
     def validated(obj : JValue) : Validation[Extractor.Error,CType] = 
       obj.validated[String].map( fromName _ ) match {
         case Success(Some(t)) => Success(t)
@@ -180,9 +291,7 @@ trait CTypeSerialization {
         case Failure(f)       => Failure(f)
       }
   }
-}
 
-case object CType extends CTypeSerialization {
   def readResolve() = CType
 
   def of(v: CValue): CType = v.cType
@@ -203,6 +312,9 @@ case object CType extends CTypeSerialization {
       case (CNum, CNum)       => Some(CNum)
 
       case (CString, CString) => Some(CString)
+
+      case (CDate, CDate) => Some(CDate)
+      case (CPeriod, CPeriod) => Some(CPeriod)
 
       case (CArrayType(et1), CArrayType(et2)) =>
         unify(et1, et2) flatMap {
@@ -293,6 +405,7 @@ object CValueType {
   implicit def double: CValueType[Double] = CDouble
   implicit def bigDecimal: CValueType[BigDecimal] = CNum
   implicit def dateTime: CValueType[DateTime] = CDate
+  implicit def period: CValueType[Period] = CPeriod
   implicit def array[@spec(Boolean, Long, Double) A](implicit elemType: CValueType[A]) = CArrayType(elemType)
 }
 
@@ -355,6 +468,8 @@ case class CArrayType[@spec(Boolean, Long, Double) A](elemType: CValueType[A]) e
   // Spec. bug: Leave lazy here.
   lazy val manifest: Manifest[Array[A]] = elemType.manifest.arrayManifest
 
+  type tpe = A
+
   def readResolve() = CArrayType(elemType.readResolve())
 
   def apply(value: Array[A]) = CArray(value, this)
@@ -385,11 +500,16 @@ case object CString extends CValueType[String] {
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CWrappedValue[Boolean] {
+sealed abstract class CBoolean(val value: Boolean) extends CWrappedValue[Boolean] {
   val cType = CBoolean
 }
 
-case object CBoolean extends CValueType[Boolean] {
+case object CTrue extends CBoolean(true)
+case object CFalse extends CBoolean(false)
+
+object CBoolean extends CValueType[Boolean] {
+  def apply(value: Boolean) = if (value) CTrue else CFalse
+  def unapply(cbool: CBoolean) = Some(cbool.value)
   val manifest: Manifest[Boolean] = implicitly[Manifest[Boolean]]
   def readResolve() = CBoolean
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
@@ -436,7 +556,7 @@ case object CNum extends CNumericType[BigDecimal] {
 }
 
 //
-// Dates
+// Dates and Periods
 //
 case class CDate(value: DateTime) extends CWrappedValue[DateTime] {
   val cType = CDate
@@ -447,6 +567,17 @@ case object CDate extends CValueType[DateTime] {
   def readResolve() = CDate
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
   def jValueFor(v: DateTime) = JString(v.toString)
+}
+
+case class CPeriod(value: Period) extends CWrappedValue[Period] {
+  val cType = CPeriod
+}
+
+case object CPeriod extends CValueType[Period] {
+  val manifest: Manifest[Period] = implicitly[Manifest[Period]]
+  def readResolve() = CPeriod
+  def order(v1: Period, v2: Period) = sys.error("todo")
+  def jValueFor(v: Period) = JString(v.toString)
 }
 
 //

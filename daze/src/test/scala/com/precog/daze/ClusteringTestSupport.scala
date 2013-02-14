@@ -21,9 +21,10 @@ package com.precog.daze
 
 import scala.util.Random._
 
-import blueeyes.json._
-
 import com.precog.util.IOUtils
+import com.precog.yggdrasil._
+
+import blueeyes.json._
 
 import spire.implicits._
 
@@ -47,18 +48,18 @@ trait ClusteringTestSupport {
     GeneratedPointSet(points, centers)
   }
 
-  def pointToJson(p: Array[Double]): JValue = {
-    JArray(p.toSeq map (JNum(_)): _*)
+  def pointToJson(p: Array[Double]): RValue = {
+    RArray(p.toSeq map (CNum(_)): _*)
   }
 
-  def pointsToJson(points: Array[Array[Double]]): List[JValue] = points.toList map (pointToJson(_))
+  def pointsToJson(points: Array[Array[Double]]): List[RValue] = points.toList map (pointToJson(_))
 
   def writePointsToDataset[A](points: Array[Array[Double]])(f: String => A): A = {
-    writeJValuesToDataset(pointsToJson(points))(f)
+    writeRValuesToDataset(pointsToJson(points))(f)
   }
 
-  def writeJValuesToDataset[A](jvals: List[JValue])(f: String => A): A = {
-    val lines = jvals map { _.renderCompact }
+  def writeRValuesToDataset[A](jvals: List[RValue])(f: String => A): A = {
+    val lines = jvals map { _.toJValue.renderCompact }
     val tmpFile = File.createTempFile("values", ".json")
     IOUtils.writeSeqToFile(lines, tmpFile).unsafePerformIO
     val pointsString0 = "filesystem" + tmpFile.toString

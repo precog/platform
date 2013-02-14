@@ -91,9 +91,19 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     }
   }
 
-  def testTrivial = {
+  def makeDAG(points: String) = {
     val line = Line(1, 1, "")
 
+    dag.Morph2(MultiLinearRegression,
+      dag.Join(DerefArray, CrossLeftSort,
+        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.Const(CLong(1))(line))(line),
+      dag.Join(DerefArray, CrossLeftSort,
+        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.Const(CLong(0))(line))(line))(line)
+  }
+
+  def testTrivial = {
     val num = 2
     val loops = 50
 
@@ -116,14 +126,8 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
 
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
-      
-      val input = dag.Morph2(MultiLinearRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+
+      val input = makeDAG(pointsString)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -152,8 +156,6 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
   }
 
   def testThreeFeatures = {
-    val line = Line(1, 1, "")
-
     val num = 4
     val loops = 50
 
@@ -179,13 +181,7 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - 5)
       
-      val input = dag.Morph2(MultiLinearRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+      val input = makeDAG(pointsString)
 
       val result = testEval(input)
       tmpFile.delete()
@@ -216,8 +212,6 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
   }
 
   def testThreeSchemata = {
-    val line = Line(1, 1, "")
-
     val num = 3
     val loops = 50
 
@@ -251,13 +245,7 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
       val pointsString0 = "filesystem" + tmpFile.toString
       val pointsString = pointsString0.take(pointsString0.length - suffix.length)
       
-      val input = dag.Morph2(MultiLinearRegression,
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(0))(line))(line),
-        dag.Join(DerefArray, CrossLeftSort,
-          dag.LoadLocal(Const(CString(pointsString))(line))(line),
-          dag.Const(CLong(1))(line))(line))(line)
+      val input = makeDAG(pointsString) 
 
       val result = testEval(input)
       tmpFile.delete()
@@ -344,8 +332,6 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     }
 
     "predict case with repeated model names and arrays" in {
-      val line = Line(0, 0, "")
-
       val input = predictionInput(LinearPrediction, "/hom/model2data", "/hom/model2")
 
       val result0 = testEval(input)

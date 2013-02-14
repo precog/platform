@@ -103,7 +103,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     }
 
     abstract class Op1F1(namespace: Vector[String], name: String) extends Op1(namespace, name) {
-      override def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
         trans.Map1(source, f1(ctx))
       
       def f1(ctx: EvaluationContext): F1
@@ -124,7 +124,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     }
 
     abstract class Op2F2(namespace: Vector[String], name: String) extends Op2(namespace, name) {
-      override def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
+      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
         trans.Map2(left, right, f2(ctx))
       
       def f2(ctx: EvaluationContext): F2
@@ -139,7 +139,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       def monoid: Monoid[Result]
       def reducer(ctx: EvaluationContext): Reducer[Result]
       def extract(res: Result): Table
-      def extractValue(res: Result): Option[CValue]
+      def extractValue(res: Result): Option[RValue]
 
       def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
     }

@@ -24,7 +24,7 @@ import akka.dispatch.Future
 
 import com.precog.common._
 import com.precog.common.json._
-import com.precog.daze.EvaluationContext
+import com.precog.daze._
 import com.precog.yggdrasil.table.ColumnarTableModule
 
 import com.weiglewilczek.slf4s.Logging
@@ -35,6 +35,7 @@ import scalaz.syntax.copointed._
 trait RenderStackSpecs extends EvalStackSpecs 
     with ParseEvalStack[Future]
     with ColumnarTableModule[Future]
+    with MemoryDatasetConsumer[Future]
     with Logging {
 
   implicit val M: Monad[Future] with Copointed[Future]

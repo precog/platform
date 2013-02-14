@@ -22,7 +22,7 @@ package jdbm3
 
 import com.precog.util._
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 
 /**
@@ -35,6 +35,7 @@ trait StdCodecs {
   implicit def StringCodec: Codec[String]
   implicit def BooleanCodec: Codec[Boolean]
   implicit def DateTimeCodec: Codec[DateTime]
+  implicit def PeriodCodec: Codec[Period]
   implicit def BitSetCodec: Codec[BitSet]
   implicit def RawBitSetCodec: Codec[RawBitSet]
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]): Codec[IndexedSeq[A]]
@@ -52,6 +53,7 @@ trait StdCodecs {
     case CDouble => DoubleCodec
     case CNum => BigDecimalCodec
     case CDate => DateTimeCodec
+    case CPeriod => PeriodCodec
     case CArrayType(elemType) => ArrayCodec(codecForCValueType(elemType), elemType.manifest)
   } } catch {
     case ex: Throwable =>
@@ -68,6 +70,7 @@ trait RowFormatCodecs extends StdCodecs { self: RowFormat =>
   implicit def StringCodec: Codec[String] = Codec.Utf8Codec
   implicit def BooleanCodec: Codec[Boolean] = Codec.BooleanCodec
   implicit def DateTimeCodec: Codec[DateTime] = Codec.DateCodec
+  implicit def PeriodCodec: Codec[Period] = Codec.PeriodCodec
   // implicit def BitSetCodec: Codec[BitSet] = Codec.BitSetCodec
   //@transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)
   @transient implicit lazy val BitSetCodec: Codec[BitSet] = Codec.SparseBitSetCodec(columnRefs.size)

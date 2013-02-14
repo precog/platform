@@ -65,9 +65,9 @@ trait IndicesModule[M[+_]]
     /**
      * Return the set of values we've seen for this group key.
      */
-    def getUniqueKeys(keyId: Int): GenSet[JValue] = {
+    def getUniqueKeys(keyId: Int): GenSet[RValue] = {
       // Union the sets we get from our slice indices.
-      val set = mutable.Set.empty[JValue]
+      val set = mutable.Set.empty[RValue]
       indices.foreach(set ++= _.getUniqueKeys(keyId))
       set
     }
@@ -75,9 +75,9 @@ trait IndicesModule[M[+_]]
     /**
      * Return the set of values we've seen for this group key.
      */
-    def getUniqueKeys(): GenSet[Seq[JValue]] = {
+    def getUniqueKeys(): GenSet[Seq[RValue]] = {
       // Union the sets we get from our slice indices.
-      val set = mutable.Set.empty[Seq[JValue]]
+      val set = mutable.Set.empty[Seq[RValue]]
       indices.foreach(set ++= _.getUniqueKeys())
       set
     }
@@ -86,7 +86,7 @@ trait IndicesModule[M[+_]]
      * Return the subtable where each group key in keyIds is set to
      * the corresponding value in keyValues.
      */
-    def getSubTable(keyIds: Seq[Int], keyValues: Seq[JValue]): Table = {
+    def getSubTable(keyIds: Seq[Int], keyValues: Seq[RValue]): Table = {
       // Each slice index will build us a slice, so we just return a
       // table of those slices.
       //
@@ -147,18 +147,18 @@ trait IndicesModule[M[+_]]
      * the table, since it's assumed that all indices have the same
      * value spec.
      */
-    def joinSubTables(tpls: List[(TableIndex, Seq[Int], Seq[JValue])]): Table = {
+    def joinSubTables(tpls: List[(TableIndex, Seq[Int], Seq[RValue])]): Table = {
 
       // Filter out negative integers. This allows the caller to do
-      // arbitrary remapping of their own Seq[JValue] by filtering
+      // arbitrary remapping of their own Seq[RValue] by filtering
       // values they don't want.
-      val params: List[(Seq[Int], Seq[JValue])] = tpls.map {
+      val params: List[(Seq[Int], Seq[RValue])] = tpls.map {
         case (index, ns, jvs) =>
           val (ns2, jvs2) = ns.zip(jvs).filter(_._1 >= 0).unzip
           (ns2, jvs2)
       }
 
-      //val params: List[(Seq[Int], Seq[JValue])] = tpls.map(t => (t._2, t._3))
+      //val params: List[(Seq[Int], Seq[RValue])] = tpls.map(t => (t._2, t._3))
       val sll: List[List[SliceIndex]] = tpls.map(_._1.indices)
       val orderedIndices: List[List[SliceIndex]] = sll.transpose
 
@@ -183,9 +183,9 @@ trait IndicesModule[M[+_]]
    * 
    * The SliceIndex currently uses in-memory data structures, although
    * this will have to change eventually. A "group key value" is
-   * defined as an (Int, JValue). The Int part corresponds to the key
+   * defined as an (Int, RValue). The Int part corresponds to the key
    * in the sequence of transforms used to build the index, and the
-   * JValue part corresponds to the value we want the key to have.
+   * RValue part corresponds to the value we want the key to have.
    * 
    * SliceIndex is able to create subslices without rescanning the
    * underlying slice due to the fact that it already knows which rows
@@ -193,9 +193,9 @@ trait IndicesModule[M[+_]]
    * valueSlice should already be materialized.
    */
   class SliceIndex(
-    private[table] val vals: mutable.Map[Int, mutable.Set[JValue]],
-    private[table] val dict: mutable.Map[(Int, JValue), mutable.Set[Int]],
-    private[table] val keyset: mutable.Set[Seq[JValue]],
+    private[table] val vals: mutable.Map[Int, mutable.Set[RValue]],
+    private[table] val dict: mutable.Map[(Int, RValue), mutable.Set[Int]],
+    private[table] val keyset: mutable.Set[Seq[RValue]],
     private[table] val valueSlice: Slice
   ) { self =>
 
@@ -206,24 +206,24 @@ trait IndicesModule[M[+_]]
     /**
      * Return the set of values we've seen for this group key.
      */
-    def getUniqueKeys(keyId: Int): GenSet[JValue] = vals(keyId)
+    def getUniqueKeys(keyId: Int): GenSet[RValue] = vals(keyId)
 
     /**
      * Return the set of value combinations we've seen.
      */
-    def getUniqueKeys(): GenSet[Seq[JValue]] = keyset
+    def getUniqueKeys(): GenSet[Seq[RValue]] = keyset
 
     /**
      * Return the subtable where each group key in keyIds is set to
      * the corresponding value in keyValues.
      */
-    def getSubTable(keyIds: Seq[Int], keyValues: Seq[JValue]): Table =
+    def getSubTable(keyIds: Seq[Int], keyValues: Seq[RValue]): Table =
       buildSubTable(getRowsForKeys(keyIds, keyValues))
 
     /**
      * Returns the rows specified by the given group key values.
      */
-    private[table] def getRowsForKeys(keyIds: Seq[Int], keyValues: Seq[JValue]): mutable.Set[Int] = {
+    private[table] def getRowsForKeys(keyIds: Seq[Int], keyValues: Seq[RValue]): mutable.Set[Int] = {
       val emptySet = mutable.Set.empty[Int]
       var rows: mutable.Set[Int] = dict.getOrElse((keyIds(0), keyValues(0)), emptySet)
       var i: Int = 1
@@ -267,9 +267,9 @@ trait IndicesModule[M[+_]]
      * Constructs an empty SliceIndex instance.
      */
     def empty = new SliceIndex(
-      mutable.Map.empty[Int, mutable.Set[JValue]],
-      mutable.Map.empty[(Int, JValue), mutable.Set[Int]],
-      mutable.Set.empty[Seq[JValue]],
+      mutable.Map.empty[Int, mutable.Set[RValue]],
+      mutable.Map.empty[(Int, RValue), mutable.Set[Int]],
+      mutable.Set.empty[Seq[RValue]],
       new Slice {
         def size = 0
         def columns = Map.empty[ColumnRef, Column]
@@ -300,26 +300,26 @@ trait IndicesModule[M[+_]]
      * builds a SliceIndex.
      * 
      * This is the heart of the indexing algorithm. We'll assemble a
-     * 2D array of JValues (by row/group key) and then do all the work
+     * 2D array of RValue (by row/group key) and then do all the work
      * necessary to associate them into the maps and sets we
      * ultimately need to construct the SliceIndex.
      */
     private[table] def createFromSlice(slice: Slice, sts: Array[SliceTransform1[_]], vt: SliceTransform1[_]): SliceIndex = {
       val numKeys = sts.length
       val n = slice.size
-      val vals = mutable.Map.empty[Int, mutable.Set[JValue]]
-      val dict = mutable.Map.empty[(Int, JValue), mutable.Set[Int]]
-      val keyset = mutable.Set.empty[Seq[JValue]]
+      val vals = mutable.Map.empty[Int, mutable.Set[RValue]]
+      val dict = mutable.Map.empty[(Int, RValue), mutable.Set[Int]]
+      val keyset = mutable.Set.empty[Seq[RValue]]
 
       val keys = readKeys(slice, sts)
 
       // build empty initial jvalue sets for our group keys
-      Loop.range(0, numKeys)(vals(_) = mutable.Set.empty[JValue])
+      Loop.range(0, numKeys)(vals(_) = mutable.Set.empty[RValue])
 
       var i = 0
       while (i < n) {
         var dead = false
-        val row = new Array[JValue](numKeys)
+        val row = new Array[RValue](numKeys)
         var k = 0
         while (!dead && k < numKeys) {
           val jv = keys(k)(i)
@@ -361,10 +361,10 @@ trait IndicesModule[M[+_]]
      * data store is column-oriented but the associations we want to
      * perform are row-oriented.
      */
-    private[table] def readKeys(slice: Slice, sts: Array[SliceTransform1[_]]): Array[Array[JValue]] = {
+    private[table] def readKeys(slice: Slice, sts: Array[SliceTransform1[_]]): Array[Array[RValue]] = {
       val n = slice.size
       val numKeys = sts.length
-      val keys: Array[Array[JValue]] = Array.ofDim[JValue](numKeys, n)
+      val keys: Array[Array[RValue]] = Array.ofDim[RValue](numKeys, n)
 
       var k = 0
       while (k < numKeys) {
@@ -374,10 +374,10 @@ trait IndicesModule[M[+_]]
 
         var i = 0
         while (i < n) {
-          val jv = keySlice.toJValue(i)
-          jv match {
-            case JUndefined =>
-            case jv => arr(i) = jv
+          val rv = keySlice.toRValue(i)
+          rv match {
+            case CUndefined =>
+            case rv => arr(i) = rv
           }
           i += 1
         }
@@ -395,7 +395,7 @@ trait IndicesModule[M[+_]]
      * the slice since it's assumed that all slices have the same
      * value spec.
      */
-    def joinSubSlices(tpls: List[(SliceIndex, (Seq[Int], Seq[JValue]))]): Slice =
+    def joinSubSlices(tpls: List[(SliceIndex, (Seq[Int], Seq[RValue]))]): Slice =
       tpls match {
         case Nil =>
           sys.error("empty slice") // FIXME

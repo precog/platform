@@ -175,8 +175,8 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     "forall" >> {
       val input = dag.Reduce(Forall,
         dag.IUI(true,
-          Const(CBoolean(true))(line),
-          Const(CBoolean(false))(line))(line))(line)
+          Const(CTrue)(line),
+          Const(CFalse)(line))(line))(line)
       
       val result = testEval(input)
       
@@ -192,8 +192,8 @@ trait ReductionLibSpecs[M[+_]] extends Specification
     "exists" >> {
       val input = dag.Reduce(Exists,
         dag.IUI(true,
-          Const(CBoolean(true))(line),
-          Const(CBoolean(false))(line))(line))(line)
+          Const(CTrue)(line),
+          Const(CFalse)(line))(line))(line)
       
       val result = testEval(input)
       

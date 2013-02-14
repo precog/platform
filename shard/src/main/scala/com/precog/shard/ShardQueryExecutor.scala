@@ -57,6 +57,28 @@ trait ShardQueryExecutorConfig
   val queryId = new java.util.concurrent.atomic.AtomicLong()
 }
 
+case class FaultPosition(line: Int, col: Int, text: String)
+
+object FaultPosition {
+  import shapeless._
+  import blueeyes.json.serialization._
+  import DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+
+  implicit val iso = Iso.hlist(FaultPosition.apply _, FaultPosition.unapply _)
+  val schema = "line" :: "column" :: "text" :: HNil
+  implicit val (decomposer, extractor) = IsoSerialization.serialization[FaultPosition](schema)
+}
+
+sealed trait Fault {
+  def pos: Option[FaultPosition]
+  def message: String
+}
+
+object Fault {
+  case class Warning(pos: Option[FaultPosition], message: String) extends Fault
+  case class Error(pos: Option[FaultPosition], message: String) extends Fault
+}
+
 
 trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
@@ -76,7 +98,11 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       }
     }
     
-    def warn(warning: JValue): N[Unit]
+    val report = queryReport contramap { (l: instructions.Line) =>
+      Option(FaultPosition(l.line, l.col, l.text))
+    }
+
+    def queryReport: QueryLogger[N, Option[FaultPosition]] 
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
@@ -86,37 +112,46 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       import EvaluationError._
 
       val solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
-        asBytecode(query) flatMap {
-          case (warnings, bytecode) => {
-            ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
-              Validation.success(outputChunks(opts.output) {
-                applyQueryOptions(opts) {
-                  logger.debug("[QID:%d] Evaluating query".format(qid))
-                  
-                  val evalResult = if (queryLogger.isDebugEnabled) {
-                    eval(dag, evaluationContext, true) map {
-                      _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
-                        slice => "size: " + slice.size
-                      }
-                    }
-                  } else {
-                    eval(dag, evaluationContext, true)
+        val (faults, bytecode) = asBytecode(query) 
+        
+        val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
+          ((systemError _) <-: (StackException(_)) <-: decorate(instrs).disjunction.validation) map { dag =>
+            applyQueryOptions(opts) {
+              logger.debug("[QID:%d] Evaluating query".format(qid))
+              
+              if (queryLogger.isDebugEnabled) {
+                eval(dag, evaluationContext, true) map {
+                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                    slice => "size: " + slice.size
                   }
-                  
-                  val warnResult = warnings map warn reduceOption { _ >> _ }
-                  
-                  warnResult map { res =>
-                    res >> evalResult
-                  } getOrElse evalResult
                 }
-              })
+              } else {
+                eval(dag, evaluationContext, true)
+              }
             }
           }
+        } getOrElse {
+          // compilation errors will be reported as warnings, but there are no results so 
+          // we just return an empty stream as the success
+          success(N.point(Table.empty))
         }
-      }
 
-      N.point {
-        ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, StreamT[N, CharBuffer]]])
+        resultVN map { nt => 
+          val faultN = faults map {
+            case Fault.Error(pos, msg) => queryReport.warn(pos, msg) 
+            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg)
+          } reduceOption { _ >> _ } getOrElse (N point ())
+
+          outputChunks(opts.output) {
+            faultN >> nt
+          }
+        }
+      } 
+      
+      N point {
+        ((systemError _) <-: solution) flatMap {
+          identity[Validation[EvaluationError, StreamT[N, CharBuffer]]]
+        }
       }
     }
 
@@ -148,18 +183,14 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       page(sort(table map (_.compact(constants.SourceValue.Single))))
     }
 
-    private def asBytecode(query: String): Validation[EvaluationError, (Set[JValue], Vector[Instruction])] = {
-      def renderError(err: Error): JValue = {
+    private def asBytecode(query: String): (Set[Fault], Option[Vector[Instruction]]) = {
+      def renderError(err: Error): Fault = {
         val loc = err.loc
         val tp = err.tp
 
-        JObject(
-          JField("message", JString("Errors occurred compiling your query."))
-            :: JField("line", JString(loc.line))
-            :: JField("lineNum", JNum(loc.lineNum))
-            :: JField("colNum", JNum(loc.colNum))
-            :: JField("detail", JString(tp.toString))
-            :: Nil)
+        val constr = if (isWarning(err)) Fault.Warning.apply _ else Fault.Error.apply _
+
+        constr(Some(FaultPosition(loc.lineNum, loc.colNum, loc.line)), tp.toString)
       }
       
       try {
@@ -170,38 +201,24 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         
         if (validForest.size == 1) {
           val tree = validForest.head
+          val faults = tree.errors map renderError
           
-          val warnings = tree.errors map renderError
-          
-          success((warnings, emit(validForest.head)))
+          (faults, Some(emit(validForest.head)))
         } else if (validForest.size > 1) {
-          failure(UserError(
-            JArray(
-              JArray(
-                JObject(
-                  JField("message", JString("Ambiguous parse results.")) :: Nil) :: Nil) :: Nil)))
+          (Set(Fault.Error(None, "Ambiguous parse results.")), None)
         } else {
-          val nested = forest map { tree =>
-            JArray((tree.errors: Set[Error]) map renderError toList)
+          val faults = forest flatMap { tree =>
+            (tree.errors: Set[Error]) map renderError
           }
 
-          failure(UserError(JArray(nested.toList)))
+          (faults, None)
         }
       } catch {
-        case ex: ParseException => failure(
-          UserError(
-            JArray(
-              JObject(
-                JField("message", JString("An error occurred parsing your query."))
-                  :: JField("line", JString(ex.failures.head.tail.line))
-                  :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
-                  :: JField("colNum", JNum(ex.failures.head.tail.colNum))
-                  :: JField("detail", JString(ex.mkString))
-                  :: Nil
-              ) :: Nil
-            )
-          )
-        )
+        case ex: ParseException =>
+          val loc = ex.failures.head.tail
+          val fault = Fault.Error(Some(FaultPosition(loc.lineNum, loc.colNum, loc.line)), ex.mkString)
+
+          (Set(fault), None)
       }
     }
 

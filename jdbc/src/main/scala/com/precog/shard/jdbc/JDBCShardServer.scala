@@ -50,14 +50,12 @@ Please note that path globs are not yet supported in Precog for PostgreSQL
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 """)
 
-  override def hardCodedAccount = Some("fakeaccount")
-
   val actorSystem = ActorSystem("ExecutorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = new FutureMonad(asyncContext)
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    BasicShardState(JDBCQueryExecutor(config.detach("queryExecutor"))(asyncContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
+    BasicShardState(JDBCQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 }

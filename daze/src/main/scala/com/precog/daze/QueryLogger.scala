@@ -34,7 +34,12 @@ import org.slf4j.{ LoggerFactory, Logger }
 import scalaz._
 import scalaz.syntax.monad._
 
-trait QueryLogger[M[+_], P] {
+trait QueryLogger[M[+_], P] { self =>
+  def contramap[P0](f: P0 => P): QueryLogger[M, P0] = new QueryLogger[M, P0] {
+    def fatal(pos: P0, msg: String): M[Unit] = self.fatal(f(pos), msg)
+    def warn(pos: P0, msg: String): M[Unit] = self.warn(f(pos), msg)
+    def info(pos: P0, msg: String): M[Unit] = self.info(f(pos), msg)
+  }
 
   /**
    * This reports a fatal error user. Depending on the implementation, this may

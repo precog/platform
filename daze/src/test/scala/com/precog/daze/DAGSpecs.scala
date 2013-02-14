@@ -43,11 +43,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       }
       
       "push_true" >> {
-        decorate(Vector(Line(1, 1, ""), PushTrue)) mustEqual Right(Const(CBoolean(true))(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushTrue)) mustEqual Right(Const(CTrue)(Line(1, 1, "")))
       }
       
       "push_false" >> {
-        decorate(Vector(Line(1, 1, ""), PushFalse)) mustEqual Right(Const(CBoolean(false))(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushFalse)) mustEqual Right(Const(CFalse)(Line(1, 1, "")))
       }      
 
       "push_null" >> {
@@ -55,11 +55,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       }
       
       "push_object" >> {
-        decorate(Vector(Line(1, 1, ""), PushObject)) mustEqual Right(Const(CEmptyObject)(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushObject)) mustEqual Right(Const(RObject.empty)(Line(1, 1, "")))
       }
       
       "push_array" >> {
-        decorate(Vector(Line(1, 1, ""), PushArray)) mustEqual Right(Const(CEmptyArray)(Line(1, 1, "")))
+        decorate(Vector(Line(1, 1, ""), PushArray)) mustEqual Right(Const(RArray.empty)(Line(1, 1, "")))
       }
 
       "push_undefined" >> {
@@ -78,12 +78,12 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
     
     "parse out map1" in {
       val result = decorate(Vector(Line(1, 1, ""), PushTrue, Map1(Neg)))
-      result mustEqual Right(Operate(Neg, Const(CBoolean(true))(Line(1, 1, "")))(Line(1, 1, "")))
+      result mustEqual Right(Operate(Neg, Const(CTrue)(Line(1, 1, "")))(Line(1, 1, "")))
     }
     
     "parse out reduce" in {
       val result = decorate(Vector(Line(1, 1, ""), PushFalse, instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
-      result mustEqual Right(dag.Reduce(Reduction(Vector(), "count", 0x2000), Const(CBoolean(false))(Line(1, 1, "")))(Line(1, 1, "")))
+      result mustEqual Right(dag.Reduce(Reduction(Vector(), "count", 0x2000), Const(CFalse)(Line(1, 1, "")))(Line(1, 1, "")))
     }
 
     "parse out distinct" in {
@@ -149,8 +149,8 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         case Right(
           s @ dag.Split(
             dag.Group(2,
-              Const(CBoolean(true)),
-              UnfixedSolution(1, Const(CBoolean(true)))),
+              Const(CTrue),
+              UnfixedSolution(1, Const(CTrue))),
             IUI(true, 
               sg: SplitGroup,
               sp: SplitParam))) => {
@@ -189,7 +189,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       result must beLike {
         case Right(
           s1 @ dag.Split(
-            dag.Group(2, Const(CBoolean(false)), UnfixedSolution(1, Const(CBoolean(true)))),
+            dag.Group(2, Const(CFalse), UnfixedSolution(1, Const(CTrue))),
             s2 @ dag.Split(
               dag.Group(4, sp1: SplitParam, UnfixedSolution(3, sg1: SplitGroup)),
               IUI(true,
@@ -238,9 +238,9 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       result must beLike {
         case Right(
           s1 @ dag.Split(
-            dag.Group(2, Const(CBoolean(false)), UnfixedSolution(1, Const(CBoolean(true)))),
+            dag.Group(2, Const(CFalse), UnfixedSolution(1, Const(CTrue))),
             s2 @ dag.Split(
-              dag.Group(4, Const(CBoolean(false)), UnfixedSolution(3, Const(CLong(42)))),
+              dag.Group(4, Const(CFalse), UnfixedSolution(3, Const(CLong(42)))),
               IUI(true,
                 Join(Add, CrossLeftSort,
                   sg1: SplitGroup,
@@ -411,7 +411,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       result must beLike {
         case Right(
           s @ dag.Split(
-            dag.Group(2, Const(CNull), UnfixedSolution(1, Const(CBoolean(true)))),
+            dag.Group(2, Const(CNull), UnfixedSolution(1, Const(CTrue))),
             Join(Add, IdentitySort,
               Const(CLong(42)),
               sg: SplitGroup))) => {
@@ -516,62 +516,62 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       "map2_match" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Match(Add)))
-        result mustEqual Right(Join(Add, IdentitySort, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(Join(Add, IdentitySort, Const(CTrue)(line), Const(CFalse)(line))(line))
       }
       
       "map2_cross" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Cross(Add)))
-        result mustEqual Right(Join(Add, CrossLeftSort, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(Join(Add, CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
       }
       
       "assert" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushNum("42"), instructions.Assert))
-        result mustEqual Right(dag.Assert(Const(CBoolean(true))(line), Const(CLong(42))(line))(line))
+        result mustEqual Right(dag.Assert(Const(CTrue)(line), Const(CLong(42))(line))(line))
       }
       
       "iunion" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IUnion))
-        result mustEqual Right(IUI(true, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(IUI(true, Const(CTrue)(line), Const(CFalse)(line))(line))
       }
       
       "iintersect" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IIntersect))
-        result mustEqual Right(IUI(false, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(IUI(false, Const(CTrue)(line), Const(CFalse)(line))(line))
       }      
 
       "set difference" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, SetDifference))
-        result mustEqual Right(Diff(Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(Diff(Const(CTrue)(line), Const(CFalse)(line))(line))
       }
     }
     
     "parse a filter with null predicate" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch))
-      result mustEqual Right(Filter(IdentitySort, Const(CBoolean(false))(line), Const(CBoolean(true))(line))(line))
+      result mustEqual Right(Filter(IdentitySort, Const(CFalse)(line), Const(CTrue)(line))(line))
     }
     
     "parse a filter_cross" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross))
-      result mustEqual Right(Filter(CrossLeftSort, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+      result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
     }
     
     "parse a filter_crossl" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
-      result mustEqual Right(Filter(CrossLeftSort, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+      result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
     }
     
     "parse a filter_crossr" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
-      result mustEqual Right(Filter(CrossRightSort, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+      result mustEqual Right(Filter(CrossRightSort, Const(CTrue)(line), Const(CFalse)(line))(line))
     }
     
     "continue processing beyond a filter" in {
@@ -580,15 +580,15 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       result mustEqual Right(
         Operate(Neg,
           Filter(IdentitySort,
-            Const(CBoolean(false))(line),
-            Const(CBoolean(true))(line))(line))(line))
+            Const(CFalse)(line),
+            Const(CTrue)(line))(line))(line))
     }
     
     "parse and factor a dup" in {
       {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, Dup, IUnion))
-        result mustEqual Right(IUI(true, Const(CBoolean(true))(line), Const(CBoolean(true))(line))(line))
+        result mustEqual Right(IUI(true, Const(CTrue)(line), Const(CTrue)(line))(line))
       }
       
       {
@@ -602,7 +602,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       "1" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushFalse, PushTrue, Swap(1), IUnion))
-        result mustEqual Right(IUI(true, Const(CBoolean(true))(line), Const(CBoolean(false))(line))(line))
+        result mustEqual Right(IUI(true, Const(CTrue)(line), Const(CFalse)(line))(line))
       }
       
       "3" >> {
@@ -613,7 +613,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
             Const(CLong(42))(line),
             IUI(true,
               Const(CString("foo"))(line),
-              IUI(true, Const(CBoolean(false))(line), Const(CBoolean(true))(line))(line))(line))(line))
+              IUI(true, Const(CFalse)(line), Const(CTrue)(line))(line))(line))(line))
       }
     }
     
@@ -830,9 +830,9 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         dag.Group(2, Const(CLong(12))(line), UnfixedSolution(1, Const(CLong(42))(line))),
         IUI(true,
           SplitGroup(2, Identities.Specs(Vector()))(split)(line),
-          Const(CBoolean(true))(line))(line))(line)
+          Const(CTrue)(line))(line))(line)
       
-      val expect = IUI(false, Const(CBoolean(false))(line), split)(line)
+      val expect = IUI(false, Const(CFalse)(line), split)(line)
         
       result mustEqual Right(expect)
     }

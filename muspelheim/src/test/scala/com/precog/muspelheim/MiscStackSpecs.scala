@@ -108,6 +108,45 @@ trait MiscStackSpecs extends EvalStackSpecs {
       actual mustEqual expected
     }
 
+    "return a range of DateTime" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | start := std::time::parseDateTimeFuzzy(clicks.timeString)
+        | end := std::time::yearsPlus(start, 2)
+        | step := std::time::parsePeriod("P01Y")
+        |
+        | input := { start: start, end: end, step: step }
+        |
+        | std::time::range(input)
+        | """.stripMargin
+
+      val expectedInput = """
+        | clicks := //clicks
+        |
+        | start := std::time::parseDateTimeFuzzy(clicks.timeString)
+        | startPlusOneYear := std::time::yearsPlus(start, 1)
+        | startPlusTwoYears := std::time::yearsPlus(start, 2)
+        |
+        | [start, startPlusOneYear, startPlusTwoYears]
+        | """.stripMargin
+
+      val result = evalE(input)
+      val expectedResult = evalE(expectedInput)
+
+      result.size mustEqual expectedResult.size
+
+      val actual = result collect {
+        case (ids, SArray(arr)) if ids.length == 1 => arr
+      }
+
+      val expected = expectedResult collect {
+        case (ids, SArray(arr)) if ids.length == 1 => arr
+      }
+
+      actual mustEqual expected
+    }
+
     "reduce sets" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -2101,6 +2140,50 @@ trait MiscStackSpecs extends EvalStackSpecs {
           fields must haveKey("height")
           fields must haveKey("weight")
       }
+    }
+
+    "work when tic-variable and reduction results are inlined" in {
+      val input = """
+        | clicks := //clicks
+        | solve 'c
+        |   {c: 'c, n: count(clicks where clicks = 'c)}
+        | """.stripMargin
+
+      val results = eval(input)
+      results must haveSize(100)
+    }
+
+    // Regression test for PLATFORM-951
+    "evaluate SnapEngage query with code caught by predicate pullups" in {
+      val input = """
+        | import std::stats::*
+        | import std::time::*
+        | data := //se/anon_status
+        |
+        | upperBound := 1353145306278
+        | lowerBound := 1353135306278
+        | extraLB := lowerBound - (24*60*60000)
+        |
+        | solve 'data
+        |   data' := data where data.time <= upperBound & data.time >= extraLB & data.a = 'data
+        |   order := denseRank(data'.time)
+        |
+        |   data'' := data' with { rank: order }
+        |   newData := new data''
+        |   newData' := newData with { rank: newData.rank - 1 }
+        |
+        |   result := newData' ~ data'' [ data'', newData' ] where newData'.rank = data''.rank
+        |
+        |   {start: std::math::max(result[0].time, lowerBound),
+        |   end: result[1].time,
+        |   a: result[0].a,
+        |   b: result[0].b,
+        |   c: result[0].c,
+        |   data: result[0]}
+        | """.stripMargin
+
+      val results = eval(input)
+      results must not(beEmpty)
     }
   }
 }

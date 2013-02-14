@@ -255,7 +255,10 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefObjectStatic(Leaf(Source), fieldHead match { case JPathField(s) => CPathField(s) })
+        DerefObjectStatic(Leaf(Source), fieldHead match {
+          case JPathField(s) => CPathField(s)
+          case _ => sys.error("non-field reached") 
+        })
       })
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
@@ -274,7 +277,10 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
-        DerefArrayStatic(Leaf(Source), fieldHead match { case JPathIndex(s) => CPathIndex(s) })
+        DerefArrayStatic(Leaf(Source), fieldHead match {
+          case JPathIndex(s) => CPathIndex(s)
+          case _ => sys.error("non-index reached")
+        })
       })
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {

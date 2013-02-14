@@ -41,7 +41,31 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
     type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
+
+    def rValueToCValue(rvalue: RValue): Option[CValue] = rvalue match {
+      case cvalue: CValue => Some(cvalue)
+      case RArray.empty => Some(CEmptyArray)
+      case RObject.empty => Some(CEmptyObject)
+      case _ => None
+    }
     
+    def transRValue[A <: SourceType](rvalue: RValue, target: TransSpec[A]): TransSpec[A] = {
+      rValueToCValue(rvalue) map { cvalue =>
+        trans.ConstLiteral(cvalue, target)
+      } getOrElse {
+        rvalue match {
+          case RArray(elements) => InnerArrayConcat(elements map {
+            element => trans.WrapArray(transRValue(element, target))
+          }: _*)
+          case RObject(fields) => InnerObjectConcat(fields.toSeq map {
+            case (key, value) => trans.WrapObject(transRValue(value, target), key)
+          }: _*)
+          case _ =>
+            sys.error("Can't handle RValue")
+        }
+      }
+    }
+
     def transFromBinOp[A <: SourceType](op: BinaryOperation, ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
       case Eq => trans.Equal[A](left, right)
       case NotEq => op1ForUnOp(Comp).spec(ctx)(trans.Equal[A](left, right))

@@ -50,12 +50,9 @@ Please note that path globs are not yet supported in Precog for MongoDB
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 """)
 
-  override def hardCodedAccount = Some("mongo")
-
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
-
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))

@@ -93,10 +93,6 @@ trait TestEventService extends
 
   private val accountFinder = new TestAccountFinder[Future](Map(testAccount.apiKey -> testAccount.accountId), Map(testAccount.accountId -> testAccount))
 
-  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(apiKeyManager)
-  
-  def AccountFinder(config: Configuration) = accountFinder
-
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
@@ -117,13 +113,19 @@ trait TestEventService extends
   } copoint
   
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
-  def EventStore(config: Configuration): EventStore = new EventStore {
-    def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
-    def start() = M.point(PrecogUnit)
-    def stop() = M.point(PrecogUnit)
-  }
 
-  def JobManager(config: Configuration): JobManager[Future] = new InMemoryJobManager[Future]
+  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
+    val deps = EventServiceDeps(
+      new DirectAPIKeyFinder(apiKeyManager),
+      accountFinder,
+      new EventStore[Future] {
+        def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
+      },
+      new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
+    )
+
+    (deps, Stoppable.Noop)
+  }
 
   implicit def jValueToFutureJValue(j: JValue) = Future(j)
 
