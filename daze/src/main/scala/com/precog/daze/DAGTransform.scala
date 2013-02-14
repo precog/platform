@@ -9,7 +9,7 @@ trait DAGTransform extends DAG {
   import dag._
   import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
-  def transformBottomUp(graph: DepGraph)(f : DepGraph => DepGraph) : DepGraph = {
+  def transformBottomUp(graph: DepGraph, splits: Set[dag.Split])(f : DepGraph => DepGraph) : DepGraph = {
 
     val memotable = mutable.Map[DepGraph, DepGraph]()
 
@@ -95,6 +95,6 @@ trait DAGTransform extends DAG {
       }
     }
     
-    transformAux(Map(), graph)
+    transformAux(splits.zip(splits)(collection.breakOut), graph)
   }
 }
