@@ -44,6 +44,7 @@ trait QueryLogger[M[+_], -P] { self =>
     def fatal(pos: P0, msg: String): M[Unit] = self.fatal(f(pos), msg)
     def warn(pos: P0, msg: String): M[Unit] = self.warn(f(pos), msg)
     def info(pos: P0, msg: String): M[Unit] = self.info(f(pos), msg)
+    def log(pos: P0, msg: String): M[Unit] = self.log(f(pos), msg)
     def timing(pos: P0, nanos: Long): M[Unit] = self.timing(f(pos), nanos)
     def done: M[Unit] = self.done
   }
@@ -63,6 +64,11 @@ trait QueryLogger[M[+_], -P] { self =>
    * Report an informational message to the user.
    */
   def info(pos: P, msg: String): M[Unit]
+  
+  /**
+   * Report an information message for internal use only
+   */
+  def log(pos: P, msg: String): M[Unit]
   
   /**
    * Record timing information for a particular position.  Note that a position
@@ -120,6 +126,8 @@ trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def warn(pos: P, msg: String): M[Unit] = send(channels.Warning, pos, msg)
 
   def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
+  
+  def log(pos: P, msg: String): M[Unit] = send(channels.Log, pos, msg)
 }
 
 trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
@@ -138,6 +146,8 @@ trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def info(pos: P, msg: String): M[Unit] = M.point {
     logger.info(msg)
   }
+
+  def log(pos: P, msg: String): M[Unit] = info(pos, msg)
 }
 
 object LoggingQueryLogger {
@@ -169,7 +179,7 @@ trait TimingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   def done: M[Unit] = {
     val logging = table.asScala map {
       case (pos, stats) =>
-        info(pos, "count = %d; sum = %d; sumSq = %d; min = %d; max = %d".format(stats.count, stats.sum, stats.sumSq, stats.min, stats.max))
+        log(pos, "count = %d; sum = %d; sumSq = %d; min = %d; max = %d".format(stats.count, stats.sum, stats.sumSq, stats.min, stats.max))
     }
     
     logging reduceOption { _ >> _ } getOrElse (M point ())
