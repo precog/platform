@@ -534,9 +534,7 @@ object Codec {
 
   implicit def IndexedSeqCodec[A](implicit elemCodec: Codec[A]) = new IndexedSeqCodec(elemCodec)
 
-  // FIXME: This should have its own codec.
   implicit def arrayCodec[@spec(Boolean,Long,Double) A: Codec: Manifest]: Codec[Array[A]] = ArrayCodec(Codec[A])
-  //Codec[IndexedSeq[A]].as[Array[A]](_.toIndexedSeq, _.toArray)
 
   case class ArrayCodec[@spec(Boolean,Long,Double) A: Manifest](elemCodec: Codec[A]) extends Codec[Array[A]] {
     type S = Either[Array[A], (elemCodec.S, Array[A], Int)]

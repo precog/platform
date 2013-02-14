@@ -71,8 +71,7 @@ object V1SegmentFormat extends SegmentFormat {
         buffer <- readChunk(channel)
       } yield {
         val length = buffer.getInt()
-        val bitSetCodec = Codec.SparseBitSetCodec(length)
-        val defined = bitSetCodec.read(buffer)
+        val defined = Codec.BitSetCodec.read(buffer)
         val codec = getCodecFor(ctype)
         val values = ctype.manifest.newArray(length)
         defined.foreach { row =>
@@ -85,8 +84,7 @@ object V1SegmentFormat extends SegmentFormat {
         buffer <- readChunk(channel)
       } yield {
         val length = buffer.getInt()
-        val bitSetCodec = Codec.SparseBitSetCodec(length)
-        val defined = bitSetCodec.read(buffer)
+        val defined = Codec.BitSetCodec.read(buffer)
         (defined, length)
       }
 
@@ -94,9 +92,8 @@ object V1SegmentFormat extends SegmentFormat {
         buffer <- readChunk(channel)
       } yield {
         val length = buffer.getInt()
-        val bitSetCodec = Codec.SparseBitSetCodec(length)
-        val defined = bitSetCodec.read(buffer)
-        val values = bitSetCodec.read(buffer)
+        val defined = Codec.BitSetCodec.read(buffer)
+        val values = Codec.BitSetCodec.read(buffer)
         (defined, length, values)
       }
 
@@ -174,16 +171,14 @@ object V1SegmentFormat extends SegmentFormat {
 
     private def writeArraySegment[@spec(Boolean,Long,Double) A](channel: WritableByteChannel,
         segment: ArraySegment[A], codec: Codec[A]): Validation[IOException, PrecogUnit] = {
-      val bitSetCodec = Codec.SparseBitSetCodec(segment.values.length)
-
-      var maxSize = bitSetCodec.maxSize(segment.defined) + 4
+      var maxSize = Codec.BitSetCodec.maxSize(segment.defined) + 4
       segment.defined.foreach { row =>
         maxSize += codec.maxSize(segment.values(row))
       }
 
       writeChunk(channel, maxSize) { buffer =>
         buffer.putInt(segment.values.length)
-        bitSetCodec.writeUnsafe(segment.defined, buffer)
+        Codec.BitSetCodec.writeUnsafe(segment.defined, buffer)
         segment.defined.foreach { row =>
           codec.writeUnsafe(segment.values(row), buffer)
         }
@@ -192,22 +187,20 @@ object V1SegmentFormat extends SegmentFormat {
     }
 
     private def writeBooleanSegment(channel: WritableByteChannel, segment: BooleanSegment) = {
-      val bitSetCodec = Codec.SparseBitSetCodec(segment.length)
-      val maxSize = bitSetCodec.maxSize(segment.defined) + bitSetCodec.maxSize(segment.values) + 4
+      val maxSize = Codec.BitSetCodec.maxSize(segment.defined) + Codec.BitSetCodec.maxSize(segment.values) + 4
       writeChunk(channel, maxSize) { buffer =>
         buffer.putInt(segment.length)
-        bitSetCodec.writeUnsafe(segment.defined, buffer)
-        bitSetCodec.writeUnsafe(segment.values, buffer)
+        Codec.BitSetCodec.writeUnsafe(segment.defined, buffer)
+        Codec.BitSetCodec.writeUnsafe(segment.values, buffer)
         PrecogUnit
       }
     }
 
     private def writeNullSegment(channel: WritableByteChannel, segment: NullSegment) = {
-      val bitSetCodec = Codec.SparseBitSetCodec(segment.length)
-      val maxSize = bitSetCodec.maxSize(segment.defined) + 4
+      val maxSize = Codec.BitSetCodec.maxSize(segment.defined) + 4
       writeChunk(channel, maxSize) { buffer =>
         buffer.putInt(segment.length)
-        bitSetCodec.writeUnsafe(segment.defined, buffer)
+        Codec.BitSetCodec.writeUnsafe(segment.defined, buffer)
         PrecogUnit
       }
     }
@@ -303,7 +296,7 @@ object V1SegmentFormat extends SegmentFormat {
     case CNum => Codec.BigDecimalCodec
     case CDate => Codec.DateCodec
     case CArrayType(elemType) =>
-      Codec.ArrayCodec(getCodecFor(elemType), elemType.manifest)
+      Codec.ArrayCodec(getCodecFor(elemType))(elemType.manifest)
   }
 }
 
