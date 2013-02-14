@@ -1,0 +1,6 @@
+/etc/precog/jobs-v1-demo.conf=demo/jobs-v1.conf
+init=demo/jobs-v1.init
+default=demo/jobs-v1.default
+/etc/monit/conf.d/jobs-v1-demo.monit=demo/jobs-v1.monit
+/etc/precog/jobs-v1-demo.logging.xml=demo/jobs-v1.logging.xml
+postinstall=demo/postinstall.sh
