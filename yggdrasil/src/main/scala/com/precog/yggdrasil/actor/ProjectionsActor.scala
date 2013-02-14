@@ -50,7 +50,7 @@ sealed trait ShardProjectionAction {
 
 case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ShardProjectionAction
 object ProjectionInsert {
-  case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+  case class Row(ids: Identities, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 }
 
 case class ProjectionArchive(descriptor: ProjectionDescriptor, id: ArchiveId) extends ShardProjectionAction
@@ -59,7 +59,7 @@ case class ProjectionRequest(descriptor: ProjectionDescriptor) extends ShardProj
 
 /////////////////
 
-case object ProjectionIdleTimeout 
+case object ProjectionIdleTimeout
 
 /////////////////
 
@@ -74,7 +74,7 @@ trait ActorProjectionModuleConfig extends BaseConfig {
 }
 
 trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Block] with YggConfigComponent { self =>
-  type YggConfig <: ActorProjectionModuleConfig 
+  type YggConfig <: ActorProjectionModuleConfig
 
   val rawProjectionModule: RawProjectionModule[IO, Key, Block]
 
@@ -106,10 +106,10 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
 
     private def getProjection(descriptor: ProjectionDescriptor): Projection = {
       projectionActors.getOrElseUpdate(
-        descriptor, 
+        descriptor,
         new Projection(
-          descriptor, 
-          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, yggConfig.idleProjectionDelay))), 
+          descriptor,
+          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, yggConfig.idleProjectionDelay))),
           yggConfig.projectionRetrievalTimeout
         )
       )
@@ -119,10 +119,10 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
       case Status =>
         sender ! status
 
-      case ProjectionRequest(desc) => 
+      case ProjectionRequest(desc) =>
         sender ! getProjection(desc)
 
-      case msg: ShardProjectionAction => 
+      case msg: ShardProjectionAction =>
         getProjection(msg.descriptor).actorRef.tell(msg, sender)
     }
 
@@ -142,7 +142,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
 
     private var projection: Option[rawProjectionModule.Projection] = None
 
-    private var lastAccess: Long = System.currentTimeMillis 
+    private var lastAccess: Long = System.currentTimeMillis
 
     private def now = System.currentTimeMillis
     private def scheduleTimeout = scheduler.scheduleOnce((new DurationLong(lastAccess + maxIdleTime.toMillis - now)).millisecond, self, ProjectionIdleTimeout)
@@ -160,9 +160,9 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
       val now0 = now
       for {
         _ <- IO { lastAccess = now0 }
-        p <- projection.map(IO(_)) getOrElse { 
+        p <- projection.map(IO(_)) getOrElse {
                logger.info("Reopening projection for %s at %d after %d idle.".format(descriptor.shows, now0, now0 - lastAccess0))
-               rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } } 
+               rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } }
              }
       } yield p
     }
@@ -172,15 +172,15 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
       (for {
         _ <- (projection map rawProjectionModule.Projection.close).sequence
         _ <- IO { projection = None }
-      } yield PrecogUnit) except { t => 
-        IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit } 
+      } yield PrecogUnit) except { t =>
+        IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit }
       }
     }
 
     private def runInsert(projection: rawProjectionModule.Projection, rows: Seq[ProjectionInsert.Row]): IO[PrecogUnit] = {
       if (rows.nonEmpty) {
         val row = rows.head
-        projection.insert(Array(row.id.uid), row.values) flatMap { _ =>
+        projection.insert(row.ids, row.values) flatMap { _ =>
           runInsert(projection, rows.tail)
         }
       } else {
@@ -189,7 +189,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     }
 
     def receive = {
-      case ProjectionInsert(`descriptor`, rows) => 
+      case ProjectionInsert(`descriptor`, rows) =>
         val startTime = System.currentTimeMillis
         (for {
           p <- awaken
@@ -204,25 +204,25 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
           case t: Throwable => IO { logger.error("Error during insert, aborting batch: " + descriptor.shows, t) }
         } unsafePerformIO
 
-      case ProjectionArchive(`descriptor`, archive) => 
+      case ProjectionArchive(`descriptor`, archive) =>
         logger.info("Archiving projection: " + descriptor.shows)
-        
+
         (for {
            _ <- sleep
-           _ <- rawProjectionModule.Projection.archive(descriptor) 
+           _ <- rawProjectionModule.Projection.archive(descriptor)
         } yield {
           sender ! ArchiveMetadata(descriptor)
         }) except {
           case t: Throwable => IO { logger.error("Error during archive on %s".format(descriptor), t) }
         } unsafePerformIO
 
-      case ProjectionGetBlock(`descriptor`, id, columns) => 
+      case ProjectionGetBlock(`descriptor`, id, columns) =>
         logger.trace("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
         (for {
           p <- awaken
           block <- p.getBlockAfter(id, columns)
         } yield {
-          sender ! block 
+          sender ! block
         }) unsafePerformIO
 
       case ProjectionIdleTimeout =>
@@ -236,4 +236,3 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
 }
 
 // vim: set ts=4 sw=4 et:
-
