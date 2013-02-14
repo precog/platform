@@ -36,47 +36,23 @@ import scalaz.{ Validation, Success, Failure }
  * of the segment. If no format exists for that version, then we return an
  * error.
  */
-case class VersionedSegmentFormat(formats: Map[Int, SegmentFormat]) extends SegmentFormat {
-  private val (version, format) = formats.maxBy(_._1)
+case class VersionedSegmentFormat(formats: Map[Int, SegmentFormat]) extends SegmentFormat with Versioning {
+  val magic: Short = 0x0536.toShort
+  val (version, format) = {
+    val (ver, format) = formats.maxBy(_._1)
+    (ver.toShort, format)
+  }
 
   object writer extends SegmentWriter {
     def writeSegment(channel: WritableByteChannel, segment: Segment) = {
-      def writeVersion(): Validation[IOException, PrecogUnit] = {
-        val buffer = ByteBuffer.allocate(4)
-        buffer.putInt(version)
-        buffer.flip()
-
-        try {
-          while (buffer.remaining() > 0) {
-            channel.write(buffer)
-          }
-          Success(PrecogUnit)
-        } catch { case ioe: IOException =>
-          Failure(ioe)
-        }
-      }
-
       for {
-        _ <- writeVersion()
+        _ <- writeVersion(channel)
         _ <- format.writer.writeSegment(channel, segment)
       } yield PrecogUnit
     }
   }
 
   object reader extends SegmentReader {
-    private def readVersion(channel: ReadableByteChannel): Validation[IOException, Int] = {
-      val buffer = ByteBuffer.allocate(4)
-      try {
-        while (buffer.remaining() > 0) {
-          channel.read(buffer)
-        }
-        buffer.flip()
-        Success(buffer.getInt())
-      } catch { case ioe: IOException =>
-        Failure(ioe)
-      }
-    }
-
     def readSegmentId(channel: ReadableByteChannel): Validation[IOException, SegmentId] = {
       readVersion(channel) flatMap { version =>
         formats get version map { format =>

@@ -31,6 +31,16 @@ import com.precog.util._
 object Segments {
   def empty(id: Long): Segments =
     Segments(id, 0, mutable.Map.empty[(CPath, CType), Int], mutable.ArrayBuffer.empty[Segment])
+
+  //def apply(blockid: Long, segments: Seq[Segment]): Segments = {
+  //  require(segments forall (_.blockid == blockid))
+
+  //  val a = new mutable.ArrayBuffer[Segment]
+  //  a ++= segments
+  //  val m: mutable.Map[(CPath, CType), Int] = segments.zipWithIndex.map({ case (seg, i) =>
+  //    ((seg.cpath, seg.ctype), i)
+  //  })(collection.breakOut)
+  //}
 }
 
 case class Segments(id: Long, var length: Int, m: mutable.Map[(CPath, CType), Int], a: mutable.ArrayBuffer[Segment]) {
