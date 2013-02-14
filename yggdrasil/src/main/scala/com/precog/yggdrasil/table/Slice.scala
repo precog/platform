@@ -1549,6 +1549,10 @@ object Slice {
 
 import com.precog.niflheim._
 
+object SegmentsWrapper {
+  def apply(segments: Segments): Slice = new SegmentsWrapper(segments)
+}
+
 class SegmentsWrapper(segments: Segments) extends Slice {
 
   private def buildColumnRef(seg: Segment) = ColumnRef(seg.cpath, seg.ctype)

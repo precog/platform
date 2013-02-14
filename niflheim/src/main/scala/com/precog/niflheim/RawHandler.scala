@@ -45,10 +45,12 @@ object RawHandler {
 }
 
 // TODO: extend derek's reader/writer traits
-class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) {
+class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) extends StorageReader {
   private val rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
   private var segments = Segments.empty(id) // TODO: weakref?
   private var count = rows.length
+
+  def structure = snapshot().m.keys
 
   def length: Int = count
 
