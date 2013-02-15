@@ -288,11 +288,16 @@ abstract class KafkaShardIngestActor(shardId: String,
         val accountIds = apiKeyMap(event.apiKey)
         if (accountIds.size == 0 || failureLog.checkFailed(eid)) {
           // Non-existent account or previously failed event Id means it must be discarded/skipped
+          if (accountIds.size == 0) logger.error("Account ID not found for apiKey " + event.apiKey + "; skipping event " + emOrig)
+          if (failureLog.checkFailed(eid)) logger.error("Prior error found for eid " + eid + "; skipping event " + emOrig)
           buildBatch(tail, apiKeyMap, batch, checkpoint.update(offset, pid, sid))
         } else {
           if (accountIds.size != 1) {
-            throw new Exception("Invalid account ID results for apiKey %s : %s".format(accountIds, event.apiKey))
+            val msg = "Invalid account ID results for apiKey %s : %s; skipping event %s".format(accountIds, event.apiKey, emOrig)
+            logger.error(msg)
+            throw new Exception(msg)
           } else {
+            if (event.ownerAccountId.isEmpty) logger.trace("event " + emOrig + " ascribed to ownerAccountId " + accountIds.head) 
             val em = if (event.ownerAccountId.isDefined) emOrig else emOrig.copy(event = event.copy(ownerAccountId = Some(accountIds.head)))
             buildBatch(tail, apiKeyMap, batch :+ (offset, em), checkpoint.update(offset, pid, sid))
           }
@@ -324,8 +329,10 @@ abstract class KafkaShardIngestActor(shardId: String,
       )
 
       consumer.fetch(req).toList.map { msgAndOffset =>
-        (msgAndOffset.offset, IngestMessageSerialization.read(msgAndOffset.message.payload))
-      }
+        val message = (msgAndOffset.offset, IngestMessageSerialization.read(msgAndOffset.message.payload))
+        logger.trace("Read message from kafka: " +message)
+        message
+      } 
     } match {
       case Success(messageSet) => 
         accountManager.mapAccountIds(messageSet.collect { case (_, EventMessage(_, event)) => event.apiKey }.toSet).map { apiKeyMap =>
@@ -335,6 +342,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       case Failure(t) => 
         import context.system
         implicit val executor = ExecutionContext.defaultExecutionContext
+        logger.error("An error occurred reading from the checkpoint " + lastCheckpoint, t)
         Future(Failure[Throwable, (Vector[(Long, IngestMessage)], YggCheckpoint)](t))
     }
   }
