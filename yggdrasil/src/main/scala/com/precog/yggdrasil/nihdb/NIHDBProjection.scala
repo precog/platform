@@ -226,7 +226,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
     case ProjectionInsert(_, ids, values) =>
       if (ids.length != 1) {
         logger.error("Cannot insert events with less/more than a single identity: " + ids.mkString("[", ",", "]"))
-      } else {
+      } else if (!values.isEmpty) {
         val pid = EventId.producerId(ids(0))
         val sid = EventId.sequenceId(ids(0))
         if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
