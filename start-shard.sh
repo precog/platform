@@ -19,6 +19,8 @@
 ## 
 #!/bin/bash
 
+MAX_PORT_OPEN_TRIES=60
+
 # Parse opts to determine settings
 while getopts ":d:lbZYR" opt; do
     case $opt in
@@ -86,9 +88,14 @@ function port_is_open() {
 }
 
 function wait_until_port_open () {
-    while ! port_is_open $1; do
+    for tryseq in `seq 1 $MAX_PORT_OPEN_TRIES`; do
+        if port_is_open $1; then
+            return 0
+        fi
         sleep 1
     done
+    echo "Time out waiting for open port: $1" >&2
+    exit 1
 }
 
 BASEDIR=$(path-canonical-simple `dirname $0`)
