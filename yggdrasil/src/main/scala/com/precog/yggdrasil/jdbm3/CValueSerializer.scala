@@ -31,6 +31,7 @@ private[jdbm3] object CTypeMappings {
   final val FEMPTYOBJECT = 7.toByte
   final val FEMPTYARRAY  = 8.toByte
   final val FARRAY       = 9.toByte
+  final val FPERIOD      = 10.toByte
   final val FUNDEFINED   = -1.toByte
 
   def flagFor(tpe: CType): Byte = tpe match {
@@ -40,6 +41,7 @@ private[jdbm3] object CTypeMappings {
     case CDouble      => FDOUBLE
     case CNum         => FNUM
     case CDate        => FDATE
+    case CPeriod      => FPERIOD
     case CNull        => FNULL
     case CEmptyObject => FEMPTYOBJECT
     case CEmptyArray  => FEMPTYARRAY
@@ -54,6 +56,7 @@ private[jdbm3] object CTypeMappings {
     case FDOUBLE       => CDouble     
     case FNUM          => CNum        
     case FDATE         => CDate       
+    case FPERIOD       => CPeriod       
     case FNULL         => CNull       
     case FEMPTYOBJECT  => CEmptyObject
     case FEMPTYARRAY   => CEmptyArray 

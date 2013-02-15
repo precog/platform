@@ -16,6 +16,7 @@ import akka.dispatch.{ ExecutionContext, Future }
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -29,9 +30,9 @@ import scalaz.std.option._
 
 trait ManagedMongoJobManagerModule {
   implicit def executionContext: ExecutionContext
+  implicit def M: Monad[Future]
 
   def jobManager(config: Configuration): (Mongo, JobManager[Future]) = {
-    import blueeyes.bkka.AkkaTypeClasses._
     import MongoJobManagerSettings.default
 
     val mongo = RealMongo(config.detach("mongo"))
@@ -63,7 +64,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   import JobState._
 
   protected val fs = fs0
-  implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
+  implicit val M = new FutureMonad(executionContext)
   implicit val queryTimeout = settings.queryTimeout
 
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")
@@ -163,8 +164,6 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   }
 
   def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): Future[Seq[Message]] = {
-    import MongoFilterImplicits._
-
     val filter0 = "jobId" === jobId && "channel" === channel
     val filter = since map { id => filter0 && MongoFieldFilter("id", MongoFilterOperators.$gt, id) } getOrElse filter0
     database {

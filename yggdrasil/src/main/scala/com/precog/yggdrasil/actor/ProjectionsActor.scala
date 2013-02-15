@@ -4,6 +4,9 @@ package actor
 import metadata._
 import com.precog.util._
 import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.util._
 
 import akka.actor.Actor
 import akka.actor.Props
@@ -48,12 +51,16 @@ sealed trait ShardProjectionAction {
   def descriptor: ProjectionDescriptor
 }
 
-case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ShardProjectionAction
-object ProjectionInsert {
-  case class Row(ids: Identities, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+trait ProjectionUpdate extends ShardProjectionAction {
+  def descriptor: ProjectionDescriptor
 }
 
-case class ProjectionArchive(descriptor: ProjectionDescriptor, id: ArchiveId) extends ShardProjectionAction
+case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
+object ProjectionInsert {
+  case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+}
+
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
 
 case class ProjectionRequest(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
@@ -180,7 +187,7 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     private def runInsert(projection: rawProjectionModule.Projection, rows: Seq[ProjectionInsert.Row]): IO[PrecogUnit] = {
       if (rows.nonEmpty) {
         val row = rows.head
-        projection.insert(row.ids, row.values) flatMap { _ =>
+        projection.insert(Array(row.id.uid), row.values) flatMap { _ =>
           runInsert(projection, rows.tail)
         }
       } else {

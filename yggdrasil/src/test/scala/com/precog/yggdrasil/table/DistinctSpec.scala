@@ -29,7 +29,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   }
 
   def testDistinctAcrossSlices = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
 
@@ -109,7 +109,7 @@ trait DistinctSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specifi
   }
 
   def testDistinctAcrossSlices2 = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
           "elxk7vv":-8.988465674311579E+307

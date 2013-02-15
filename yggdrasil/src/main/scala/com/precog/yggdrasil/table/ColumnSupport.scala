@@ -1,7 +1,7 @@
 package com.precog.yggdrasil
 package table
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import com.precog.common._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
@@ -222,6 +222,10 @@ object ArraySetColumn {
 
       case CDate        => new ArraySetColumn[DateColumn](ctype, columnSet.map(_.asInstanceOf[DateColumn])) with DateColumn {
         def apply(row: Int): DateTime = backing(firstDefinedIndexAt(row)).asInstanceOf[DateColumn].apply(row)
+      }
+
+      case CPeriod      => new ArraySetColumn[PeriodColumn](ctype, columnSet.map(_.asInstanceOf[PeriodColumn])) with PeriodColumn {
+        def apply(row: Int): Period = backing(firstDefinedIndexAt(row)).asInstanceOf[PeriodColumn].apply(row)
       }
 
       case ctype: CArrayType[a] => new ArraySetColumn[HomogeneousArrayColumn[a]](ctype, columnSet.map(_.asInstanceOf[HomogeneousArrayColumn[a]])) with HomogeneousArrayColumn[a] {
