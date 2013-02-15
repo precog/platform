@@ -113,18 +113,24 @@ class BenchmarkSpecs extends Specification with FutureMatchers {
       eventid
     }
 
-    def runNihAsync(f: File, bufSize: Int, _eventid: Long): Long = {
+    def runNihAsync(i: Int, f: File, bufSize: Int, _eventid: Long): Long = {
       var t: Long = 0L
       def startit(): Unit = t = System.currentTimeMillis()
       def timeit(s: String) {
         val tt = System.currentTimeMillis()
-        println("%s in %d ms" format (s, tt - t))
+        println("%s in %.3fs" format (s, (tt - t) * 0.001))
+        t = tt
+      }
+      def timeit2(s: String) {
+        val tt = System.currentTimeMillis()
+        val d = (tt - t) * 0.001
+        println("%s in %.3fs (%.3fs/M)" format (s, d, d / i))
         t = tt
       }
 
       var eventid: Long = _eventid
 
-      println("start %s/%s" format (f, bufSize))
+      //println("start %s %s" format (f, eventid))
       startit()
 
       val ch = new FileInputStream(f).getChannel
@@ -150,15 +156,15 @@ class BenchmarkSpecs extends Specification with FutureMatchers {
       }
   
       while (fromFuture(projection.stats).pending > 0) Thread.sleep(100)
-      timeit("finished cooking")
+      timeit("  finished cooking")
 
       import scalaz._
       val stream = StreamT.unfoldM[Future, Unit, Option[Long]](None) { key =>
         projection.getBlockAfter(key).map(_.map { case BlockProjectionData(_, maxKey, _) => ((), Some(maxKey)) })
       }
-      Await.result(stream.length, 30.seconds)
-      timeit("evaluated")
-      println("done %s/%s" format (f, bufSize))
+
+      Await.result(stream.length, 300.seconds)
+      timeit2("  evaluated")
 
       eventid
     }
@@ -176,16 +182,18 @@ class BenchmarkSpecs extends Specification with FutureMatchers {
       //}
 
       //val f = new File("yggdrasil/src/test/resources/z10k_nl.json")
-      val f = new File("yggdrasil/src/test/resources/z100k_nl.json")
-      //val f = new File("yggdrasil/src/test/resources/z1m_nl.json")
+      //val f = new File("yggdrasil/src/test/resources/z100k_nl.json")
+      val f = new File("yggdrasil/src/test/resources/z1m_nl.json")
 
-      for (_ <- 0 until 4) {
+      for (i <- 1 to 100) {
+        println("iteration %d" format i)
         //eventid = runNihAsync(f, 1 * 1024 * 1024, eventid)
         //eventid = runNihAsync(f, 2 * 1024 * 1024, eventid)
         //eventid = runNihAsync(f, 4 * 1024 * 1024, eventid)
-        eventid = runNihAsync(f, 8 * 1024 * 1024, eventid)
+        eventid = runNihAsync(i, f, 8 * 1024 * 1024, eventid)
         //eventid = runNihAsync(f, 16 * 1024 * 1024, eventid)
         //eventid = runNihAsync(f, 32 * 1024 * 1024, eventid)
+        println("total rows: %dM" format i)
       }
 
       // try out runJDBM too...
