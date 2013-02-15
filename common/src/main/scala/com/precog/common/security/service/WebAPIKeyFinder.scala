@@ -44,7 +44,6 @@ import org.streum.configrity.Configuration
 
 import scalaz._
 import scalaz.Validation._
-import scalaz.EitherT.eitherT
 import scalaz.std.set._
 import scalaz.std.option._
 import scalaz.syntax.monad._
@@ -71,7 +70,10 @@ class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: Strin
   implicit val M = new FutureMonad(executor)
 }
 
-trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
+trait WebAPIKeyFinder extends APIKeyFinder[Future] with BaseClient with Logging{
+  import EitherT.{ left => leftT, right => rightT, _ }
+  import \/.{ left, right }
+
   implicit def executor: ExecutionContext
   def rootAPIKey: APIKey
 
@@ -155,11 +157,8 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
 
     withJsonClient { client =>
       client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
-        case HttpResponse(HttpStatus(Created, _), _, None, _) => 
-          true
-        
-        case _ =>
-          false
+        case HttpResponse(HttpStatus(Created, _), _, None, _) => true
+        case _ => false
       }
     }
   }
