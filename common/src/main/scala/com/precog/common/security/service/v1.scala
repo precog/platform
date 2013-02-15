@@ -90,9 +90,7 @@ object v1 {
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewAPIKeyRequest](schemaV1)
 
-    def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None, parentIds: Set[GrantId]) = {
-      require(!parentIds.isEmpty, "Cannot create a new account without parent IDs.")
-
+    def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None, parentIds: Set[GrantId] = Set()) = {
       val grants = NewGrantRequest.newGrant(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), parentIds, None)
       NewAPIKeyRequest(name, description, Set(grants))
     }

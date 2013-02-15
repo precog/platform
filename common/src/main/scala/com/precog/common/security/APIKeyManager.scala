@@ -135,12 +135,15 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
       if(!Grant.implies(grants, perms, expiration)) none[Grant].point[M]
       else {
         val minimized = Grant.coveringGrants(grants, perms, expiration).map(_.grantId)
-        if(minimized.isEmpty) none[Grant].point[M]
-        else newGrant(name, description, issuerKey, minimized, perms, expiration) map { some }
+        if (minimized.isEmpty) {
+          none[Grant].point[M]
+        } else {
+          newGrant(name, description, issuerKey, minimized, perms, expiration) map { some }
+        }
       }
     }
   }
-  
+
   def deriveSingleParentGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentId: GrantId, perms: Set[Permission], expiration: Option[DateTime] = None): M[Option[Grant]] = {
     validGrants(issuerKey, expiration).flatMap { validGrants =>
       validGrants.find(_.grantId == parentId) match {
@@ -150,26 +153,26 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
       }
     }
   }
-  
+
   def deriveAndAddGrant(name: Option[String], description: Option[String], issuerKey: APIKey, perms: Set[Permission], recipientKey: APIKey, expiration: Option[DateTime] = None): M[Option[Grant]] = {
     deriveGrant(name, description, issuerKey, perms, expiration) flatMap {
       case Some(grant) => addGrants(recipientKey, Set(grant.grantId)) map { _ map { _ => grant } }
       case None => none[Grant].point[M]
     }
   }
-  
+
   def newAPIKeyWithGrants(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[v1.NewGrantRequest]): M[Option[APIKeyRecord]] = {
-    grants.map { grant =>
-      hasCapability(issuerKey, grant.permissions, grant.expirationDate)
-    }.sequence.map(_.foldLeft(true)(_ && _)).flatMap { mayGrant =>
-      if (mayGrant) {
-        val mgrantIds = grants.map(grant => deriveGrant(None, None, issuerKey, grant.permissions, grant.expirationDate)).sequence.map(_.flatten)
-        mgrantIds.flatMap { grants => newAPIKey(name, description, issuerKey, grants.map(_.grantId)) } map { some }
+    grants.map(grant => hasCapability(issuerKey, grant.permissions, grant.expirationDate)).sequence flatMap { checks =>
+      if (checks.forall(_ == true)) {
+        for {
+          newGrants <- grants.map(grant => deriveGrant(grant.name, grant.description, issuerKey, grant.permissions, grant.expirationDate)).sequence
+          newKey    <- newAPIKey(name, description, issuerKey, newGrants.flatten.map(_.grantId))
+        } yield some(newKey)
       } else {
         none[APIKeyRecord].point[M]
       }
     }
-  } 
+  }
 
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime] = None): M[Boolean] =
     validGrants(apiKey, at).map(Grant.implies(_, perms, at))

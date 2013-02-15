@@ -61,6 +61,8 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
     (accountManager, Stoppable.fromFuture(accountManager.close()))
   }
 
-  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config)
+  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config) valueOr { errs =>
+    sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
+  }
 }
 

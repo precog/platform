@@ -908,8 +908,9 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
 
   def showRoot(apiKeyManager: APIKeyManager[Future]) = {
-    for (rootAPIKey <- apiKeyManager.rootAPIKey) yield {
+    for (rootAPIKey <- apiKeyManager.rootAPIKey; rootGrantId <- apiKeyManager.rootGrantId) yield {
       println(rootAPIKey)
+      println(rootGrantId)
     }
   }
 

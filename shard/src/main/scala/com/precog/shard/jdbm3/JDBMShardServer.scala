@@ -51,7 +51,10 @@ object JDBMShardServer extends BlueEyesServer
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   override def configureShardState(config: Configuration) = M.point {
-    val apiKeyFinder = WebAPIKeyFinder(config.detach("security"))
+    val apiKeyFinder = WebAPIKeyFinder(config.detach("security")) valueOr { errs =>
+      sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
+    }
+
     val accountFinder = WebAccountFinder(config.detach("accounts"))
     val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)

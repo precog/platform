@@ -43,25 +43,29 @@ import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity.Configuration
 
 import scalaz._
+import scalaz.Validation._
 import scalaz.EitherT.eitherT
+import scalaz.std.set._
+import scalaz.std.option._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
-import scalaz.std.set._
+import scalaz.syntax.std.option._
 
 object WebAPIKeyFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): APIKeyFinder[Future] = {
-    new RealWebAPIKeyFinder(
-      config[String]("protocol", "http"),
-      config[String]("host", "localhost"),
-      config[Int]("port", 80),
-      config[String]("path", "/security/v1/"),
-      config[String]("rootKey"),
-      config[String]("rootGrantId")
-    )
+  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Future]] = {
+    config.get[String]("rootKey").toSuccess("rootKey configuration parameter is required").toValidationNEL map { rootKey: APIKey =>
+      new RealWebAPIKeyFinder(
+        config[String]("protocol", "http"),
+        config[String]("host", "localhost"),
+        config[Int]("port", 80),
+        config[String]("path", "/security/v1/"),
+        rootKey
+      )
+    }
   }
 }
 
-class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey, val rootGrantId: GrantId)(implicit val executor: ExecutionContext) 
+class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey)(implicit val executor: ExecutionContext) 
     extends WebClient(protocol, host, port, path) with WebAPIKeyFinder {
   implicit val M = new FutureMonad(executor)
 }
@@ -69,7 +73,6 @@ class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: Strin
 trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
   implicit def executor: ExecutionContext
   def rootAPIKey: APIKey
-  def rootGrantId: GrantId
 
   def findAPIKey(apiKey: APIKey): Future[Option[v1.APIKeyDetails]] = {
     withJsonClient { client =>
@@ -125,7 +128,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
   }
 
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Future[v1.APIKeyDetails] = {
-    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set(rootGrantId))
+    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set())
 
     withJsonClient { client => 
       client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {

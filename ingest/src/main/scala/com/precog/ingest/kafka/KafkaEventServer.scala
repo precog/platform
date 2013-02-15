@@ -73,8 +73,12 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 
+    val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")) valueOr { errs =>
+      sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
+    }
+
     val deps = EventServiceDeps[Future]( 
-      apiKeyFinder = WebAPIKeyFinder(config.detach("security")),
+      apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
       jobManager = WebJobManager(config.detach("jobs"))
