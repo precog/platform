@@ -145,8 +145,8 @@ for f in $@; do
     ALLTABLES="$ALLTABLES $TABLE"
     DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
-    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/ingest/v1/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST --data-binary @- "http://localhost:$INGEST_PORT/ingest/v1/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 

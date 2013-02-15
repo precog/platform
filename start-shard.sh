@@ -391,19 +391,19 @@ JOBS_PORT=$(random_port "Jobs service")
 SHARD_PORT=$(random_port "Shard")
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/accounts/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/; s/port = 30060/port = $INGEST_PORT/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 30064/port = $ACCOUNTS_PORT/; s#/accounts/v1/#/#; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/; s/port = 30060/port = $INGEST_PORT/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#/opt/precog/shard#$WORKDIR/shard-data#; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 30062/port = $AUTH_PORT/" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.logging.xml > "$WORKDIR"/configs/auth-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/port = 80/port = $AUTH_PORT/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/security/v1/#/#; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/accounts/configs/dev/accounts-v1.logging.xml > "$WORKDIR"/configs/accounts-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = $AUTH_PORT/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGO_PORT\"\]!; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30066/port = $JOBS_PORT/" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 30062/port = $AUTH_PORT/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGO_PORT\"\]!; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30066/port = $JOBS_PORT/" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.logging.xml > "$WORKDIR"/configs/jobs-v1.logging.xml
 
 cd "$BASEDIR"
