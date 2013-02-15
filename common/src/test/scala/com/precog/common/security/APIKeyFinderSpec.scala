@@ -1,5 +1,4 @@
-package com.precog
-package common
+package com.precog.common
 package security
 
 import com.precog.common.accounts._
