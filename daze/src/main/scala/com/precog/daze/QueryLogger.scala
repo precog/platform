@@ -136,15 +136,15 @@ trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
   def fatal(pos: P, msg: String): M[Unit] = M.point {
-    logger.error(msg)
+    logger.error(pos.toString + " - " + msg)
   }
 
   def warn(pos: P, msg: String): M[Unit] = M.point {
-    logger.warn(msg)
+    logger.warn(pos.toString + " - " + msg)
   }
 
   def info(pos: P, msg: String): M[Unit] = M.point {
-    logger.info(msg)
+    logger.info(pos.toString + " - " + msg)
   }
 
   def log(pos: P, msg: String): M[Unit] = info(pos, msg)
