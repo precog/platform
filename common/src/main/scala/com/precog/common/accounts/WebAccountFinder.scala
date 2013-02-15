@@ -46,23 +46,28 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
+import scalaz.{ NonEmptyList => NEL }
+import scalaz.Validation._
 import scalaz.syntax.monad._
+import scalaz.syntax.validation._
+import scalaz.syntax.std.option._
 
 object WebAccountFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): AccountFinder[Future] = {
-    config.get[String]("service.hardcoded_account") map { accountId =>
-      new ConstantAccountFinder(accountId)
+  def apply(config: Configuration)(implicit executor: ExecutionContext): Validation[NonEmptyList[String], AccountFinder[Future]] = {
+    val serviceConfig = config.detach("service")
+    serviceConfig.get[String]("hardcoded_account") map { accountId =>
+      success(new ConstantAccountFinder(accountId))
     } getOrElse {
-      val protocol = config[String]("service.protocol")
-      val host = config[String]("service.host")
-      val port = config[Int]("service.port")
-      val path = config[String]("service.path")
-      val user = config[String]("service.user")
-      val password = config[String]("service.password")
-      val cacheSize = config[Int]("service.cache_size", 1000)
-      
-      val settings = WebAccountFinderSettings(protocol, host, port, path, user, password, cacheSize)
-      new WebAccountFinder(settings)
+      (serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property service.protocol is required")) |@|
+       serviceConfig.get[String]("host").toSuccess(NEL("Configuration property service.host is required")) |@|
+       serviceConfig.get[Int]("port").toSuccess(NEL("Configuration property service.port is required")) |@|
+       serviceConfig.get[String]("path").toSuccess(NEL("Configuration property service.path is required")) |@|
+       serviceConfig.get[String]("user").toSuccess(NEL("Configuration property service.user is required")) |@|
+       serviceConfig.get[String]("password").toSuccess(NEL("Configuration property service.password is required"))) {
+        (protocol, host, port, path, user, password) => 
+          val cacheSize = serviceConfig[Int]("cache_size", 1000)
+          new WebAccountFinder(protocol, host, port, path, user, password, cacheSize)
+      }
     }
   }
 }
@@ -74,10 +79,7 @@ class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionCo
   def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
 }
 
-case class WebAccountFinderSettings(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)
-
-class WebAccountFinder(settings: WebAccountFinderSettings)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
-  import settings._
+class WebAccountFinder(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
   implicit val M: Monad[Future] = new FutureMonad(executor)
 
   private[this] val apiKeyToAccountCache = Cache.simple[APIKey, AccountId](Cache.MaxSize(cacheSize))

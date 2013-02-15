@@ -517,35 +517,34 @@ object ZookeeperTools extends Command {
       showChildren("agents", path, pathsAt(path, client))
     }
 
-    def xyz(path: String, data: String) {
-      JParser.parseFromString(data).flatMap(_.validated[YggCheckpoint]) match {
-        case Success(_) =>
-          if (!client.exists(path)) client.createPersistent(path, true)
+    def parseCheckpoint(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[YggCheckpoint]) 
 
-          val updater = new DataUpdater[Array[Byte]] {
-            def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
-          }
+    def setCheckpoint(path: String, data: YggCheckpoint) {
+      if (!client.exists(path)) client.createPersistent(path, true)
 
-          client.updateDataSerialized(path, updater)
-          println("Checkpoint updated: %s with %s".format(path, data))
-
-        case Failure(e) =>
-          println("Invalid json for checkpoint: %s".format(e))
+      val updater = new DataUpdater[Array[Byte]] {
+        def update(cur: Array[Byte]): Array[Byte] = data.serialize.renderCompact.getBytes 
       }
+
+      client.updateDataSerialized(path, updater)
+      println("Checkpoint updated: %s with %s".format(path, data))
     }
 
     config.checkpointUpdate.foreach {
       case (path, data) =>
-        val newCheckpoint = data match {
-          case "initial" => """{"offset":0,"messageClock":[[0,0]]}"""
-          case s => s
+        data match {
+          case "initial" => 
+            println("Loading initial checkpoint")
+            setCheckpoint(path, YggCheckpoint.Empty)
+          case s => 
+            println("Loading initial checkpoint from : " + s)
+            setCheckpoint(path, parseCheckpoint(s).valueOr(err => sys.error(err.message)))
         }
-        println("Loading initial checkpoint: " + newCheckpoint)
-        xyz(path, newCheckpoint)
     }
 
     config.relayAgentUpdate.foreach { 
-      case (path, data) => xyz(path, data)
+      case (path, data) => 
+        setCheckpoint(path, parseCheckpoint(data).valueOr(err => sys.error(err.message)))
     }
   }
 
@@ -908,9 +907,8 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
 
   def showRoot(apiKeyManager: APIKeyManager[Future]) = {
-    for (rootAPIKey <- apiKeyManager.rootAPIKey; rootGrantId <- apiKeyManager.rootGrantId) yield {
+    for (rootAPIKey <- apiKeyManager.rootAPIKey) yield {
       println(rootAPIKey)
-      println(rootGrantId)
     }
   }
 

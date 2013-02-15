@@ -40,19 +40,22 @@ import akka.dispatch.{ ExecutionContext, Future }
 import org.streum.configrity.Configuration
 
 import scalaz._
+import scalaz.{NonEmptyList => NEL}
+import scalaz.syntax.std.option._
 
 object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
-    for (centralZookeeperHosts <- config.get[String]("central.zk.connect")) yield {
+  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
+    val localConfig = config.detach("local")
+    val centralConfig = config.detach("central")
+
+    centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
       val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
       val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
       val agent = serviceUID.hostId + serviceUID.serviceId
 
-      val localConfig = config.detach("local")
-
       val eventIdSeq = new SystemEventIdSequence(agent, coordination)
       val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
-      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, config.detach("central"))
+      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, centralConfig)
 
       (eventStore, esStop.parent(raStop))
     }
@@ -65,12 +68,13 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
-
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
-    val accountFinder0 = WebAccountFinder(config.detach("accounts"))
+    val accountFinder0 = WebAccountFinder(config.detach("accounts")) valueOr { errs =>
+      sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
+    }
 
-    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
-      sys.error("Invalid configuration: eventStore.central.zk.connect required")
+    val (eventStore0, stoppable) = KafkaEventStore(config.detach("eventStore"), accountFinder0) valueOr { errs =>
+      sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
     }
 
     val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")) valueOr { errs =>

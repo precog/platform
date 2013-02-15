@@ -53,12 +53,13 @@ import scalaz.syntax.std.option._
 
 object WebAPIKeyFinder {
   def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Future]] = {
+    val serviceConfig = config.detach("service")
     config.get[String]("rootKey").toSuccess("rootKey configuration parameter is required").toValidationNEL map { rootKey: APIKey =>
       new RealWebAPIKeyFinder(
-        config[String]("protocol", "http"),
-        config[String]("host", "localhost"),
-        config[Int]("port", 80),
-        config[String]("path", "/security/v1/"),
+        serviceConfig[String]("protocol", "http"),
+        serviceConfig[String]("host", "localhost"),
+        serviceConfig[Int]("port", 80),
+        serviceConfig[String]("path", "/security/v1/"),
         rootKey
       )
     }

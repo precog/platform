@@ -112,7 +112,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           Future {
             logger.debug("Building account service state...")
             val (accountManager, stoppable) = AccountManager(config)
-            val apiKeyFinder = APIKeyFinder(config.detach("security.service"))
+            val apiKeyFinder = APIKeyFinder(config.detach("security"))
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
             val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId)
 

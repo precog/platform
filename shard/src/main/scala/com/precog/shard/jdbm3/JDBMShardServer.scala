@@ -55,7 +55,10 @@ object JDBMShardServer extends BlueEyesServer
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val accountFinder = WebAccountFinder(config.detach("accounts"))
+    val accountFinder = WebAccountFinder(config.detach("accounts")) valueOr { errs =>
+      sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
+    }
+
     val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
     val stoppable = Stoppable.fromFuture(platform.shutdown)

@@ -410,7 +410,7 @@ cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
+    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:initial" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
