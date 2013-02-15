@@ -67,25 +67,19 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
 
-    "return current root API key even if a new one is requested" in new TestAPIKeyManager {
-      val result = Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys,
-        MongoAPIKeyManagerSettings.defaults.grants, true), timeout)
+    "return current root API key" in new TestAPIKeyManager {
+      val result = Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys), timeout)
 
       result.apiKey mustEqual rootAPIKey
     }
 
     "error if a root API key cannot be found and creation isn't requested" in new TestAPIKeyManager {
-      Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys + "_empty",
-        MongoAPIKeyManagerSettings.defaults.grants, false), timeout) must throwAn[Exception]
+      Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys + "_empty"), timeout) must throwAn[Exception]
     }
     
     "not find missing API key" in new TestAPIKeyManager { 
-
       val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
-
-      result must beLike {
-        case None => ok 
-      }
+      result must beNone
     }
     
     "issue new API key" in new TestAPIKeyManager { 
@@ -96,8 +90,8 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
 
       result must beLike {
         case APIKeyRecord(_, n, _, _, g, _) => 
-          Some(name) must_== n
-          Set.empty must_== g
+          n must beSome(name) 
+          g must beEmpty
       }
     }
     
@@ -161,8 +155,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     val to = Duration(30, "seconds")
     implicit val queryTimeout: Timeout = to
 
-    val rootAPIKeyOrig = Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys,
-      MongoAPIKeyManagerSettings.defaults.grants, true), to)
+    val rootAPIKeyOrig = Await.result(MongoAPIKeyManager.createRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys, MongoAPIKeyManagerSettings.defaults.grants), to)
   
     val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults.copy(rootKeyId = rootAPIKeyOrig.apiKey))
 

@@ -313,7 +313,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
 
     "TimeFraction function with not fully formed string with tz" in {
       val input = Operate(BuiltInFunction1Op(HourOfDay),
-          Const(CString("2010-01-04T03-02:00"))(line))(line)
+        Const(CString("2010-01-04T03-02:00"))(line))(line)
         
       val result = testEval(input) collect {
         case (ids, SDecimal(d)) if ids.length == 0 => d.toInt

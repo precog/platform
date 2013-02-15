@@ -20,14 +20,17 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.bytecode.JType
+import com.precog.common.security._
+
+import java.io.File
+
 import TableModule._
 
-trait NIHDBColumnarTableModule[M[+_], Long] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] with StorageMetadataSource[M] {
-  def accessControl: Accesscontrol[M]
+trait NIHDBColumnarTableModule[M[+_], Long] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Long, Slice] with StorageMetadataSource[M] {
+  def accessControl: AccessControl[M]
 
   def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
-    import loadMergeEngine._
-
     val constraints = Schema.flatten(tpe)
 
     for {

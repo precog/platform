@@ -34,7 +34,12 @@ import org.slf4j.{ LoggerFactory, Logger }
 import scalaz._
 import scalaz.syntax.monad._
 
-trait QueryLogger[M[+_], -P] {
+trait QueryLogger[M[+_], P] { self =>
+  def contramap[P0](f: P0 => P): QueryLogger[M, P0] = new QueryLogger[M, P0] {
+    def fatal(pos: P0, msg: String): M[Unit] = self.fatal(f(pos), msg)
+    def warn(pos: P0, msg: String): M[Unit] = self.warn(f(pos), msg)
+    def info(pos: P0, msg: String): M[Unit] = self.info(f(pos), msg)
+  }
 
   /**
    * This reports a fatal error user. Depending on the implementation, this may
@@ -56,7 +61,7 @@ trait QueryLogger[M[+_], -P] {
 /**
  * Reports errors to a job's channel.
  */
-trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait JobQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   import JobManager._
 
   implicit def M: Monad[M]
@@ -88,7 +93,7 @@ trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
 }
 
-trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait LoggingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
 
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
@@ -107,14 +112,14 @@ trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
 }
 
 object LoggingQueryLogger {
-  def apply[M[+_]](implicit M0: Applicative[M]): QueryLogger[M, Any] = {
-    new LoggingQueryLogger[M, Any] {
+  def apply[M[+_], P](implicit M0: Applicative[M]): QueryLogger[M, P] = {
+    new LoggingQueryLogger[M, P] {
       val M = M0
     }
   }
 }
 
-trait ExceptionQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait ExceptionQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
   
   abstract override def fatal(pos: P, msg: String): M[Unit] = for {

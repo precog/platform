@@ -36,7 +36,7 @@ class JDBCStorageMetadataSource(dbMap: Map[String, String])(implicit asyncContex
 }
 
 class JDBCStorageMetadata(dbMap: Map[String, String])(implicit asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
-  implicit val M = AkkaTypeClasses.futureApplicative(asyncContext) 
+  implicit val M = new FutureMonad(asyncContext) 
 
   // FIXME: Actually implement these for JDBC
   def findChildren(path: Path): Future[Set[Path]] = {

@@ -17,15 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ingest
+package com.precog.ingest
 package service
 
-import common._
-import common.security._
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.common.ingest._
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 
 import blueeyes.core.data.ByteChunk
@@ -37,36 +37,29 @@ import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz.{Validation, Success}
+import scalaz._
 
-class ArchiveServiceHandler[A](apiKeyManager: APIKeyManager[Future], eventStore: EventStore, archiveTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
-extends CustomHttpService[A, (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
+class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore: EventStore[Future], archiveTimeout: Timeout)(implicit M: Monad[Future])
+extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    Success { (r: APIKeyRecord, p: Path) =>
-      apiKeyManager.hasCapability(r.apiKey, Set(DeletePermission(p, Set())), None) flatMap { mayAccess =>
-        if(mayAccess) {
-          try { 
-            val archiveInstance = Archive(p, r.apiKey)
-            logger.trace("Archiving path: " + archiveInstance)
-            eventStore.save(archiveInstance, archiveTimeout).map {
-              _ => HttpResponse[JValue](OK)
-            }
-          } catch {
-            case ex => {
-              logger.error("Error during archive", ex)
-              Future(HttpResponse[JValue](ServiceUnavailable))
-            }
+    Success { (apiKey: APIKey, path: Path) =>
+      accessControl.hasCapability(apiKey, Set(DeletePermission(path, Set())), None) flatMap { 
+        case true =>
+          val archiveInstance = Archive(apiKey, path, None)
+          logger.trace("Archiving path: " + archiveInstance)
+          eventStore.save(archiveInstance, archiveTimeout) map {
+            _ => HttpResponse[JValue](OK)
           }
-        } else {
-          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your API key does not have permissions to archive this path."))))
-        }
+        
+        case false =>
+          M.point(HttpResponse[JValue](Unauthorized, content=Some(JString("Your API key does not have permissions to archive this path."))))
       }
     }
   }
 
   val metadata = Some(DescriptionMetadata(
     """
-      This service can be used to archive the data under the given path.
+      This service can be used to archive all data at the given path.
     """
   ))
 }

@@ -28,7 +28,7 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 import blueeyes.json._
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
@@ -699,7 +699,10 @@ trait ObjectConcatHelpers extends ConcatHelpers {
   def buildFields(leftColumns: Map[ColumnRef, Column], rightColumns: Map[ColumnRef, Column]) =
     (filterFields(leftColumns), filterFields(rightColumns))
 
-  def buildEmptyObjects(emptyBits: BitSet) = Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+  def buildEmptyObjects(emptyBits: BitSet) = {
+    if (emptyBits.isEmpty) Map.empty[ColumnRef, Column]
+    else Map(ColumnRef(CPath.Identity, CEmptyObject) -> EmptyObjectColumn(emptyBits))
+  }
 
   def buildNonemptyObjects(leftFields: Map[ColumnRef, Column], rightFields: Map[ColumnRef, Column]) = {
     val (leftInner, leftOuter) = leftFields partition {

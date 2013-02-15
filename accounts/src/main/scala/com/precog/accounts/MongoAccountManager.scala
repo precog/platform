@@ -17,18 +17,19 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package accounts
+package com.precog.accounts
 
 import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import blueeyes._
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
@@ -52,47 +53,11 @@ trait ZkAccountManagerSettings {
   def zkAccountIdPath: String
 }
 
-trait MongoAccountManagerSettings {
-  def accounts: String
-  def deletedAccounts: String
-  def timeout: Timeout
-}
-
-
-trait ZkMongoAccountManagerComponent {
-  private lazy val zkmLogger = LoggerFactory.getLogger("com.precog.accounts.ZkMongoAccountManagerComponent")
-
-  implicit def asyncContext: ExecutionContext
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  def accountManager(config: Configuration): AccountManager[Future] = {
-    val mongo = RealMongo(config.detach("mongo"))
-    
-    val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
-    val database = config[String]("mongo.database", "accounts_v1")
-
-    val settings0 = new MongoAccountManagerSettings with ZkAccountManagerSettings {
-      val zkAccountIdPath = config[String]("zookeeper.accountId.path")
-      val accounts = config[String]("mongo.collection", "accounts")
-      val deletedAccounts = config[String]("mongo.deletedCollection", "deleted_accounts")
-      val timeout = new Timeout(config[Int]("mongo.timeout", 30000))
-    }
-
-    new MongoAccountManager(mongo, mongo.database(database), settings0) {
-      val settings = settings0
-      val zkc = new ZkClient(zkHosts)
-    }
-  }
-}
-
-
-trait ZkAccountIdSource extends AccountManager[Future] {
-  implicit def execContext: ExecutionContext
-
+trait ZKAccountIdSource extends AccountManager[Future] {
   def zkc: ZkClient
   def settings: ZkAccountManagerSettings
 
-  def newAccountId: Future[String] = Future {
+  def newAccountId: Future[String] = M.point {
     if (!zkc.exists(settings.zkAccountIdPath)) {
       zkc.createPersistent(settings.zkAccountIdPath, true)
     }
@@ -102,16 +67,23 @@ trait ZkAccountIdSource extends AccountManager[Future] {
   }
 }
 
-abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val execContext: ExecutionContext)
-  extends AccountManager[Future] with ZkAccountIdSource {
+trait MongoAccountManagerSettings {
+  def accounts: String
+  def deletedAccounts: String
+  def timeout: Timeout
+}
+
+abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val M: Monad[Future])
+    extends AccountManager[Future] {
   import Account._
 
-  implicit val M = AkkaTypeClasses.futureApplicative(execContext)
-  
   private lazy val mamLogger = LoggerFactory.getLogger("com.precog.accounts.MongoAccountManager")
 
   private implicit val impTimeout = settings.timeout
+  import Account.Serialization._
   
+  def newAccountId: Future[String] 
+
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
@@ -126,7 +98,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           apiKey, path, plan,
           parent)
         
-        database(insert(account0.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.accounts)) map {
+        database(insert(account0.serialize.asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
         } 
       }
@@ -134,31 +106,24 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   }
 
   private def findOneMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
-    database {
-      selectOne().from(collection).where(keyName === keyValue)
-    }.map {
+    database(selectOne().from(collection).where(keyName === keyValue)) map {
       _.map(_.deserialize(extractor))
     }
   }
 
   private def findAllMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
-    database {
-      selectAll.from(collection).where(keyName === keyValue)
-    }.map {
+    database(selectAll.from(collection).where(keyName === keyValue)) map {
       _.map(_.deserialize(extractor)).toSet
     }
   }
   
   private def findAll[A](collection: String)(implicit extract: Extractor[A]): Future[Seq[A]] =
-    database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
+    database(selectAll.from(collection)) map { 
+      _.map(_.deserialize(extract)).toSeq 
+    }
 
   
-  def listAccountIds(apiKey: String) = findAllMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
-  
-  def mapAccountIds(apiKeys: Set[APIKey]) : Future[Map[APIKey, Set[AccountId]]] =
-    apiKeys.foldLeft(Future(Map.empty[APIKey, Set[AccountId]])) {
-      case (fmap, key) => fmap.flatMap { m => listAccountIds(key).map { ids => m + (key -> ids) } }
-    }
+  def findAccountByAPIKey(apiKey: String) = findOneMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
   
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
@@ -168,14 +133,14 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(account.accountId).flatMap {
       case Some(existingAccount) =>
         database {
-          val updateObj = account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]
+          val updateObj = account.serialize.asInstanceOf[JObject]
           update(settings.accounts).set(updateObj).where("accountId" === account.accountId)
         } map {
           _ => true
         }
           
       case None => 
-        Future(false)
+        M.point(false)
     }
   }
 
@@ -183,14 +148,15 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
     findAccountById(accountId).flatMap { 
       case ot @ Some(account) =>
         for {
-          _ <- database(insert(account.serialize(UnsafeAccountDecomposer).asInstanceOf[JObject]).into(settings.deletedAccounts))
-           _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
+          _ <- database(insert(account.serialize.asInstanceOf[JObject]).into(settings.deletedAccounts))
+          _ <- database(remove.from(settings.accounts).where("accountId" === accountId))
         } yield { ot }
-      case None    => Future(None)
+      case None => 
+        M.point(None)
     } 
   }
 
-  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
+  def close() = database.disconnect.fallbackTo(M.point(())).flatMap{_ => mongo.close}
 }
 
 

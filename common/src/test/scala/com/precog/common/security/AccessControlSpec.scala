@@ -191,7 +191,7 @@ class AccessControlSpec extends Specification {
       hasCapability(userAPIKey, Set(WritePermission(Path("/other"), Set(otherAccountId)))) must beTrue
       hasCapability(userAPIKey, Set(DeletePermission(Path("/other"), Set(otherAccountId)))) must beTrue
 
-      apiKeyManager.deleteGrant(accessOtherGrant)
+      apiKeyManager.deleteGrant(accessOtherGrant.grantId)
       
       hasCapability(userAPIKey, Set(ReadPermission(Path("/other"), Set(otherAccountId)))) must beFalse
       hasCapability(userAPIKey, Set(ReducePermission(Path("/other"), Set(otherAccountId)))) must beFalse
@@ -251,7 +251,7 @@ class AccessControlSpec extends Specification {
       hasCapability(user2APIKey, Set(WritePermission(Path("/other"), Set(otherAccountId)))) must beTrue
       hasCapability(user2APIKey, Set(DeletePermission(Path("/other"), Set(otherAccountId)))) must beTrue
 
-      apiKeyManager.deleteGrant(user1AccessOtherGrant)
+      apiKeyManager.deleteGrant(user1AccessOtherGrant.grantId)
       
       hasCapability(user2APIKey, Set(ReadPermission(Path("/other"), Set(otherAccountId)))) must beFalse
       hasCapability(user2APIKey, Set(ReducePermission(Path("/other"), Set(otherAccountId)))) must beFalse
@@ -328,7 +328,7 @@ class AccessControlSpec extends Specification {
       hasCapability(addOnAPIKey, readPerm) must beFalse
       hasCapability(addOnAPIKey, writePerm) must beTrue
 
-      apiKeyManager.deleteGrant(addOnCanWrite)
+      apiKeyManager.deleteGrant(addOnCanWrite.grantId)
       
       hasCapability(providerAPIKey, readPerm) must beFalse
       hasCapability(providerAPIKey, writePerm) must beTrue
@@ -357,7 +357,7 @@ class AccessControlSpec extends Specification {
       hasCapability(addOnAPIKey, addOnPerm) must beTrue
       hasCapability(customerAPIKey, addOnPerm) must beTrue
         
-      apiKeyManager.deleteGrant(derivedGrantId)
+      apiKeyManager.deleteGrant(derivedGrantId.grantId)
         
       hasCapability(addOnAPIKey, addOnPerm) must beTrue
       hasCapability(customerAPIKey, addOnPerm) must beFalse

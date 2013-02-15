@@ -274,42 +274,42 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
   }
 
   def testCogroupPathology1 = {
-    import JParser.parse
-    val s1 = SampleData(Stream(toRecord(Array(1, 1, 1), parse("""{ "a":[] }"""))))
-    val s2 = SampleData(Stream(toRecord(Array(1, 1, 1), parse("""{ "b":0 }"""))))
+    import JParser.parseUnsafe
+    val s1 = SampleData(Stream(toRecord(Array(1, 1, 1), parseUnsafe("""{ "a":[] }"""))))
+    val s2 = SampleData(Stream(toRecord(Array(1, 1, 1), parseUnsafe("""{ "b":0 }"""))))
 
     testCogroup(s1, s2)
   }
 
   def testCogroupSliceBoundaries = {
-    import JParser.parse
+    import JParser.parseUnsafe
 
     val s1 = SampleData(Stream(
-      toRecord(Array(1), parse("""{ "ruoh5A25Jaxa":-1.0 }""")),
-      toRecord(Array(2), parse("""{ "ruoh5A25Jaxa":-2.735023101944097E37 }""")),
-      toRecord(Array(3), parse("""{ "ruoh5A25Jaxa":2.12274644226519E38 }""")),
-      toRecord(Array(4), parse("""{ "ruoh5A25Jaxa":1.085656944502855E38 }""")),
-      toRecord(Array(5), parse("""{ "ruoh5A25Jaxa":-3.4028234663852886E38 }""")),
-      toRecord(Array(6), parse("""{ "ruoh5A25Jaxa":-1.0 }""")),
-      toRecord(Array(7), parse("""{ "ruoh5A25Jaxa":-3.4028234663852886E38 }""")),
-      toRecord(Array(8), parse("""{ "ruoh5A25Jaxa":2.4225587899613125E38 }""")),
-      toRecord(Array(9), parse("""{ "ruoh5A25Jaxa":-3.078101074510345E38 }""")),
-      toRecord(Array(10), parse("""{ "ruoh5A25Jaxa":0.0 }""")),
-      toRecord(Array(11), parse("""{ "ruoh5A25Jaxa":-2.049657967962047E38 }"""))
+      toRecord(Array(1), parseUnsafe("""{ "ruoh5A25Jaxa":-1.0 }""")),
+      toRecord(Array(2), parseUnsafe("""{ "ruoh5A25Jaxa":-2.735023101944097E37 }""")),
+      toRecord(Array(3), parseUnsafe("""{ "ruoh5A25Jaxa":2.12274644226519E38 }""")),
+      toRecord(Array(4), parseUnsafe("""{ "ruoh5A25Jaxa":1.085656944502855E38 }""")),
+      toRecord(Array(5), parseUnsafe("""{ "ruoh5A25Jaxa":-3.4028234663852886E38 }""")),
+      toRecord(Array(6), parseUnsafe("""{ "ruoh5A25Jaxa":-1.0 }""")),
+      toRecord(Array(7), parseUnsafe("""{ "ruoh5A25Jaxa":-3.4028234663852886E38 }""")),
+      toRecord(Array(8), parseUnsafe("""{ "ruoh5A25Jaxa":2.4225587899613125E38 }""")),
+      toRecord(Array(9), parseUnsafe("""{ "ruoh5A25Jaxa":-3.078101074510345E38 }""")),
+      toRecord(Array(10), parseUnsafe("""{ "ruoh5A25Jaxa":0.0 }""")),
+      toRecord(Array(11), parseUnsafe("""{ "ruoh5A25Jaxa":-2.049657967962047E38 }"""))
     ))
 
     val s2 = SampleData(Stream(
-      toRecord(Array(1), parse("""{ "mbsn8ya":-629648309198725501 }""")),
-      toRecord(Array(2), parse("""{ "mbsn8ya":-1642079669762657762 }""")),
-      toRecord(Array(3), parse("""{ "mbsn8ya":-75462980385303464 }""")),
-      toRecord(Array(4), parse("""{ "mbsn8ya":-4407493923710190330 }""")),
-      toRecord(Array(5), parse("""{ "mbsn8ya":4611686018427387903 }""")),
-      toRecord(Array(6), parse("""{ "mbsn8ya":-4374327062386862583 }""")),
-      toRecord(Array(7), parse("""{ "mbsn8ya":1920642186250198767 }""")),
-      toRecord(Array(8), parse("""{ "mbsn8ya":1 }""")),
-      toRecord(Array(9), parse("""{ "mbsn8ya":0 }""")),
-      toRecord(Array(10), parse("""{ "mbsn8ya":1 }""")),
-      toRecord(Array(11), parse("""{ "mbsn8ya":758880641626989193 }"""))
+      toRecord(Array(1), parseUnsafe("""{ "mbsn8ya":-629648309198725501 }""")),
+      toRecord(Array(2), parseUnsafe("""{ "mbsn8ya":-1642079669762657762 }""")),
+      toRecord(Array(3), parseUnsafe("""{ "mbsn8ya":-75462980385303464 }""")),
+      toRecord(Array(4), parseUnsafe("""{ "mbsn8ya":-4407493923710190330 }""")),
+      toRecord(Array(5), parseUnsafe("""{ "mbsn8ya":4611686018427387903 }""")),
+      toRecord(Array(6), parseUnsafe("""{ "mbsn8ya":-4374327062386862583 }""")),
+      toRecord(Array(7), parseUnsafe("""{ "mbsn8ya":1920642186250198767 }""")),
+      toRecord(Array(8), parseUnsafe("""{ "mbsn8ya":1 }""")),
+      toRecord(Array(9), parseUnsafe("""{ "mbsn8ya":0 }""")),
+      toRecord(Array(10), parseUnsafe("""{ "mbsn8ya":1 }""")),
+      toRecord(Array(11), parseUnsafe("""{ "mbsn8ya":758880641626989193 }"""))
     ))
 
     testCogroup(s1, s2)
@@ -368,54 +368,54 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
   }
 
   def testCogroupPathology3 = {
-    import JParser.parse
+    import JParser.parseUnsafe
     val s1 = SampleData(Stream(
-      parse("""{ "value":{ "ugsrry":3.0961191760668197E+307 }, "key":[2.0] }"""),
-      parse("""{ "value":{ "ugsrry":0.0 }, "key":[3.0] }"""),
-      parse("""{ "value":{ "ugsrry":3.323617580854415E+307 }, "key":[5.0] }"""),
-      parse("""{ "value":{ "ugsrry":-9.458984438931391E+306 }, "key":[6.0] }"""),
-      parse("""{ "value":{ "ugsrry":1.0 }, "key":[10.0] }"""),
-      parse("""{ "value":{ "ugsrry":0.0 }, "key":[13.0] }"""),
-      parse("""{ "value":{ "ugsrry":-3.8439741460685273E+307 }, "key":[14.0] }"""),
-      parse("""{ "value":{ "ugsrry":5.690895589711475E+307 }, "key":[15.0] }"""),
-      parse("""{ "value":{ "ugsrry":0.0 }, "key":[16.0] }"""),
-      parse("""{ "value":{ "ugsrry":-5.567237049482096E+307 }, "key":[17.0] }"""),
-      parse("""{ "value":{ "ugsrry":-8.988465674311579E+307 }, "key":[18.0] }"""),
-      parse("""{ "value":{ "ugsrry":2.5882896341488965E+307 }, "key":[22.0] }""")
+      parseUnsafe("""{ "value":{ "ugsrry":3.0961191760668197E+307 }, "key":[2.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":0.0 }, "key":[3.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":3.323617580854415E+307 }, "key":[5.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":-9.458984438931391E+306 }, "key":[6.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":1.0 }, "key":[10.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":0.0 }, "key":[13.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":-3.8439741460685273E+307 }, "key":[14.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":5.690895589711475E+307 }, "key":[15.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":0.0 }, "key":[16.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":-5.567237049482096E+307 }, "key":[17.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":-8.988465674311579E+307 }, "key":[18.0] }"""),
+      parseUnsafe("""{ "value":{ "ugsrry":2.5882896341488965E+307 }, "key":[22.0] }""")
     ))
 
     val s2 = SampleData(Stream(
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-40146] }, "key":[2.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-9.44770762864723688E-39073] }, "key":[3.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.894611552200768372E+19] }, "key":[5.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-2.561276432629787073E-42575] }, "key":[6.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-10449] }, "key":[10.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2110233717777347493] }, "key":[13.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[3.039020270015831847E+19] }, "key":[14.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[1E-50000] }, "key":[15.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1.296393752892965818E-49982] }, "key":[16.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[4.611686018427387903E+50018] }, "key":[17.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[0E+48881] }, "key":[18.0] }"""),
-      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.326724524858976798E-10633] }, "key":[22.0] }""")
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-40146] }, "key":[2.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[-9.44770762864723688E-39073] }, "key":[3.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.894611552200768372E+19] }, "key":[5.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[-2.561276432629787073E-42575] }, "key":[6.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-10449] }, "key":[10.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[2110233717777347493] }, "key":[13.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[3.039020270015831847E+19] }, "key":[14.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[1E-50000] }, "key":[15.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1.296393752892965818E-49982] }, "key":[16.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[4.611686018427387903E+50018] }, "key":[17.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[0E+48881] }, "key":[18.0] }"""),
+      parseUnsafe("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.326724524858976798E-10633] }, "key":[22.0] }""")
     ))
 
     testCogroup(s1, s2)
   }
 
   def testPartialUndefinedCogroup = {
-    import JParser.parse
+    import JParser.parseUnsafe
 
     val ltable = fromSample(SampleData(Stream(
-      parse("""{ "id" : "foo", "val" : 4 }"""))))
+      parseUnsafe("""{ "id" : "foo", "val" : 4 }"""))))
 
     val rtable = fromSample(SampleData(Stream(
-      parse("""{ "id" : "foo", "val" : 2 }"""),
-      parse("""{ "val" : 3 }"""),
-      parse("""{ "id" : "foo", "val" : 4 }"""))))
+      parseUnsafe("""{ "id" : "foo", "val" : 2 }"""),
+      parseUnsafe("""{ "val" : 3 }"""),
+      parseUnsafe("""{ "id" : "foo", "val" : 4 }"""))))
 
     val expected = Stream(
-      parse("""{ "id": "foo", "left": 4, "right": 2 }"""),
-      parse("""{ "id": "foo", "left": 4, "right": 4 }""")
+      parseUnsafe("""{ "id": "foo", "left": 4, "right": 2 }"""),
+      parseUnsafe("""{ "id": "foo", "left": 4, "right": 4 }""")
     )
 
     val keySpec = DerefObjectStatic(Leaf(Source), CPathField("id"))

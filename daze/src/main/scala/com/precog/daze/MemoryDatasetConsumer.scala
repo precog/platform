@@ -17,14 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.daze
 
-import common.{ Path, VectorCase }
-import common.security._
+import com.precog.common.{ Path, VectorCase }
+import com.precog.common.security._
 
-import yggdrasil._
-import yggdrasil.table._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 
 import akka.dispatch.Await
 import akka.util.Duration
@@ -48,6 +47,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   type SEvent = (Vector[IdType], SValue)
 
   implicit def M: Monad[M] with Copointed[M]
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
   def extractIds(jv: JValue): Seq[IdType]
 

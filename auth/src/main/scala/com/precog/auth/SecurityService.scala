@@ -17,75 +17,92 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package auth
+package com.precog.auth
 
-import common.security._
+import com.precog.common.security._
+import com.precog.common.security.service._
+import com.precog.common.services.PathServiceCombinators
 
 import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
 
 import blueeyes.BlueEyesServiceBuilder
-import blueeyes.bkka.{ AkkaDefaults, Stoppable } 
+import blueeyes.bkka.Stoppable
 import blueeyes.core.data.{DefaultBijections, ByteChunk}
+import blueeyes.core.http._
+import blueeyes.json._
 import blueeyes.health.metrics.eternity
+import ByteChunk._
+import DefaultBijections._
 
 import org.streum.configrity.Configuration
+import scalaz._
 
-case class SecurityServiceState(apiKeyManagement: APIKeyManagement)
+trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators with PathServiceCombinators {
+  case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
 
-trait SecurityService extends BlueEyesServiceBuilder with AkkaDefaults with APIKeyServiceCombinators {
-  import DefaultBijections._
+  val timeout = akka.util.Timeout(120000) //for now
 
-  val insertTimeout = akka.util.Timeout(10000)
-  implicit val timeout = akka.util.Timeout(120000) //for now
+  implicit def executionContext: ExecutionContext
+  implicit def M: Monad[Future]
 
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future]
+  def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable)
+  def clock: blueeyes.util.Clock
 
-  val securityService = service("security", "1.0") {
+  def securityService = service("security", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
           val securityConfig = config.detach("security")
-          val apiKeyManager = apiKeyManagerFactory(securityConfig)
-          Future(SecurityServiceState(new APIKeyManagement(apiKeyManager)))
+          val (apiKeyManager, stoppable) = APIKeyManager(securityConfig)
+          M.point(State(new SecurityServiceHandlers(apiKeyManager, clock), stoppable))
         } ->
-        request { (state: SecurityServiceState) =>
+        request { case State(handlers, stoppable) =>
+          import handlers._
           jsonp[ByteChunk] {
-            apiKey(state.apiKeyManagement.apiKeyManager) {
-              path("/apikeys/") {
-                get(new GetAPIKeysHandler(state.apiKeyManagement)) ~
-                post(new CreateAPIKeyHandler(state.apiKeyManagement)) ~
-                path("'apikey") {
-                  get(new GetAPIKeyDetailsHandler(state.apiKeyManagement)) ~
-                  delete(new DeleteAPIKeyHandler(state.apiKeyManagement)) ~
-                  path("/grants/") {
-                    get(new GetAPIKeyGrantsHandler(state.apiKeyManagement)) ~
-                    post(new AddAPIKeyGrantHandler(state.apiKeyManagement)) ~
-                    path("'grantId") {
-                      delete(new RemoveAPIKeyGrantHandler(state.apiKeyManagement))
-                    }
+            transcode {
+              path("/apikeys/'apikey") {
+                get(ReadAPIKeyDetailsHandler) ~
+                delete(DeleteAPIKeyHandler) ~
+                path("/grants/") {
+                  get(ReadAPIKeyGrantsHandler) ~
+                  post(CreateAPIKeyGrantHandler) ~
+                  path("'grantId") {
+                    delete(DeleteAPIKeyGrantHandler)
                   }
+                } 
+              } ~ 
+              path("/grants/'grantId") {
+                get(ReadGrantDetailsHandler) ~
+                path("/children/") {
+                  get(ReadGrantChildrenHandler) 
                 }
               } ~
-              path("/grants/") {
-                post(new CreateGrantHandler(state.apiKeyManagement)) ~
-                path("'grantId") {
-                  get(new GetGrantDetailsHandler(state.apiKeyManagement)) ~
-                  delete(new DeleteGrantHandler(state.apiKeyManagement)) ~
-                  path("/children/") {
-                    get(new GetGrantChildrenHandler(state.apiKeyManagement)) ~
-                    post(new AddGrantChildHandler(state.apiKeyManagement))
+              jsonApiKey(k => handlers.apiKeyManager.findAPIKey(k).map(_.map(_.apiKey))) {
+                path("/apikeys/") {
+                  get(ReadAPIKeysHandler) ~
+                  post(CreateAPIKeyHandler) 
+                } ~
+                path("/grants/") {
+                  get(ReadGrantsHandler) ~
+                  post(CreateGrantHandler) ~
+                  path("'grantId") {
+                    delete(DeleteGrantHandler) ~
+                    path("/children/") {
+                      post(CreateGrantChildHandler)
+                    }
                   }
+                } ~
+                dataPath("/permissions/fs") {
+                  get(ReadPermissionsHandler)
                 }
               }
             }
           }
         } ->
-        shutdown { state => 
-          for {
-            _ <- state.apiKeyManagement.close()
-          } yield Option.empty[Stoppable]
+        stop[State] { case State(_, stoppable) =>
+          stoppable
         }
       }
     }

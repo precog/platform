@@ -187,6 +187,8 @@ object SliceColumnarTableModule {
 
         for (empty <- emptyM; nonEmpty <- nonEmptyM) yield empty ++ nonEmpty
 
+      case JArrayHomogeneousT(_) => sys.error("todo")
+
       case JUnionT(tpe1, tpe2) =>
         (Set(loadable(metadataView, path, prefix, tpe1), loadable(metadataView, path, prefix, tpe2))).sequence map { _.flatten }
     }

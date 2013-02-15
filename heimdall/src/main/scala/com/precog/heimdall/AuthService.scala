@@ -21,7 +21,9 @@ package com.precog.heimdall
 
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.common.client._
 import com.precog.common.JValueByteChunkTranscoders._
+import BaseClient.Response
 
 import blueeyes._
 import blueeyes.bkka._
@@ -49,18 +51,13 @@ trait AuthService[M[+_]] { self =>
   }
 }
 
-case class WebAuthService(protocol: String, host: String, port: Int, path: String)(implicit val executionContext: ExecutionContext)
-    extends AuthService[Response] {
+case class WebAuthService(protocol: String, host: String, port: Int, path: String)(implicit executor: ExecutionContext)
+    extends WebClient(protocol, host, port, path) with AuthService[Response] {
   import scalaz.syntax.monad._
   import scalaz.EitherT.eitherT
-  import blueeyes.bkka.AkkaTypeClasses._
+  implicit val M: Monad[Future] = new FutureMonad(executor)
 
-  final private def withClient[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb
-    f(client.protocol(protocol).host(host).port(port).path(path))
-  }
-
-  final def isValid(apiKey: APIKey): Response[Boolean] = withClient { client =>
+  final def isValid(apiKey: APIKey): Response[Boolean] = withJsonClient { client =>
     eitherT(client.query("apiKey", apiKey).get[JValue]("apikeys/" + apiKey) map {
       case HttpResponse(HttpStatus(OK, _), _, _, _) => \/.right(true)
       case HttpResponse(HttpStatus(NotFound, _), _, _, _) => \/.right(false)

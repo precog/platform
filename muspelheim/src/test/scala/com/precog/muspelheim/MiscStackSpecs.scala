@@ -108,6 +108,45 @@ trait MiscStackSpecs extends EvalStackSpecs {
       actual mustEqual expected
     }
 
+    "return a range of DateTime" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | start := std::time::parseDateTimeFuzzy(clicks.timeString)
+        | end := std::time::yearsPlus(start, 2)
+        | step := std::time::parsePeriod("P01Y")
+        |
+        | input := { start: start, end: end, step: step }
+        |
+        | std::time::range(input)
+        | """.stripMargin
+
+      val expectedInput = """
+        | clicks := //clicks
+        |
+        | start := std::time::parseDateTimeFuzzy(clicks.timeString)
+        | startPlusOneYear := std::time::yearsPlus(start, 1)
+        | startPlusTwoYears := std::time::yearsPlus(start, 2)
+        |
+        | [start, startPlusOneYear, startPlusTwoYears]
+        | """.stripMargin
+
+      val result = evalE(input)
+      val expectedResult = evalE(expectedInput)
+
+      result.size mustEqual expectedResult.size
+
+      val actual = result collect {
+        case (ids, SArray(arr)) if ids.length == 1 => arr
+      }
+
+      val expected = expectedResult collect {
+        case (ids, SArray(arr)) if ids.length == 1 => arr
+      }
+
+      actual mustEqual expected
+    }
+
     "reduce sets" in {
       val input = """
         | medals := //summer_games/london_medals

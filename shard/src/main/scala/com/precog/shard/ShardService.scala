@@ -17,26 +17,26 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package shard
+package com.precog.shard
 
-import com.precog.accounts.BasicAccountManager
-import com.precog.common.jobs.JobManager
-
-import service._
-import ingest.service._
-import common.Path
-import common.security._
-import daze._
 import com.precog.util.PrecogUnit
 import com.precog.muspelheim._
 
-import akka.dispatch.{Future, Promise}
+import com.precog.common.Path
+import com.precog.common.accounts._
+import com.precog.common.ingest._
+import com.precog.common.jobs.JobManager
+import com.precog.common.security._
+import com.precog.daze._
+import com.precog.shard.service._
+
+import akka.dispatch.{Future, ExecutionContext, Promise}
 
 import blueeyes.util.Clock
 import blueeyes.json._
-import blueeyes.bkka.{AkkaDefaults, Stoppable}
+import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
+import blueeyes.core.data.ByteChunk._
 import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.BlueEyesServiceBuilder
@@ -57,24 +57,25 @@ import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
+import scalaz.syntax.monad._
+import scalaz.std.function._
 
 sealed trait ShardState {
   def platform: Platform[Future, StreamT[Future, CharBuffer]]
-  def apiKeyManager: APIKeyManager[Future]
+  def apiKeyFinder: APIKeyFinder[Future]
   def stoppable: Stoppable
 }
 
 case class ManagedQueryShardState(
-  platform: ManagedPlatform,
-  apiKeyManager: APIKeyManager[Future],
-  accountManager: BasicAccountManager[Future],
+  override val platform: ManagedPlatform,
+  apiKeyFinder: APIKeyFinder[Future],
   jobManager: JobManager[Future],
   clock: Clock,
   stoppable: Stoppable) extends ShardState
 
 case class BasicShardState(
   platform: Platform[Future, StreamT[Future, CharBuffer]],
-  apiKeyManager: APIKeyManager[Future],
+  apiKeyFinder: APIKeyFinder[Future],
   stoppable: Stoppable) extends ShardState
 
 trait ShardService extends
@@ -84,6 +85,7 @@ trait ShardService extends
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
+  implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
   /**
@@ -99,129 +101,92 @@ trait ShardService extends
    */
   def configureShardState(config: Configuration): Future[ShardState]
 
-  def optionsResponse[A] = Promise.successful(
-    HttpResponse[A](
-      headers = HttpHeaders(Seq(
-        "Allow" -> "GET,POST,OPTIONS",
-        "Access-Control-Allow-Origin" -> "*",
-        "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-        "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")
-      )
-    )
+  val utf8 = Charset.forName("UTF-8")
+
+  def optionsResponse = M.point(
+    HttpResponse[ByteChunk](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
+      "Access-Control-Allow-Origin" -> "*",
+      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
   )
 
-  // TODO: maybe some of these implicits should be moved, but for now i
-  // don't have the patience to figure out where.
-
-  implicit def err: (HttpFailure, String) => HttpResponse[ByteChunk] = { (failure, s) =>
-    HttpResponse(failure, content = Some(ByteChunk(JString(s.getBytes("UTF-8")).renderCompact)))
-  }
-
-  implicit def failureToQueryResult: (HttpFailure, String) => HttpResponse[QueryResult] = { (fail: HttpFailure, msg: String) =>
-    HttpResponse[QueryResult](status = fail, content = Some(Left(JString(msg))))
-  }
-
-  implicit def futureJValueToFutureQueryResult: Future[HttpResponse[JValue]] => Future[HttpResponse[QueryResult]] = {
-    (fr: Future[HttpResponse[JValue]]) => fr.map { r =>
-      r.copy(content = r.content.map(Left(_)))
-    }
-  }
-
-  lazy val utf8 = Charset.forName("UTF-8")
-
-  implicit def queryResultToFutureByteChunk: QueryResult => Future[ByteChunk] = {
+  private val queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
-      case Left(jv) => Future(Left(ByteBuffer.wrap(jv.renderCompact.getBytes)))
-      case Right(stream) => Future(Right(stream.map(cb => utf8.encode(cb))))
+      case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes))
+      case Right(stream) => Right(stream.map(cb => utf8.encode(cb)))
     }
-  }
-
-  implicit def futureByteChunk2byteChunk: Future[ByteChunk] => ByteChunk = { fb =>
-    Right(StreamT.wrapEffect[Future, ByteBuffer] {
-      fb map {
-        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
-        case Right(stream) => stream
-      }
-    })
-  }
-
-  implicit def queryResult2byteChunk = futureByteChunk2byteChunk compose queryResultToFutureByteChunk
-
-  // I feel dirty inside.
-  implicit def futureMapper[A, B](implicit a2b: A => B): Future[HttpResponse[A]] => Future[HttpResponse[B]] = { fa =>
-    fa map { res => res.copy(content = res.content map a2b) }
   }
 
   private def asyncQueryService(state: ShardState) = state match {
     case BasicShardState(_, _, _) =>
       new QueryServiceNotAvailable
-    case ManagedQueryShardState(platform, _, _, _, _, _) =>
+    case ManagedQueryShardState(platform, _, _, _, _) =>
       new AsyncQueryServiceHandler(platform.asynchronous)
   }
 
   private def syncQueryService(state: ShardState) = state match {
     case BasicShardState(platform, _, _) =>
       new BasicQueryServiceHandler(platform)
-    case ManagedQueryShardState(platform, _, _, jobManager, _, _) =>
+    case ManagedQueryShardState(platform, _, jobManager, _, _) =>
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
+  private val cf = implicitly[ByteChunk => Future[JValue]]
+
+  def shardService[F[+_]](service: HttpService[Future[JValue], F[Future[HttpResponse[QueryResult]]]])(implicit
+      F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {
+    service map { _ map { _ map { _ map queryResultToByteChunk } } } contramap cf
+  }
+
   private def asyncHandler(state: ShardState) = {
-    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = apiKey(state.apiKeyManager) {
+    //val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = {
+    val queryHandler = jsonApiKey(state.apiKeyFinder) {
       path("/analytics/queries") {
-        asyncQuery(post(asyncQueryService(state)))
+        shardService[({ type λ[+α] = (APIKey => α) })#λ] {
+          asyncQuery(post(asyncQueryService(state)))
+        }
       }
     }
 
     state match {
-      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock, _) =>
-        // [ByteChunk, Future[HttpResponse[ByteChunk]]]
-        apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+      case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _) =>
+        jsonApiKey(apiKeyFinder) {
           path("/analytics/queries") {
             path("'jobId") {
               get(new AsyncQueryResultServiceHandler(jobManager)) ~
-              delete(new QueryDeleteHandler(jobManager, clock))
+              delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
             }
           }
         } ~ queryHandler
 
       case _ =>
-        val x: HttpService[Future[JValue], Future[HttpResponse[ByteChunk]]] = queryHandler map (_ map { response =>
-          response.copy(content = response.content map queryResult2byteChunk)
-        })
-        val f: ByteChunk => Future[JValue] = implicitly
-        x contramap f
+        queryHandler
     }
   }
 
   private def syncHandler(state: ShardState) = {
-    implicit def lift[A](a: A): Future[A] = Promise.successful(a)
-
-    jsonpcb[ByteChunk] {
-      apiKey(state.apiKeyManager) {
-        dataPath("analytics/fs") {
-          query {
-            get(syncQueryService(state)) ~
-            options {   // Handle OPTIONS requests internally to simplify the standalone service
-              (request: HttpRequest[ByteChunk]) => {
-                (a: APIKeyRecord, p: Path, s: String, o: QueryOptions) => optionsResponse[QueryResult]
+    jsonp[ByteChunk] {
+      jsonApiKey(state.apiKeyFinder) {
+        dataPath("/analytics/fs") {
+          query[ByteChunk, HttpResponse[ByteChunk]] {
+            get {
+              shardService[({ type λ[+α] = ((APIKey, Path, String, QueryOptions) => α) })#λ] {
+                syncQueryService(state)
               }
+            } ~
+            options {
+              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
             }
-          } map { f => 
-            (a: APIKeyRecord, p: Path) => f(a, p) map { r => r.copy(content = r.content map queryResult2byteChunk) } 
           }
         } ~
-        dataPath("meta/fs") {
-          {
-            get(new BrowseServiceHandler(state.platform.metadataClient, state.apiKeyManager)) map { f => 
-              (a: APIKeyRecord, p: Path) => f(a,p) map { r => r.copy(content = r.content map jvalueToChunk) } 
+        dataPath("/meta/fs") {
+          get {
+            shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
+              new BrowseServiceHandler[Future[JValue]](state.platform.metadataClient, state.apiKeyFinder)
             }
           } ~
-          // Handle OPTIONS requests internally to simplify the standalone service
           options {
-            (request: HttpRequest[ByteChunk]) => {
-              (a: APIKeyRecord, p: Path) => optionsResponse[ByteChunk]
-            }
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
           }
         }
       }
@@ -238,8 +203,8 @@ trait ShardService extends
         request { state =>
           asyncHandler(state) ~ syncHandler(state)
         } ->
-        shutdown { state =>
-          Stoppable.stoppableStop.stop(state.stoppable)
+        stop { state: ShardState =>
+          state.stoppable
         }
       }
     }

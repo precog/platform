@@ -19,17 +19,16 @@
  */
 package com.precog.accounts
 
-import com.precog.auth._
 import com.precog.common._
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 import org.specs2.mutable._
 import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
+import akka.dispatch.{ Future, ExecutionContext, Await }
 import akka.util.Duration
 
 import org.joda.time._
@@ -44,60 +43,34 @@ import scalaz.Validation._
 import blueeyes.akka_testing._
 
 import blueeyes.core.data._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka._
+import blueeyes.core.service._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json._
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
-import blueeyes.json._
-
 import blueeyes.util.Clock
 
-/*
-//we need to create a security server as well as the accounts server, because the accounts server relies on the security server
+import DefaultBijections._
 
-trait TestAPIKeyService extends BlueEyesServiceSpecification with APIKeyService with AkkaDefaults with MongoAPIKeyManagerComponent {
+import org.apache.commons.codec.binary.Base64
 
-  val asyncContext = defaultFutureDispatch
+import scalaz._
+import scalaz.syntax.copointed._
 
-  import BijectionsChunkJson._
+trait TestAccountService extends BlueEyesServiceSpecification with AccountService with AkkaDefaults {
 
-  val config = """ 
-    security {
-      test = true
-      mongo {
-        mock = true
-        servers = [localhost]
-        database = test
-      }
-    }   
-  """
-
-  override val configuration = "services { auth { v1 { " + config + " } } }"
-
-  override def apiKeyManagerFactory(config: Configuration) = TestAPIKeyManager.testAPIKeyManager[Future]
-
-  lazy val authService = service.contentType[JValue](application/(MimeTypes.json)).path("/auth")
-
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
-
-  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
-}
-
-
-//object TestAPIKeyServer extends TestAPIKeyService
-
-trait TestAccountService extends BlueEyesServiceSpecification with AccountService  with AkkaDefaults with ZKMongoAccountManagerComponent {
-
-  val asyncContext = defaultFutureDispatch
-
-  import BijectionsChunkJson._
+  implicit def executionContext = defaultFutureDispatch
+  implicit def M = new FutureMonad(executionContext) with Copointed[Future] {
+    def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(5, "seconds"))
+  }
 
   val config = """ 
     security {
@@ -110,102 +83,172 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
     }   
   """
 
-  override val configuration = "services { auth { v1 { " + config + " } } }"
+  override val configuration = "services { accounts { v1 { " + config + " } } }"
 
-  override def AccountManagerFactory(config: Configuration) = TestAccountManager.testAccountManager[Future]
+  def AccountManager(config: Configuration) = (new InMemoryAccountManager()(M), Stoppable.Noop)
+  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(new InMemoryAPIKeyManager())
 
-  lazy val accountService = service.contentType[JValue](application/(MimeTypes.json)).path("/accounts")
+  val clock = Clock.System
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
+class AccountServiceSpec extends TestAccountService with Tags {
+  lazy val accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/")
 
+  def auth(user: String, pass: String): HttpHeader = {
+    val raw = (user + ":" + pass).getBytes("utf-8")
+    val encoded = Base64.encodeBase64String(raw)
+    HttpHeaders.Authorization("Basic " + encoded)
+  }
 
-//not complete
-
-class TServiceSpec extends TestAPIKeyService with  FutureMatchers with Tags {
-import TestAPIKeyManager._
- 
-}
-object TServiceSpec
-
-class AccountServiceSpec extends TestAccountService with  FutureMatchers with Tags {
-  import TestAccountManager._
- 
-  
   def listAccounts(request: JValue) = 
-    accountService.query("", "").post("")(request)
+    accounts.query("", "").post("")(request)
 
-  def createAccount(email: String, request: JValue) = 
-    accountService.query("email", email).post("")(request)
+  def createAccount(email: String, password: String) = {
+    val request: JValue = JObject(JField("email", JString(email)) :: JField("password", JString(password)) :: Nil)
+    accounts.post("")(request)
+  }
 
+  def getAccount(accountId: String, user: String, pass: String) = 
+    accounts.header(auth(user, pass)).get(accountId)
 
-  
-  
-  def getAccountDetails(accountId: String, request: JValue) = 
-    accountService.query("accountId",accountId).post(accountId)(request)
-  
-  //def updateAccount(account: Account, queryKey: String) = 
- //   accountService.query("account", account.serialize).put(accountId + "/apikeys/")
+  def deleteAccount(accountId: String, user: String, pass: String) = 
+    accounts.header(auth(user, pass)).delete(accountId)
 
-  
-  def deleteAccount(accountId: String) = 
-    accountService.query("accountId",accountId).delete(accountId)
+  def changePassword(accountId: String, user: String, oldPass: String, newPass: String) = {
+    val request: JValue = JObject(JField("password", JString(newPass)) :: Nil)
+    accounts.header(auth(user, oldPass)).put(accountId + "/password")(request)
+  }
 
-  
-  
-  
-  
   def addGrantToAccount(accountId: String,request: JValue) = 
-    accountService.query("accountId",accountId).post(accountId + "/grants/")(request)
+    accounts.query("accountId",accountId).post(accountId + "/grants/")(request)
 
+  def getAccountPlan(accountId: String, user: String, pass: String) = 
+    accounts.header(auth(user, pass)).get(accountId + "/plan")
   
-  
-  def getAccountPlan(accountId: String) = 
-    accountService.query("accountId",accountId).get(accountId + "/plan/")
-  
-  def putAccountPlan(accountId: String, planType: String, request: JValue) = 
-    accountService.query("type", planType).put(accountId + "/plan/")(request)
-  
-  def removeAccountPlan(accountId: String) = 
-    accountService.query("accountId",accountId).delete(accountId + "/plan/")
-  
-  
-  
-  "Account service" should {
-    
-    "Create an Account" in {
-      createAccount("email",JObject(List(JField("","")))) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(accountID), _) => ok
-      }}
-    }
-
-    
-    "Delete an Account" in {
-      
-      //create account
-      //delete account
-      //find account
-//      deleteAccount("todo create one first") must whenDelivered { beLike {
-  //      case HttpResponse(HttpStatus(OK, _), _, _, _) => ok
-    //  }}
-    }
-    
-    
-     "List Accounts" in {
-       //create list of accounts
-       
-       //list accounts, check accountIds
-      listAccounts(JObject(List(JField("","")))) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, _, _) => ok
-      }}
-    }
-    
-    //TODO : more to add here once APIKey Server can be started
-    
+  def putAccountPlan(accountId: String, user: String, pass: String, planType: String) = {
+    val request: JValue = JObject(JField("type", JString(planType)) :: Nil)
+    accounts.header(auth(user, pass)).put(accountId + "/plan")(request)
   }
   
+  def removeAccountPlan(accountId: String, user: String, pass: String) = 
+    accounts.header(auth(user, pass)).delete(accountId + "/plan")
+
+  def createAccountAndGetId(email: String, pass: String): Future[String] = {
+    createAccount(email, pass) map {
+      case HttpResponse(_, _, Some(jv), _) =>
+        val JString(id) = jv \ "accountId"
+        id
+      case _ => sys.error("Invalid response from server when creating account.")
+    }
+  }
+
+  "accounts service" should {
+    "create accounts" in {
+      createAccount("test0001@email.com", "12345").copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
+          jvalue \ "accountId" must beLike { case JString(id) => ok }
+      }
+    }
+
+    "not create duplicate accounts" in {
+      val (JString(id1), JString(id2)) = (for {
+        HttpResponse(HttpStatus(OK, _), _, Some(jv1), _) <- createAccount("test0002@email.com", "password1")
+        HttpResponse(HttpStatus(OK, _), _, Some(jv2), _) <- createAccount("test0002@email.com", "password2")
+      } yield ((jv1 \ "accountId", jv2 \ "accountId"))).copoint
+
+      id1 must_== id2
+    }
+
+    "find own account" in {
+      val (user, pass) = ("test0003@email.com", "password")
+      (for {
+        id <- createAccountAndGetId(user, pass)
+        resp <- getAccount(id, user, pass)
+      } yield resp).copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
+          jv \ "email" must_== JString(user)
+      }
+    }
+
+    "not find other account" in {
+      val (user, pass) = ("test0003@email.com", "password")
+      (for {
+        id1 <- createAccountAndGetId(user, pass)
+        id2 <- createAccountAndGetId("some-other-email@email.com", "password")
+        resp <- getAccount(id2, user, pass)
+      } yield resp).copoint must beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(jv), _) =>
+          ok
+      }
+    }
+
+    "delete own account" in {
+      val (user, pass) = ("test0004@email.com", "password")
+      (for {
+        id <- createAccountAndGetId(user, pass)
+        res0 <- deleteAccount(id, user, pass)
+        res1 <- getAccount(id, user, pass)
+      } yield ((res0, res1))).copoint must beLike {
+        case (HttpResponse(HttpStatus(NoContent, _), _, _, _), HttpResponse(HttpStatus(Unauthorized, _), _, _, _)) =>
+          ok
+      }
+    }
+
+    "change password of account" in {
+      val (user, oldPass) = ("test0005@email.com", "password")
+      val newPass = "super"
+      (for {
+        id <- createAccountAndGetId(user, oldPass)
+        res0 <- changePassword(id, user, oldPass, newPass)
+        res1 <- getAccount(id, user, oldPass)
+        res2 <- getAccount(id, user, newPass)
+      } yield ((res0, res1, res2))).copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, _, _),
+              HttpResponse(HttpStatus(Unauthorized, _), _, _, _),
+              HttpResponse(HttpStatus(OK, _), _, _, _)) =>
+          ok
+      }
+    }
+
+    "get account plan type" in {
+      val (user, pass) = ("test0006@email.com", "password")
+      (for {
+        id <- createAccountAndGetId(user, pass)
+        res <- getAccountPlan(id, user, pass)
+      } yield res).copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
+          jv \ "type" must_== JString("Free")
+      }
+    }
+
+    "update account plan type" in {
+      val (user, pass) = ("test0007@email.com", "password")
+      (for {
+        id <- createAccountAndGetId(user, pass)
+        res0 <- putAccountPlan(id, user, pass, "Root")
+        res1 <- getAccountPlan(id, user, pass)
+      } yield ((res0, res1))).copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, _, _),
+              HttpResponse(HttpStatus(OK, _), _, Some(jv), _)) =>
+          jv \ "type" must_== JString("Root")
+      }
+    }
+
+    "delete account plan" in {
+      val (user, pass) = ("test0008@email.com", "password")
+      (for {
+        id <- createAccountAndGetId(user, pass)
+        _ <- putAccountPlan(id, user, pass, "Root")
+        _ <- removeAccountPlan(id, user, pass)
+        res <- getAccountPlan(id, user, pass)
+      } yield res).copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
+          jv \ "type" must_== JString("Free")
+      }
+    }
+  }
 }
-*/

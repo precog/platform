@@ -20,8 +20,9 @@
 package com.precog.yggdrasil
 package actor
 
-import com.precog.accounts.BasicAccountManager
-import com.precog.common.{ Archive, ArchiveMessage, CheckpointCoordination, IngestMessage, Path, YggCheckpoint }
+import com.precog.common.{ CheckpointCoordination, YggCheckpoint, Path }
+import com.precog.common.accounts.AccountFinder
+import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
@@ -41,8 +42,11 @@ import org.streum.configrity.converter.Extra._
 
 import scalaz.{Failure,Success}
 import scalaz.syntax.applicative._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.std.boolean._
 import scalaz.std.option._
+import scalaz.std.map._
+import scalaz.std.vector._
 
 trait ShardConfig extends BaseConfig {
   type IngestConfig
@@ -83,23 +87,23 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]): Option[ActorRef]
 
-  def initShardActors(storage: MetadataStorage, accountManager: BasicAccountManager[Future], projectionsActor: ActorRef): ShardActors = {
+  def initShardActors(storage: MetadataStorage, accountFinder: AccountFinder[Future], projectionsActor: ActorRef): ShardActors = {
     //FIXME: move outside
     val metadataActorSystem: ActorSystem = ActorSystem("Metadata")
     val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
     def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
-        checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
-          case Some(Failure(errors)) =>
-            logger.error("Unable to load Kafka checkpoint: " + errors)
-            sys.error("Unable to load Kafka checkpoint: " + errors)
+      checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
+        case Some(Failure(errors)) =>
+          logger.error("Unable to load Kafka checkpoint: " + errors)
+          sys.error("Unable to load Kafka checkpoint: " + errors)
 
         case Some(Success(checkpoint)) => Some(checkpoint)
         case None => None
       }
-    } 
+    }
 
     val initialCheckpoint = loadCheckpoint()
 
@@ -107,7 +111,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
     val metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint, yggConfig.metadataPreload)), "metadata")
     val metadataSync = metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
 
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, metadataActor, accountManager)) yield init
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, metadataActor, accountFinder)) yield init
 
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(

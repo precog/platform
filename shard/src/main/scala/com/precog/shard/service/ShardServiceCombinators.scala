@@ -32,23 +32,24 @@ import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common.Path
-import com.precog.common.security._
 import com.precog.common.json._
-import com.precog.ingest.service._
-import com.precog.daze.{QueryOptions, QueryOutput, JsonOutput, CsvOutput}
+import com.precog.common.security._
+import com.precog.common.security.service._
+import com.precog.common.services._
+import com.precog.daze._
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._
 
-import scalaz.{ Validation, Success, Failure }
-import scalaz.ValidationNEL
+import com.weiglewilczek.slf4s.Logging
+
+import scalaz._
 import scalaz.Validation._
-import scalaz.Monad
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
 import scalaz.syntax.bifunctor._
 import scalaz.std.option._
 
-trait ShardServiceCombinators extends EventServiceCombinators {
-
+trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
   type Query = String
 
   import DefaultBijections._
@@ -96,15 +97,26 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   }
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
+    import blueeyes.json.serialization.Extractor._    
+    val onError: Error => String = {
+      case err @ Thrown(ex) =>
+        logger.warn("Exceptiion thrown from JSON parsing of sortOn parameter", ex)
+        err.message
+      case other => 
+        other.message          
+    }
+
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
-      (((_: Throwable).getMessage) <-: JParser.parseFromString(paths)) flatMap {
+      val parsed: Validation[Error, List[CPath]] = ((Thrown(_:Throwable)) <-: JParser.parseFromString(paths)) flatMap {
         case JArray(elems) =>
           Validation.success(elems collect { case JString(path) => CPath(path) })
         case JString(path) =>
           Validation.success(CPath(path) :: Nil)
         case badJVal =>
-          Validation.failure("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal)
+          Validation.failure(Invalid("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal))
       }
+
+      onError <-: parsed 
     } getOrElse {
       Validation.success[String, List[CPath]](Nil)
     }
@@ -135,8 +147,8 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def query[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, (APIKeyRecord, Path) => Future[B], A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]] {
+  def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, (APIKey, Path) => Future[B]] = {
+    new DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
       val metadata = None
       val service = (request: HttpRequest[A]) => {
@@ -157,7 +169,7 @@ trait ShardServiceCombinators extends EventServiceCombinators {
           )
 
           query map { q =>
-            next.service(request) map { f => (apiKey: APIKeyRecord, path: Path) => f(apiKey, path, q, opts) }
+            next.service(request) map { f => (apiKey: APIKey, path: Path) => f(apiKey, path, q, opts) }
           } getOrElse {
             failure(inapplicable)
           }
@@ -169,13 +181,13 @@ trait ShardServiceCombinators extends EventServiceCombinators {
     }
   }
 
-  def asyncQuery[A, B](next: HttpService[A, (APIKeyRecord, Path, Query, QueryOptions) => Future[B]]) = {
-    new DelegatingService[A, APIKeyRecord => Future[B], A, (APIKeyRecord, Path) => Future[B]] {
-      val delegate = query(next)
+  def asyncQuery[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, APIKey => Future[B]] = {
+    new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
+      val delegate = query[A, B](next)
       val service = { (request: HttpRequest[A]) =>
         val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
         delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
-          (apiKey: APIKeyRecord) => f(apiKey, Path(path))
+          (apiKey: APIKey) => f(apiKey, Path(path))
         }
       }
 
@@ -192,12 +204,4 @@ trait ShardServiceCombinators extends EventServiceCombinators {
   }
 
   implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
-
-  def jsonpcb[A](delegate: HttpService[Future[JValue], Future[HttpResponse[A]]])
-    (implicit bi: A => Future[ByteChunk], M: Monad[Future]) = {
-
-    jsonpc[ByteBuffer, ByteBuffer](delegate map (_ flatMap { response =>
-      response.content.map(bi).sequence.map(c0 => response.copy(content = c0))
-    }))
-  }
 }

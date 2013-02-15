@@ -186,19 +186,16 @@ case object CPathArray extends CPathNode {
   override def toString = "[*]"
 }
 
-trait CPathSerialization {
+object CPath {
+  import blueeyes.json._
   implicit val CPathDecomposer: Decomposer[CPath] = new Decomposer[CPath] {
     def decompose(cpath: CPath): JValue = JString(cpath.toString)
   }
 
-  implicit val CPathExtractor: Extractor[CPath] = new Extractor[CPath] with ValidatedExtraction[CPath] {
+  implicit val CPathExtractor: Extractor[CPath] = new Extractor[CPath] {
     override def validated(obj: JValue): scalaz.Validation[Extractor.Error,CPath] =
       obj.validated[String].map(CPath(_))
   }
-}
-
-object CPath extends CPathSerialization {
-  import blueeyes.json._
 
   private[this] case class CompositeCPath(nodes: List[CPathNode]) extends CPath 
 

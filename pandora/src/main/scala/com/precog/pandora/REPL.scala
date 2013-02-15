@@ -32,10 +32,9 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
-
-import com.precog.accounts.InMemoryAccountManager
 import com.precog.common.Path
 import com.precog.common.kafka._
+import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
@@ -276,7 +275,8 @@ object Console extends App {
     replConfig <- loadConfig(args.headOption) 
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
   } yield {
-      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle](new REPL 
+      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle] {
+        new REPL 
           with Lifecycle 
           with ActorStorageModule
           with ActorProjectionModule[Array[Byte], Slice]
@@ -302,9 +302,11 @@ object Console extends App {
           }
         }
 
+        val accountFinder = None
+
         val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
         val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-          initShardActors(fileMetadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
+          initShardActors(fileMetadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
         val accessControl = new UnrestrictedAccessControl[Future]()
 
@@ -325,7 +327,7 @@ object Console extends App {
           new Evaluator[N](N0) with IdSourceScannerModule {
             type YggConfig = REPLConfig
             val yggConfig = replConfig
-            val report = LoggingQueryLogger[N](N0)
+            val report = LoggingQueryLogger[N, instructions.Line](N0)
           }
 
         def startup = IO { PrecogUnit }
@@ -335,8 +337,8 @@ object Console extends App {
           actorSystem.shutdown()
           PrecogUnit
         }
-      })
-
+      }
+    }
   }
 
   val run = repl.flatMap[PrecogUnit] {

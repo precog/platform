@@ -79,8 +79,6 @@ trait ManagedQueryModule extends YggConfigComponent {
 
   type YggConfig <: ManagedQueryModuleConfig
 
-  type ShardQuery[+A] = JobQueryT[Future, A]
-
   trait ShardQueryMonad extends QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
     def jobId: Option[JobId]
     def Q: JobQueryStateMonad
@@ -90,7 +88,7 @@ trait ManagedQueryModule extends YggConfigComponent {
    * A mix-in for `QueryLogger`s that forcefully aborts a shard query on fatal
    * errors.
    */
-  trait ShardQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+  trait ShardQueryLogger[M[+_], P] extends QueryLogger[M, P] {
     def M: ShardQueryMonad
 
     abstract override def fatal(pos: P, msg: String): M[Unit] = {

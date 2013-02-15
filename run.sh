@@ -19,6 +19,8 @@
 ## 
 #!/bin/bash
 
+MAX_SHARD_STARTUP_WAIT=300
+
 function usage {
     echo "Usage: ./run.sh [-b] [-l] [-d] [-q directory] [ingest.json ...]" >&2
     echo "  -b: Build any required artifacts for the run" >&2
@@ -84,9 +86,19 @@ function finished {
 trap "finished; exit 1" TERM INT
 trap "finished" EXIT
 
-while [ ! -f $WORKDIR/ports.txt ] > /dev/null; do
+# Wait for the shard to come up fully
+for trySeq in `seq 1 $MAX_SHARD_STARTUP_WAIT`; do
+    if [ -f $WORKDIR/ports.txt ] > /dev/null; then
+        break
+    fi
     sleep 1
 done
+
+if [ ! -f $WORKDIR/ports.txt ] > /dev/null; then
+    echo "Start must have failed to start! Leaving work dir in place!" >&2
+    DONTCLEAN=1
+    exit 1
+fi
 
 ROOTTOKEN="$(cat $WORKDIR/root_token.txt)"
 ACCOUNTID="$(cat $WORKDIR/account_id.txt)"
@@ -133,8 +145,8 @@ for f in $@; do
     ALLTABLES="$ALLTABLES $TABLE"
     DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
-    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -X POST --data-binary @- "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/ingest/v1/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST --data-binary @- "http://localhost:$INGEST_PORT/ingest/v1/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 

@@ -17,10 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package auth
+package com.precog.auth 
 
 import com.precog.common._
+import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.joda.time.DateTime
@@ -31,6 +31,7 @@ import akka.dispatch.{ ExecutionContext, Future, Promise }
 import blueeyes.bkka._
 import blueeyes.json._
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -57,14 +58,12 @@ object MongoAPIKeyManagerSettings {
   val defaults = MongoAPIKeyManagerSettings()
 }
 
-trait MongoAPIKeyManagerComponent extends Logging {
-  implicit def asyncContext: ExecutionContext
-  implicit val M: Monad[Future]
+object MongoAPIKeyManager extends Logging {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): (APIKeyManager[Future], Stoppable) = {
+    // TODO: should only require either the executor or M, not both.
+    implicit val M: Monad[Future] = new FutureMonad(executor)
 
-  def apiKeyManagerFactory(config: Configuration): APIKeyManager[Future] = {
-    val mongo = RealMongo(config.detach("mongo"))
-    
-    val database = config[String]("mongo.database", "auth_v1")
+    val dbName = config[String]("mongo.database", "auth_v1")
     val apiKeys = config[String]("mongo.tokens", "tokens")
     val grants = config[String]("mongo.grants", "grants")
     val deletedAPIKeys = config[String]("mongo.deleted_tokens", apiKeys + "_deleted")
@@ -76,76 +75,57 @@ trait MongoAPIKeyManagerComponent extends Logging {
       apiKeys, grants, deletedAPIKeys, deletedGrants, timeoutMillis, rootKeyId
     )
 
-    val mongoAPIKeyManager = 
-      new MongoAPIKeyManager(mongo, mongo.database(database), settings)
+    val mongo = RealMongo(config.detach("mongo"))
+    val database = mongo.database(dbName)
+    val mongoAPIKeyManager = new MongoAPIKeyManager(mongo, database, settings)
 
     val cached = config[Boolean]("cached", false)
 
-    if(cached) {
-      new CachingAPIKeyManager(mongoAPIKeyManager)
-    } else {
-      mongoAPIKeyManager
-    }
+    val dbStop = Stoppable.fromFuture(database.disconnect.fallbackTo(Future(())) flatMap { _ => mongo.close })
+
+    (if (cached) new CachingAPIKeyManager(mongoAPIKeyManager) else mongoAPIKeyManager, dbStop)
   }
-}
 
-object MongoAPIKeyManager extends Logging {
-  def findRootAPIKey(db: Database, keyCollection: String, grantCollection: String, createIfMissing: Boolean)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
-    import Grant.Serialization._
-    import APIKeyRecord.Serialization._
+  def createRootAPIKey(db: Database, keyCollection: String, grantCollection: String)(implicit timeout: Timeout): Future[APIKeyRecord] = {
+    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
 
-    db(selectOne().from(keyCollection).where("isRoot" === true)).flatMap {
+    logger.info("Creating new root key")
+    // Set up a new root API Key
+    val rootAPIKeyId = APIKeyManager.newAPIKey()
+    val rootGrantId = APIKeyManager.newGrantId()
+
+    val rootGrant = Grant(
+      rootGrantId, Some("root-grant"), Some("The root grant"), rootAPIKeyId, Set(),
+      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      None
+    )
+  
+    val rootAPIKeyRecord = APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), rootAPIKeyId, Set(rootGrantId), true)
+
+    for {
+      _ <- db(insert(rootGrant.serialize.asInstanceOf[JObject]).into(grantCollection)) 
+      _ <- db(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(keyCollection))
+    } yield rootAPIKeyRecord
+  }
+
+  def findRootAPIKey(db: Database, keyCollection: String)(implicit context: ExecutionContext, timeout: Timeout): Future[APIKeyRecord] = {
+    db(selectOne().from(keyCollection).where("isRoot" === true)) flatMap {
       case Some(keyJv) => 
         logger.info("Retrieved existing root key")
         Promise.successful(keyJv.deserialize[APIKeyRecord])
-      case None if createIfMissing => {
-        logger.info("Creating new root key")
-        // Set up a new root API Key
-        val rootGrantId = APIKeyManager.newGrantId()
-        val rootGrant = {
-          def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-        
-          Grant(
-            rootGrantId, Some("root-grant"), Some("The root grant"), None, Set(),
-            Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
-            None
-          )
-        }
-      
-        val rootAPIKeyId = APIKeyManager.newAPIKey()
-        val rootAPIKeyRecord =
-          APIKeyRecord(rootAPIKeyId, Some("root-apiKey"), Some("The root API key"), None, Set(rootGrantId), true)
 
-        db(insert(rootGrant.serialize.asInstanceOf[JObject]).into(grantCollection)) flatMap {
-          _ => db(insert(rootAPIKeyRecord.serialize.asInstanceOf[JObject]).into(keyCollection)).map { _ => rootAPIKeyRecord }
-        }
-      }
-      case _ => 
+      case None => 
         logger.error("Could not locate existing root API key!")
-        throw new Exception("Could not locate existing root API key!")
+        Promise.failed(new IllegalStateException("Could not locate existing root API key!"))
     }
   }
 }
 
-// FIXME: This will be in scalaz when we move from our current milestone
-object TempPlusEmpty {
-  implicit def monadPlusEmpty[M[_], F[_]](implicit FM: Monad[F], PlusM: PlusEmpty[M]) = new PlusEmpty[({ type λ[α] = F[M[α]] })#λ] {
-    def empty[A] = FM.point(PlusM.empty[A])
-    def plus[A](a: F[M[A]], b: => F[M[A]]): F[M[A]] = FM.bind(a) { am => FM.map(b) { bm => PlusM.plus[A](am, bm) } }
-  }
-}
-
-class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)
-  (implicit val execContext: ExecutionContext) extends APIKeyManager[Future] with Logging {
-  
-  import TempPlusEmpty._
-
-  implicit val M = AkkaTypeClasses.futureApplicative(execContext)
+class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)(implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
+  implicit val M = new FutureMonad(executor)
 
   private implicit val impTimeout = settings.timeout
 
-  import Grant.Serialization._
-  import APIKeyRecord.Serialization._
 
   val rootAPIKeyRecord : Future[APIKeyRecord] = findAPIKey(settings.rootKeyId).map { 
     _.getOrElse { throw new Exception("Could not locate root api key as specified in the configuration") }
@@ -155,14 +135,14 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   def rootGrantId: Future[GrantId] = rootAPIKeyRecord.map(_.grants.head) 
 
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): Future[APIKeyRecord] = {
-    val apiKey = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, some(issuerKey), grants, false)
+    val apiKey = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     database(insert(apiKey.serialize.asInstanceOf[JObject]).into(settings.apiKeys)) map {
       _ => apiKey
     }
   }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
-    val ng = Grant(APIKeyManager.newGrantId(), name, description, some(issuerKey), parentIds, perms, expiration)
+    val ng = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, expiration)
     logger.debug("Adding grant: " + ng)
     database(insert(ng.serialize.asInstanceOf[JObject]).into(settings.grants)) map {
       _ => logger.debug("Add complete for " + ng); ng
@@ -172,29 +152,29 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   private def findOneMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
     database {
       selectOne().from(collection).where(keyName === keyValue)
-    }.map {
-      _.map(_.deserialize(extractor))
+    } map {
+      _.map(_.deserialize[A])
     }
   }
 
   private def findAllMatching[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
-      selectAll.from(collection).where(keyName === keyValue)
-    }.map {
-      _.map(_.deserialize(extractor)).toSet
+      selectAll.from(collection).where(keyName === keyValue )
+    } map {
+      _.map(_.deserialize[A]).toSet
     }
   }
 
   private def findAllIncluding[A](keyName: String, keyValue: MongoPrimitive, collection: String)(implicit extractor: Extractor[A]): Future[Set[A]] = {
     database {
       selectAll.from(collection).where(stringToMongoFilterBuilder(keyName) contains keyValue)
-    }.map {
-      _.map(_.deserialize(extractor)).toSet
+    } map {
+      _.map(_.deserialize[A]).toSet
     }
   }
 
   private def findAll[A](collection: String)(implicit extract: Extractor[A]): Future[Seq[A]] =
-    database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
+    database { selectAll.from(collection) } map { _.map(_.deserialize[A]).toSeq }
 
   def listAPIKeys() = findAll[APIKeyRecord](settings.apiKeys)
   def listGrants() = findAll[Grant](settings.grants)
@@ -202,6 +182,8 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   def findAPIKey(apiKey: APIKey) = 
     ToPlusOps[({ type λ[α] = Future[Option[α]] })#λ, APIKeyRecord](findOneMatching[APIKeyRecord]("apiKey", apiKey, settings.apiKeys)) <+>
     findOneMatching[APIKeyRecord]("tid", apiKey, settings.apiKeys)
+
+  def findAPIKeyChildren(apiKey: APIKey): Future[Set[APIKeyRecord]] = sys.error("todo")
 
   def findGrant(gid: GrantId) = 
     ToPlusOps[({ type λ[α] = Future[Option[α]] })#λ, Grant](findOneMatching[Grant]("grantId", gid, settings.grants)) <+>
@@ -261,19 +243,18 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     } 
 
   def deleteGrant(gid: GrantId): Future[Set[Grant]] = {
-    findGrantChildren(gid).flatMap { gc =>
-      Future.sequence(gc.map { g => deleteGrant(g.grantId)}).map { _.flatten }.flatMap { gds =>
-        findGrant(gid).flatMap {
-          case og @ Some(g) =>
-            for {
-              _ <- database(insert(g.serialize.asInstanceOf[JObject]).into(settings.deletedGrants))
-              _ <- database(remove.from(settings.grants).where("grantId" === gid))
-            } yield { gds + g }
-          case None    => Future(gds)
-        }
-      }
-    }
+    for {
+      children <- findGrantChildren(gid)
+      deletedChildren <- Future.sequence(children map { g => deleteGrant(g.grantId) }) map { _.flatten } 
+      leafOpt <- findGrant(gid) 
+      result <- leafOpt map { leafGrant =>
+                  for {
+                    _ <- database(insert(leafGrant.serialize.asInstanceOf[JObject]).into(settings.deletedGrants))
+                    _ <- database(remove.from(settings.grants).where("grantId" === gid))
+                  } yield { deletedChildren + leafGrant } 
+                } getOrElse {
+                  Promise successful deletedChildren
+                }
+    } yield result
   }
-  
-  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
 }

@@ -24,7 +24,7 @@ import com.precog.common.json._
 import com.precog.common.security._
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
+import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
 
@@ -69,16 +69,16 @@ trait JobStateSerialization {
   implicit object JobStateDecomposer extends Decomposer[JobState] {
     private def base(state: String, timestamp: DateTime, previous: JobState, reason: Option[String] = None): JObject = {
       JObject(
-        JField("state", state) ::
-        JField("timestamp", timestamp) ::
-        JField("previous", decompose(previous)) ::
-        (reason map { reason => JField("reason", reason) :: Nil } getOrElse Nil)
+        jfield("state", state) ::
+        jfield("timestamp", timestamp) ::
+        jfield("previous", decompose(previous)) ::
+        (reason map { jfield("reason", _) :: Nil } getOrElse Nil)
       )
     }
 
     override def decompose(job: JobState): JValue = job match {
       case NotStarted =>
-        JObject(JField("state", "not_started") :: Nil)
+        jobject(jfield("state", "not_started"))
 
       case Started(ts, prev) =>
         base("started", ts, prev)
@@ -97,7 +97,7 @@ trait JobStateSerialization {
     }
   }
 
-  implicit object JobStateExtractor extends Extractor[JobState] with ValidatedExtraction[JobState] {
+  implicit object JobStateExtractor extends Extractor[JobState] {
     def extractBase(obj: JValue): Validation[Error, (DateTime, JobState)] = {
       ((obj \ "timestamp").validated[DateTime] |@| (obj \ "previous").validated[JobState]).tupled
     }

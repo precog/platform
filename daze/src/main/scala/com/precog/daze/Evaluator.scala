@@ -84,8 +84,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   type GroupId = Int
   
   type Evaluator[N[+_]] <: EvaluatorLike[N]
-
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
   abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with PredicatePullups with YggConfigComponent {
     type YggConfig <: EvaluatorConfig
@@ -371,7 +369,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               case CUndefined => Table.empty
 
-              case rv => Table.fromJson(Stream(rv.toJValue))
+              case rv => Table.fromRValues(Stream(rv))
             }
 
             val spec = buildConstantWrapSpec(Leaf(Source))
@@ -1070,8 +1068,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
     
     private def zip[A](table1: StateT[N, EvaluatorState, A], table2: StateT[N, EvaluatorState, A]): StateT[N, EvaluatorState, (A, A)] =
-      monadState.apply(table1, table2) { (_, _) }
-
+      monadState.apply2(table1, table2) { (_, _) }
+    
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
       reductions: Map[DepGraph, Option[RValue]] = Map.empty,

@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 
 import blueeyes.json._
@@ -32,6 +33,7 @@ import scala.collection.immutable.ListMap
 import scala.math.BigDecimal
 
 class RoutingTableSpec extends Specification {
+  import ProjectionInsert.Row
   
   "SingleColumnProjectionRoutingTable" should {
 
@@ -44,16 +46,16 @@ class RoutingTableSpec extends Specification {
         JField("selector", JString("Test")) :: Nil 
       )
 
-      val metadata = Map[JPath, Set[UserMetadata]]() +
-                     (JPath(".selector") -> Set.empty[UserMetadata])
-      
-      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), Some("someOwner"), jval, metadata))
+      val eventId = EventId(0, 0)
+      val msg = IngestMessage("apiKey", Path("/a/b"), "someOwner", Vector(IngestRecord(eventId, jval)), None)
       
       val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
 
-      val actions = rt.routeEvent(msg)
+      val actions = rt.routeIngest(msg)
 
-      val expected = Seq(ProjectionData(toProjDesc(colDesc :: Nil), List[CValue](CString("Test")), List(Set.empty)))
+      val expected = Seq(
+        ProjectionInsert(toProjDesc(colDesc :: Nil), Seq(Row(eventId, List[CValue](CString("Test")), Nil)))
+      )
 
       actions must containAllOf(expected).only
     }
@@ -68,31 +70,24 @@ class RoutingTableSpec extends Specification {
                                JField("baz", JNum(BigDecimal("91011.12E+1314")))))
       )
 
-      val metadata = Map[JPath, Set[UserMetadata]]() +
-                     (JPath(".selector") -> Set.empty[UserMetadata]) +
-                     (JPath(".foo.bar") -> Set.empty[UserMetadata]) +
-                     (JPath(".foo.bat") -> Set.empty[UserMetadata]) +
-                     (JPath(".foo.baz") -> Set.empty[UserMetadata])
-
-
-      val msg = EventMessage(EventId(0,0), Event("apiKey", Path("/a/b"), Some("someOwner"), jval, metadata))
+      val eventId = EventId(0, 0)
+      val msg = IngestMessage("apiKey", Path("/a/b"), "someOwner", Vector(IngestRecord(eventId, jval)), None)
 
       val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
       val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("someOwner")))
       val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("someOwner")))
       val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("someOwner")))
 
-      val actions = rt.routeEvent(msg)
+      val actions = rt.routeIngest(msg)
 
       val expected = Seq(
-        ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase[CValue](CString("Test")), List(Set.empty)),
-        ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase[CValue](CLong(123)), List(Set.empty)),
-        ProjectionData(toProjDesc(colDesc3 :: Nil), VectorCase[CValue](CDouble(456.78)), List(Set.empty)),
-        ProjectionData(toProjDesc(colDesc4 :: Nil), VectorCase[CValue](CNum(BigDecimal("91011.12E+1314"))), List(Set.empty))
+        ProjectionInsert(toProjDesc(colDesc1 :: Nil), Seq(Row(eventId, VectorCase[CValue](CString("Test")), Nil))),
+        ProjectionInsert(toProjDesc(colDesc2 :: Nil), Seq(Row(eventId, VectorCase[CValue](CLong(123)), Nil))),
+        ProjectionInsert(toProjDesc(colDesc3 :: Nil), Seq(Row(eventId, VectorCase[CValue](CDouble(456.78)), Nil))),
+        ProjectionInsert(toProjDesc(colDesc4 :: Nil), Seq(Row(eventId, VectorCase[CValue](CNum(BigDecimal("91011.12E+1314"))), Nil)))
       )
 
       actions must containAllOf(expected).only
-      
     }
   }
 }

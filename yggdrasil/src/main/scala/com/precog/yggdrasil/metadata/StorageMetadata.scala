@@ -178,8 +178,8 @@ class UserMetadataView[M[+_]](apiKey: APIKey, accessControl: AccessControl[M], m
     as.map(f).toStream.sequence.map(_ forall identity)
 }
 
-class ActorStorageMetadata(metadataActor: ActorRef, serviceTimeout0: Timeout)(implicit val asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
-  implicit val M = AkkaTypeClasses.futureApplicative(asyncContext) 
+class ActorStorageMetadata(metadataActor: ActorRef, serviceTimeout0: Timeout)(implicit val executor: ExecutionContext) extends StorageMetadata[Future] with Logging {
+  implicit val M = new FutureMonad(executor) 
   implicit val serviceTimeout = serviceTimeout0
  
   def findChildren(path: Path) = (metadataActor ? FindChildren(path)).mapTo[Set[Path]] onFailure { 

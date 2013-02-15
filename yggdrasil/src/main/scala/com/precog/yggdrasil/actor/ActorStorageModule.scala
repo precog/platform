@@ -22,8 +22,9 @@ package actor
 
 import metadata._
 
-import com.precog.accounts.BasicAccountManager
+import com.precog.common.accounts.AccountFinder
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.security._
 
 import com.precog.util.PrecogUnit

@@ -22,6 +22,7 @@ package actor
 
 import metadata._
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.util._
 

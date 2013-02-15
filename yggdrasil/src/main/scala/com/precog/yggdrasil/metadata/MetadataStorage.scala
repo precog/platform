@@ -243,10 +243,9 @@ object FileMetadataStorage extends Logging {
       if (!df.exists) {
         Failure("Unable to find serialized projection descriptor in " + baseDir)
       } else {
-        ((_: Extractor.Error).message) <-: (for {
-          jv <- ((Extractor.Invalid(_: String)) compose onError) <-: JParser.parseFromFile(df)
-          desc <- jv.validated[ProjectionDescriptor]
-        } yield desc)
+        (((_: Throwable).getMessage) <-: JParser.parseFromFile(df)) flatMap { jv =>
+          ((_: Extractor.Error).message) <-: jv.validated[ProjectionDescriptor]
+        }
       }
     }
 
@@ -389,14 +388,16 @@ class FileMetadataStorage private (baseDir: File, archiveDir: File, fileOps: Fil
 case class MetadataRecord(metadata: ColumnMetadata, clock: VectorClock)
 
 trait MetadataRecordSerialization {
+  // TODO: clean up these extractors
   implicit val MetadataRecordDecomposer: Decomposer[MetadataRecord] = new Decomposer[MetadataRecord] {
     def extract(metadata: ColumnMetadata) = {
       val list: List[Set[Metadata]] = metadata.values.map{ _.values.toSet }(collection.breakOut)
       list.serialize
     }
+
     override def decompose(metadata: MetadataRecord): JValue = JObject(List(
       JField("metadata", extract(metadata.metadata)),
-      JField("checkpoint", metadata.clock)
+      JField("checkpoint", metadata.clock.jv)
     ))
   }
 
@@ -404,7 +405,7 @@ trait MetadataRecordSerialization {
     v.map { _.map( sm => Metadata.toTypedMap(sm) ).toList }
   }
 
-  def metadataRecordExtractor(desc: ProjectionDescriptor): Extractor[MetadataRecord] = new Extractor[MetadataRecord] with ValidatedExtraction[MetadataRecord] {
+  def metadataRecordExtractor(desc: ProjectionDescriptor): Extractor[MetadataRecord] = new Extractor[MetadataRecord] {
     override def validated(obj: JValue): Validation[Error, MetadataRecord] =
       (extractMetadata((obj \ "metadata").validated[List[Set[Metadata]]]) |@|
        (obj \ "checkpoint").validated[VectorClock]).apply {
@@ -414,4 +415,3 @@ trait MetadataRecordSerialization {
 }
 
 object MetadataRecord extends MetadataRecordSerialization
-

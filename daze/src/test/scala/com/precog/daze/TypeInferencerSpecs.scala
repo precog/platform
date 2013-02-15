@@ -124,7 +124,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
     }
   }
 
-  val cLiterals = Set(CBoolean, CLong, CDouble, CNum, CString, CNull, CDate)
+  val cLiterals = Set(CBoolean, CLong, CDouble, CNum, CString, CNull, CDate, CPeriod)
 
   "type inference" should {
     "propagate structure/type information through a trivial Join/DerefObject node" in {

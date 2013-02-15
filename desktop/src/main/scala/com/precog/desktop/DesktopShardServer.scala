@@ -23,13 +23,15 @@ package desktop
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
+import blueeyes.bkka._
 
 import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
 import com.precog.common.jobs.InMemoryJobManager
+import com.precog.common.accounts.StaticAccountFinder
+import com.precog.common.security.StaticAPIKeyFinder
 import com.precog.shard.jdbm3.JDBMQueryExecutorComponent
 import com.precog.standalone.StandaloneShardServer
 
@@ -37,27 +39,19 @@ object DesktopShardServer
     extends StandaloneShardServer
     with JDBMQueryExecutorComponent {
   val caveatMessage = None
-  override def hardCodedAccount = Some("desktop")
 
   val actorSystem = ActorSystem("desktopExecutorActorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = M.point {
-    val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
-    val accountManager = accountManagerFactory(config.detach("accounts"))
+  def configureShardState(config: Configuration) = Future {
+    val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
+    val accountFinder = new StaticAccountFinder("desktop")
     val jobManager = new InMemoryJobManager
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val stoppable = Stoppable.Noop
 
-    val stoppable = Stoppable.fromFuture {
-      for {
-        _ <- apiKeyManager.close
-        _ <- accountManager.close
-        _ <- platform.shutdown
-      } yield ()
-    }
-
-    ManagedQueryShardState(platform, apiKeyManager, accountManager, jobManager, clock, stoppable)
+    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start JDBM Shard server!!!")

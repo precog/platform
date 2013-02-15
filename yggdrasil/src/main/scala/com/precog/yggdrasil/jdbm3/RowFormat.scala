@@ -27,7 +27,7 @@ import com.precog.common.json._
 import com.precog.yggdrasil.table._
 import com.precog.util._
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import scala.collection.mutable.ListBuffer
 
@@ -210,6 +210,18 @@ trait RowFormatSupport { self: StdCodecs =>
         }
       }
 
+    case (CPeriod, col: PeriodColumn) =>
+      new SimpleColumnValueEncoder[Period] {
+        val codec = Codec[Period]
+
+        def encode(row: Int, buffer: ByteBuffer, pool: ByteBufferPool): Option[List[ByteBuffer]] = {
+          codec.writeInit(col(row), buffer) match {
+            case Some(s) => Some(writeMore(s, pool, buffer :: Nil))
+            case None => None
+          }
+        }
+      }
+
     case (CEmptyObject, col: EmptyObjectColumn) =>
       new ColumnValueEncoder {
         def encode(row: Int, buffer: ByteBuffer, pool: ByteBufferPool): Option[List[ByteBuffer]] = None
@@ -251,6 +263,9 @@ trait RowFormatSupport { self: StdCodecs =>
     }
     case (CDate, col: ArrayDateColumn) => new ColumnValueDecoder {
       def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[DateTime].read(buf))
+    }
+    case (CPeriod, col: ArrayPeriodColumn) => new ColumnValueDecoder {
+      def decode(row: Int, buf: ByteBuffer) = col.update(row, Codec[Period].read(buf))
     }
     case (CEmptyObject, col: MutableEmptyObjectColumn) => new ColumnValueDecoder {
       def decode(row: Int, buf: ByteBuffer) = col.update(row, true)
@@ -424,6 +439,7 @@ trait ValueRowFormat extends RowFormat with RowFormatSupport { self: StdCodecs =
         case CBoolean(x) => wrappedWriteInit[Boolean](x, sink)
         case CString(x) => wrappedWriteInit[String](x, sink)
         case CDate(x) => wrappedWriteInit[DateTime](x, sink)
+        case CPeriod(x) => wrappedWriteInit[Period](x, sink)
         case CLong(x) => wrappedWriteInit[Long](x, sink)
         case CDouble(x) => wrappedWriteInit[Double](x, sink)
         case CNum(x) => wrappedWriteInit[BigDecimal](x, sink)
@@ -720,6 +736,8 @@ trait SortingRowFormat extends RowFormat with StdCodecs with RowFormatSupport {
           case FNull => 0
           case FDate =>
             math.signum(Codec[Long].read(abuf) - Codec[Long].read(bbuf)).toInt
+          case FPeriod =>
+            math.signum(Codec[Long].read(abuf) - Codec[Long].read(bbuf)).toInt
           case x => sys.error("Match error for: " + x)
         }
       } else {
@@ -754,6 +772,7 @@ object SortingRowFormat {
     case CDouble => FDouble
     case CNum => FBigDecimal
     case CDate => FDate
+    case CPeriod => FPeriod
     case CEmptyObject => FEmptyObject
     case CEmptyArray => FEmptyArray
     case CNull => FNull
@@ -767,6 +786,7 @@ object SortingRowFormat {
     case FDouble => CDouble
     case FBigDecimal => CNum
     case FDate => CDate
+    case FPeriod => CPeriod
     case FEmptyObject => CEmptyObject
     case FEmptyArray => CEmptyArray
     case FNull => CNull
@@ -784,6 +804,7 @@ object SortingRowFormat {
   private val FEmptyArray: Byte = 0x70.toByte
   private val FNull: Byte = 0x80.toByte
   private val FDate: Byte = 0x90.toByte
+  private val FPeriod: Byte = 0x91.toByte
 }
 
 trait IdentitiesRowFormat extends RowFormat {

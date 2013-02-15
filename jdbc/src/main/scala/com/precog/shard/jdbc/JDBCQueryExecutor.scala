@@ -24,18 +24,12 @@ import blueeyes.json._
 import blueeyes.json.serialization._
 import DefaultSerialization._
 
-import com.precog.accounts._
-
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.accounts._
 import com.precog.common.security._
-
 import com.precog.daze._
-
 import com.precog.muspelheim._
-
-import com.precog.util.FilesystemFileOps
-
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
@@ -44,6 +38,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbc._
 import com.precog.yggdrasil.util._
+import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -130,8 +125,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
-    val report = LoggingQueryLogger(M)
-    def warn(warning: JValue) = report.warn(warning, "warning")
+    val queryReport = LoggingQueryLogger[Future, Option[FaultPosition]](M)
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
@@ -142,7 +136,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
     new Evaluator[N](N0) with IdSourceScannerModule {
       type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
       val yggConfig = platform.yggConfig
-      val report = LoggingQueryLogger[N](N0)
+      val report = LoggingQueryLogger[N, instructions.Line](N0)
     }
   }
 

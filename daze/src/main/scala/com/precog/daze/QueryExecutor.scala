@@ -36,16 +36,11 @@ import scalaz.{ Validation, StreamT, Id, Applicative }
 import Validation._
 
 sealed trait EvaluationError
-case class UserError(errorData: JArray) extends EvaluationError
 case class InvalidStateError(message: String) extends EvaluationError
-case class AccessDenied(reason: String) extends EvaluationError
-case object TimeoutError extends EvaluationError
 case class SystemError(error: Throwable) extends EvaluationError
 
 object EvaluationError {
-  def userError(errorData: JArray):  EvaluationError = UserError(errorData)
   def systemError(error: Throwable): EvaluationError = SystemError(error)
-  val timeoutError: EvaluationError = TimeoutError
 }
 
 sealed trait QueryOutput

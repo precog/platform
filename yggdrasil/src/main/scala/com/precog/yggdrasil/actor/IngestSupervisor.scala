@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor 
 
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 
 import akka.actor.{Actor,ActorRef,Props,Scheduler}
@@ -43,6 +44,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scalaz._
 import scalaz.syntax.bind._
+import scalaz.syntax.semigroup._
+import scalaz.std.map._
+import scalaz.std.vector._
 
 //////////////
 // MESSAGES //
@@ -53,9 +57,9 @@ case class GetMessages(sendTo: ActorRef)
 sealed trait ShardIngestAction
 sealed trait IngestResult extends ShardIngestAction
 case class IngestErrors(errors: Seq[String]) extends IngestResult
-case class IngestData(messages: Seq[IngestMessage]) extends IngestResult
+case class IngestData(messages: Seq[EventMessage]) extends IngestResult
 
-case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAction
+case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestAction
 
 ////////////
 // ACTORS //
@@ -129,12 +133,14 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
    * with ProjectionInsertsExpected to set the count, then sending either InsertMetadata or
    * InsertNoMetadata messages after processing each message.
    */
-  def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+  //TODO: This needs review; not sure why only archive paths are being considered.
+  def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
     logger.debug("Beginning processing of %d messages".format(messages.size))
     implicit val to = metadataTimeout
-    implicit val executor = context.dispatcher
+    implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
     
-    val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
+    //TODO: Make sure that authorization has been checked here.
+    val archivePaths = messages.collect { case ArchiveMessage(_, Archive(_, path, jobId)) => path } 
 
     if (archivePaths.nonEmpty) {
       logger.debug("Processing archive paths: " + archivePaths)
@@ -148,15 +154,11 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
       }
     } onSuccess {
       case descMaps : Seq[Set[ProjectionDescriptor]] => 
-        val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
-          descMap <- descMaps
-          desc    <- descMap
-          column  <- desc.columns
-        } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
-
-        projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
-      
-        val updates = routingTable.batchMessages(messages, projectionMap)
+        val grouped: Map[Path, Seq[ProjectionDescriptor]] = descMaps.flatten.foldLeft(Map.empty[Path, Vector[ProjectionDescriptor]]) {
+          case (acc, descriptor) => descriptor.columns.map(c => (c.path -> Vector(descriptor))).toMap |+| acc
+        }
+        
+        val updates = routingTable.batchMessages(messages, grouped)
 
         logger.debug("Sending " + updates.size + " update message(s)")
         batchCoordinator ! ProjectionUpdatesExpected(updates.size)

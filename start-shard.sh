@@ -19,6 +19,8 @@
 ## 
 #!/bin/bash
 
+MAX_PORT_OPEN_TRIES=60
+
 # Parse opts to determine settings
 while getopts ":d:lbZYR" opt; do
     case $opt in
@@ -86,9 +88,14 @@ function port_is_open() {
 }
 
 function wait_until_port_open () {
-    while ! port_is_open $1; do
+    for tryseq in `seq 1 $MAX_PORT_OPEN_TRIES`; do
+        if port_is_open $1; then
+            return 0
+        fi
         sleep 1
     done
+    echo "Time out waiting for open port: $1" >&2
+    exit 1
 }
 
 BASEDIR=$(path-canonical-simple `dirname $0`)
@@ -99,7 +106,7 @@ AUTH_ASSEMBLY="$BASEDIR"/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY="$BASEDIR"/accounts/target/accounts-assembly-$VERSION.jar
 JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
 SHARD_ASSEMBLY="$BASEDIR"/shard/target/shard-assembly-$VERSION.jar
-YGGDRASIL_ASSEMBLY="$BASEDIR"/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
+RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
 
@@ -107,7 +114,7 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
-for ASM in "$INGEST_ASSEMBLY" "$SHARD_ASSEMBLY" "$YGGDRASIL_ASSEMBLY" "$AUTH_ASSEMBLY" "$ACCOUNTS_ASSEMBLY" "$JOBS_ASSEMBLY"; do
+for ASM in "$INGEST_ASSEMBLY" "$SHARD_ASSEMBLY" "$RATATOSKR_ASSEMBLY" "$AUTH_ASSEMBLY" "$ACCOUNTS_ASSEMBLY" "$JOBS_ASSEMBLY"; do
     if [ ! -f "$ASM" ]; then
         if [ -n "$BUILDMISSING" ]; then
             # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
@@ -126,7 +133,7 @@ done
 
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
-    echo "Up-to-date ingest, shard, auth, accounts and yggdrasil assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
+    echo "Up-to-date ingest, shard, auth, accounts and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
     done
@@ -365,7 +372,7 @@ wait_until_port_open $MONGO_PORT
 
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
     echo "Retrieving new root token"
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" tokens -s "localhost:$MONGO_PORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
+    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" tokens -s "localhost:$MONGO_PORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
         echo "Error retrieving new root token" >&2
         exit 3
     }
@@ -384,26 +391,26 @@ JOBS_PORT=$(random_port "Jobs service")
 SHARD_PORT=$(random_port "Shard")
 
 # Set up ingest and shard services
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/accounts/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/; s/port = 30060/port = $INGEST_PORT/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 30064/port = $ACCOUNTS_PORT/; s#/accounts/v1/#/#; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/; s/port = 30060/port = $INGEST_PORT/" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/opt/precog/shard#$WORKDIR/shard-data#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#/opt/precog/shard#$WORKDIR/shard-data#; s/port = 9092/port = $KAFKA_GLOBAL_PORT/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/shard/configs/dev/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
-sed -e "s#/var/log#$WORKDIR/logs#; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/port = 30062/port = $AUTH_PORT/" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
+sed -e "s#/var/log#$WORKDIR/logs#; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.conf > "$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/auth/configs/dev/dev-auth-v1.logging.xml > "$WORKDIR"/configs/auth-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s/port = 80/port = $AUTH_PORT/; s#/security/v1/#/#; s/rootKey = .*/rootKey = \"$TOKENID\"/; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 30062/port = $AUTH_PORT/; s/rootKey = .*/rootKey = \"$TOKENID\"/; s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; s#/security/v1/#/#; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/accounts/configs/dev/accounts-v1.conf > "$WORKDIR"/configs/accounts-v1.conf || echo "Failed to update accounts config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/accounts/configs/dev/accounts-v1.logging.xml > "$WORKDIR"/configs/accounts-v1.logging.xml
 
-sed -e "s!/var/log!$WORKDIR/logs!; s/port = 80/port = $AUTH_PORT/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGO_PORT\"\]!; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30066/port = $JOBS_PORT/" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
+sed -e "s!/var/log!$WORKDIR/logs!; s/port = 30062/port = $AUTH_PORT/; s!/security/v1/!/!; s!\[\"localhost\"\]!\[\"localhost:$MONGO_PORT\"\]!; s/hosts = localhost:2181/hosts = localhost:$ZOOKEEPER_PORT/; s/port = 30066/port = $JOBS_PORT/" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > "$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/heimdall/configs/dev/jobs-v1.logging.xml > "$WORKDIR"/configs/jobs-v1.logging.xml
 
 cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$YGGDRASIL_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
+    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:initial" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }

@@ -24,9 +24,10 @@ import com.precog.common._
 import com.precog.common.json._
 import com.precog.daze._
 
-import blueeyes.json.{ serialization => _, _ }
-import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
-import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+import blueeyes.json._
+import blueeyes.json.serialization.{ Decomposer, Extractor }
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.IsoSerialization.{serialization => isoSerialization}
 
 import shapeless._
 
@@ -45,8 +46,8 @@ object UserQuery {
       }
     }
 
-    implicit val SortOrderExtractor = new Extractor[DesiredSortOrder] with ValidatedExtraction[DesiredSortOrder] {
-      def decompose(obj: JValue): Validation[Extractor.Error, DesiredSortOrder] = obj match {
+    implicit val SortOrderExtractor = new Extractor[DesiredSortOrder] {
+      def validated(obj: JValue): Validation[Extractor.Error, DesiredSortOrder] = obj match {
         case JString("asc") => Success(SortAscending)
         case JString("desc") => Success(SortDescending)
         case _ => Failure(Extractor.Invalid("Sort order can only be either 'asc' and 'desc'."))
@@ -54,6 +55,6 @@ object UserQuery {
     }
 
     val schema = "query" :: "prefix" :: "sortOn" :: "sortOrder" :: HNil
-    implicit val (queryDecomposer, queryExtractor) = serialization[UserQuery](schema)
+    implicit val (queryDecomposer, queryExtractor) = isoSerialization[UserQuery](schema)
   }
 }

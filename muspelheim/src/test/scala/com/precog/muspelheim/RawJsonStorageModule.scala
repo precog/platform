@@ -21,26 +21,24 @@ package com.precog.muspelheim
 
 import com.precog.bytecode._
 import com.precog.common.json.CPath
+import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
+import com.precog.util._
+import SValue._
+
+import blueeyes.json._
 
 import akka.actor._
 import akka.dispatch._
 import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
-
-import blueeyes.json._
-
-import com.precog.common._
-import com.precog.common.security._
-import com.precog.util._
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.metadata._
-import com.precog.yggdrasil.util._
-import com.precog.util._
-import SValue._
 
 import java.io._
 import org.reflections._
@@ -67,6 +65,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
   def userMetadataView(apiKey: APIKey) = new UserMetadataView(apiKey, new UnrestrictedAccessControl[M](), metadata)
 
   private implicit val ordering = IdentitiesOrder.toScalaOrdering
+
   private val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
   private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -74,6 +73,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
 
   private def load(path: Path) = {
     val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
+
     using(getClass.getResourceAsStream(resourceName)) { in =>
       // FIXME: Refactor as soon as JParser can parse from InputStreams
       val reader = new InputStreamReader(in)
@@ -92,10 +92,10 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
       projections = json.elements.foldLeft(projections) { 
         case (acc, jobj) => 
           val evID = EventId(0, identity.getAndIncrement)
-          routingTable.routeEvent(EventMessage(evID, Event("", path, None, jobj, Map()))).foldLeft(acc) {
+          routingTable.routeIngest(IngestMessage("", path, "", Seq(IngestRecord(evID, jobj)), None)).foldLeft(acc) {
             case (acc, data) =>
-              acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
-        }
+              acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) ++ data.toJValues))
+          }
       }
     }
   }
@@ -127,7 +127,6 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
 
     def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
   }
-
 }
 
 trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModuleTestSupport[M] {

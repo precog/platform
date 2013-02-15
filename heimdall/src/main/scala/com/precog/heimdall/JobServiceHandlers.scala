@@ -23,7 +23,7 @@ import com.precog.util.flipBytes
 import com.precog.common.jobs._
 import com.precog.common.security._
 
-import blueeyes.bkka.AkkaTypeClasses._
+import blueeyes.bkka._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
@@ -81,20 +81,20 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               }
 
             } getOrElse {
-              Future(HttpResponse[JValue](BadRequest, content = Some("Missing required paramter 'apiKey")))
+              Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing required paramter 'apiKey"))))
             }
 
           case (JUndefined, JUndefined, _) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing both `name` and `type` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing both `name` and `type` of job."))))
 
           case (name, JUndefined, _) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing `type` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `type` of job."))))
 
           case (JUndefined, tpe, _) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Missing `name` of job.")))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Missing `name` of job."))))
 
           case (name, tpe, _) =>
-            Future(HttpResponse[JValue](BadRequest, content = Some("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe))))
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("Expected `name` and `type` to be strings, but found '%s' and '%s'." format (name, tpe)))))
         }
       })
     } getOrElse {
@@ -373,6 +373,8 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
 
 class CreateResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
+  private implicit val M = new FutureMonad(ctx)
+
   val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success((for {
       jobId <- request.parameters get 'jobId
@@ -405,7 +407,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
 extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
-  import JobState._
+  private implicit val M = new FutureMonad(ctx)
 
   val service: HttpRequest[ByteChunk] => Validation[NotServed, Future[HttpResponse[ByteChunk]]] = (request: HttpRequest[ByteChunk]) => {
     Success(request.parameters get 'jobId map { jobId =>
@@ -434,3 +436,6 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
     DescriptionMetadata("Get a job's result.")
   ))
 }
+
+
+// type JobServiceHandlers

@@ -22,6 +22,8 @@ package metadata
 
 import actor._
 import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.common.kafka._
 import com.precog.common.util._
 import com.precog.common.json._
 import com.precog.util._
@@ -45,20 +47,23 @@ import org.scalacheck._
 import org.scalacheck.Gen._
 
 
-class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with FutureMatchers {
-  
-  val ingestAPIKey         = "root"       // FIXME
-  val ingestOwnerAccountId = Some("root") // FIXME
+class ActorMetadataSpec extends Specification with ScalaCheck with RealisticEventMessage with FutureMatchers {
+  // TODO: make test more robust about ingest keys
+  val ingestAPIKey         = "root"       
+  val ingestOwnerAccountId = Some("root") 
   
   trait WithActorSystem extends mutable.Before {
     def before {}
     implicit val actorSystem = ActorSystem("test" + System.nanoTime)
   }
 
-  def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
-    def projectionDescriptors(e: Event) = {
-      e.data.flattenWithPath.map {
-        case (sel, value) => ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
+  def buildMetadata(sample: List[Ingest]): Map[ProjectionDescriptor, ColumnMetadata] = {
+    def projectionDescriptors(e: Ingest) = {
+      for {
+        jvalue <- e.data
+        (sel, value) <- jvalue.flattenWithPath
+      } yield {
+        ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
       }
     }
 
@@ -66,48 +71,60 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       CType.forJValue(jvalue).getOrElse(CNull)
     }
 
-    def columnMetadata(columns: Seq[ColumnDescriptor]): ColumnMetadata = 
-      columns.foldLeft(Map[ColumnDescriptor, MetadataMap]()) { 
-        (acc, col) => acc + (col -> Map[MetadataType, Metadata]() ) 
+    def columnMetadata(columns: Seq[ColumnDescriptor]): ColumnMetadata = {
+      columns.foldLeft(Map.empty[ColumnDescriptor, MetadataMap]) { 
+        (acc, col) => acc + (col -> Map.empty[MetadataType, Metadata]) 
       }
+    }
 
-    sample.map(projectionDescriptors).foldLeft( Map[ProjectionDescriptor, ColumnMetadata]()) {
+    sample.map(projectionDescriptors).foldLeft(Map.empty[ProjectionDescriptor, ColumnMetadata]) {
       case (acc, el) => el.foldLeft(acc) {
         case (iacc, pd) => iacc + (pd -> columnMetadata(pd.columns)) 
       }
     }
   }
 
-  implicit val eventListArbitrary = Arbitrary(containerOfN[List, Event](50, genEvent))
+  implicit val eventListArbitrary = Arbitrary(containerOfN[List, Ingest](50, genIngest))
 
   implicit val timeout = Timeout(Long.MaxValue)
  
-  def extractSelectorsFor(path: Path)(events: List[Event]): Set[JPath] = {
+  def extractSelectorsFor(path: Path)(events: List[Ingest]): Set[JPath] = {
     events.flatMap {
-      case Event(apiKey, epath, None, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
-      case _                                                    => List.empty
+      case Ingest(apiKey, epath, None, data, metadata) if epath == path => 
+        data flatMap { _.flattenWithPath.map(_._1) }
+
+      case _ => Nil
     }.toSet
   }
 
   def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
   
-  def extractPathsFor(ref: Path)(events: List[Event]): Set[Path] = {
+  def extractPathsFor(ref: Path)(events: List[Ingest]): Set[Path] = {
     events.collect {
-      case Event(_, test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
+      case Ingest(_, test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
     }.toSet
   }
 
-  def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
-    def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
-    Map(events.flatMap {
-      case e @ Event(apiKey, epath, _, data, metadata) if epath == path => 
-        data.flattenWithPath.collect {
-          case (k, v) if isEqualOrChild(selector, k) => k
-        }.map( toProjectionDescriptor(e, _) )
-      case _                                                        => List.empty
-    }.map{ pd => (pd, convertColDesc(pd.columns.head)) }: _*)
+  def extractMetadataFor(path: Path, selector: JPath)(events: List[Ingest]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
+    @inline def defaultMetadata(cd: ColumnDescriptor) = Map(cd -> Map.empty[MetadataType, Metadata])
+
+    val descriptors: Set[ProjectionDescriptor] = (events flatMap {
+      case e @ Ingest(apiKey, epath, _, data, metadata) if epath == path => 
+        data flatMap {
+          _.flattenWithPath.collect {
+            case (jpath, jv) if isEqualOrChild(selector, jpath) => 
+              val cd = ColumnDescriptor(epath, CPath(jpath), CType.forJValue(jv).get, Authorities(Set(apiKey)))
+              ProjectionDescriptor(1, cd :: Nil)
+          }
+        }
+
+      case _ => List.empty
+    })(scala.collection.breakOut) 
+    
+    descriptors map { pd => (pd, defaultMetadata(pd.columns.head)) } toMap
   }
   
+  /*
   trait ChildType
   case class LeafChild(cType: CType, apiKey: String) extends ChildType
   case class IndexChild(i: Int) extends ChildType
@@ -157,31 +174,10 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
         PathField(n, extractPathMetadata(path, selector \ n, in))
     }
   }
+  */
 
-  def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Event]): PathRoot = {
-    val col: Set[(JPath, CType, String)] = events.collect {
-      case Event(apiKey, `path`, _, data, _) =>
-        data.flattenWithPath.collect {
-          case (s, v) if isEqualOrChild(selector, s) => 
-             val ns = s.nodes.slice(selector.length, s.length-1)
-            (JPath(ns), CType.forJValue(v).get, apiKey)
-        }
-    }.flatten.toSet
-
-    PathRoot(extractPathMetadata(path, JPath(""), col)) 
-  }
-
-  def toProjectionDescriptor(e: Event, selector: JPath) = {
-    def extractType(selector: JPath, data: JValue): CType = {
-      data.flattenWithPath.find( _._1 == selector).flatMap[CType]( t => CType.forJValue(t._2) ).getOrElse(sys.error("bang"))
-    }
-    
-    val colDesc = ColumnDescriptor(e.path, CPath(selector), extractType(selector, e.data), Authorities(Set(e.apiKey)))
-    ProjectionDescriptor(1, colDesc :: Nil)
-  }
-    
   "ShardMetadata" should {
-    "return all children for the root path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all children for the root path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
       
@@ -193,7 +189,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
     
-    "return all children for the an arbitrary path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all children for the an arbitrary path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -207,7 +203,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
 
-    "return all selectors for a given path" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all selectors for a given path" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -219,14 +215,15 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
     }}
 
-    "return all metadata for a given (path, selector)" ! new WithActorSystem { check { (sample: List[Event]) =>
+    "return all metadata for a given (path, selector)" ! new WithActorSystem { check { (sample: List[Ingest]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
-      val expected = extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
+      val sampleJPath = event.data.flatMap(_.flattenWithPath).head._1
+      val expected = extractMetadataFor(event.path, sampleJPath)(sample)
 
-      (actor ? FindDescriptors(event.path, CPath(event.data.flattenWithPath.head._1))) must whenDelivered {
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None, false))
+      (actor ? FindDescriptors(event.path, CPath(sampleJPath))) must whenDelivered {
         be_==(expected)
       }
     }}

@@ -34,9 +34,6 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.Extractor._
 
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat

@@ -20,8 +20,9 @@
 package com.precog.yggdrasil
 package actor 
 
-import com.precog.common.json._
 import metadata._
+import com.precog.common.ingest._
+import com.precog.common.json._
 import ColumnMetadata._
 
 import com.precog.util._

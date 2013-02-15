@@ -24,7 +24,7 @@ import com.precog.common._
 import com.precog.common.json._
 import org.slf4j.LoggerFactory
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import java.nio.ByteBuffer
 import java.util.SortedMap
@@ -97,6 +97,7 @@ object JDBMSlice {
       case CDouble      => ArrayDoubleColumn.empty(sliceSize)
       case CNum         => ArrayNumColumn.empty(sliceSize)
       case CDate        => ArrayDateColumn.empty(sliceSize)
+      case CPeriod      => ArrayPeriodColumn.empty(sliceSize)
       case CNull        => MutableNullColumn.empty()
       case CEmptyObject => MutableEmptyObjectColumn.empty()
       case CEmptyArray  => MutableEmptyArrayColumn.empty()

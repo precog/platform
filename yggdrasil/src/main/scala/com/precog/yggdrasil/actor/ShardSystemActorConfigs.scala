@@ -21,9 +21,9 @@ package com.precog.yggdrasil
 package actor
 
 import metadata.ColumnMetadata
-import com.precog.accounts.BasicAccountManager
 import com.precog.util._
 import com.precog.common._
+import com.precog.common.accounts.AccountFinder
 import com.precog.common.kafka._
 
 import akka.actor._
@@ -33,6 +33,9 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
+import _root_.kafka.consumer._
+
+import blueeyes.bkka._
 import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
@@ -92,7 +95,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 
   def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]) = {
     yggConfig.ingestConfig map { conf => 
       val consumer = new SimpleConsumer(yggConfig.kafkaHost, 
                                         yggConfig.kafkaPort, 
@@ -104,12 +107,14 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
                                    initialCheckpoint = checkpoint, 
                                    consumer = consumer, 
                                    topic = yggConfig.kafkaTopic, 
-                                   accountManager = accountManager,
+                                   accountFinder = accountFinder,
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
                                    ingestTimeout = conf.batchTimeout,
                                    maxCacheSize = conf.maxParallel,
                                    maxConsecutiveFailures = conf.maxConsecutiveFailures) {
+
+        implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
 
         def handleBatchComplete(ck: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
           logger.debug(ck + " to be updated")
@@ -129,7 +134,7 @@ trait StandaloneShardSystemConfig extends ShardConfig {
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]) = None
   override def checkpointCoordination = CheckpointCoordination.Noop
 }
 

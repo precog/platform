@@ -24,13 +24,13 @@ import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.core.data._
 
-import akka.dispatch.ExecutionContext
+import akka.dispatch.Future
 
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 
-case class DecompressService[B](delegate: HttpService[ByteChunk, B])(implicit ctx: ExecutionContext)
+case class DecompressService[B](delegate: HttpService[ByteChunk, B])(implicit M: Monad[Future])
 extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
   import HttpStatusCodes._
   import HttpHeaders._
@@ -43,11 +43,11 @@ extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
         case Some(contentEncoding) =>
           contentEncoding.encodings match {
             case Seq(`x-zip`) =>
-              success(UnzipByteChunk().apply(_))
+              success((new UnzipByteChunk).apply(_))
             case Seq(`gzip`) =>
-              success(GunzipByteChunk().apply(_))
+              success((new GunzipByteChunk).apply(_))
             case Seq(`deflate`) =>
-              success(InflateByteChunk().apply(_))
+              success((new InflateByteChunk).apply(_))
             case Seq(Encodings.`identity`) =>
               success(identity)
             case _ =>
@@ -65,7 +65,7 @@ extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
   val metadata = None
 }
 
-trait DecompressCombinators extends blueeyes.bkka.AkkaDefaults {
-  def decompress[A](service: HttpService[ByteChunk, A]) = new DecompressService(service)
+trait DecompressCombinators {
+  def decompress[A](service: HttpService[ByteChunk, A])(implicit M: Monad[Future]) = new DecompressService(service)
 }
 

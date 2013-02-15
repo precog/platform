@@ -17,36 +17,33 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package pandora
+package com.precog.pandora
 
-import accounts.InMemoryAccountManager
-
-import common.VectorCase
-import common.kafka._
-import common.security._
-
-import daze._
-
-import pandora._
-
-import quirrel._
-import quirrel.emitter._
-import quirrel.parser._
-import quirrel.typer._
-
-import yggdrasil._
-import yggdrasil.actor._
-import yggdrasil.jdbm3._
-import yggdrasil.metadata._
-import yggdrasil.serialization._
-import yggdrasil.table._
-import yggdrasil.util._
-import yggdrasil.test.YId
-import muspelheim._
+import com.precog.common.Path
+import com.precog.common.VectorCase
+import com.precog.common.accounts._
+import com.precog.common.kafka._
+import com.precog.common.security._
 
 import com.precog.bytecode.JType
-import com.precog.common.Path
+
+import com.precog.daze._
+
+import com.precog.quirrel._
+import com.precog.quirrel.emitter._
+import com.precog.quirrel.parser._
+import com.precog.quirrel.typer._
+
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.test.YId
+
+import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
@@ -103,6 +100,10 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
     def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
   }
 
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+
+  val accountFinder = None
+
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
@@ -120,20 +121,19 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
     val yggConfig = self.yggConfig
     val Projection = new ProjectionCompanion {
       def fileOps = FilesystemFileOps
-      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
-      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
-      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
+      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = metadataStorage.ensureDescriptorRoot(descriptor)
+      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = metadataStorage.findDescriptorRoot(descriptor)
+      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = metadataStorage.findArchiveRoot(descriptor)
     }
   }
 
-  val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
   val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
   val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-    initShardActors(fileMetadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
+    initShardActors(metadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
-  val accessControl = new UnrestrictedAccessControl[Future]
+  override val accessControl = new UnrestrictedAccessControl[Future]
   class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
-  val storage = new Storage
+  override val storage = new Storage
 
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
@@ -144,6 +144,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
   object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
   trait TableCompanion extends SliceColumnarTableCompanion
+
   object Table extends TableCompanion {
     implicit val geq: scalaz.Equal[Int] = intInstance
   }

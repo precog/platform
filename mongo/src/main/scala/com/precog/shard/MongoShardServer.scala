@@ -23,13 +23,15 @@ package mongo
 import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
-import blueeyes.bkka.{AkkaTypeClasses, Stoppable}
+import blueeyes.bkka._
 
 import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
 import com.precog.standalone.StandaloneShardServer
+
+import com.precog.common.security._
 
 object MongoShardServer extends StandaloneShardServer {
   val caveatMessage = Some("""
@@ -48,14 +50,12 @@ Please note that path globs are not yet supported in Precog for MongoDB
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 """)
 
-  override def hardCodedAccount = Some("mongo")
-
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
+  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   def configureShardState(config: Configuration) = M.point {
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(asyncContext, M), apiKeyManagerFactory(config.detach("security")), Stoppable.fromFuture(Future(())))
+    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
+    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(executionContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }
 }

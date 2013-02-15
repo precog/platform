@@ -31,15 +31,15 @@ import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.SerializationImplicits._
 
-import akka.dispatch.{ MessageDispatcher, Future }
+import akka.dispatch.{ ExecutionContext, Future }
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 
 import scalaz._
 
-class AsyncQueryResultServiceHandler(jobManager: JobManager[Future])(implicit dispatcher: MessageDispatcher, M: Monad[Future])
-extends CustomHttpService[ByteChunk, APIKeyRecord => Future[HttpResponse[ByteChunk]]] {
+class AsyncQueryResultServiceHandler(jobManager: JobManager[Future])(implicit executor: ExecutionContext, M: Monad[Future])
+    extends CustomHttpService[ByteChunk, APIKey => Future[HttpResponse[ByteChunk]]] {
   import JobManager._
   import JobState._
   import scalaz.syntax.monad._
@@ -47,7 +47,7 @@ extends CustomHttpService[ByteChunk, APIKeyRecord => Future[HttpResponse[ByteChu
   val Utf8 = Charset.forName("utf-8")
 
   val service = { (request: HttpRequest[ByteChunk]) =>
-    Success({ (apiKey: APIKeyRecord) =>
+    Success({ (apiKey: APIKey) =>
       request.parameters get 'jobId map { jobId =>
         jobManager.findJob(jobId) flatMap {
           case Some(job) =>

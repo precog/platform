@@ -23,7 +23,7 @@ package jobs
 import blueeyes.core.http.{ MimeType, MimeTypes }
 
 import blueeyes.json._
-import blueeyes.json.serialization.{ Decomposer, Extractor, ValidatedExtraction }
+import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.DefaultSerialization._
 
 import org.apache.commons.codec.binary.Base64
@@ -67,7 +67,7 @@ trait JobResultSerialization {
     ))
   }
 
-  implicit object JobResultExtractor extends Extractor[JobResult] with ValidatedExtraction[JobResult] {
+  implicit object JobResultExtractor extends Extractor[JobResult] {
     import Extractor._
 
     override def validated(obj: JValue): Validation[Error, JobResult] = {

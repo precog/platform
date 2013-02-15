@@ -20,7 +20,7 @@
 package com.precog.util
   
 import blueeyes.json._
-import blueeyes.json.serialization.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 
@@ -50,7 +50,7 @@ trait VectorClockSerialization {
     override def decompose(clock: VectorClock): JValue = clock.map.serialize 
   }
 
-  implicit val VectorClockExtractor: Extractor[VectorClock] = new Extractor[VectorClock] with ValidatedExtraction[VectorClock] {
+  implicit val VectorClockExtractor: Extractor[VectorClock] = new Extractor[VectorClock] {
     override def validated(obj: JValue): Validation[Error, VectorClock] = 
       (obj.validated[Map[Int, Int]]).map(VectorClock(_))
   }

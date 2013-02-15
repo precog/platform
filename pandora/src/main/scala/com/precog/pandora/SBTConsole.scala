@@ -27,9 +27,8 @@ import daze._
 
 import pandora._
 
-import com.precog.accounts.InMemoryAccountManager
-
 import com.precog.common.Path
+import com.precog.common.accounts._
 
 import quirrel._
 import quirrel.emitter._
@@ -130,7 +129,7 @@ object SBTConsole {
 
     val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
     val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-      initShardActors(metadataStorage, new InMemoryAccountManager[Future](), projectionsActor)
+      initShardActors(metadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
     val accessControl = new UnrestrictedAccessControl[Future]()
 
@@ -155,7 +154,7 @@ object SBTConsole {
       new Evaluator[N](N0) with IdSourceScannerModule {
         type YggConfig = PlatformConfig
         val yggConfig = console.yggConfig
-        val report = LoggingQueryLogger[N](N0)
+        val report = LoggingQueryLogger[N, instructions.Line](N0)
       }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {

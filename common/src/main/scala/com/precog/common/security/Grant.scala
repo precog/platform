@@ -20,26 +20,30 @@
 package com.precog.common
 package security
 
+import accounts.AccountId
 import json._
 
 import org.joda.time.DateTime
 
 import com.weiglewilczek.slf4s.Logging
 
-import blueeyes.json.{JValue, JString}
-import blueeyes.json.serialization.{Extractor, ValidatedExtraction}
+import blueeyes.json.{ JValue, JString }
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
-import scalaz.Scalaz._
-import scalaz.std.set._
-
 import shapeless._
+
+import scalaz._
+import scalaz.syntax.plus._
+import scalaz.syntax.applicative._
+import scalaz.std.set._
 
 case class Grant(
   grantId:        GrantId,
   name:           Option[String],
   description:    Option[String],
-  issuerKey:      Option[APIKey],
+  issuerKey:      APIKey,
   parentIds:      Set[GrantId],
   permissions:    Set[Permission],
   expirationDate: Option[DateTime]) {
@@ -66,45 +70,34 @@ case class Grant(
 object Grant extends Logging {
   implicit val grantIso = Iso.hlist(Grant.apply _, Grant.unapply _)
 
-  val schema =     "grantId" :: "name" :: "description" :: "issuerKey" :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
-  val safeSchema = "grantId" :: "name" :: "description" :: Omit        :: Omit        :: "permissions" :: "expirationDate" :: HNil
+  val schemaV1 =     "grantId" :: "name" :: "description" :: ("issuerKey" ||| "(undefined)") :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
   
-  object Serialization {
-    implicit val grantDecomposer = decomposer[Grant](schema)
-    val v1GrantExtractor = extractor[Grant](schema)
-  }
-  
-  object SafeSerialization {
-    implicit val safeGrantDecomposer = decomposer[Grant](safeSchema)
-    val v1SafeGrantExtractor = extractor[Grant](safeSchema)
-  }
+  val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0"))
+  val extractorV2: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, None)
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
-  val v0GrantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
+  val extractorV0: Extractor[Grant] = new Extractor[Grant] {
     override def validated(obj: JValue) = {
-      ((obj \ "gid").validated[GrantId] |@|
-       (obj \ "issuer").validated[Option[GrantId]] |@|
+      (obj.validated[GrantId]("gid") |@|
+       obj.validated[Option[APIKey]]("cid").map(_.getOrElse("(undefined)")) |@|
+       obj.validated[Option[GrantId]]("issuer") |@|
        {
          (obj \ "permission" \ "type") match {
            case JString("owner") => Permission.accessTypeExtractor.validated(JString("delete"))
            case other            => Permission.accessTypeExtractor.validated(other)
          }
        } |@|
-       (obj \ "permission" \ "path").validated[Path] |@|
-       (obj \ "permission" \ "ownerAccountId").validated[Option[String]] |@|
-       (obj \ "permission" \ "expirationDate").validated[Option[DateTime]]).apply {
-        (gid, issuer, permBuild, path, ownerId, expiration) => Grant(gid, None, None, None, issuer.toSet, Set(permBuild.apply(path, ownerId.toSet)), expiration)
+       obj.validated[Path]("permission.path") |@|
+       obj.validated[Option[String]]("permission.ownerAccountId") |@|
+       obj.validated[Option[DateTime]]("permission.expirationDate")).apply {
+        (gid, cid, issuer, permBuild, path, ownerId, expiration) => Grant(gid, None, None, cid, issuer.toSet, Set(permBuild.apply(path, ownerId.toSet)), expiration)
       }
     }
   }
 
-  implicit val grantExtractor = new Extractor[Grant] with ValidatedExtraction[Grant] {
-    override def validated(obj: JValue) = {
-      Serialization.v1GrantExtractor.validated(obj) orElse
-      SafeSerialization.v1SafeGrantExtractor.validated(obj) orElse
-      v0GrantExtractor.validated(obj)
-    }
-  }
+  implicit val decomposer: Decomposer[Grant] = decomposerV1
+  implicit val extractor: Extractor[Grant] = extractorV2 <+> extractorV1 <+> extractorV0
 
   def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) = {
     logger.trace("Checking implication of %s to %s".format(grants, perms))
@@ -145,25 +138,3 @@ object Grant extends Logging {
   }
 }
 
-case class NewGrantRequest(name: Option[String], description: Option[String], parentIds: Set[GrantId], permissions: Set[Permission], expirationDate: Option[DateTime]) {
-  def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
-    case (None, _) => false
-    case (_, None) => true
-    case (Some(expiry), Some(ref)) => expiry.isBefore(ref) 
-  } 
-}
-
-object NewGrantRequest {
-  implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
-  
-  val schema = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
-  
-  implicit val (newGrantRequestDecomposer, newGrantRequestExtractor) = serialization[NewGrantRequest](schema)
-
-  def newAccount(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
-    // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
-    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
-    val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
-    NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
-  }
-}

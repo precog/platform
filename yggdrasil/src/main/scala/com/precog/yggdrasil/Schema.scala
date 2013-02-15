@@ -41,7 +41,9 @@ object Schema {
     case JTextT => Set(CString)
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
+
     case JDateT => Set(CDate)
+    case JPeriodT => Set(CPeriod)
     case _ => Set.empty
   }
 
@@ -63,6 +65,7 @@ object Schema {
     case CLong | CDouble | CNum => Some(JNumberT)
     case CArrayType(elemType) => fromCValueType(elemType) map (JArrayHomogeneousT(_))
     case CDate => Some(JDateT)
+    case CPeriod => Some(JPeriodT)
   }
 
   
@@ -125,7 +128,9 @@ object Schema {
       case JBooleanT => handleRoot(Seq(CBoolean), cols)
       case JTextT => handleRoot(Seq(CString), cols)
       case JNullT => handleRoot(Seq(CNull), cols)
+
       case JDateT => handleRoot(Seq(CDate), cols)
+      case JPeriodT => handleRoot(Seq(CPeriod), cols)
 
       case JObjectUnfixedT => handleUnfixed(CEmptyObject, _.isInstanceOf[CPathField], cols)
       case JArrayUnfixedT => handleUnfixed(CEmptyArray, _.isInstanceOf[CPathIndex], cols)
@@ -234,6 +239,7 @@ object Schema {
     case (JNullT, (CPath.Identity, CNull))=> true
 
     case (JDateT, (CPath.Identity, CDate))=> true
+    case (JPeriodT, (CPath.Identity, CPeriod))=> true
 
     case (JObjectUnfixedT, (CPath.Identity, CEmptyObject)) => true
     case (JObjectUnfixedT, (CPath(CPathField(_), _*), _)) => true
@@ -281,6 +287,7 @@ object Schema {
     case JNullT => ctpes.contains(CPath.Identity, CNull)
 
     case JDateT => ctpes.contains(CPath.Identity, CDate)
+    case JPeriodT => ctpes.contains(CPath.Identity, CPeriod)
 
     case JObjectUnfixedT if ctpes.contains(CPath.Identity, CEmptyObject) => true
     case JObjectUnfixedT => ctpes.exists {

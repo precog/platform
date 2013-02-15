@@ -90,11 +90,11 @@ for source in `find -L . -name '*.json'`; do
 done
 popd > /dev/null
 
-[ -f yggdrasil/target/yggdrasil-assembly-$VERSION.jar ] || {
-    echo "Error: you must build yggdrasil/assembly before running tasks that extract data"
+[ -f ratatoskr/target/ratatoskr-assembly-$VERSION.jar ] || {
+    echo "Error: you must build ratatoskr/assembly before running tasks that extract data"
     exit 2
 }
 
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
-java -Xmx1G -cp yggdrasil/target/yggdrasil-assembly-$VERSION.jar com.precog.yggdrasil.util.YggUtils import -t $OWNERTOKEN -o $OWNERACCOUNT -s $DATADIR $SOURCES
+java -Xmx1G -cp ratatoskr/target/ratatoskr-assembly-$VERSION.jar com.precog.ratatoskr.Ratatoskr import -t $OWNERTOKEN -o $OWNERACCOUNT -s $DATADIR $SOURCES

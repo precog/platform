@@ -17,22 +17,18 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package ragnarok
+package com.precog.ragnarok
 
+import com.precog.common.accounts._
+import com.precog.common.security._
 import com.precog.daze._
-import com.precog.accounts.InMemoryAccountManager
-
-import yggdrasil.{ ProjectionDescriptor, BaseConfig }
-import yggdrasil.actor._
-import yggdrasil.util._
-import yggdrasil.jdbm3._
-import yggdrasil.table._
-import yggdrasil.metadata.FileMetadataStorage
-
-import common.security._
-
-import util.{ FileOps, FilesystemFileOps }
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.metadata.FileMetadataStorage
+import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
@@ -66,18 +62,20 @@ abstract class StandalonePerfTestRunner[T](testTimeout: Duration) extends Evalua
 
   type YggConfig <: StandalonePerfTestRunnerConfig
 
-  val ms = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
   val rawProjectionModule = new JDBMProjectionModule {
     type YggConfig = StandalonePerfTestRunnerConfig
     val yggConfig = self.yggConfig
     val Projection = new ProjectionCompanion {
       def fileOps = FilesystemFileOps
-      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
-      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
-      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
+      def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = metadataStorage.ensureDescriptorRoot(descriptor)
+      def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = metadataStorage.findDescriptorRoot(descriptor)
+      def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = metadataStorage.findArchiveRoot(descriptor)
     }
   }
+
+  val accountFinder = None
 
   implicit val actorSystem = ActorSystem("StandalonePerfTestRunner")
   implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -87,7 +85,7 @@ abstract class StandalonePerfTestRunner[T](testTimeout: Duration) extends Evalua
 
   val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
   val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-    initShardActors(ms, new InMemoryAccountManager[Future](), projectionsActor)
+    initShardActors(metadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
   object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
 
@@ -134,13 +132,11 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
   yggConfig.dataDir.mkdirs()
   val fileMetadataStorage = FileMetadataStorage.load(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps).unsafePerformIO
 
-  val report = LoggingQueryLogger[Future]
-
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
     new Evaluator[N](N0) with IdSourceScannerModule {
       type YggConfig = self.YggConfig
       val yggConfig = self.yggConfig
-      val report = LoggingQueryLogger[N](N0)
+      val report = LoggingQueryLogger[N, instructions.Line](N0)
     }
   }
 }

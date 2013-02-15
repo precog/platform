@@ -21,11 +21,15 @@ package com.precog.yggdrasil
 
 import metadata.StorageMetadata
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.util.PrecogUnit
 import com.precog.common.security._
 
 import scalaz._
+import scalaz.effect._
+import scalaz.syntax.bind._
 import scalaz.syntax.monad._
+import scala.annotation.unchecked._
 
 trait StorageModule[M[+_]] {
   type Storage <: StorageLike[M]
