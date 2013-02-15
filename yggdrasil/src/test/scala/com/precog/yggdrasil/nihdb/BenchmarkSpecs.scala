@@ -26,6 +26,7 @@ import com.precog.util.IOUtils
 
 import akka.actor.{ActorSystem, Props}
 import akka.dispatch.{Await, Future}
+import akka.routing._
 import akka.util.Duration
 
 import blueeyes.akka_testing.FutureMatchers
@@ -42,10 +43,12 @@ import java.io.File
 class BenchmarkSpecs extends Specification with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
-  val chef = actorSystem.actorOf(Props(new Chef(
+    val chefs = (1 to 4).map { _ => actorSystem.actorOf(Props(new Chef(
     VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)),
     VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))
-  ))
+  )) }
+
+  val chef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
   def newNihProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
 
@@ -95,11 +98,8 @@ class BenchmarkSpecs extends Specification with FutureMatchers {
       }
       timeit("finished inserting")
   
-      var waits = 10
-  
-      while (waits > 0 && fromFuture(projection.stats).pending > 0) {
+      while (fromFuture(projection.stats).pending > 0) {
         Thread.sleep(200)
-        waits -= 1
       }
       timeit("finished cooking")
 
@@ -119,8 +119,8 @@ class BenchmarkSpecs extends Specification with FutureMatchers {
     "Properly convert raw blocks to cooked" in new TempContext {
       var eventid: Long = 1L
       for {
-        name <- List("z10k_nl.json", "z100k_nl.json")
-        size <- List(1000, 10000, 20000, 50000)
+        name <- List(/*"z10k_nl.json", */"z100k_nl.json")
+        size <- List(50000) // List(1000, 10000, 20000, 50000)
       } yield {
         eventid = runNIH(new File("yggdrasil/src/test/resources/%s" format name), size, eventid)
       }
