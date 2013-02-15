@@ -232,6 +232,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
+        val startTime = System.nanoTime
+        
         def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
           for (state <- monadState.gets(identity)) yield state.assume.get(graph)
         
@@ -743,7 +745,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
         }
         
-        memoized(graph, evalTransSpecable)
+        val back = memoized(graph, evalTransSpecable)
+        val endTime = System.nanoTime
+        
+        val timingM = transState liftM report.timing(graph.loc, endTime - startTime)
+        
+        timingM >> back
       }
     
       /**
