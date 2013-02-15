@@ -77,6 +77,14 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
     }
   }
 
+  def bitset(ns: Int*) = {
+    val bs = new BitSet
+    ns.foreach(bs.set)
+    bs
+  }
+
+  def decs(ns: Double*): Array[BigDecimal] = ns.map(BigDecimal(_)).toArray
+
   def makeps(f: File) = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
 
   "raw handler" should {
@@ -91,11 +99,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val h = RawHandler.empty(blockid, tmp1)
       h.length must_== 0
 
-      val s1 = h.snapshot
-      s1.id must_== blockid
-      s1.length must_== 0
-      s1.m.size must_== 0
-      s1.a.size must_== 0
+      h.snapshot(None).length must_== 0
 
       h.write(16, json("""
 {"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
@@ -103,25 +107,11 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 {"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
 """))
 
-      val s2 = h.snapshot
-      s2.id must_== blockid
-      s2.length must_== 3
+      h.length must_== 3
 
-      testSnapshotKeys(s2, Set(
-          (".a", CNum), (".b", CBoolean), (".b", CString), (".c", CBoolean), (".c", CNum),
-          (".d", CNull), (".e", CString), (".f.aa", CNum), (".f.bb", CNum),
-          (".arr[0]", CNum), (".arr[1]", CNum), (".arr[2]", CNum),
-          (".y", CEmptyArray), (".z", CEmptyObject)
-      ))
-
-      val tpla = List(
-        (0, BigDecimal(123)),
-        (1, BigDecimal(9999.0)),
-        (2, BigDecimal(0))
-      )
-
-      testArraySegment(s2, blockid, CPath(".a"), CNum, tpla)
-      testBooleanSegment(s2, blockid, CPath(".b"), CBoolean, List((0, true), (2, false)))
+      val segs1 = h.snapshot(None)
+      segs1 must contain(ArraySegment(blockid, CPath(".a"), CNum, bitset(0, 1, 2), decs(123, 9999.0, 0)))
+      segs1 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2), bitset(0), 3))
 
       h.write(17, json("""
 999
@@ -131,22 +121,10 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 {"b": true}
 """))
 
-      val s3 = h.snapshot
-      s3.id must_== blockid
-      s3.length must_== 8
+      h.length must_== 8
 
-      testSnapshotKeys(s3, Set(
-          (".", CNum), (".", CNum), (".", CString),
-          (".a", CNum), (".b", CBoolean), (".b", CString), (".c", CBoolean), (".c", CNum),
-          (".d", CNull), (".e", CString), (".f.aa", CNum), (".f.bb", CNum),
-          (".arr[0]", CNum), (".arr[1]", CNum), (".arr[2]", CNum),
-          (".y", CEmptyArray), (".z", CEmptyObject),
-          ("[0]", CNum), ("[1]", CNum), ("[2]", CNum), ("[3]", CString)
-      ))
-      
-      testArraySegment(s3, blockid, CPath(".a"), CNum, tpla)
-      testBooleanSegment(s3, blockid, CPath(".b"), CBoolean, List((0, true), (2, false), (7, true)))
-      testArraySegment(s3, blockid, CPath("."), CNum, List((3, BigDecimal(999)), (4, BigDecimal(123.0))))
+      val segs2 = h.snapshot(None)
+      segs2 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2, 7), bitset(0, 7), 8))
     }
 
 
@@ -168,14 +146,16 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 """.trim
 
       h1.write(18, json(js))
-      val s1 = h1.snapshot()
+      val s1 = h1.snapshot(None)
       h1.close()
 
       val (h2, events, true) = RawHandler.load(blockid, tmp2)
-      val s2 = h2.snapshot()
+      val s2 = h2.snapshot(None)
+
+      implicit val ord: Ordering[Segment] = Ordering.by[Segment, String](_.toString)
 
       events.toSet must_== Set(18)
-      s2 must_== s1
+      s2.sorted must_== s1.sorted
     }
 
 
@@ -189,7 +169,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
      */
     val tmp3 = tempfile()
     "recover from errors" in new cleanup(tmp3) {
-
+    
       // write a valid event, then a mal-formed event
       val ps = makeps(tmp3)
       RawLoader.writeHeader(ps, blockid)
@@ -197,24 +177,24 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       ps.println("##start 101")
       ps.println("""{"a": 2000, "b": 3.0}""")
       ps.close()
-
+    
       // try to load
       val (h1, events1, ok1) = RawHandler.load(blockid, tmp3)
       h1.length must_== 1
       events1.toSet must_== Set(100)
       ok1 must_== false
-
+    
       // close this handler
       h1.close()
-
+    
       // open a new handler, we should have sanitized the rawlog
       val (h2, events2, ok2) = RawHandler.load(blockid, tmp3)
       h2.length must_== 1
       events2.toSet must_== Set(100)
       ok2 must_== true
     }
-
-
+    
+    
     /**
      * Test missing files.
      *
@@ -224,8 +204,8 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
     "throw an exception when loading empty logs" in new cleanup(tmp4) {
       RawHandler.load(blockid, tmp4) must throwA[Exception]
     }
-
-
+    
+    
     /**
      * Test file collisions.
      *
@@ -251,8 +231,8 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       es.isEmpty must_== true
       h.length must_== 0
     }
-
-
+    
+    
     /**
      * Test recovery from totally corrupted rawlog file #2.
      *
@@ -265,8 +245,8 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       ps.close()
       RawHandler.load(blockid, tmp7) must throwA[Exception]
     }
-
-
+    
+    
     /**
      * Test recovery from partially-corrupted rawlog file #3.
      *
@@ -275,30 +255,30 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
     val tmp8 = tempfile()
     "recover when partially corrupted" in new cleanup(tmp8) {
       val range = (0 until 20)
-
+    
       val ps = makeps(tmp8)
       RawLoader.writeHeader(ps, blockid)
       def makejson(i: Int) = json("""{"a": %s, "b": %s}""" format (i * 2, i * 3))
       range.foreach(i => RawLoader.writeEvents(ps, i, makejson(i)))
       ps.println("biewjgwijgjigiwej")
       ps.close()
-
+    
       val (h, events, ok) = RawHandler.load(blockid, tmp8)
       h.length must_== range.length
       events.toSet must_== range.toSet
       ok must_== false
-
+    
       // double-check the data
       val cpa = CPath(".a")
       val cpb = CPath(".b")
       val bs = new BitSet()
       range.foreach(i => bs.set(i))
-
+      
       val sa = ArraySegment(blockid, cpa, CNum, bs.copy, range.map(i => BigDecimal(i * 2)).toArray)
       val sb = ArraySegment(blockid, cpb, CNum, bs.copy, range.map(i => BigDecimal(i * 3)).toArray)
 
-      val m = mutable.Map[(CPath, CType), Int]((cpa, CNum) -> 0, (cpb, CNum) -> 1)
-      h.snapshot must_== Segments(blockid, range.length, m, mutable.ArrayBuffer(sa, sb))
+      h.snapshot(Some(Set(cpa))) must contain(sa)
+      h.snapshot(Some(Set(cpb))) must contain(sb)
     }
 
   }

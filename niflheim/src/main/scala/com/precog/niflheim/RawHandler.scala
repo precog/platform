@@ -33,21 +33,21 @@ object RawHandler {
   def empty(id: Long, f: File): RawHandler = {
     if (f.exists)
       sys.error("rawlog %s already exists!" format f)
-    val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    RawLoader.writeHeader(ps, id)
-    new RawHandler(id, f, Nil, ps)
+    val os = new BufferedOutputStream(new FileOutputStream(f, true))
+    RawLoader.writeHeader(os, id)
+    new RawHandler(id, f, Nil, os)
   }
 
   // file does exist and is ok -> load data
   def load(id: Long, f: File): (RawHandler, Seq[Long], Boolean) = {
     val (rows, events, ok) = RawLoader.load(id, f)
-    val ps = new PrintStream(new FileOutputStream(f, true), false, "UTF-8")
-    (new RawHandler(id, f, rows, ps), events, ok)
+    val os = new BufferedOutputStream(new FileOutputStream(f, true))
+    (new RawHandler(id, f, rows, os), events, ok)
   }
 }
 
 // TODO: extend derek's reader/writer traits
-class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) extends StorageReader {
+class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], os: OutputStream) extends StorageReader {
   @volatile
   private var rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
   @volatile
@@ -104,13 +104,13 @@ json3
     // start locking here?
     if (!values.isEmpty) {
       count += values.length
-      RawLoader.writeEvents(ps, eventid, values)
+      RawLoader.writeEvents(os, eventid, values)
       rows ++= values
     }
     // end locking here?
   }
 
   def close(): Unit = {
-    ps.close()
+    os.close()
   }
 }

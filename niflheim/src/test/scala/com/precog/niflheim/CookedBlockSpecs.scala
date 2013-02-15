@@ -34,7 +34,7 @@ class V1CookedBlockFormatSpecs extends CookedBlockFormatSpecs {
   val format = V1CookedBlockFormat
 }
 
-case class VersionedCookedBlockFormatSpecs extends CookedBlockFormatSpecs {
+case class VersionedCookedBlockFormatSpecs() extends CookedBlockFormatSpecs {
   val format = VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat))
 }
 
@@ -53,23 +53,24 @@ trait CookedBlockFormatSpecs extends Specification with ScalaCheck with SegmentF
 
   "cooked block format" should {
     "round trip empty segments" in {
-      surviveRoundTrip(format)(new Array[(SegmentId, File)](0))
+      surviveRoundTrip(format)(CookedBlockMetadata(999L, 0, new Array[(SegmentId, File)](0)))
     }
 
     "round trip simple segments" in {
-      surviveRoundTrip(format)(Array(
-        SegmentId(1234L, CPath("a.b.c"), CLong) -> new File("/hello/there/abc.cooked")
+      surviveRoundTrip(format)(CookedBlockMetadata(999L, 1, 
+          Array(SegmentId(1234L, CPath("a.b.c"), CLong) -> new File("/hello/there/abc.cooked"))
       ))
     }
 
     "roundtrip arbitrary blocks" in {
       check { files: List[(SegmentId, File)] =>
-        surviveRoundTrip(format)(files.toArray)
+        surviveRoundTrip(format)(CookedBlockMetadata(999L, files.length, files.toArray))
       }.set(maxDiscarded -> 2000)
     }
   }
 
-  def surviveRoundTrip(format: CookedBlockFormat)(segments0: Array[(SegmentId, File)]) = {
+  //def surviveRoundTrip(format: CookedBlockFormat)(segments0: Array[(SegmentId, File)]) = {
+  def surviveRoundTrip(format: CookedBlockFormat)(segments0: CookedBlockMetadata) = {
     val out = new InMemoryWritableByteChannel
     format.writeCookedBlock(out, segments0) must beLike {
       case Success(_) =>

@@ -37,22 +37,29 @@ private[niflheim] object RawLoader {
   private val utf8 = java.nio.charset.Charset.forName("UTF-8")
 
   /**
-   * Write the rawlog header to 'ps'. Currently this is:
+   * Write the rawlog header to 'os'. Currently this is:
    * 
    *   "##rawlog <id> 1\n"
    */
-  def writeHeader(ps: PrintStream, id: Long): Unit =
-    ps.println("##rawlog " + id.toString + " 1")
+  def writeHeader(os: OutputStream, id: Long): Unit = {
+    val s = "##rawlog " + id.toString + " 1\n"
+    os.write(s.getBytes(utf8))
+    os.flush()
+  }
 
   /**
-   * Write the given event to 'ps'. Each event consists of an
+   * Write the given event to 'os'. Each event consists of an
    * 'eventid' and a sequence of Jvalue instances.
    */
-  def writeEvents(ps: PrintStream, eventid: Long, values: Seq[JValue]) {
+  def writeEvents(os: OutputStream, eventid: Long, values: Seq[JValue]) {
     val e = eventid.toString
-    ps.println("##start " + e)
-    values.foreach(j => ps.println(j.renderCompact))
-    ps.println("##end " + e)
+    os.write(("##start " + e + "\n").getBytes(utf8))
+    values.foreach { j =>
+      os.write(j.renderCompact.getBytes(utf8))
+      os.write('\n')
+    }
+    os.write(("##end " + e + "\n").getBytes(utf8))
+    os.flush()
   }
 
   /**
@@ -104,8 +111,8 @@ private[niflheim] object RawLoader {
 
     // open a tempfile to write a "corrected" rawlog to, and write the header
     val tmp = File.createTempFile("nilfheim", "recovery")
-    val ps = new PrintStream(new FileOutputStream(tmp, true), false, "UTF-8")
-    writeHeader(ps, id)
+    val os = new BufferedOutputStream(new FileOutputStream(tmp, true))
+    writeHeader(os, id)
 
     // for each event, write its rows to the rawlog
     var row = 0
@@ -117,7 +124,7 @@ private[niflheim] object RawLoader {
         row += 1
         i += 1
       }
-      writeEvents(ps, eventid, values)
+      writeEvents(os, eventid, values)
       values.clear()
     }
 
