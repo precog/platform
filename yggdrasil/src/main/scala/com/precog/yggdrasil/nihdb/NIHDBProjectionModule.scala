@@ -58,12 +58,41 @@ trait NIHDBProjectionModule extends RawProjectionModule[Future, Long, Slice] wit
   trait ProjectionCompanion extends RawProjectionCompanionLike[Future] {
     def fileOps: FileOps
 
-    // Must return a directory
-    def ensureBaseDir(descriptor: ProjectionDescriptor): Future[File]
-    def findBaseDir(descriptor: ProjectionDescriptor): Option[File]
+    private final val disallowedPathComponents = Set(".", "..")
+    /**
+      * Computes the stable path for a given descriptor relative to the given base dir
+      */
+    private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): File = {
+      // The path component maps directly to the FS
+      // FIXME: escape user-provided components that match NIHDB internal paths
+      val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
+
+      new File(baseDir, prefix.mkString(File.separator))
+    }
 
     // Must return a directory
-    def archiveDir(descriptor: ProjectionDescriptor): Future[Option[File]]
+    def ensureBaseDir(descriptor: ProjectionDescriptor): Future[File] = Future {
+      val dir = descriptorDir(baseDir, descriptor)
+      if (!dir.exists && !dir.mkdirs()) {
+        throw new Exception("Failed to create directory for descriptor: " + descriptor)
+      }
+      dir
+    }
+
+    def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = {
+      val dir = descriptorDir(baseDir, descriptor)
+
+      dir.isDirectory.some.map(_ => dir)
+    }
+
+    // Must return a directory
+    def archiveDir(descriptor: ProjectionDescriptor): Future[Option[File]] = Future {
+      val dir = descriptorDir(archiveDir, descriptor)
+      if (!dir.exists && !dir.mkdirs()) {
+        throw new Exception("Failed to create directory for descriptor: " + descriptor)
+      }
+      Some(dir)
+    }
 
     def apply(descriptor: ProjectionDescriptor): Future[Projection] = {
       pmLogger.debug("Opening NIHDB projection for " + descriptor)
