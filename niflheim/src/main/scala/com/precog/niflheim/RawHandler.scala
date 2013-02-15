@@ -48,7 +48,9 @@ object RawHandler {
 
 // TODO: extend derek's reader/writer traits
 class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], ps: PrintStream) extends StorageReader {
-  private val rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
+  @volatile
+  private var rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
+  @volatile
   private var segments = Segments.empty(id) // TODO: weakref?
   private var count = rows.length
 
@@ -60,13 +62,19 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
     val segs = if (rows.isEmpty) {
       segments
     } else {
-      val segs = segments.copy
-      segs.extendWithRows(rows)
-      // start locking here?
-      rows.clear()
-      segments = segs
-      // end locking here?
-      segs
+      segments.synchronized {
+        if (rows.isEmpty) {
+          segments
+        } else {
+          val segs = segments.copy
+          segs.extendWithRows(rows)
+          // start locking here?
+          rows.clear()
+          segments = segs
+          // end locking here?
+          segs
+        }
+      }
     }
 
     pathConstraint.map { cpaths =>
@@ -102,5 +110,7 @@ json3
     // end locking here?
   }
 
-  def close(): Unit = ps.close()
+  def close(): Unit = {
+    ps.close()
+  }
 }
