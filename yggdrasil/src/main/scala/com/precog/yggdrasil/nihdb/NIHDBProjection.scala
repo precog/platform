@@ -44,6 +44,9 @@ case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Long]
 case object ProjectionGetStats
 case class ProjectionStats(cooked: Int, pending: Int, rawSize: Int)
 
+case object ProjectionGetStructure
+case class ProjectionStructure(columns: Set[ColumnRef])
+
 /**
   *  Projection for NIH DB files
   *
@@ -60,7 +63,7 @@ class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, c
 
   private[this] val actor = actorSystem.actorOf(Props(new NIHDBActor(baseDir, descriptor, chef, cookThreshold)))
 
-  def getBlockAfter(id: Option[Long], columns: Set[ColumnDescriptor])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
+  def getBlockAfter(id: Option[Long], columns: Set[ColumnRef])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
     // FIXME: We probably want to change this semantic throughout Yggdrasil
     val constraint = if (columns.size > 0) Some(columns.map(_.selector)) else None
     (actor ? ProjectionGetBlock(descriptor, id, constraint)).mapTo[Option[BlockProjectionData[Long, Slice]]]
@@ -74,6 +77,8 @@ class NIHDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor, c
     actor ! ProjectionInsert(descriptor, id, v)
     Promise.successful(PrecogUnit)
   }
+
+  def structure: Future[Set[ColumnRef]] = (actor ? ProjectionGetStructure).mapTo[Set[ColumnRef]]
 
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
@@ -243,6 +248,11 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
       }
 
     case ProjectionGetStats => sender ! ProjectionStats(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
+
+    case ProjectionGetStructure => sender ! {
+      val perBlock: Set[ColumnRef] = currentBlocks.values.map { block: StorageReader => block.structure.map { case (s, t) => ColumnRef(s, t) } }.toSet.flatten
+      ProjectionStructure(perBlock)
+    }
   }
 }
 
