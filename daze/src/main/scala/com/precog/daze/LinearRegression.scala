@@ -147,7 +147,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
         val spec = TransSpec.concatChildren(tree)
   
-        val theta = Table.fromJson(Stream(JArray(res.map(JNum(_)).toList)))
+        val theta = Table.fromRValues(Stream(RArray(res.map(CNum(_)).toList)))
 
         val result = theta.transform(spec)
 

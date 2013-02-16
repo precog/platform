@@ -150,6 +150,7 @@ trait SamplableColumnarTableModule[M[+_]]
         case CNum => ArrayNumColumn.empty(size)
         case CString => ArrayStrColumn.empty(size)
         case CDate => ArrayDateColumn.empty(size)
+        case CPeriod => ArrayPeriodColumn.empty(size)
         case CArrayType(elemType) => ArrayHomogeneousArrayColumn.empty(size)(elemType)
         case CNull => MutableNullColumn.empty()
         case CEmptyObject => MutableEmptyObjectColumn.empty()

@@ -597,7 +597,7 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
         val spec = TransSpec.concatChildren(tree)
 
         val tables = points map { pt =>
-          Table.fromJson(Stream(JArray(pt.map(JNum(_)).toList)))
+          Table.fromRValues(Stream(RArray(pt.map(CNum(_)).toList)))
         }
 
         val transformedTables = tables map { table => table.transform(spec) }
