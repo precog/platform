@@ -59,6 +59,50 @@ object Schema {
     cpaths sorted
   }
 
+  def flatten(jtype: JType): List[(CPath, CType)] = {
+    def buildPath(nodes: List[CPathNode], jType: JType): List[(CPath, CType)] = jType match {
+      case JArrayFixedT(indices) if indices.isEmpty =>
+        (CPath(nodes.reverse), CEmptyArray) :: Nil
+
+      case JArrayFixedT(fields) if fields.isEmpty =>
+        (CPath(nodes.reverse), CEmptyObject) :: Nil
+
+      case JArrayFixedT(indices) =>
+        indices.flatMap({ case (idx, tpe) =>
+          buildPath(CPathIndex(idx) :: nodes, tpe)
+        })(collection.breakOut)
+
+      case JObjectFixedT(fields) => 
+        fields.flatMap({ case (field, tpe) =>
+          buildPath(CPathField(field) :: nodes, tpe)
+        })(collection.breakOut)
+
+      case JArrayHomogeneousT(tpe) =>
+        buildPath(CPathArray :: nodes, tpe)
+
+      case JNumberT =>
+        val path = CPath(nodes.reverse)
+        (path, CLong: CType) :: (path, CDouble) :: (path, CNum) :: Nil
+
+      case JTextT =>
+        (CPath(nodes.reverse), CString) :: Nil
+
+      case JBooleanT =>
+        (CPath(nodes.reverse), CBoolean) :: Nil
+
+      case JDateT =>
+        (CPath(nodes.reverse), CDate) :: Nil
+
+      case JNullT =>
+        (CPath(nodes.reverse), CNull) :: Nil
+
+      case JUnionT(ltpe, rtpe) =>
+        buildPath(nodes, ltpe) ++ buildPath(nodes, rtpe)
+    }
+
+    buildPath(Nil, jtype)
+  }
+
   private def fromCValueType(t: CValueType[_]): Option[JType] = t match {
     case CBoolean => Some(JBooleanT)
     case CString => Some(JTextT)
