@@ -107,6 +107,17 @@ package object util {
   }
 
   implicit def lazyValueMapper[A, B](m: Map[A, B]) = new LazyMapValues[A, B] { val source = m }
+
+  def arrayEq[@specialized A](a1: Array[A], a2: Array[A]): Boolean = {
+    val len = a1.length
+    if (len != a2.length) return false
+    var i = 0
+    while (i < len) {
+      if (a1(i) != a2(i)) return false
+      i += 1
+    }
+    true
+  }
 }
 
 // vim: set ts=4 sw=4 et:

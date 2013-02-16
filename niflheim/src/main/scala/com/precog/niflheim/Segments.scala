@@ -65,11 +65,7 @@ case class Segments(id: Long, var length: Int, t: CTree, a: ArrayBuffer[Segment]
 
   override def equals(that: Any): Boolean = that match {
     case Segments(`id`, length2, t2, a2) =>
-      if (length != length2) return false
-      //val x = m.map { case (k, v) => (k, a(v)) }
-      //val y = m2.map { case (k, v) => (k, a2(v)) }
-      //x == y
-      true //FIXME
+      length == length2 && t == t2 && a.toSet == a2.toSet
     case _ =>
       false
   }
@@ -185,8 +181,9 @@ case class Segments(id: Long, var length: Int, t: CTree, a: ArrayBuffer[Segment]
     }
   }
 
+  // TODO: more principled number handling
   def addNum(row: Int, tree: CTree, s: String): Unit =
-    addBigDecimal(row, tree, BigDecimal(s)) //FIXME?
+    addBigDecimal(row, tree, BigDecimal(s)) 
 
   def extendWithRows(rows: Seq[JValue]) {
     var i = 0

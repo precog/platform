@@ -71,38 +71,16 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
 
     pathConstraint.map { cpaths =>
       segments.a.filter { seg => cpaths(seg.cpath) }
-    }.getOrElse(segments.a)
+    }.getOrElse(segments.a.clone)
   }
 
-
-  /**
-["rawlog", blockid, version]
-...
-
-##rawlog blockid version
-##start <932,123>
-json1
-json2
-json3
-##end <932,123>
-##start <932,9991>
-...
-##end <932,9991>
-##start <123,9923>
-...EOF
-   */
-
   def write(eventid: Long, values: Seq[JValue]) {
-    // start locking here?
     if (!values.isEmpty) {
       count += values.length
       RawLoader.writeEvents(os, eventid, values)
       rows ++= values
     }
-    // end locking here?
   }
 
-  def close(): Unit = {
-    os.close()
-  }
+  def close(): Unit = os.close()
 }
