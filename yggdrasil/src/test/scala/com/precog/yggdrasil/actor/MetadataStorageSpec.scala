@@ -61,7 +61,7 @@ class MetadataStorageSpec extends Specification {
 
   override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
 
-  val colDesc = ColumnDescriptor(Path("/"), CPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
+  val colDesc = ColumnRef(Path("/"), CPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
 
   val desc = ProjectionDescriptor(1, List(colDesc))
 

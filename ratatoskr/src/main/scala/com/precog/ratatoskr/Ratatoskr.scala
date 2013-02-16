@@ -210,7 +210,7 @@ object DatabaseTools extends Command with RatatoskrCommon {
     descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[AccountId])]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
-         case (acc, ColumnDescriptor(p, s, t, u)) =>
+         case (acc, ColumnRef(p, s, t, u)) =>
            val update = acc.get(p) map { _ + Tuple3(s, t, u.ownerAccountIds.toSeq) } getOrElse { SortedSet(Tuple3(s, t, u.ownerAccountIds.toSeq)) } 
            acc + (p -> update) 
        }
@@ -289,16 +289,16 @@ object ChownTools extends Command with RatatoskrCommon {
   }
 
   private def changeOwners(path: Option[Path], selector: Option[CPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
-    def updateColumnDescriptor(path: Option[Path], selector: Option[CPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
+    def updateColumnRef(path: Option[Path], selector: Option[CPath], owners: Set[String], col: ColumnRef): ColumnRef = {
       if(path.map { _ == col.path }.getOrElse(true) &&
          selector.map { _ == col.selector }.getOrElse(true)) {
-        ColumnDescriptor(col.path, col.selector, col.valueType, Authorities(owners))
+        ColumnRef(col.path, col.selector, col.valueType, Authorities(owners))
       } else { 
         col
       }
     }
 
-    proj.copy(columns = proj.columns.map { col => updateColumnDescriptor(path, selector, owners, col) })
+    proj.copy(columns = proj.columns.map { col => updateColumnRef(path, selector, owners, col) })
   }
 
   def save(descs: Array[(File, ProjectionDescriptor)], dryrun: Boolean) {

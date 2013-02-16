@@ -63,7 +63,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticEven
         jvalue <- e.data
         (sel, value) <- jvalue.flattenWithPath
       } yield {
-        ProjectionDescriptor(1, ColumnDescriptor(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
+        ProjectionDescriptor(1, ColumnRef(e.path, CPath(sel), typeOf(value), Authorities(Set(e.apiKey))) :: Nil)
       }
     }
 
@@ -71,8 +71,8 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticEven
       CType.forJValue(jvalue).getOrElse(CNull)
     }
 
-    def columnMetadata(columns: Seq[ColumnDescriptor]): ColumnMetadata = {
-      columns.foldLeft(Map.empty[ColumnDescriptor, MetadataMap]) { 
+    def columnMetadata(columns: Seq[ColumnRef]): ColumnMetadata = {
+      columns.foldLeft(Map.empty[ColumnRef, MetadataMap]) { 
         (acc, col) => acc + (col -> Map.empty[MetadataType, Metadata]) 
       }
     }
@@ -105,15 +105,15 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticEven
     }.toSet
   }
 
-  def extractMetadataFor(path: Path, selector: JPath)(events: List[Ingest]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
-    @inline def defaultMetadata(cd: ColumnDescriptor) = Map(cd -> Map.empty[MetadataType, Metadata])
+  def extractMetadataFor(path: Path, selector: JPath)(events: List[Ingest]): Map[ProjectionDescriptor, Map[ColumnRef, Map[MetadataType, Metadata]]] = {
+    @inline def defaultMetadata(cd: ColumnRef) = Map(cd -> Map.empty[MetadataType, Metadata])
 
     val descriptors: Set[ProjectionDescriptor] = (events flatMap {
       case e @ Ingest(apiKey, epath, _, data, metadata) if epath == path => 
         data flatMap {
           _.flattenWithPath.collect {
             case (jpath, jv) if isEqualOrChild(selector, jpath) => 
-              val cd = ColumnDescriptor(epath, CPath(jpath), CType.forJValue(jv).get, Authorities(Set(apiKey)))
+              val cd = ColumnRef(epath, CPath(jpath), CType.forJValue(jv).get, Authorities(Set(apiKey)))
               ProjectionDescriptor(1, cd :: Nil)
           }
         }
@@ -132,9 +132,9 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticEven
   case object NotChild extends ChildType
   
   def projectionDescriptorMap(path: Path, selector: CPath, cType: CType, apiKey: String) = {
-    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(apiKey)))
+    val colDesc = ColumnRef(path, selector, cType, Authorities(Set(apiKey)))
     val desc = ProjectionDescriptor(1, colDesc :: Nil)
-    val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
+    val metadata = Map[ColumnRef, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }
 

@@ -35,9 +35,9 @@ import scalaz._
 class ProjectionDescriptorSpec extends Specification {
 
   val descriptors = List(
-    ColumnDescriptor(Path("/abc"), CPath(".foo.bar"), CString, Authorities(Set())),
-    ColumnDescriptor(Path("/abc"), CPath(".foo.bar.baz"), CString, Authorities(Set())),
-    ColumnDescriptor(Path("/def"), CPath(".bar.baz"), CLong, Authorities(Set()))
+    ColumnRef(Path("/abc"), CPath(".foo.bar"), CString, Authorities(Set())),
+    ColumnRef(Path("/abc"), CPath(".foo.bar.baz"), CString, Authorities(Set())),
+    ColumnRef(Path("/def"), CPath(".bar.baz"), CLong, Authorities(Set()))
   )
 
   val testDescriptor = ProjectionDescriptor(3, descriptors)

@@ -103,7 +103,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 
       val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None, false))
 
-      val colDesc = ColumnDescriptor(Path("/"), CPath(".test"), CString, Authorities(Set("me")))
+      val colDesc = ColumnRef(Path("/"), CPath(".test"), CString, Authorities(Set("me")))
 
       val descriptor = ProjectionDescriptor(1, colDesc :: Nil)
       val values = Vector[CValue](CString("Test123"))
@@ -136,9 +136,9 @@ object MetadataActorStateSpec extends Specification {
   implicit val system = ActorSystem("shardMetadataTest")
 
   def projectionDescriptor(path: Path, selector: CPath, cType: CType, apiKey: String) = {
-    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(apiKey)))
+    val colDesc = ColumnRef(path, selector, cType, Authorities(Set(apiKey)))
     val desc = ProjectionDescriptor(1, colDesc :: Nil)
-    val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
+    val metadata = Map[ColumnRef, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }
 
@@ -275,7 +275,7 @@ object MetadataActorStateSpec extends Specification {
   }
 
   "helper methods" should {
-    val colDesc1 = ColumnDescriptor(Path("/"), CPath(".foo"), CLong, Authorities(Set()))
+    val colDesc1 = ColumnRef(Path("/"), CPath(".foo"), CLong, Authorities(Set()))
     val descriptor1 = ProjectionDescriptor(1, colDesc1 :: Nil)
 
     def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
@@ -296,7 +296,7 @@ object MetadataActorStateSpec extends Specification {
    
       val initialValueStats = ProjectionMetadata.valueStats(initialValue).get
       val initialMetadata = Map[MetadataType, Metadata]((initialValueStats.metadataType -> initialValueStats))
-      val initialColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> initialMetadata))
+      val initialColumnMetadata = Map[ColumnRef, MetadataMap]((colDesc1 -> initialMetadata))
       
       val value = CLong(20)
    
@@ -319,7 +319,7 @@ object MetadataActorStateSpec extends Specification {
    
       val secondValueStats = ProjectionMetadata.valueStats(secondValue).get
       val secondMetadata = Map[MetadataType, Metadata]((secondValueStats.metadataType -> secondValueStats))
-      val secondColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> secondMetadata))
+      val secondColumnMetadata = Map[ColumnRef, MetadataMap]((colDesc1 -> secondMetadata))
 
       val result = secondColumnMetadata |+| firstColumnMetadata
 

@@ -103,7 +103,7 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
   //      CPath("6") -> CEmptyArray,
   //      CPath("7") -> CNum)
   //    val pd = ProjectionDescriptor(0, paths.toList map { case (cpath, ctype) =>
-  //      ColumnDescriptor(path, cpath, ctype, auth)
+  //      ColumnRef(path, cpath, ctype, auth)
   //    })
 
   //    val size = scala.math.abs(badSize % 100).toInt
@@ -135,7 +135,7 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
       CPath("6") -> CEmptyArray,
       CPath("7") -> CNum)
     ProjectionDescriptor(0, paths.toList map { case (cpath, ctype) =>
-      ColumnDescriptor(path, cpath, ctype, auth)
+      ColumnRef(path, cpath, ctype, auth)
     })
   }
 

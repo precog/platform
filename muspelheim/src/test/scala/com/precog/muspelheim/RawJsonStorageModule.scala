@@ -120,7 +120,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
     def findSelectors(path: Path) = M.point(source.findSelectors(path))
     def findProjections(path: Path, selector: CPath) = M.point {
       projections.collect {
-        case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
+        case (descriptor, _) if descriptor.columns.exists { case ColumnRef(p, s, _, _) => p == path && s == selector } => 
           (descriptor, ColumnMetadata.Empty)
       }
     }

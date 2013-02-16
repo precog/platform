@@ -69,7 +69,7 @@ trait NIHDBProjectionModule extends RawProjectionModule[Future, Long, Slice] wit
     private def descriptorDir(baseDir: File, descriptor: ProjectionDescriptor): File = {
       // The path component maps directly to the FS
       // FIXME: escape user-provided components that match NIHDB internal paths
-      val prefix = descriptor.commonPrefix.filterNot(disallowedPathComponents.contains)
+      val prefix = descriptor.path.elements.filterNot(disallowedPathComponents)
 
       new File(baseDir, prefix.mkString(File.separator))
     }

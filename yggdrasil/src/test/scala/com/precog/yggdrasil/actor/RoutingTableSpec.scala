@@ -37,7 +37,7 @@ class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
 
-    def toProjDesc(colDescs: List[ColumnDescriptor]) = ProjectionDescriptor(1, colDescs)
+    def toProjDesc(colDescs: List[ColumnRef]) = ProjectionDescriptor(1, colDescs)
 
     "project an event with one property to a single projection action" in {
       val rt = new SingleColumnProjectionRoutingTable
@@ -49,7 +49,7 @@ class RoutingTableSpec extends Specification {
       val eventId = EventId(0, 0)
       val msg = IngestMessage("apiKey", Path("/a/b"), "someOwner", Vector(IngestRecord(eventId, jval)), None)
       
-      val colDesc = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
+      val colDesc = ColumnRef(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
 
       val actions = rt.routeIngest(msg)
 
@@ -73,10 +73,10 @@ class RoutingTableSpec extends Specification {
       val eventId = EventId(0, 0)
       val msg = IngestMessage("apiKey", Path("/a/b"), "someOwner", Vector(IngestRecord(eventId, jval)), None)
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("someOwner")))
-      val colDesc3 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("someOwner")))
-      val colDesc4 = ColumnDescriptor(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("someOwner")))
+      val colDesc1 = ColumnRef(Path("/a/b/"), CPath(".selector"), CString, Authorities(Set("someOwner")))
+      val colDesc2 = ColumnRef(Path("/a/b/"), CPath(".foo.bar"), CLong, Authorities(Set("someOwner")))
+      val colDesc3 = ColumnRef(Path("/a/b/"), CPath(".foo.bat"), CDouble, Authorities(Set("someOwner")))
+      val colDesc4 = ColumnRef(Path("/a/b/"), CPath(".foo.baz"), CNum, Authorities(Set("someOwner")))
 
       val actions = rt.routeIngest(msg)
 

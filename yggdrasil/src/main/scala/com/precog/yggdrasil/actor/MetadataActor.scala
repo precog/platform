@@ -224,7 +224,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
   def findDescriptors(path: Path, selector: CPath): Set[ProjectionDescriptor] = {
     @inline def matches(path: Path, selector: CPath) = {
-      (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
+      (col: ColumnRef) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
     storage.findDescriptors(_.columns.exists(matches(path, selector)))
@@ -287,7 +287,7 @@ object ProjectionMetadata {
   }
 
   def initMetadata(desc: ProjectionDescriptor): ColumnMetadata = {
-    desc.columns.foldLeft( Map[ColumnDescriptor, MetadataMap]() ) {
+    desc.columns.foldLeft( Map[ColumnRef, MetadataMap]() ) {
       (acc, col) => acc + (col -> Map[MetadataType, Metadata]())
     }
   }

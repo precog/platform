@@ -93,7 +93,7 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
     } 
 
     for (((selector, ctype), values) <- categorized.toStream) yield {
-      val colDesc = ColumnDescriptor(msg.path, CPath(selector), ctype, Authorities(Set(msg.ownerAccountId)))
+      val colDesc = ColumnRef(msg.path, CPath(selector), ctype, Authorities(Set(msg.ownerAccountId)))
       val projDesc = ProjectionDescriptor(1, List(colDesc))
 
       ProjectionInsert(projDesc, values)

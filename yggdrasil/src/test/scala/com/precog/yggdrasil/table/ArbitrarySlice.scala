@@ -38,7 +38,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
 
   private def fullBitSet(size: Int): BitSet = BitSetUtil.range(0, size)
 
-  def genColumn(col: ColumnDescriptor, size: Int): Gen[Column] = {
+  def genColumn(col: ColumnRef, size: Int): Gen[Column] = {
     val bs = fullBitSet(size)
     col.valueType match {
       case CString            => containerOfN[Array, String](size, arbitrary[String]) map { strs => ArrayStrColumn(bs, strs) }
@@ -70,7 +70,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
       new Slice {
         val size = sz
         val columns: Map[ColumnRef, Column] = data.map({
-          case (ColumnDescriptor(path, selector, ctype, _), arr) => (ColumnRef(selector, ctype) -> arr)
+          case (ColumnRef(path, selector, ctype, _), arr) => (ColumnRef(selector, ctype) -> arr)
         })(collection.breakOut)
       }
     }

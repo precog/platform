@@ -32,27 +32,27 @@ import Gen._
 import Arbitrary.arbitrary
 
 trait ArbitraryProjectionDescriptor {
-  def constructColumnDescriptor: Gen[ColumnDescriptor] = {
+  def constructColumnRef: Gen[ColumnRef] = {
     def genPath: Gen[Path] = Gen.oneOf(Seq(Path("path1"),Path("path2"),Path("path3"),Path("path4"),Path("path5")))
     def genJPath: Gen[JPath] = Gen.oneOf(Seq(JPath("jpath1"),JPath("jpath2"),JPath("jpath3"),JPath("jpath4"),JPath("jpath5")))
     def genCType: Gen[CType] = Gen.oneOf(Seq(CBoolean, CLong, CDouble, CNum, CString))
     def genAuthorities: Gen[Authorities] = Gen.oneOf(Seq(Authorities(Set())))
 
-    val genColumnDescriptor = for {
+    val genColumnRef = for {
       path      <- genPath
       selector  <- genJPath // TODO genCPath
       valueType <- genCType
       ownership <- genAuthorities
-    } yield ColumnDescriptor(path, CPath(selector), valueType, ownership)
+    } yield ColumnRef(path, CPath(selector), valueType, ownership)
 
-    genColumnDescriptor
+    genColumnRef
   }
 
-  def genListColDes: Gen[List[ColumnDescriptor]] = for {
+  def genListColDes: Gen[List[ColumnRef]] = for {
     number <- Gen.oneOf(1 to 30)
-    listColDes <- Gen.listOfN(number, constructColumnDescriptor).map(_.groupBy(c => (c.path, c.selector)).filter {
+    listColDes <- Gen.listOfN(number, constructColumnRef).map(_.groupBy(c => (c.path, c.selector)).filter {
       case (_, value) => value.size == 1 
-     }.foldLeft(List.empty[ColumnDescriptor]) {
+     }.foldLeft(List.empty[ColumnRef]) {
        case (list, (_, colDes)) => list ++ colDes
      })
   } yield {

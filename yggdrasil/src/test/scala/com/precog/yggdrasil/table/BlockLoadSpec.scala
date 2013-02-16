@@ -64,10 +64,10 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
         idCount, 
         subschema flatMap {
           case (jpath, CNum | CLong | CDouble) =>
-            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), CPath(jpath), _, Authorities.None) }
+            List(CNum, CLong, CDouble) map { ColumnRef(Path("/test"), CPath(jpath), _, Authorities.None) }
           
           case (jpath, ctype) =>
-            List(ColumnDescriptor(Path("/test"), CPath(jpath), ctype, Authorities.None))
+            List(ColumnRef(Path("/test"), CPath(jpath), ctype, Authorities.None))
         } toList
       )
 
