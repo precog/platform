@@ -51,12 +51,16 @@ trait NIHDBProjectionModule extends RawProjectionModule[Future, Long, Slice] wit
   def cooker: ActorRef
   def actorSystem: ActorSystem
   def asyncContext: ExecutionContext
+  def baseDir: File
+  def archiveBaseDir: File
 
   class Projection private[NIHDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor)
       extends NIHDBProjection(baseDir, descriptor, cooker, yggConfig.maxSliceSize, actorSystem, yggConfig.projectionTimeout)
 
   trait ProjectionCompanion extends RawProjectionCompanionLike[Future] {
     def fileOps: FileOps
+
+    implicit def execContext = asyncContext
 
     private final val disallowedPathComponents = Set(".", "..")
     /**
@@ -82,12 +86,12 @@ trait NIHDBProjectionModule extends RawProjectionModule[Future, Long, Slice] wit
     def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = {
       val dir = descriptorDir(baseDir, descriptor)
 
-      dir.isDirectory.some.map(_ => dir)
+      if (dir.isDirectory) Some(dir) else None
     }
 
     // Must return a directory
     def archiveDir(descriptor: ProjectionDescriptor): Future[Option[File]] = Future {
-      val dir = descriptorDir(archiveDir, descriptor)
+      val dir = descriptorDir(archiveBaseDir, descriptor)
       if (!dir.exists && !dir.mkdirs()) {
         throw new Exception("Failed to create directory for descriptor: " + descriptor)
       }

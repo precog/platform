@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package nihdb
 
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.niflheim._
 import com.precog.util._
@@ -35,6 +36,8 @@ import akka.util.{Duration, Timeout}
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.IsoSerialization._
+import blueeyes.json.serialization.Extractor._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -133,7 +136,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
         case Failure(error) =>
           logger.error("Failed to load state! " + error.message)
-          error.die
+          throw new Exception(error.message)
       }
     } else {
       logger.info("No current descriptor found, creating fresh descriptor")
@@ -200,7 +203,7 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
   def updatedThresholds(current: Map[Int, Int], ids: Seq[Long]): Map[Int, Int] = {
     (current.toSeq ++ ids.map {
-      i => val EventId(p, s) = EventId(i); (p -> s)
+      i => val EventId(p, s) = EventId.fromLong(i); (p -> s)
     }).groupBy(_._1).map { case (p, ids) => (p -> ids.map(_._2).max) }
   }
 

@@ -66,6 +66,11 @@ object EventId {
   val schemaV1 = "producerId" :: "sequenceId" :: HNil
 
   implicit val (decomposerV1, extractorV1) = serializationV[EventId](schemaV1, Some("1.0"))
+
+  def fromLong(id: Long): EventId = EventId(producerId(id), sequenceId(id))
+
+  def producerId(id: Long) = (id >> 32).toInt
+  def sequenceId(id: Long) = id.toInt
 }
 
 case class IngestRecord(eventId: EventId, value: JValue)
