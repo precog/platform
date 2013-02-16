@@ -36,7 +36,7 @@ class JobQueryLoggerSpec extends Specification {
   import JobState._
 
   def withReport[A](f: JobQueryLogger[Need, Unit] => A): A = {
-    f(new JobQueryLogger[Need, Unit] {
+    f(new JobQueryLogger[Need, Unit] with TimingQueryLogger[Need, Unit] {
       val M = Need.need
       val clock = Clock.System
       val jobManager = new InMemoryJobManager[Need]

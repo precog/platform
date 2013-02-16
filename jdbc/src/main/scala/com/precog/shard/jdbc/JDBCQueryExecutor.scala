@@ -125,19 +125,11 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
-    val queryReport = LoggingQueryLogger[Future, Option[FaultPosition]](M)
+    val queryReport = LoggingQueryLogger[Future](M)
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
     Future(Success(executor))
-  }
-
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-    new Evaluator[N](N0) with IdSourceScannerModule {
-      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
-      val yggConfig = platform.yggConfig
-      val report = LoggingQueryLogger[N, instructions.Line](N0)
-    }
   }
 
   val metadataClient = new MetadataClient[Future] {

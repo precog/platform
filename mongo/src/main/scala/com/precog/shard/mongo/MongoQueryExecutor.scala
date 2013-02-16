@@ -130,7 +130,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
-    val queryReport = LoggingQueryLogger[Future, Option[FaultPosition]](M)
+    val queryReport = LoggingQueryLogger[Future](M)
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {

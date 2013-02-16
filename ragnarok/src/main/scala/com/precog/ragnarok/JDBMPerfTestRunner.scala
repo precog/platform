@@ -136,7 +136,7 @@ final class JDBMPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val o
     new Evaluator[N](N0) with IdSourceScannerModule {
       type YggConfig = self.YggConfig
       val yggConfig = self.yggConfig
-      val report = LoggingQueryLogger[N, instructions.Line](N0)
+      val report = LoggingQueryLogger[N](N0)
     }
   }
 }

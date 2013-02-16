@@ -28,10 +28,9 @@ parallelExecution in test := false
 
 libraryDependencies ++= Seq(
   "commons-primitives"          %  "commons-primitives" % "1.0",
-  "net.sf.opencsv"              %  "opencsv"             % "2.0",
+  "net.sf.opencsv"              %  "opencsv"            % "2.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
-  "com.typesafe.akka"           %  "akka-actor"         % "2.0.2",
-  "com.typesafe.akka"           %  "akka-testkit"       % "2.0.2" % "test",
-  "org.apfloat"                 %  "apfloat"            % "1.6.3",
-  "org.spire-math"              %% "spire"              % "0.2.0-M2"
+  "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1",
+  "com.typesafe.akka"           %  "akka-actor"         % "2.0.5",
+  "com.typesafe.akka"           %  "akka-testkit"       % "2.0.5" % "test"
 )

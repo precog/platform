@@ -154,7 +154,7 @@ object SBTConsole {
       new Evaluator[N](N0) with IdSourceScannerModule {
         type YggConfig = PlatformConfig
         val yggConfig = console.yggConfig
-        val report = LoggingQueryLogger[N, instructions.Line](N0)
+        val report = LoggingQueryLogger[N](N0)
       }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
