@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => 
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity.Configuration
+import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Validation._
@@ -70,7 +71,7 @@ class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: Strin
   implicit val M = new FutureMonad(executor)
 }
 
-trait WebAPIKeyFinder extends APIKeyFinder[Future] with BaseClient with Logging{
+trait WebAPIKeyFinder extends APIKeyFinder[Future] with BaseClient with Logging {
   import EitherT.{ left => leftT, right => rightT, _ }
   import \/.{ left, right }
 
