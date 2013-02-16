@@ -34,7 +34,7 @@ import TransSpecModule._
 import blueeyes.json._
 import org.apache.commons.collections.primitives.ArrayIntList
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
@@ -221,6 +221,10 @@ trait Slice { source =>
           case CDate(d) => (ColumnRef(CPath.Identity, CDate), new DateColumn {
             def isDefinedAt(row: Int) = source.isDefinedAt(row)
             def apply(row: Int) = d
+          })
+          case CPeriod(p) => (ColumnRef(CPath.Identity, CPeriod), new PeriodColumn {
+            def isDefinedAt(row: Int) = source.isDefinedAt(row)
+            def apply(row: Int) = p
           })
           case value: CArray[a] => (ColumnRef(CPath.Identity, value.cType), new HomogeneousArrayColumn[a] {
             val tpe = value.cType
@@ -800,6 +804,14 @@ trait Slice { source =>
           }
           ArrayDateColumn(defined, values)
 
+        case col: PeriodColumn =>
+          val defined = col.definedAt(0, source.size)
+          val values = new Array[Period](source.size)
+          Loop.range(0, source.size) { row =>
+            if (defined(row)) values(row) = col(row)
+          }
+          ArrayPeriodColumn(defined, values)
+
         case col: EmptyArrayColumn =>
           val ncol = MutableEmptyArrayColumn.empty()
           Loop.range(0, source.size) { row => ncol.update(row, col.isDefinedAt(row)) }
@@ -880,6 +892,8 @@ trait Slice { source =>
             }
             
             case CPathMeta(_) :: _ => target
+
+            case CPathArray :: _ => sys.error("todo")
             
             case Nil => {
               val node = SchemaNode.Leaf(ctype, col)
@@ -1177,6 +1191,16 @@ trait Slice { source =>
           renderString(date.toString)
         }
         
+        @inline
+        def renderPeriod(period: Period) {
+          renderString(period.toString)
+        }
+        
+        @inline
+        def renderArray[A](array: Array[A]) {
+          renderString(array.deep.toString)
+        }
+        
         def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
           case obj: SchemaNode.Obj => {
             val keys = obj.keys
@@ -1378,6 +1402,30 @@ trait Slice { source =>
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderDate(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CPeriod => {
+              val specCol = col.asInstanceOf[PeriodColumn]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderPeriod(specCol(row))
+                true
+              } else {
+                false
+              }
+            }
+            
+            case CArrayType(_) => {
+              val specCol = col.asInstanceOf[HomogeneousArrayColumn[_]]
+              
+              if (specCol.isDefinedAt(row)) {
+                flushIn()
+                renderArray(specCol(row))
                 true
               } else {
                 false

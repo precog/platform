@@ -54,6 +54,7 @@ import au.com.bytecode.opencsv.CSVReader
 import scala.collection.mutable.ListBuffer
 
 import scalaz._
+import scalaz.effect.IO
 
 class IngestServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, insertTimeout: Timeout, threadPool: Executor, maxBatchErrors: Int)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path) => Future[HttpResponse[JValue]]] with Logging {
@@ -89,7 +90,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
 
   case class SyncResult(total: Int, ingested: Int, errors: List[(Int, String)])
 
-  class EventQueueInserter(t: APIKeyRecord, p: Path, events: Iterator[Either[String, JValue]], close: Option[Closeable]) extends Runnable {
+  class EventQueueInserter(t: APIKeyRecord, p: Path, events: Iterator[Either[String, JValue]], close: IO[Unit]) extends Runnable {
     private[service] val result: Promise[SyncResult] = Promise()
 
     def run() {
@@ -102,9 +103,11 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
           ev match {
             case Right(event) if event.flattenWithPath.size <= 250 => futures += ingest(t, p, event)
             case Right(event) => 
-              logger.warn("Event with more than 250 fields skipped: " + event)
+              logger.warn("Rejecting event for %s at %s due to excessive primitive fields (%d). Event = %s".format(t, p, event.flattenWithPath.size, event.renderCompact))
               errors += (i -> "Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience.")
-            case Left(error) => errors += (i -> error)
+            case Left(error) => 
+              logger.warn("Failure on ingest for %s at %s: %s".format(t, p, error))
+              errors += (i -> error)
           }
         }
         i += 1
@@ -113,7 +116,7 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
       logger.debug("Insert started on %d events".format(i))
 
       Future.sequence(futures) foreach { results =>
-        close foreach (_.close())
+        close.unsafePerformIO
         result.complete(Right(SyncResult(i, futures.size, errors.toList)))
       }
     }
@@ -175,33 +178,27 @@ extends CustomHttpService[Either[Future[JValue], ByteChunk], (APIKeyRecord, Path
         })
       }
 
-      new EventQueueInserter(t, p, jVals, Some(csv))
+      new EventQueueInserter(t, p, jVals, IO { csv.close; file.delete })
     }
   }
 
-  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path): EventQueueInserter = {
+  def parseJson(channel: ReadableByteChannel, t: APIKeyRecord, p: Path, cleanup: IO[Unit]): EventQueueInserter = {
     val reader = new BufferedReader(Channels.newReader(channel, Charsets.UTF_8.name))
     val lines = Iterator.continually { reader.readLine() }.takeWhile(_ != null)
-    new EventQueueInserter(t, p, lines map { json =>
-      try {
-        Right(JParser.parse(json))
-      } catch {
-        case e => Left("Parsing failed: " + e.getMessage())
-      }
-    }, Some(reader))
+    new EventQueueInserter(t, p, lines map { json => JParser.parseFromString(json).bimap("Parsing failed: " + _.getMessage, x => x).toEither }, IO(reader.close).flatMap {_ => cleanup })
   }
 
   def parseSyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     val pipe = Pipe.open()
     writeChunkStream(pipe.sink(), byteStream)
-    Future(parseJson(pipe.source(), t, p))
+    Future(parseJson(pipe.source(), t, p, IO.ioUnit))
   }
 
   def parseAsyncJson(byteStream: ByteChunk, t: APIKeyRecord, p: Path): Future[EventQueueInserter] = {
     for {
       file <- writeToFile(byteStream)
     } yield {
-      parseJson(new FileInputStream(file).getChannel(), t, p)
+      parseJson(new FileInputStream(file).getChannel(), t, p, IO { file.delete })
     }
   }
 

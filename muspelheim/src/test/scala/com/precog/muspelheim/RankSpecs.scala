@@ -107,7 +107,7 @@ trait RankSpecs extends EvalStackSpecs {
 
       result must haveSize(size)
 
-      forall(result) {
+      result must haveAllElementsLike {
         case (ids, SObject(obj)) => {
           ids.length must_== 1
           obj must haveSize(3)
@@ -201,7 +201,7 @@ trait RankSpecs extends EvalStackSpecs {
         
         results must haveSize(2)
 
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SObject(obj)) => {
             ids.length must_== 1
             obj must haveSize(5)
@@ -220,7 +220,7 @@ trait RankSpecs extends EvalStackSpecs {
         
         results must haveSize(2)
 
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SObject(obj)) => {
             ids.length must_== 1
             obj must haveSize(5)
@@ -303,7 +303,7 @@ trait RankSpecs extends EvalStackSpecs {
         
         results must haveSize(2)
 
-        forall(results) {
+        results must haveAllElementsLike {
           case (ids, SObject(obj)) => {
             ids.length must_== 1
             obj must haveSize(5)

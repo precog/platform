@@ -97,7 +97,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       }
     }
     
-    val report = queryReport contramap { (l: instructions.Line) =>
+    lazy val report = queryReport contramap { (l: instructions.Line) =>
       Option(FaultPosition(l.line, l.col, l.text))
     }
 
@@ -149,7 +149,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
             StreamT.empty[N, CharBuffer]
           }
           
-          chunks ++ effect
+          chunks ++ (StreamT wrapEffect effect)
         }
       } 
       
