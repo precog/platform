@@ -327,7 +327,7 @@ object Console extends App {
           new Evaluator[N](N0) with IdSourceScannerModule {
             type YggConfig = REPLConfig
             val yggConfig = replConfig
-            val report = LoggingQueryLogger[N, instructions.Line](N0)
+            val report = LoggingQueryLogger[N](N0)
           }
 
         def startup = IO { PrecogUnit }

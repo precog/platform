@@ -56,7 +56,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
     val ctx = EvaluationContext(apiKey, prefix, new DateTime())
     Validation.fromTryCatch {
       implicit val nt = NaturalTransformation.refl[M]
-      val result = Evaluator(M).eval(graph, ctx, optimize)
+      val evaluator = Evaluator(M)
+      val result = evaluator.eval(graph, ctx, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JUndefined
       }}
@@ -65,7 +66,9 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
         (Vector(extractIds(jvalue \ "key"): _*), jvalueToSValue(jvalue \ "value"))
       }
       
-      events.toSet
+      val back = events.toSet
+      evaluator.report.done.copoint
+      back
     }
   }
   

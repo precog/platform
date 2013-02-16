@@ -34,11 +34,19 @@ import org.slf4j.{ LoggerFactory, Logger }
 import scalaz._
 import scalaz.syntax.monad._
 
-trait QueryLogger[M[+_], P] { self =>
+import scala.collection.JavaConverters._
+import scala.annotation.tailrec
+
+import java.util.concurrent.ConcurrentHashMap
+
+trait QueryLogger[M[+_], -P] { self =>
   def contramap[P0](f: P0 => P): QueryLogger[M, P0] = new QueryLogger[M, P0] {
     def fatal(pos: P0, msg: String): M[Unit] = self.fatal(f(pos), msg)
     def warn(pos: P0, msg: String): M[Unit] = self.warn(f(pos), msg)
     def info(pos: P0, msg: String): M[Unit] = self.info(f(pos), msg)
+    def log(pos: P0, msg: String): M[Unit] = self.log(f(pos), msg)
+    def timing(pos: P0, nanos: Long): M[Unit] = self.timing(f(pos), nanos)
+    def done: M[Unit] = self.done
   }
 
   /**
@@ -56,6 +64,33 @@ trait QueryLogger[M[+_], P] { self =>
    * Report an informational message to the user.
    */
   def info(pos: P, msg: String): M[Unit]
+  
+  /**
+   * Report an information message for internal use only
+   */
+  def log(pos: P, msg: String): M[Unit]
+  
+  /**
+   * Record timing information for a particular position.  Note that a position
+   * may record multiple timing events, which should be aggregated according to
+   * simple summary statistics.
+   *
+   * Please note the following:
+   *
+   * kx = 303 seconds 
+   *   where
+   *     2^63 - 1 = sum i from 0 to k, x^2
+   *     x > 0
+   *     k = 10000    (an arbitrary, plausible iteration count)
+   * 
+   * This is to say that, for a particular position which is hit 10,000 times,
+   * the total time spent in that particular position must be bounded by 303
+   * seconds to avoid signed Long value overflow.  Conveniently, our query timeout
+   * is 300 seconds, so this is not an issue.
+   */
+  def timing(pos: P, nanos: Long): M[Unit]
+  
+  def done: M[Unit]
 }
 
 /**
@@ -91,6 +126,8 @@ trait JobQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   def warn(pos: P, msg: String): M[Unit] = send(channels.Warning, pos, msg)
 
   def info(pos: P, msg: String): M[Unit] = send(channels.Info, pos, msg)
+  
+  def log(pos: P, msg: String): M[Unit] = send(channels.Log, pos, msg)
 }
 
 trait LoggingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
@@ -99,27 +136,78 @@ trait LoggingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")
 
   def fatal(pos: P, msg: String): M[Unit] = M.point {
-    logger.error(msg)
+    logger.error(pos.toString + " - " + msg)
   }
 
   def warn(pos: P, msg: String): M[Unit] = M.point {
-    logger.warn(msg)
+    logger.warn(pos.toString + " - " + msg)
   }
 
   def info(pos: P, msg: String): M[Unit] = M.point {
-    logger.info(msg)
+    logger.info(pos.toString + " - " + msg)
   }
+
+  def log(pos: P, msg: String): M[Unit] = info(pos, msg)
 }
 
 object LoggingQueryLogger {
-  def apply[M[+_], P](implicit M0: Applicative[M]): QueryLogger[M, P] = {
-    new LoggingQueryLogger[M, P] {
+  def apply[M[+_]](implicit M0: Monad[M]): QueryLogger[M, Any] = {
+    new LoggingQueryLogger[M, Any] with TimingQueryLogger[M, Any] {
       val M = M0
     }
   }
 }
 
-trait ExceptionQueryLogger[M[+_], P] extends QueryLogger[M, P] {
+trait TimingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
+  implicit def M: Monad[M]
+  
+  private val table = new ConcurrentHashMap[P, Stats]
+  
+  def timing(pos: P, nanos: Long): M[Unit] = {
+    @tailrec
+    def loop() {
+      val stats = table get pos
+      
+      if (stats == null) {
+        val stats = Stats(1, nanos, nanos * nanos, nanos, nanos)
+        
+        if (table.putIfAbsent(pos, stats) != stats) {
+          loop()
+        }
+      } else {
+        if (!table.replace(pos, stats, stats derive nanos)) {
+          loop()
+        }
+      }
+    }
+    
+    M point {
+      loop()
+    }
+  }
+  
+  def done: M[Unit] = {
+    val logging = table.asScala map {
+      case (pos, stats) =>
+        log(pos, "count = %d; sum = %d; sumSq = %d; min = %d; max = %d".format(stats.count, stats.sum, stats.sumSq, stats.min, stats.max))
+    }
+    
+    logging reduceOption { _ >> _ } getOrElse (M point ())
+  }
+  
+  private case class Stats(count: Long, sum: Long, sumSq: Long, min: Long, max: Long) {
+    final def derive(nanos: Long): Stats = {
+      copy(
+        count = count + 1,
+        sum = sum + nanos,
+        sumSq = sumSq + (nanos * nanos),
+        min = min min nanos,
+        max = max max nanos)
+    }
+  }
+}
+
+trait ExceptionQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
   
   abstract override def fatal(pos: P, msg: String): M[Unit] = for {
