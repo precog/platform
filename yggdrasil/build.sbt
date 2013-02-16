@@ -59,8 +59,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"           %  "akka-actor"         % "2.0.2",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0.2" % "test",
   "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1",
-  "org.apfloat"                 %  "apfloat"            % "1.6.3",
-  "org.spire-math"              %% "spire"              % "0.2.0-M2"
+  "org.apfloat"                 %  "apfloat"            % "1.6.3"
 )
 
 mainClass := Some("com.precog.yggdrasil.util.YggUtils")

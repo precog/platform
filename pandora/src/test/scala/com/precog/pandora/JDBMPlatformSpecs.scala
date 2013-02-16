@@ -105,7 +105,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
-      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
       class YggConfig extends EvaluatorConfig {
@@ -137,7 +137,7 @@ trait JDBMPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
-  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] {
+  val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M
   }
 

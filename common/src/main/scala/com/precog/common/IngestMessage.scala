@@ -176,7 +176,7 @@ object IngestMessageSerialization {
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
     if (magic != magicByte) {
-      Failure("Invalid message bad magic byte. Found [" + magic + "]")
+      Failure("Invalid message: bad magic byte. Found [0x%02x]" format magic)
     } else {
       val msgType = buffer.get()
       val stop    = buffer.get()
@@ -184,13 +184,15 @@ object IngestMessageSerialization {
       (stop, msgType) match {
         case (`stopByte`, `jsonEventFlag`) => parseEvent(buffer)
         case (`stopByte`, `jsonArchiveFlag`) => parseArchive(buffer)
+        case (`stopByte`, flag) => Failure("Invalid message: unknown flag byte. Found [0x%02x]" format flag)
+        case (stop, _) => Failure("Invalid message: bad stop byte. Found [0x%02x]" format stop)
       }
     }
   }
   
-  def parseEvent = (parseJValue _) andThen (jvalueToEvent _)
+  def parseEvent = (parseJValue _) andThen (_ flatMap jvalueToEvent _)
 
-  def parseArchive = (parseJValue _) andThen (jvalueToArchive _)
+  def parseArchive = (parseJValue _) andThen (_ flatMap jvalueToArchive _)
   
   def jvalueToEvent(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[EventMessage] match {
@@ -206,11 +208,14 @@ object IngestMessageSerialization {
     }
   }
   
-  def parseJValue(buffer: ByteBuffer): JValue = {
+  def parseJValue(buffer: ByteBuffer): Validation[String, JValue] = {
     val decoder = charset.newDecoder()
     val charBuffer = decoder.decode(buffer)
-    JParser.parse(charBuffer.toString())
+    JParser.parseFromString(charBuffer.toString()) match {
+      case Failure(e)  => Failure(e.getMessage() + " parsing: " + charBuffer.toString())
+      case Success(jv) => Success(jv)
+    }
   }
 }
 
-// vim: set ts=4 sw=4 et:
+// vim: set ts=2 sw=2 et:

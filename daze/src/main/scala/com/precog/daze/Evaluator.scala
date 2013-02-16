@@ -232,6 +232,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
         
+        val startTime = System.nanoTime
+        
         def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
           for (state <- monadState.gets(identity)) yield state.assume.get(graph)
         
@@ -460,7 +462,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
               table = pending.table.transform(liftToValues(pending.trans))
 
-                sorted <- transState liftM mn(table.sort(valueSpec, SortAscending))
+              sorted <- transState liftM mn(table.sort(valueSpec, SortAscending))
               distinct = sorted.distinct(valueSpec)
               result = distinct.transform(idSpec)
             } yield {
@@ -482,6 +484,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               liftedTrans = liftToValues(pendingTable.trans)
+              
               result = mn(pendingTable.table
                 .transform(liftedTrans)
                 .transform(DerefObjectStatic(Leaf(Source), paths.Value))
@@ -523,7 +526,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           
           case s @ dag.Split(spec, child) => 
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
-
+          
             val params = child.foldDown(true) {
               case param: dag.SplitParam if param.parent == s => Set(param)
             }
@@ -743,7 +746,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
         }
         
-        memoized(graph, evalTransSpecable)
+        val back = memoized(graph, evalTransSpecable)
+        val endTime = System.nanoTime
+        
+        val timingM = transState liftM report.timing(graph.loc, endTime - startTime)
+        
+        timingM >> back
       }
     
       /**
@@ -754,25 +762,37 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        */
       def fullEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
+        
+        type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
+        
+        val splitNodes = splits.keys.toSet
+        
+        def stage(toEval: List[StagingPoint], graph: DepGraph): EvaluatorStateT[DepGraph] = {
+          for {
+            state <- monadState gets identity
+            optPoint = toEval find { g => !(state.assume contains g) }
+            
+            optBack = optPoint map { point =>
+              for {
+                _ <- prepareEval(point, splits)
+                rewritten <- stagedOptimizations(graph, ctx, optimize, splitNodes)
+                
+                toEval = listStagingPoints(Queue(rewritten)) filter referencesOnlySplit(parentSplits)
+                result <- stage(toEval, rewritten)
+              } yield result
+            }
+            
+            back <- optBack getOrElse (monadState point graph)
+          } yield back
+        }
 
         // find the topologically-sorted forcing points (excluding the endpoint)
         // at the current split level
         val toEval = listStagingPoints(Queue(graph)) filter referencesOnlySplit(parentSplits)
 
-        lazy val splitNodes = splits.keys.toSet
-        type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
-        val preState = toEval.foldLeftM[EvaluatorStateT, DepGraph](graph) {
-          case (graph, node) => for {
-            rewrittenGraph <- stagedOptimizations(graph, ctx, optimize, splitNodes)
-            _ <- prepareEval(node, splits)
-          } yield rewrittenGraph
-        }
-      
-        // run the evaluator on all forcing points *including* the endpoint, in order
         for {
-          rewrittenGraph <- preState
-          stageRewrittenGraph <- stagedOptimizations(rewrittenGraph, ctx, optimize, splitNodes)
-          pendingTable <- prepareEval(stageRewrittenGraph, splits)
+          rewrittenGraph <- stage(toEval, graph)
+          pendingTable <- prepareEval(rewrittenGraph, splits)
           table = pendingTable.table transform liftToValues(pendingTable.trans)
         } yield table
       }
