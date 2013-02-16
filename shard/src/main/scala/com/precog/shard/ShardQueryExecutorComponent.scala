@@ -149,7 +149,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
             StreamT.empty[N, CharBuffer]
           }
           
-          chunks ++ effect
+          chunks ++ (StreamT wrapEffect effect)
         }
       } 
       
