@@ -59,27 +59,19 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
   def length: Int = count
 
   def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
-    val segs = if (rows.isEmpty) {
-      segments
-    } else {
+    if (!rows.isEmpty) {
       segments.synchronized {
-        if (rows.isEmpty) {
-          segments
-        } else {
-          val segs = segments.copy
-          segs.extendWithRows(rows)
-          // start locking here?
+        if (!rows.isEmpty) {
+          segments.extendWithRows(rows)
           rows.clear()
-          segments = segs
-          // end locking here?
-          segs
         }
+        segments
       }
     }
 
     pathConstraint.map { cpaths =>
-      segs.a.filter { seg => cpaths(seg.cpath) }
-    }.getOrElse(segs.a.clone)
+      segments.a.filter { seg => cpaths(seg.cpath) }
+    }.getOrElse(segments.a)
   }
 
 
