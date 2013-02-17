@@ -67,9 +67,9 @@ import scalaz.syntax.traverse._
 //////////////
 
 // To simplify routing, tag all messages for the ProjectionLike actor
-sealed trait ShardProjectionAction {
-  def descriptor: ProjectionDescriptor
-}
+//sealed trait ShardProjectionAction {
+//  def descriptor: ProjectionDescriptor
+//}
 
 // trait ProjectionUpdate extends ShardProjectionAction {
 //   def descriptor: ProjectionDescriptor
@@ -82,185 +82,184 @@ sealed trait ShardProjectionAction {
 // 
 // case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
 
-case class ProjectionRequest(descriptor: ProjectionDescriptor) extends ShardProjectionAction
+// case class ProjectionRequest(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
 /////////////////
 
-case object ProjectionIdleTimeout
+// case object ProjectionIdleTimeout
 
 /////////////////
 
-case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
-case class ArchiveMetadata(descriptor: ProjectionDescriptor)
-case object InsertNoMetadata
+case class InsertComplete(path: Path)
+case class ArchiveComplete(path: Path)
 
 ////////////////
-trait ActorProjectionModuleConfig extends BaseConfig {
-  def projectionRetrievalTimeout: Timeout = config[Long]("actors.store.idle_projection_seconds", 300) seconds
-  def idleProjectionDelay: Duration = config[Long]("actors.store.idle_projection_seconds", 300) seconds
-}
-
-trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Block] with YggConfigComponent { self =>
-  type YggConfig <: ActorProjectionModuleConfig
-
-  val rawProjectionModule: RawProjectionModule[IO, Key, Block]
-
-  case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Key], columns: Set[ColumnRef])
-
-  final class Projection(val descriptor: ProjectionDescriptor, val actorRef: ActorRef, timeout: Timeout) extends ProjectionLike[Future, Key, Block] {
-    private implicit val reqTimeout = timeout
-    // TODO: need Monad[M] @@ AccountResource
-    def getBlockAfter(id: Option[Key], columns: Set[ColumnRef] = Set())(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Key, Block]]] = {
-      (actorRef ? ProjectionGetBlock(descriptor, id, columns)).mapTo[Option[BlockProjectionData[Key, Block]]]
-      // (actorRef ? ProjectionGetBlock(descriptor, id, columns)) flatMap { a => M.point(a.asInstanceOf[Option[BlockProjectionData[Key, Block]]]) }
-    }
-  }
-
-  class ProjectionCompanion(projectionsActor: ActorRef, timeout: Timeout) extends ProjectionCompanionLike[Future] {
-    implicit val reqTimeout = timeout
-    def apply(descriptor: ProjectionDescriptor): Future[Projection] = {
-      (projectionsActor ? ProjectionRequest(descriptor)).mapTo[Projection]
-    }
-  }
-
-  ////////////
-  // ACTORS //
-  ////////////
-
-  class ProjectionsActor extends Actor { self =>
-    private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
-
-    private val projectionActors = mutable.Map.empty[ProjectionDescriptor, Projection]
-
-    private def getProjection(descriptor: ProjectionDescriptor): Projection = {
-      projectionActors.getOrElseUpdate(
-        descriptor,
-        new Projection(
-          descriptor,
-          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, yggConfig.idleProjectionDelay))),
-          yggConfig.projectionRetrievalTimeout
-        )
-      )
-    }
-
-    def receive = {
-      case Status =>
-        sender ! status
-
-      case ProjectionRequest(desc) =>
-        sender ! getProjection(desc)
-
-      case msg: ShardProjectionAction =>
-        getProjection(msg.descriptor).actorRef.tell(msg, sender)
-    }
-
-    override def postStop(): Unit = {
-      // TODO: Should this wait for all projections to close?
-      projectionActors.values foreach { _.actorRef ! PoisonPill }
-    }
-
-    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projectionActors.size)))))
-  }
-
-    /**
-     * A per-projection worker Actor
-     */
-  class ProjectionActor(scheduler: Scheduler, descriptor: ProjectionDescriptor, maxIdleTime: Duration) extends Actor { self =>
-    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionActor")
-
-    private var projection: Option[rawProjectionModule.Projection] = None
-
-    private var lastAccess: Long = System.currentTimeMillis
-
-    private def now = System.currentTimeMillis
-    private def scheduleTimeout = scheduler.scheduleOnce((new DurationLong(lastAccess + maxIdleTime.toMillis - now)).millisecond, self, ProjectionIdleTimeout)
-
-    override def preStart() = {
-      scheduleTimeout
-    }
-
-    override def postStop() = {
-      sleep.unsafePerformIO
-    }
-
-    private def awaken: IO[rawProjectionModule.Projection] = {
-      val lastAccess0 = lastAccess
-      val now0 = now
-      for {
-        _ <- IO { lastAccess = now0 }
-        p <- projection.map(IO(_)) getOrElse {
-               logger.info("Reopening projection for %s at %d after %d idle.".format(descriptor.shows, now0, now0 - lastAccess0))
-               rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } }
-             }
-      } yield p
-    }
-
-    private def sleep: IO[PrecogUnit] = {
-      logger.info("Closing projection for %s at %d.".format(descriptor.shows, now))
-      (for {
-        _ <- (projection map rawProjectionModule.Projection.close).sequence
-        _ <- IO { projection = None }
-      } yield PrecogUnit) except { t =>
-        IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit }
-      }
-    }
-
-    private def runInsert(projection: rawProjectionModule.Projection, rows: Seq[ProjectionInsert.Row]): IO[PrecogUnit] = {
-      if (rows.nonEmpty) {
-        val row = rows.head
-        projection.insert(Array(row.id.uid), row.values) flatMap { _ =>
-          runInsert(projection, rows.tail)
-        }
-      } else {
-        IO(PrecogUnit)
-      }
-    }
-
-    def receive = {
-      case ProjectionInsert(`descriptor`, rows) =>
-        val startTime = System.currentTimeMillis
-        (for {
-          p <- awaken
-          _ <- IO { logger.debug("Inserting " + rows.size + " rows into " + p) }
-          _ <- runInsert(p, rows)
-          _ <- IO { logger.trace("runInsert complete for " + p.descriptor.shows) }
-          _ <- p.commit
-        } yield {
-          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))
-          sender ! InsertMetadata(descriptor, ProjectionMetadata.columnMetadata(descriptor, rows))
-        }) except {
-          case t: Throwable => IO { logger.error("Error during insert, aborting batch: " + descriptor.shows, t) }
-        } unsafePerformIO
-
-      case ProjectionArchive(`descriptor`, archive) =>
-        logger.info("Archiving projection: " + descriptor.shows)
-
-        (for {
-           _ <- sleep
-           _ <- rawProjectionModule.Projection.archive(descriptor)
-        } yield {
-          sender ! ArchiveMetadata(descriptor)
-        }) except {
-          case t: Throwable => IO { logger.error("Error during archive on %s".format(descriptor), t) }
-        } unsafePerformIO
-
-      case ProjectionGetBlock(`descriptor`, id, columns) =>
-        logger.trace("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
-        (for {
-          p <- awaken
-          block <- p.getBlockAfter(id, columns)
-        } yield {
-          sender ! block
-        }) unsafePerformIO
-
-      case ProjectionIdleTimeout =>
-        if (lastAccess + maxIdleTime.toMillis < now) {
-          sleep.unsafePerformIO
-        } else {
-          scheduleTimeout
-        }
-    }
-  }
-}
-
-// vim: set ts=4 sw=4 et:
+//trait ActorProjectionModuleConfig extends BaseConfig {
+//  def projectionRetrievalTimeout: Timeout = config[Long]("actors.store.idle_projection_seconds", 300) seconds
+//  def idleProjectionDelay: Duration = config[Long]("actors.store.idle_projection_seconds", 300) seconds
+//}
+//
+//trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Block] with YggConfigComponent { self =>
+//  type YggConfig <: ActorProjectionModuleConfig
+//
+//  val rawProjectionModule: RawProjectionModule[IO, Key, Block]
+//
+//  case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Key], columns: Set[ColumnRef])
+//
+//  final class Projection(val descriptor: ProjectionDescriptor, val actorRef: ActorRef, timeout: Timeout) extends ProjectionLike[Future, Key, Block] {
+//    private implicit val reqTimeout = timeout
+//    // TODO: need Monad[M] @@ AccountResource
+//    def getBlockAfter(id: Option[Key], columns: Set[ColumnRef] = Set())(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Key, Block]]] = {
+//      (actorRef ? ProjectionGetBlock(descriptor, id, columns)).mapTo[Option[BlockProjectionData[Key, Block]]]
+//      // (actorRef ? ProjectionGetBlock(descriptor, id, columns)) flatMap { a => M.point(a.asInstanceOf[Option[BlockProjectionData[Key, Block]]]) }
+//    }
+//  }
+//
+//  class ProjectionCompanion(projectionsActor: ActorRef, timeout: Timeout) extends ProjectionCompanionLike[Future] {
+//    implicit val reqTimeout = timeout
+//    def apply(descriptor: ProjectionDescriptor): Future[Projection] = {
+//      (projectionsActor ? ProjectionRequest(descriptor)).mapTo[Projection]
+//    }
+//  }
+//
+//  ////////////
+//  // ACTORS //
+//  ////////////
+//
+//  class ProjectionsActor extends Actor { self =>
+//    private lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionsActor")
+//
+//    private val projectionActors = mutable.Map.empty[ProjectionDescriptor, Projection]
+//
+//    private def getProjection(descriptor: ProjectionDescriptor): Projection = {
+//      projectionActors.getOrElseUpdate(
+//        descriptor,
+//        new Projection(
+//          descriptor,
+//          context.actorOf(Props(new ProjectionActor(context.system.scheduler, descriptor, yggConfig.idleProjectionDelay))),
+//          yggConfig.projectionRetrievalTimeout
+//        )
+//      )
+//    }
+//
+//    def receive = {
+//      case Status =>
+//        sender ! status
+//
+//      case ProjectionRequest(desc) =>
+//        sender ! getProjection(desc)
+//
+//      case msg: ShardProjectionAction =>
+//        getProjection(msg.descriptor).actorRef.tell(msg, sender)
+//    }
+//
+//    override def postStop(): Unit = {
+//      // TODO: Should this wait for all projections to close?
+//      projectionActors.values foreach { _.actorRef ! PoisonPill }
+//    }
+//
+//    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projectionActors.size)))))
+//  }
+//
+//    /**
+//     * A per-projection worker Actor
+//     */
+//  class ProjectionActor(scheduler: Scheduler, descriptor: ProjectionDescriptor, maxIdleTime: Duration) extends Actor { self =>
+//    private val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.ProjectionActor")
+//
+//    private var projection: Option[rawProjectionModule.Projection] = None
+//
+//    private var lastAccess: Long = System.currentTimeMillis
+//
+//    private def now = System.currentTimeMillis
+//    private def scheduleTimeout = scheduler.scheduleOnce((new DurationLong(lastAccess + maxIdleTime.toMillis - now)).millisecond, self, ProjectionIdleTimeout)
+//
+//    override def preStart() = {
+//      scheduleTimeout
+//    }
+//
+//    override def postStop() = {
+//      sleep.unsafePerformIO
+//    }
+//
+//    private def awaken: IO[rawProjectionModule.Projection] = {
+//      val lastAccess0 = lastAccess
+//      val now0 = now
+//      for {
+//        _ <- IO { lastAccess = now0 }
+//        p <- projection.map(IO(_)) getOrElse {
+//               logger.info("Reopening projection for %s at %d after %d idle.".format(descriptor.shows, now0, now0 - lastAccess0))
+//               rawProjectionModule.Projection(descriptor) map { _ tap { p => projection = Some(p) } }
+//             }
+//      } yield p
+//    }
+//
+//    private def sleep: IO[PrecogUnit] = {
+//      logger.info("Closing projection for %s at %d.".format(descriptor.shows, now))
+//      (for {
+//        _ <- (projection map rawProjectionModule.Projection.close).sequence
+//        _ <- IO { projection = None }
+//      } yield PrecogUnit) except { t =>
+//        IO { logger.error("Error closing projection for %s.".format(descriptor), t); PrecogUnit }
+//      }
+//    }
+//
+//    private def runInsert(projection: rawProjectionModule.Projection, rows: Seq[ProjectionInsert.Row]): IO[PrecogUnit] = {
+//      if (rows.nonEmpty) {
+//        val row = rows.head
+//        projection.insert(Array(row.id.uid), row.values) flatMap { _ =>
+//          runInsert(projection, rows.tail)
+//        }
+//      } else {
+//        IO(PrecogUnit)
+//      }
+//    }
+//
+//    def receive = {
+//      case ProjectionInsert(`descriptor`, rows) =>
+//        val startTime = System.currentTimeMillis
+//        (for {
+//          p <- awaken
+//          _ <- IO { logger.debug("Inserting " + rows.size + " rows into " + p) }
+//          _ <- runInsert(p, rows)
+//          _ <- IO { logger.trace("runInsert complete for " + p.descriptor.shows) }
+//          _ <- p.commit
+//        } yield {
+//          logger.debug("Insertion of %d rows in %d ms".format(rows.size, System.currentTimeMillis - startTime))
+//          sender ! InsertMetadata(descriptor, ProjectionMetadata.columnMetadata(descriptor, rows))
+//        }) except {
+//          case t: Throwable => IO { logger.error("Error during insert, aborting batch: " + descriptor.shows, t) }
+//        } unsafePerformIO
+//
+//      case ProjectionArchive(`descriptor`, archive) =>
+//        logger.info("Archiving projection: " + descriptor.shows)
+//
+//        (for {
+//           _ <- sleep
+//           _ <- rawProjectionModule.Projection.archive(descriptor)
+//        } yield {
+//          sender ! ArchiveMetadata(descriptor)
+//        }) except {
+//          case t: Throwable => IO { logger.error("Error during archive on %s".format(descriptor), t) }
+//        } unsafePerformIO
+//
+//      case ProjectionGetBlock(`descriptor`, id, columns) =>
+//        logger.trace("Getting block for %s from actor %s after index %s.".format(descriptor.shows, System.identityHashCode(self), id))
+//        (for {
+//          p <- awaken
+//          block <- p.getBlockAfter(id, columns)
+//        } yield {
+//          sender ! block
+//        }) unsafePerformIO
+//
+//      case ProjectionIdleTimeout =>
+//        if (lastAccess + maxIdleTime.toMillis < now) {
+//          sleep.unsafePerformIO
+//        } else {
+//          scheduleTimeout
+//        }
+//    }
+//  }
+//}
+//
+//// vim: set ts=4 sw=4 et:

@@ -32,12 +32,12 @@ import org.streum.configrity.Configuration
 import com.precog.common.jobs.InMemoryJobManager
 import com.precog.common.accounts.StaticAccountFinder
 import com.precog.common.security.StaticAPIKeyFinder
-import com.precog.shard.jdbm3.JDBMQueryExecutorComponent
+import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone.StandaloneShardServer
 
 object DesktopShardServer
     extends StandaloneShardServer
-    with JDBMQueryExecutorComponent {
+    with NIHDBQueryExecutorComponent {
   val caveatMessage = None
 
   val actorSystem = ActorSystem("desktopExecutorActorSystem")
@@ -54,7 +54,7 @@ object DesktopShardServer
     ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
   } recoverWith {
     case ex: Throwable =>
-      System.err.println("Could not start JDBM Shard server!!!")
+      System.err.println("Could not start NIHDB Shard server!!!")
       ex.printStackTrace
       Promise.failed(ex)
   }

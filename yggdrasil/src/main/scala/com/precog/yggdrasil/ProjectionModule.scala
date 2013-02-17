@@ -23,6 +23,8 @@ import com.precog.util.PrecogUnit
 import com.precog.common._
 import com.precog.yggdrasil.table.ColumnRef
 
+import blueeyes.json.JValue
+
 import scalaz._
 import scalaz.syntax.monad._
 
@@ -39,6 +41,7 @@ trait ProjectionModule[M[+_], Key, Block] {
 
     def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M0]) = new ProjectionCompanionLike[({ type λ[+α] = T[M0, α] })#λ] {
       def apply(descriptor: ProjectionDescriptor) = self.apply(descriptor).liftM[T]
+      def apply(path: Path) = self.apply(path).liftM[T]
     }
   }
 }
@@ -70,6 +73,7 @@ trait RawProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Bl
 
     override def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M0]) = new RawProjectionCompanionLike[({ type λ[+α] = T[M0, α] })#λ] {
       def apply(descriptor: ProjectionDescriptor) = self(descriptor).liftM[T]
+      def apply(path: Path) = self.apply(path).liftM[T]
       def close(p: Projection) = self.close(p).liftM[T]
       def archive(d: ProjectionDescriptor) = self.archive(d).liftM[T]
     }
@@ -77,12 +81,13 @@ trait RawProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Bl
 }
 
 trait RawProjectionLike[M[+_], Key, Block] extends ProjectionLike[M, Key, Block] {
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): M[PrecogUnit]
+  // def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): M[PrecogUnit]
+  def insert(id : Identities, v : Seq[JValue]): M[PrecogUnit]
   def commit: M[PrecogUnit]
 }
 
 trait SortProjectionLike[M[+_], Key, Block] extends RawProjectionLike[M, Key, Block] {
   def descriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false) = sys.error("Insertion on sort projections is unsupported")
+  def insert(id : Identities, v : Seq[JValue]) = sys.error("Insertion on sort projections is unsupported")
   def commit = sys.error("Commit on sort projections is unsupported")
 }

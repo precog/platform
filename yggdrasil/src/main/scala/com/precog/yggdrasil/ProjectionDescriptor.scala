@@ -23,6 +23,7 @@ import com.precog.common.json._
 import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.security.Authorities
 import com.precog.util.IOUtils
 
 import com.google.common.base.Charsets
@@ -85,39 +86,6 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(ownerAccountIds: Set[AccountId]) {
-  @tailrec
-  final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
-    if(i < l.length) {
-      hashSeq(l, hash * 31 + l(i).hashCode, i+1)
-    } else {
-      hash
-    }     
-  }    
-
-  lazy val hash = {
-    if(ownerAccountIds.size == 0) 1 
-    else if(ownerAccountIds.size == 1) ownerAccountIds.head.hashCode 
-    else hashSeq(ownerAccountIds.toSeq, 1) 
-  }
-
-  override def hashCode(): Int = hash
-}
-
-object Authorities {
-  implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
-    override def decompose(authorities: Authorities): JValue = {
-      JObject(JField("uids", JArray(authorities.ownerAccountIds.map(JString(_)).toList)) :: Nil)
-    }
-  }
-
-  implicit val AuthoritiesExtractor: Extractor[Authorities] = new Extractor[Authorities] {
-    override def validated(obj: JValue): Validation[Error, Authorities] =
-      (obj \ "uids").validated[Set[String]].map(Authorities(_))
-  }
-
-  val None = Authorities(Set())
-}
 
 /** 
  * The descriptor for a projection

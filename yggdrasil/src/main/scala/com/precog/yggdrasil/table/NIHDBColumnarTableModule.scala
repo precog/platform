@@ -22,6 +22,12 @@ package table
 
 import com.precog.bytecode.JType
 import com.precog.common.security._
+import com.precog.yggdrasil.nihdb._
+
+import akka.actor.{ActorRef, ActorSystem}
+import akka.dispatch.{Future, Promise}
+import akka.pattern.AskSupport
+import akka.util.Timeout
 
 import org.joda.time.DateTime
 
@@ -34,36 +40,32 @@ import scalaz.syntax.traverse._
 
 import TableModule._
 
-trait NIHDBColumnarTableModule[M[+_], Long] extends BlockStoreColumnarTableModule[M] with RawProjectionModule[M, Long, Slice] {
-  def accessControl: AccessControl[M]
+trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with AskSupport { 
+  def accessControl: AccessControl[Future]
+  def actorSystem: ActorSystem
+  def projectionsActor: ActorRef
+  def storageTimeout: Timeout
 
   trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
-      val constraints = Schema.flatten(tpe).map { case (p, t) => ColumnRef(p, t) }.toSet
+    def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
+      // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
+      val constraints = Some(Schema.flatten(tpe).map { case (p, t) => ColumnRef(p, t) }.toSet)
 
       for {
         paths          <- pathsM(table)
         projections    <- paths.map { path =>
-          Projection(path) flatMap {
-            case Some(proj) =>
-              accessControl.hasCapability(apiKey, Set(ReducePermission(path, proj.descriptor.authorities.ownerAccountIds)), Some(new DateTime)) map { canAccess =>
-                if (canAccess) Some(proj) else {
-                  Projection.close(proj)
-                  None
-                }
-              }
-            case None =>
-              M.point(None)
-          }
+          implicit val timeout = storageTimeout
+          (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]]
         }.sequence map (_.flatten)
+        totalLength    <- projections.map(_.length).sequence.map(_.sum)
       } yield {
-        def slices(proj: Projection): StreamT[M, Slice] = {
-          StreamT.unfoldM[M, Slice, Option[Long]](None) { key =>
+        def slices(proj: NIHDBProjection): StreamT[Future, Slice] = {
+          StreamT.unfoldM[Future, Slice, Option[Long]](None) { key =>
             proj.getBlockAfter(key, constraints).map(_.map { case BlockProjectionData(_, maxKey, slice) => (slice, Some(maxKey)) })
           }
         }
 
-        Table(projections.foldLeft(StreamT.empty[M, Slice]) { (acc, proj) => acc ++ slices(proj) }, ExactSize(projections.map(_.length).sum))
+        Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) => acc ++ slices(proj) }, ExactSize(totalLength))
       }
     }
   }

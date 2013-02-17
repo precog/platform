@@ -202,7 +202,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   def receive = {
     case Status => sender ! status
 
-    case complete @ BatchComplete(checkpoint, _) => 
+    case complete @ BatchComplete(checkpoint) => 
       pendingCompletes :+= complete
 
       // the minimum value in the ingest cache is complete, so
@@ -217,8 +217,8 @@ abstract class KafkaShardIngestActor(shardId: String,
           // FIXME: Carefully review this logic; previously, the comparison here was being done using "<="
           // by the serialized JSON representation of the vector clocks (a silent side effect of
           // the silent implicit conversions to JValue in BlueEyes)
-          case BatchComplete(pendingCheckpoint @ YggCheckpoint(_, clock), updated) if clock isDominatedBy checkpoint.messageClock =>
-            handleBatchComplete(pendingCheckpoint, updated)
+          case BatchComplete(pendingCheckpoint @ YggCheckpoint(_, clock)) if clock isDominatedBy checkpoint.messageClock =>
+            handleBatchComplete(pendingCheckpoint)
             None
 
           case stillPending => 
@@ -289,7 +289,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   /**
    * This method will be called on each completed batch. Subclasses may perform additional work here.
    */
-  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]): Unit
+  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint): Unit
 
   private def readRemote(fromCheckpoint: YggCheckpoint): Future[Validation[Error, (Vector[(Long, EventMessage)], YggCheckpoint)]] = {
     // The shard ingest actor needs to compute the maximum offset, so it has

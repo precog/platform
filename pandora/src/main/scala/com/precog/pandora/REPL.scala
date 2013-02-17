@@ -22,7 +22,8 @@ package pandora
 
 import akka.actor.{ActorSystem, Props}
 import akka.dispatch._
-import akka.util.Duration
+import akka.pattern.gracefulStop
+import akka.util.{Duration, Timeout}
 
 import blueeyes.bkka._
 import blueeyes.json._
@@ -36,12 +37,13 @@ import com.precog.common.Path
 import com.precog.common.kafka._
 import com.precog.common.accounts._
 import com.precog.common.security._
+import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.jdbm3._
 import yggdrasil.metadata._
+import yggdrasil.nihdb._
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._
@@ -73,12 +75,8 @@ trait Lifecycle {
 class REPLConfig(dataDir: Option[String]) extends BaseConfig
     with IdSourceConfig
     with EvaluatorConfig
-    with StandaloneShardSystemConfig
     with ColumnarTableModuleConfig
-    with BlockStoreColumnarTableModuleConfig
-    with JDBMProjectionModuleConfig
-    with ActorStorageModuleConfig
-    with ActorProjectionModuleConfig {
+    with BlockStoreColumnarTableModuleConfig {
   val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
   val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -87,21 +85,24 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
   val memoizationWorkDir = scratchDir
   val ingestConfig = None
 
-  val controlTimeout = Duration(120, "seconds")
+  val storageTimeout = Timeout(Duration(120, "seconds"))
+  val controlTimeout = storageTimeout.duration
   val flatMapTimeout = controlTimeout
   val maxEvalDuration = controlTimeout
   val clock = blueeyes.util.Clock.System
-  
-  val maxSliceSize = 10000
+
+  val maxSliceSize = 20000
+  val cookThreshold = maxSliceSize
   val smallSliceSize = 8
 
   //TODO: Get a producer ID
   val idSource = new FreshAtomicIdSource
 }
 
-trait REPL extends ParseEvalStack[Future] 
-   with SliceColumnarTableModule[Future, Array[Byte]]
-   with LongIdMemoryDatasetConsumer[Future] {
+trait REPL extends ParseEvalStack[Future]
+    with NIHDBColumnarTableModule
+    with NIHDBStorageMetadataSource
+    with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"
 
@@ -112,7 +113,7 @@ trait REPL extends ParseEvalStack[Future]
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
     terminal.init()
     
-    val color = new Color(true)       // TODO   
+    val color = new Color(true)       // TODO
     
     val reader = new ConsoleReader
     // val out = new PrintWriter(reader.getTerminal.wrapOutIfNeeded(System.out))
@@ -159,7 +160,7 @@ trait REPL extends ParseEvalStack[Future]
         
         true
       }
-      
+        
       case PrintTree(tree) => {
         bindRoot(tree, tree)
         val tree2 = shakeTree(tree)
@@ -169,7 +170,7 @@ trait REPL extends ParseEvalStack[Future]
         
         true
       }
-      
+        
       case Help => {
         printHelp(out)
         true
@@ -209,14 +210,14 @@ trait REPL extends ParseEvalStack[Future]
         }
       }
     }
-  
+    
 
     out.println("Welcome to Quirrel early access preview.")       // TODO we should try to get this string from a file
     out.println("Type in expressions to have them evaluated.")
     out.println("Press Ctrl-D on a new line to evaluate an expression.")
     out.println("Type in :help for more information.")
     out.println()
-  
+    
     loop()
 
     PrecogUnit
@@ -238,24 +239,24 @@ trait REPL extends ParseEvalStack[Future]
   }
   
   def printHelp(out: PrintStream) {
-    val str = 
+    val str =
       """Note: command abbreviations are not yet supported!
         |
         |<expr>        Evaluate the expression
         |:help         Print this help message
         |:quit         Exit the REPL
         |:tree <expr>  Print the AST for the expression"""
-        
+    
     out.println(str stripMargin '|')
   }
   
   // %%
   
   lazy val prompt: Parser[Command] = (
-      expr           ^^ { t => Eval(t) }
-    | ":tree" ~ expr ^^ { (_, t) => PrintTree(t) }
-    | ":help"        ^^^ Help
-    | ":quit"        ^^^ Quit
+    expr           ^^ { t => Eval(t) }
+      | ":tree" ~ expr ^^ { (_, t) => PrintTree(t) }
+      | ":help"        ^^^ Help
+      | ":quit"        ^^^ Quit
   )
   
   sealed trait Command
@@ -272,15 +273,12 @@ object Console extends App {
   }
 
   val repl: IO[scalaz.Validation[blueeyes.json.serialization.Extractor.Error, Lifecycle]] = for {
-    replConfig <- loadConfig(args.headOption) 
-    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, replConfig.archiveDir, FilesystemFileOps)
+    replConfig <- loadConfig(args.headOption)
   } yield {
-      scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle] {
-        new REPL 
-          with Lifecycle 
-          with ActorStorageModule
-          with ActorProjectionModule[Array[Byte], Slice]
-          with StandaloneActorProjectionSystem { self =>
+    scalaz.Success[blueeyes.json.serialization.Extractor.Error, Lifecycle] {
+      new REPL
+          with Lifecycle { self =>
+        val storageTimeout = yggConfig.storageTimeout
 
         implicit val actorSystem = ActorSystem("replActorSystem")
         implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -291,39 +289,19 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        val rawProjectionModule = new JDBMProjectionModule {
-          type YggConfig = REPLConfig
-          val yggConfig = replConfig
-          val Projection = new ProjectionCompanion {
-            def fileOps = FilesystemFileOps
-            def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = fileMetadataStorage.ensureDescriptorRoot(descriptor)
-            def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = fileMetadataStorage.findDescriptorRoot(descriptor)
-            def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = fileMetadataStorage.findArchiveRoot(descriptor)
-          }
-        }
-
         val accountFinder = None
-
-        val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
-        val shardActors @ ShardActors(ingestSupervisor, metadataActor, metadataSync) =
-          initShardActors(fileMetadataStorage, AccountFinder.Empty[Future], projectionsActor)
 
         val accessControl = new UnrestrictedAccessControl[Future]()
 
-        object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
-        class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor)
-        val storage = new Storage
+        val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
+        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
 
-        trait TableCompanion extends SliceColumnarTableCompanion {
-          import scalaz.std.anyVal._
-          implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
-        }
+        trait TableCompanion extends NIHDBColumnarTableCompanion
 
         object Table extends TableCompanion
 
-        def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+        def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
           new Evaluator[N](N0) with IdSourceScannerModule {
             type YggConfig = REPLConfig
             val yggConfig = replConfig
@@ -332,8 +310,8 @@ object Console extends App {
 
         def startup = IO { PrecogUnit }
 
-        def shutdown = IO { 
-          Await.result(Stoppable.stop(shardActors.stoppable, yggConfig.stopTimeout.duration), yggConfig.stopTimeout.duration)
+        def shutdown = IO {
+          Await.result(gracefulStop(projectionsActor, yggConfig.controlTimeout), yggConfig.controlTimeout)
           actorSystem.shutdown()
           PrecogUnit
         }
@@ -342,7 +320,7 @@ object Console extends App {
   }
 
   val run = repl.flatMap[PrecogUnit] {
-    case scalaz.Success(lifecycle) => 
+    case scalaz.Success(lifecycle) =>
       for {
         _ <- lifecycle.startup
         _ <- lifecycle.run

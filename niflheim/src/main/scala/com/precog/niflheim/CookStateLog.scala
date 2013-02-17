@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package nihdb
+package com.precog.niflheim
 
 import com.precog.util.FileLock
 

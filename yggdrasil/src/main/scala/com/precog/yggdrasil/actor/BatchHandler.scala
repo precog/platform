@@ -36,7 +36,7 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.monoid._
 
-case class BatchComplete(checkpoint: YggCheckpoint, updatedProjections: Seq[(ProjectionDescriptor, Option[ColumnMetadata])])
+case class BatchComplete(checkpoint: YggCheckpoint)
 case class BatchFailed(requestor: ActorRef, checkpoint: YggCheckpoint)
 
 class BatchCompleteNotifier(p: Promise[BatchComplete]) extends Actor {
@@ -59,7 +59,6 @@ class BatchCompleteNotifier(p: Promise[BatchComplete]) extends Actor {
 class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCheckpoint, ingestTimeout: Timeout) extends Actor with Logging {
 
   private var remaining = -1 
-  private var updatedProjections = Seq.empty[(ProjectionDescriptor, Option[ColumnMetadata])]
 
   override def preStart() = {
     context.system.scheduler.scheduleOnce(ingestTimeout.duration, self, PoisonPill)
@@ -71,20 +70,13 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       logger.trace("Should expect %d more updates (total %d)".format(count, remaining))
       if (remaining == 0) self ! PoisonPill
 
-    case InsertMetadata(descriptor, columnMetadata) =>
-      logger.trace("Insert metadata complete for " + descriptor)
-      updatedProjections = (descriptor, Some(columnMetadata)) +: updatedProjections 
+    case InsertComplete(path) =>
+      logger.trace("Insert complete for " + path)
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
 
-    case ArchiveMetadata(descriptor) =>
-      logger.info("Archive complete for " + descriptor)
-      updatedProjections = (descriptor, None) +: updatedProjections 
-      remaining -= 1
-      if (remaining == 0) self ! PoisonPill
-
-    case InsertNoMetadata =>
-      logger.debug("Insert without metadata")
+    case ArchiveComplete(path) =>
+      logger.info("Archive complete for " + path)
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
   }
@@ -98,7 +90,7 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       // update the metadatabase, by way of notifying the ingest actor
       // so that any pending completions that arrived out of order can be cleared.
       logger.info("Sending complete on batch")
-      ingestActor ! BatchComplete(checkpoint, updatedProjections)
+      ingestActor ! BatchComplete(checkpoint)
     }
   }
 }

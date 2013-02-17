@@ -1597,13 +1597,26 @@ object Slice {
 
 import com.precog.niflheim._
 
-object SegmentsWrapper {
-  def apply(segments: Seq[Segment]): Slice = new SegmentsWrapper(segments)
-}
+case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice {
+  import TransSpecModule.paths
 
-class SegmentsWrapper(segments: Seq[Segment]) extends Slice {
+  // FIXME: This should use an identity of Array[Long](projectionId,
+  // blockId), but the evaluator will cry if we do that right now
+  private def keyFor(row: Int): Long = {
+    (projectionId.toLong << 44) ^ (blockId << 16) ^ row.toLong
+  }
 
-  private def buildColumnRef(seg: Segment) = ColumnRef(seg.cpath, seg.ctype)
+  private def buildKeyColumn(length: Int): (ColumnRef, Column) = {
+    val keys = new Array[Long](length)
+    var i = 0
+    while (i < length) {
+      keys(i) = keyFor(i)
+      i += 1
+    }
+    (ColumnRef(CPath(paths.Key) \ 0, CLong), ArrayLongColumn(keys))
+  }
+
+  private def buildColumnRef(seg: Segment) = ColumnRef(CPath(paths.Value) \ seg.cpath, seg.ctype)
 
   private def buildColumn(seg: Segment): Column = seg match {
     case segment: ArraySegment[a] =>
@@ -1638,7 +1651,7 @@ class SegmentsWrapper(segments: Seq[Segment]) extends Slice {
   private def buildMap(segments: Seq[Segment]): Map[ColumnRef, Column] =
     segments.map(seg => (buildColumnRef(seg), buildColumn(seg))).toMap
 
-  private val cols: Map[ColumnRef, Column] = buildMap(segments)
+  private val cols: Map[ColumnRef, Column] = buildMap(segments) + buildKeyColumn(segments.headOption map (_.length) getOrElse 0)
 
   val size: Int = segments.foldLeft(0)(_ max _.length)
   def columns: Map[ColumnRef, Column] = cols

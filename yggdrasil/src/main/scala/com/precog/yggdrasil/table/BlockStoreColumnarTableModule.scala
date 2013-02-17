@@ -814,8 +814,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
           // We can actually get the last key, but is that necessary?
           M.point(Some(CellState(index, new Array[Byte](0), slice, (k: SortingKey) => M.point(None))))
 
-        case (SliceIndex(name, dbFile, _, _, _, keyColumns, valColumns, _), index) => 
-          val sortProjection = new JDBMRawSortProjection[M](dbFile, name, keyColumns, valColumns, sortOrder, yggConfig.maxSliceSize)
+        case (SliceIndex(name, dbFile, _, _, _, keyColumns, valColumns, count), index) => 
+          val sortProjection = new JDBMRawSortProjection[M](dbFile, name, keyColumns, valColumns, sortOrder, yggConfig.maxSliceSize, count, M)
           val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => sortProjection.getBlockAfter(key)
           
           succ(None) map { 

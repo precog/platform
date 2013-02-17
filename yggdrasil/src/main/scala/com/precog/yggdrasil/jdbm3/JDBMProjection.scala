@@ -17,34 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.mongo
+package com.precog.yggdrasil
+package jdbm3
 
-import akka.dispatch.{ExecutionContext, Future, Promise}
-
-import blueeyes.bkka._
-
-import com.mongodb.Mongo
-
-import com.precog.common._
-import com.precog.common.json._
-import com.precog.common.security._
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.metadata._
-
-import com.weiglewilczek.slf4s.Logging
-
-class MongoStorageMetadataSource(mongo: Mongo)(implicit asyncContext: ExecutionContext) extends StorageMetadataSource[Future] {
-  def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = new MongoStorageMetadata(mongo)
+object JDBMProjection {
+  final val MAX_SPINS = 20 // FIXME: This is related to the JDBM ConcurrentMod exception, and should be removed when that's cleaned up
 }
 
-class MongoStorageMetadata(mongo: Mongo)(implicit asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
-  implicit val M = new FutureMonad(asyncContext) 
+// FIXME: Again, related to JDBM concurent mod exception
+class VicciniException(message: String) extends java.io.IOException("Inconceivable! " + message)
 
-  // FIXME: Actually implement these for Mongo
-  def findChildren(path: Path): Future[Set[Path]] = {
-    logger.warn("Path globs will be supported in a future release of Precog for MongoDB")
-    Promise.successful(Set())
-  }
-
-  def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
-}

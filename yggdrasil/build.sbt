@@ -31,8 +31,5 @@ libraryDependencies ++= Seq(
   "net.sf.opencsv"              %  "opencsv"             % "2.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0.2",
-  "com.typesafe.akka"           %  "akka-testkit"       % "2.0.2" % "test",
-  "org.apfloat"                 %  "apfloat"            % "1.6.3",
-  "org.spire-math"              %% "spire"              % "0.2.0-M2",
-  "org.objectweb.howl"          %  "howl"               % "1.0.1-1"
+  "com.typesafe.akka"           %  "akka-testkit"       % "2.0.2" % "test"
 )

@@ -25,7 +25,6 @@ import com.precog.common.accounts.AccountFinder
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
-import com.precog.yggdrasil.metadata.{ ColumnMetadata, FileMetadataStorage, MetadataStorage }
 
 import akka.actor._
 import akka.dispatch._
@@ -57,17 +56,14 @@ trait ShardConfig extends BaseConfig {
   def ingestConfig: Option[IngestConfig]  
 
   def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
-  def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
-  def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
-  def metadataPreload: Boolean = config[Boolean]("actors.metadata.preload", true)
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
 // The ingest system consists of the ingest supervisor and ingest actor(s)
-case class ShardActors(ingestSystem: ActorRef, metadataActor: ActorRef, stoppable: Stoppable)
+case class ShardActors(ingestSystem: ActorRef, stoppable: Stoppable)
 
 object ShardActors extends Logging {
   def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
@@ -87,11 +83,10 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountFinder: AccountFinder[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]): Option[ActorRef]
 
-  def initShardActors(storage: MetadataStorage, accountFinder: AccountFinder[Future], projectionsActor: ActorRef): ShardActors = {
+  def initShardActors(accountFinder: AccountFinder[Future], projectionsActor: ActorRef): ShardActors = {
     //FIXME: move outside
-    val metadataActorSystem: ActorSystem = ActorSystem("Metadata")
     val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
     def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
@@ -107,15 +102,11 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
     val initialCheckpoint = loadCheckpoint()
 
-    logger.info("Initializing MetadataActor with storage = " + storage)
-    val metadataActor = metadataActorSystem.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint, yggConfig.metadataPreload)), "metadata")
-    val metadataSync = metadataActorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
-
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, metadataActor, accountFinder)) yield init
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, checkpointCoordination, accountFinder)) yield init
 
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(
-      new IngestSupervisor(ingestActor, metadataActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.metadataTimeout, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
+      new IngestSupervisor(ingestActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
       ), 
       "ingestRouter"
     )
@@ -126,15 +117,12 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
       for {
         _ <- ingestActor map { actorStop(yggConfig, _, "ingestActor")(ingestActorSystem, ingestActorSystem.dispatcher) } getOrElse { Future(())(ingestActorSystem.dispatcher) }
         _ <- actorStop(yggConfig, ingestSystem, "ingestSupervisor")(ingestActorSystem, ingestActorSystem.dispatcher)
-        _ <- actorStop(yggConfig, metadataActor, "metadataActor")(metadataActorSystem, metadataActorSystem.dispatcher)
       } yield {
-        metadataSync.cancel()
-        metadataActorSystem.shutdown()
         ingestActorSystem.shutdown() 
         logger.info("Shard system stopped.")
       }
     })
 
-    ShardActors(ingestSystem, metadataActor, stoppable)
+    ShardActors(ingestSystem, stoppable)
   }
 }

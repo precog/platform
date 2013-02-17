@@ -35,7 +35,7 @@ case class Prepare(blockid: Long, seqId: Long, root: File, source: StorageReader
 case class Spoilt(blockid: Long, seqId: Long)
 case class Cooked(blockid: Long, seqId: Long, root: File, metadata: File)
 
-final case  class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) extends Actor {
+final case class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) extends Actor {
   private def typeCode(ctype: CType): String = CType.nameOf(ctype)
 
   def prefix(id: Segment): String = {

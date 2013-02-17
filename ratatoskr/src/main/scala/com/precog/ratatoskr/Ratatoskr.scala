@@ -29,7 +29,8 @@ import com.precog.auth._
 import com.precog.accounts._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.jdbm3._
+import com.precog.yggdrasil.nihdb._
+import com.precog.niflheim._
 import com.precog.yggdrasil.metadata._
 import com.precog.util._
 
@@ -47,7 +48,8 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.Timeout
 import akka.util.Duration
-import akka.pattern.gracefulStop
+import akka.pattern.{ask, gracefulStop}
+import akka.routing.RoundRobinRouter
 
 import _root_.kafka.message._
 
@@ -74,17 +76,17 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{Buffer, ListBuffer}
 import scala.io.Source
 
-trait RatatoskrCommon {
-  def load(dataDir: String) = {
-    val dir = new File(dataDir)
-    for{
-      d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")
-      descriptor <- ProjectionDescriptor.fromFile(d).unsafePerformIO.toOption
-    } yield {
-      (d, descriptor)
-    }
-  }
-}
+//trait RatatoskrCommon {
+//  def load(dataDir: String) = {
+//    val dir = new File(dataDir)
+//    for{
+//      d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")
+//      descriptor <- ProjectionDescriptor.fromFile(d).unsafePerformIO.toOption
+//    } yield {
+//      (d, descriptor)
+//    }
+//  }
+//}
 
 object Ratatoskr {
   def usage(message: String*): String = {
@@ -96,7 +98,6 @@ object Ratatoskr {
   }
 
   val commands = List(
-    DatabaseTools,
     ChownTools,
     KafkaTools,
     IngestTools,
@@ -133,194 +134,13 @@ trait Command {
   def run(args: Array[String])
 }
 
-object DatabaseTools extends Command with RatatoskrCommon {
-  val name = "db" 
-  val description = "describe db paths and selectors" 
-  
-  def run(args: Array[String]) {
-    val config = new Config
-    val parser = new OptionParser("yggutils db") {
-      opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
-      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(CPath(s))})
-      opt("v", "verbose", "show selectors as well", {config.verbose = true})
-      arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
-    }
-    if (parser.parse(args)) {
-      process(config)
-    } else { 
-      parser
-    }
-  }
-
-  implicit val usord = new Ordering[Seq[AccountId]] {
-    val sord = implicitly[Ordering[String]]
-
-    def compare(a: Seq[AccountId], b: Seq[AccountId]) = order(a,b)
-
-    private def order(a: Seq[AccountId], b: Seq[AccountId], i: Int = 0): Int = {
-      if(a.length < i && b.length < i) {
-        val comp = sord.compare(a(i), b(i))
-        if(comp != 0) comp else order(a,b,i+1)
-      } else {
-        if(a.length == b.length) {
-          0 
-        } else if(a.length < i) {
-          +1 
-        } else {
-          -1
-        }
-      }
-    }
-  }
-
-  implicit val t3ord = new Ordering[(CPath, CType, Seq[AccountId])] {
-    val jord = implicitly[Ordering[CPath]]
-    val sord = implicitly[Ordering[String]]
-    val ssord = implicitly[Ordering[Seq[AccountId]]]
-
-    def compare(a: (CPath, CType, Seq[AccountId]), b: (CPath, CType, Seq[AccountId])) = {
-      val j = jord.compare(a._1,b._1)
-      if(j != 0) {
-        j 
-      } else {
-        val c = sord.compare(CType.nameOf(a._2), CType.nameOf(b._2))
-        if(c != 0) {
-          c 
-        } else {
-          ssord.compare(a._3, b._3)
-        }
-      }
-    }
-  }
-
-  def process(config: Config) {
-    println("describing data at %s matching %s%s".format(config.dataDir, 
-                                                         config.path.map(_.toString).getOrElse("*"),
-                                                         config.selector.map(_.toString).getOrElse(".*")))
-    
-    show(extract(load(config.dataDir).map(_._2)), config.verbose)
-  }
-
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountId])]] = {
-    implicit val pord = new Ordering[Path] {
-      val sord = implicitly[Ordering[String]] 
-      def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
-    }
-
-    descs.foldLeft(SortedMap[Path,SortedSet[(CPath, CType, Seq[AccountId])]]()) {
-      case (acc, desc) =>
-       desc.columns.foldLeft(acc) {
-         case (acc, ColumnRef(p, s, t, u)) =>
-           val update = acc.get(p) map { _ + Tuple3(s, t, u.ownerAccountIds.toSeq) } getOrElse { SortedSet(Tuple3(s, t, u.ownerAccountIds.toSeq)) } 
-           acc + (p -> update) 
-       }
-    }
-  }
-
-  def show(summary: SortedMap[Path, SortedSet[(CPath, CType, Seq[AccountId])]], verbose: Boolean) {
-    summary.foreach { 
-      case (p, sels) =>
-        println(p)
-        if(verbose) {
-          sels.foreach {
-            case (s, ct, u) => println("  %s -> %s %s".format(s, ct, u.mkString("[",",","]")))
-          }
-          println
-        }
-    }
-  }
-
-  class Config(var path: Option[Path] = None, 
-               var selector: Option[CPath] = None,
-               var dataDir: String = ".",
-               var verbose: Boolean = false)
-}
-
-object ChownTools extends Command with RatatoskrCommon {
+object ChownTools extends Command {
   val name = "dbchown" 
   val description = "change ownership" 
  
-  val projectionDescriptor = "projection_descriptor.json" 
-
   def run(args: Array[String]) {
-    val config = new Config
-    val parser = new OptionParser("yggutils dbchown") {
-      opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
-      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(CPath(s))})
-      opt("o", "owners", "<owners>", "new owners TOKEN1,TOKEN2", {s: String => config.owners = s.split(",").toSet})
-      opt("d", "dryrun", "dry run only lists changes to be made", { config.dryrun = true }) 
-      arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
-    }
-    if (parser.parse(args)) {
-      process(config)
-    } else { 
-      parser
-    }
+    sys.error("FIXME for NIHDB")
   }
-
-  def process(config: Config) {
-    println("Processing %s changing ownership for %s:%s to %s".format(config.dataDir, 
-                                                         config.path.map(_.toString).getOrElse("*"),
-                                                         config.selector.map(_.toString).getOrElse(".*"),
-                                                         config.owners.mkString("[",",","]")))
-   
-    val raw = load(config.dataDir)
-    val filtered = filter(config.path, config.selector, raw)
-    val updated = changeOwners(config.path, config.selector, config.owners, filtered)
-    save(updated, config.dryrun)
-  }
-
-
-  def filter(path: Option[Path], selector: Option[CPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
-    descs.filter {
-      case (_, proj) =>
-        proj.columns.exists {
-          case col => path.map { _ == col.path }.getOrElse(true) &&
-                      selector.map { _ == col.selector }.getOrElse(true)
-
-        }
-    }
-  }
-
-  def changeOwners(path: Option[Path], selector: Option[CPath], owners: Set[String], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
-    descs.map {
-      case (f, proj) => (f, changeOwners(path, selector, owners, proj))
-    }
-  }
-
-  private def changeOwners(path: Option[Path], selector: Option[CPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
-    def updateColumnRef(path: Option[Path], selector: Option[CPath], owners: Set[String], col: ColumnRef): ColumnRef = {
-      if(path.map { _ == col.path }.getOrElse(true) &&
-         selector.map { _ == col.selector }.getOrElse(true)) {
-        ColumnRef(col.path, col.selector, col.valueType, Authorities(owners))
-      } else { 
-        col
-      }
-    }
-
-    proj.copy(columns = proj.columns.map { col => updateColumnRef(path, selector, owners, col) })
-  }
-
-  def save(descs: Array[(File, ProjectionDescriptor)], dryrun: Boolean) {
-    descs.foreach {
-      case (f, proj) =>
-        val pd = new File(f, projectionDescriptor)
-        val output = proj.serialize.renderPretty
-        if(dryrun) {
-          println("Replacing %s with\n%s".format(pd, output)) 
-        } else {
-          IOUtils.safeWriteToFile(output, pd) except {
-            case e => println("Error update: %s - %s".format(pd, e)); IO(PrecogUnit)
-          } unsafePerformIO
-        }
-    }
-  }
-
-  class Config(var owners: Set[String] = Set.empty,
-               var path: Option[Path] = None, 
-               var selector: Option[CPath] = None,
-               var dataDir: String = ".",
-               var dryrun: Boolean = false)
 }
 
 object KafkaTools extends Command {
@@ -725,73 +545,61 @@ object ImportTools extends Command with Logging {
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, config.archiveRoot, FilesystemFileOps)) yield {
-      object shardModule extends ActorStorageModule with ActorProjectionModule[Array[Byte], table.Slice] with StandaloneActorProjectionSystem { self =>
-        class YggConfig(val config: Configuration) extends BaseConfig 
-            with StandaloneShardSystemConfig 
-            with JDBMProjectionModuleConfig 
-            with ActorStorageModuleConfig 
-            with ActorProjectionModuleConfig {
-          val maxSliceSize = config[Int]("precog.jdbm.maxSliceSize", 50000)
-          val ingestConfig = None
-          val smallSliceSize = config[Int]("precog.jdbm.smallSliceSize", 8)
-        }
-
-        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
-
-        val rawProjectionModule = new JDBMProjectionModule {
-          type YggConfig = self.YggConfig
-          val yggConfig = self.yggConfig
-          val Projection = new ProjectionCompanion {
-            def fileOps = FilesystemFileOps
-            def ensureBaseDir(descriptor: ProjectionDescriptor): IO[File] = ms.ensureDescriptorRoot(descriptor)
-            def findBaseDir(descriptor: ProjectionDescriptor): Option[File] = ms.findDescriptorRoot(descriptor)
-            def archiveDir(descriptor: ProjectionDescriptor): IO[Option[File]] = ms.findArchiveRoot(descriptor)
-          }
-        }
-
-        implicit val actorSystem = ActorSystem("yggutilImport")
-        implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-        implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
-
-        val projectionsActor = actorSystem.actorOf(Props(new ProjectionsActor), "projections")
-
-        val shardActors @ ShardActors(ingestSupervisor, metadataActor, shardStoppable) = 
-          initShardActors(ms, AccountFinder.Empty[Future], projectionsActor)
-
-        object Projection extends ProjectionCompanion(projectionsActor, yggConfig.metadataTimeout)
-
-        override val accessControl = new UnrestrictedAccessControl[Future]
-        class Storage extends ActorStorageLike(actorSystem, ingestSupervisor, metadataActor) 
-
-        override val storage = new Storage
+    object shardModule { self =>
+      class YggConfig(val config: Configuration) extends BaseConfig {
+        val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
       }
 
-      import shardModule.{logger => _, _}
+      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-      val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
-      logger.info("Using PID: " + pid)
-      config.input.foreach {
-        case (db, input) =>
-          logger.info("Inserting batch: %s:%s".format(db, input))
-          val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
-          val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
-          val event = IngestMessage(config.apiKey, Path(db), config.accountId, ingestRecords, None)
-          
-          logger.info(ingestRecords.length + " total events to be inserted")
-          Await.result(storage.storeBatch(List(event)), Duration(300, "seconds"))
-          logger.info("Batch saved")
+      implicit val actorSystem = ActorSystem("yggutilImport")
+      implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
+
+      val chefs = (1 to 8).map { _ =>
+        actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
       }
+      val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      logger.info("Waiting for shard shutdown")
-      Await.result(Stoppable.stop(shardStoppable), Duration(2, "minutes"))
-      actorSystem.shutdown()
+      val accessControl = new UnrestrictedAccessControl[Future]
 
-      logger.info("Shutdown")
-      sys.exit(0)
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
     }
 
-    io.unsafePerformIO
+    import shardModule._
+
+    val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
+    logger.info("Using PID: " + pid)
+    implicit val insertTimeout = Timeout(300 * 1000)
+    config.input.foreach {
+      case (db, input) =>
+        logger.info("Inserting batch: %s:%s".format(db, input))
+        val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
+        val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
+
+        ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
+          val update = ProjectionInsert(Path(db), records, config.accountId)
+        
+          logger.info(ingestRecords.length + " total events to be inserted")
+          Await.result(projectionsActor ? update, Duration(300, "seconds"))
+          logger.info("Batch saved")
+        }
+    }
+
+    logger.info("Finalizing chef work-in-progress")
+    chefs.foreach { chef =>
+      Await.result(gracefulStop(chef, stopTimeout), stopTimeout)
+    }
+
+    Await.result(gracefulStop(masterChef, stopTimeout), stopTimeout)
+    logger.info("Completed chef shutdown")
+
+    logger.info("Waiting for shard shutdown")
+    Await.result(gracefulStop(projectionsActor, stopTimeout), stopTimeout)
+    actorSystem.shutdown()
+
+    logger.info("Shutdown")
+    sys.exit(0)
   }
 }
 
