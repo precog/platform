@@ -81,7 +81,7 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
 
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
-  private val routingTable = new SingleColumnProjectionRoutingTable
+  private val routingTable = new SinglePathProjectionRoutingTable
 
   private var initiated = 0
   private var processed = 0

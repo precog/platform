@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package actor
 
+import table._
 import util.CPathUtils
 
 import com.precog.common._
@@ -40,9 +41,9 @@ import scalaz.syntax.traverse._
 trait RoutingTable {
   def routeIngest(msg: IngestMessage): Seq[ProjectionInsert]
   
-  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionArchive]
+  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, ProjectionDescriptor]): Seq[ProjectionArchive]
 
-  def batchMessages(events: Seq[EventMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionUpdate] = {
+  def batchMessages(events: Seq[EventMessage], descriptorMap: Map[Path, ProjectionDescriptor]): Seq[ProjectionUpdate] = {
     // coalesce adjacent inserts into single inserts
     @tailrec def accumulate(updates: Stream[ProjectionUpdate], acc: Vector[ProjectionUpdate], last: Option[ProjectionInsert]): Vector[ProjectionUpdate] = {
       updates match {
@@ -71,36 +72,52 @@ trait RoutingTable {
   }
 }
 
-
-class SingleColumnProjectionRoutingTable extends RoutingTable {
+class SinglePathProjectionRoutingTable extends RoutingTable {
   final def routeIngest(msg: IngestMessage): Seq[ProjectionInsert] = {
-    val categorized = msg.data.foldLeft(Map.empty[(JPath, CType), Vector[ProjectionInsert.Row]]) {
-      case (acc, IngestRecord(eventId, jv)) =>
-        jv.flattenWithPath.foldLeft(acc) {
-          case (acc0, (selector, value)) => 
-            CType.forJValue(value) match { 
-              case Some(ctype) =>
-                val key = (selector, ctype) 
-                val row = ProjectionInsert.Row(eventId, List(CType.toCValue(value)), Nil)
-                acc0 + (key -> (acc.getOrElse(key, Vector()) :+ row))
-
-              case None =>
-                // should never happen, since flattenWithPath only gives us the
-                // leaf types and CType.forJValue is total in this set.
-                sys.error("Could not determine ctype for ingest leaf " + value)
-            }
-        }
-    } 
-
-    for (((selector, ctype), values) <- categorized.toStream) yield {
-      val colDesc = ColumnRef(msg.path, CPath(selector), ctype, Authorities(Set(msg.ownerAccountId)))
-      val projDesc = ProjectionDescriptor(1, List(colDesc))
-
-      ProjectionInsert(projDesc, values)
+    val authorities = Authorities(Set(msg.ownerAccountId))
+    val projDesc = ProjectionDescriptor(1, msg.path, authorities)
+    val inserts = msg.data map { case IngestRecord(eventId, value) =>
+      ProjectionInsert(projDesc, eventId, row :: Nil)
     }
+    inserts
   }
-
+  
   final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionArchive] = {
-    descriptorMap.get(msg.archive.path).flatten map { desc => ProjectionArchive(desc, msg.eventId) } toStream
+    descriptorMap.get(msg.archive.path).map { projDesc =>
+      ProjectionArchive(projDesc, msg.eventId)
+    }.toSeq
   }
 }
+
+// class SingleColumnProjectionRoutingTable extends RoutingTable {
+//   final def routeIngest(msg: IngestMessage): Seq[ProjectionInsert] = {
+//     val categorized = msg.data.foldLeft(Map.empty[(JPath, CType), Vector[ProjectionInsert.Row]]) {
+//       case (acc, IngestRecord(eventId, jv)) =>
+//         jv.flattenWithPath.foldLeft(acc) {
+//           case (acc0, (selector, value)) => 
+//             CType.forJValue(value) match { 
+//               case Some(ctype) =>
+//                 val key = (selector, ctype) 
+//                 val row = ProjectionInsert.Row(eventId, List(CType.toCValue(value)), Nil)
+//                 acc0 + (key -> (acc.getOrElse(key, Vector()) :+ row))
+// 
+//               case None =>
+//                 // should never happen, since flattenWithPath only gives us the
+//                 // leaf types and CType.forJValue is total in this set.
+//                 sys.error("Could not determine ctype for ingest leaf " + value)
+//             }
+//         }
+//     } 
+// 
+//     for (((selector, ctype), values) <- categorized.toStream) yield {
+//       val colDesc = ColumnRef(msg.path, CPath(selector), ctype, Authorities(Set(msg.ownerAccountId)))
+//       val projDesc = ProjectionDescriptor(1, List(colDesc))
+// 
+//       ProjectionInsert(projDesc, values)
+//     }
+//   }
+// 
+//   final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionArchive] = {
+//     descriptorMap.get(msg.archive.path).flatten map { desc => ProjectionArchive(desc, msg.eventId) } toStream
+//   }
+// }

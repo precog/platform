@@ -57,7 +57,20 @@ import scala.collection.JavaConverters._
 sealed trait NIHActorMessage
 
 // FIXME: dedup this
-case class ProjectionInsert(descriptor: ProjectionDescriptor, id: Identities, values: Seq[JValue])
+
+case class FindProjectionDescriptor(path: Path)
+
+sealed trait ProjectionUpdate {
+  def descriptor: ProjectionDescriptor
+  def path: Path = descriptor.path
+}
+
+case class ProjectionInsert(descriptor: ProjectionDescriptor, id: EventId, values: JValue) extends ProjectionUpdate
+
+case class ProjectionBatchInsert(descriptor: ProjectionDescriptor, id: EventId, values: Seq[JValue]) extends ProjectionUpdate
+
+case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
+
 case class ProjectionGetBlock(descriptor: ProjectionDescriptor, id: Option[Long], columns: Option[Set[CPath]])
 
 case object ProjectionGetStats
@@ -65,6 +78,34 @@ case class ProjectionStats(cooked: Int, pending: Int, rawSize: Int)
 
 case object ProjectionGetStructure
 case class ProjectionStructure(columns: Set[ColumnRef])
+
+class NIHDBProjectionsActor(
+    rootDir: File,
+    chef: ActorRef,
+    cookThreshold: Int,
+    actorSystem: ActorSystem,
+    actorTimeout: Duration
+    ) extends Actor {
+
+  private def baseDir(path: Path): File =
+    new File(rootDir, path.toString)
+
+  private val projections = mutable.Map.empty[Path, Projection]
+
+  private def getProjection(path: Path): Projection = {
+    projections.getOrElseUpdate(path, {
+      new NIHDBProjection(baseDir(path), path,
+        chef, cookThreshold, actorSystem, actorTimeout)
+    })
+  }
+
+  def receive = {
+    case FindProjectionDescriptor(path) =>
+      // Option[ProjectionDescriptor]
+    case update: ProjectionUpdate =>
+      getProjection(update.path) ! 
+  }
+}
 
 /**
   *  Projection for NIH DB files
@@ -122,16 +163,20 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
 
   private[this] val cookSequence = new AtomicLong
 
-  (for {
-    c <- IO { cookedDir.mkdirs() }
-    r <- IO { rawDir.mkdirs() }
-  } yield (c,r)).except {
-    case t: Throwable =>
-      logger.error("Failed to set up base directories for %s".format(descriptor), t)
-      throw t
-  }.unsafePerformIO
+  def initDirs(f: File) {
+    if (!f.isDirectory)
+      f.mkdirs() || throw new IOException("Failed to create %s" format f)
+  }
 
-  println("Opening log in " + baseDir)
+  try {
+    initDirs(cookedDir)
+    initDirs(rawDir)
+  } catch { case t: Exception =>
+    logger.error("Failed to set up base directories for %s".format(descriptor), t)
+    throw t
+  }
+
+  logger.debug("Opening log in " + baseDir)
   private[this] val txLog = new CookStateLog(baseDir)
 
   private[this] var currentState =
@@ -192,8 +237,8 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
   override def postStop() = {
     IO {
       txLog.close
-    }.except {
-      case t: Throwable => IO { logger.error("Error during close", t) }
+    }.except { case t: Throwable =>
+      IO { logger.error("Error during close", t) }
     }.unsafePerformIO
 
     workLock.release
@@ -231,15 +276,15 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
       ProjectionState.toFile(currentState, cookedMapFile)
       txLog.completeCook(id)
 
-    case ProjectionInsert(_, ids, values) =>
+    case ProjectionInsert(_, eventId, values) =>
       if (ids.length != 1) {
         logger.error("Cannot insert events with less/more than a single identity: " + ids.mkString("[", ",", "]"))
       } else {
-        val pid = EventId.producerId(ids(0))
-        val sid = EventId.sequenceId(ids(0))
+        val pid = eventId.producerId
+        val sid = eventId.sequenceId
         if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
           logger.debug("Inserting %d rows for %d:%d".format(values.length, pid, sid))
-          blockState.rawLog.write(ids(0), values)
+          blockState.rawLog.write(eventId.uid, values)
 
           // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
           currentState = currentState.copy(producerThresholds = updatedThresholds(currentState.producerThresholds, ids))
@@ -266,12 +311,12 @@ class NIHDBActor(val baseDir: File, val descriptor: ProjectionDescriptor, chef: 
         case _ => None
       }
 
-    case ProjectionGetStats => sender ! ProjectionStats(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
+    case ProjectionGetStats =>
+      sender ! ProjectionStats(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
 
-    case ProjectionGetStructure => sender ! {
+    case ProjectionGetStructure =>
       val perBlock: Set[ColumnRef] = currentBlocks.values.map { block: StorageReader => block.structure.map { case (s, t) => ColumnRef(s, t) } }.toSet.flatten
-      ProjectionStructure(perBlock)
-    }
+      sender ! ProjectionStructure(perBlock)
   }
 }
 

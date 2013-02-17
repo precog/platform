@@ -126,3 +126,10 @@ object Authorities {
  */
 case class ProjectionDescriptor(identities: Int, path: Path, authorities: Authorities)
 
+object ProjectionDescriptor {
+  implicit object briefShow extends Show[ProjectionDescriptor] {
+    override def shows(d: ProjectionDescriptor) = {
+      d.toString
+    }
+  }
+}

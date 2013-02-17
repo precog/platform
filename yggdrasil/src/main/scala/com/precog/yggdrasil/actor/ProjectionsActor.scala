@@ -25,6 +25,7 @@ import com.precog.util._
 import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
 
 import akka.actor.Actor
@@ -70,16 +71,16 @@ sealed trait ShardProjectionAction {
   def descriptor: ProjectionDescriptor
 }
 
-trait ProjectionUpdate extends ShardProjectionAction {
-  def descriptor: ProjectionDescriptor
-}
-
-case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
-object ProjectionInsert {
-  case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
-}
-
-case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
+// trait ProjectionUpdate extends ShardProjectionAction {
+//   def descriptor: ProjectionDescriptor
+// }
+// 
+// case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ProjectionUpdate
+// object ProjectionInsert {
+//   case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+// }
+// 
+// case class ProjectionArchive(descriptor: ProjectionDescriptor, id: EventId) extends ProjectionUpdate
 
 case class ProjectionRequest(descriptor: ProjectionDescriptor) extends ShardProjectionAction
 
@@ -110,7 +111,8 @@ trait ActorProjectionModule[Key, Block] extends ProjectionModule[Future, Key, Bl
     private implicit val reqTimeout = timeout
     // TODO: need Monad[M] @@ AccountResource
     def getBlockAfter(id: Option[Key], columns: Set[ColumnRef] = Set())(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Key, Block]]] = {
-      (actorRef ? ProjectionGetBlock(descriptor, id, columns)) flatMap { a => M.point(a.asInstanceOf[Option[BlockProjectionData[Key, Block]]]) }
+      (actorRef ? ProjectionGetBlock(descriptor, id, columns)).mapTo[Option[BlockProjectionData[Key, Block]]]
+      // (actorRef ? ProjectionGetBlock(descriptor, id, columns)) flatMap { a => M.point(a.asInstanceOf[Option[BlockProjectionData[Key, Block]]]) }
     }
   }
 
