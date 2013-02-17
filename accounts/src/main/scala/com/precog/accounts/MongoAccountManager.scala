@@ -35,6 +35,7 @@ trait ZkAccountManagerSettings {
 }
 
 trait ZKAccountIdSource extends AccountManager[Future] {
+  implicit def M: Monad[Future]
   def zkc: ZkClient
   def settings: ZkAccountManagerSettings
 

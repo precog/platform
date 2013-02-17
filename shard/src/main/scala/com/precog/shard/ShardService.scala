@@ -121,7 +121,7 @@ trait ShardService extends
 
   private def asyncHandler(state: ShardState) = {
     //val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = {
-    val queryHandler = jsonApiKey(state.apiKeyFinder) {
+    val queryHandler = jsonAPIKey(state.apiKeyFinder) {
       path("/analytics/queries") {
         shardService[({ type λ[+α] = (APIKey => α) })#λ] {
           asyncQuery(post(asyncQueryService(state)))
@@ -131,7 +131,7 @@ trait ShardService extends
 
     state match {
       case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _) =>
-        jsonApiKey(apiKeyFinder) {
+        jsonAPIKey(apiKeyFinder) {
           path("/analytics/queries") {
             path("'jobId") {
               get(new AsyncQueryResultServiceHandler(jobManager)) ~
@@ -147,7 +147,7 @@ trait ShardService extends
 
   private def syncHandler(state: ShardState) = {
     jsonp[ByteChunk] {
-      jsonApiKey(state.apiKeyFinder) {
+      jsonAPIKey(state.apiKeyFinder) {
         dataPath("/analytics/fs") {
           query[ByteChunk, HttpResponse[ByteChunk]] {
             get {
