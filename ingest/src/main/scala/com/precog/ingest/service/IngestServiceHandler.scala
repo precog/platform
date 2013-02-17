@@ -70,7 +70,7 @@ import scala.annotation.tailrec
 class IngestServiceHandler(
     accountFinder: AccountFinder[Future], 
     accessControl: AccessControl[Future], 
-    jobManager: JobManager[BaseClient.Response], 
+    jobManager: JobManager[Response], 
     clock: Clock, 
     eventStore: EventStore[Future], 
     ingestTimeout: Timeout, 
@@ -405,13 +405,16 @@ class IngestServiceHandler(
   }
 
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
+    logger.debug("Got request in ingest handler: " + request)
     Success { (apiKey: APIKey, path: Path) => {
       def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id } 
 
       accountFinder.resolveForWrite(request.parameters.get('ownerAccountId), apiKey) flatMap {
         case Some(ownerAccountId) =>
+          logger.debug("Resolved owner account ID for write: " + ownerAccountId)
           accessControl.hasCapability(apiKey, Set(WritePermission(path, Set(ownerAccountId))), None) flatMap {
             case true => 
+              logger.debug("Write permission granted for " + ownerAccountId + " to " + path)
               request.content map { content =>
                 import MimeTypes._
                 import Validation._
@@ -442,7 +445,7 @@ class IngestServiceHandler(
 
                       case AsyncSuccess(contentLength) =>
                         HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
-                    
+
                       case BatchSyncResult(total, ingested, errors) =>
                         val failed = errors.size
                         val responseContent = JObject(
@@ -467,14 +470,17 @@ class IngestServiceHandler(
                   )
                 }
               } getOrElse {
+                logger.warn("No event data found for ingest request from " + apiKey + " owner " + ownerAccountId)
                 M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Missing event data."))))
               }
 
             case false =>
+              logger.warn("Write permission denied for " + apiKey + " owner " + ownerAccountId + " to " + path)
               M.point(HttpResponse[JValue](Unauthorized, content = Some(JString("Your API key does not have permissions to write at this location."))))
           }
 
         case None =>
+          logger.warn("Unable to resolve ownerAccountId for write from " + apiKey + " owner " + request.parameters.get('ownerAccountId))
           M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Either the ownerAccountId parameter you specified could not be resolved to a known account, or the API key specified was invalid."))))
       }
     }}

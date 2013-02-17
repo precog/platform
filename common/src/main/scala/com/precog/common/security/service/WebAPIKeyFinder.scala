@@ -35,7 +35,7 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.core.http.HttpStatusCodes.{ Response => _, _ }
 import blueeyes.core.service._
 import blueeyes.json._
-import blueeyes.json.serialization.SerializationImplicits._
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
 import org.joda.time.DateTime
@@ -45,14 +45,15 @@ import org.streum.configrity.Configuration
 import scalaz._
 import scalaz.Validation._
 import scalaz.EitherT.eitherT
-import scalaz.std.set._
 import scalaz.std.option._
+import scalaz.std.stream._
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
 object WebAPIKeyFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Future]] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Response]] = {
     val serviceConfig = config.detach("service")
     config.get[String]("rootKey").toSuccess("rootKey configuration parameter is required").toValidationNEL map { rootKey: APIKey =>
       new RealWebAPIKeyFinder(
@@ -71,96 +72,97 @@ class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: Strin
   implicit val M = new FutureMonad(executor)
 }
 
-trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Future] {
+trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
+  import scalaz.syntax.monad._
+  import EitherT.{ left => leftT, right => rightT, _ }
+  import \/.{ left, right }
+  import DefaultBijections._
+  import blueeyes.json.serialization.DefaultSerialization._
+
   implicit def executor: ExecutionContext
+
   def rootAPIKey: APIKey
 
-  def findAPIKey(apiKey: APIKey): Future[Option[v1.APIKeyDetails]] = {
+  def findAPIKey(apiKey: APIKey): Response[Option[v1.APIKeyDetails]] = {
     withJsonClient { client =>
-      client.query("apiKey", apiKey).get[JValue]("apikeys/" + apiKey) map {
+      eitherT(client.get[JValue]("apikeys/" + apiKey) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => 
-          jvalue.validated[v1.APIKeyDetails].toOption
+          (((_: Extractor.Error).message) <-: jvalue.validated[v1.APIKeyDetails] :-> { details => Some(details) }).disjunction
 
-        case res => 
-          logger.warn("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
-          None
-      }
+        case res @ HttpResponse(HttpStatus(NotFound, _), _, _, _) => 
+          logger.warn("apiKey " + apiKey + " not found:\n" + res)
+          right(None)
+
+        case res =>
+          logger.error("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
+          left("Unexpected response from security service; unable to proceed." + res)
+      })
     }
   }
 
-  def findAllAPIKeys(fromRoot: APIKey): Future[Set[v1.APIKeyDetails]] = {
+  def findAllAPIKeys(fromRoot: APIKey): Response[Set[v1.APIKeyDetails]] = {
     withJsonClient { client =>
-      client.query("apiKey", fromRoot).get[JValue]("apikeys/") map {
+      eitherT(client.query("apiKey", fromRoot).get[JValue]("apikeys/") map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
-          jvalue.validated[Set[v1.APIKeyDetails]] getOrElse Set.empty
+          (((_:Extractor.Error).message) <-: jvalue.validated[Set[v1.APIKeyDetails]]).disjunction
         case res =>
-          logger.warn("Unexpected response from auth service for apiKey " + fromRoot + ":\n" + res)
-          Set.empty
-      }
+          logger.error("Unexpected response from auth service for apiKey " + fromRoot + ":\n" + res)
+          left("Unexpected response from security service; unable to proceed." + res)
+      })
     }
   }
 
   private val fmt = ISODateTimeFormat.dateTime()
 
-  private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Future[Set[Permission]] = {
+  private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Response[Set[Permission]] = {
     withJsonClient { client0 =>
       val client = at map (fmt.print(_)) map (client0.query("at", _)) getOrElse client0
-      client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path) map {
+      eitherT(client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
-          jvalue.validated[Set[Permission]] getOrElse Set.empty
+          (((_:Extractor.Error).message) <-: jvalue.validated[Set[Permission]]).disjunction
         case res =>
-          logger.warn("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
-          Set.empty
-      }
+          logger.error("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
+          left("Unexpected response from security service; unable to proceed." + res)
+      })
     }
   }
 
-  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): Future[Boolean] = {
-
+  def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): Response[Boolean] = {
     // We group permissions by path, then find the permissions for each path individually.
     // This means a call to this will do 1 HTTP request per path, which isn't efficient.
 
-    val results: Set[Future[Boolean]] = perms.groupBy(_.path).map({ case (path, requiredPathPerms) =>
+    val results: Iterable[Response[Boolean]] = perms.groupBy(_.path) map { case (path, requiredPathPerms) =>
       findPermissions(apiKey, path, at) map { actualPathPerms =>
         requiredPathPerms forall { perm => actualPathPerms exists (_ implies perm) }
       }
-    })(collection.breakOut)
-    results.sequence.map(_.foldLeft(true)(_ && _))
+    } 
+
+    results.toStream.sequence.map(_.foldLeft(true)(_ && _))
   }
 
-  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Future[v1.APIKeyDetails] = {
+  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Response[v1.APIKeyDetails] = {
     val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set())
 
     withJsonClient { client => 
-      client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {
+      eitherT(client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
-          wrappedKey.validated[v1.APIKeyDetails] valueOr { error =>
-            logger.error("Unable to deserialize response from auth service: " + error.message)
-            throw HttpException(BadGateway, "Unexpected response to API key creation request: " + error.message)
-          }
+          (((_:Extractor.Error).message) <-: wrappedKey.validated[v1.APIKeyDetails]).disjunction
 
-        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) => 
-          logger.error("Fatal error attempting to create api key: " + failure + ": " + content)
-          throw HttpException(failure, reason)
-
-        case x => 
-          logger.error("Unexpected response from api provisioning service: " + x)
-          throw HttpException(BadGateway, "Unexpected response from the api provisioning service: " + x)
-      }
+        case res =>
+          logger.error("Unexpected response from api provisioning service: " + res)
+          left("Unexpected response from api key provisioning service; unable to proceed." + res)
+      })
     }
   }
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): Future[Boolean] = {
+  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): Response[Boolean] = {
     val requestBody = jobject(JField("grantId", JString(grantId)))
 
     withJsonClient { client =>
-      client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
-        case HttpResponse(HttpStatus(Created, _), _, None, _) => 
-          true
-        
-        case _ =>
-          false
-      }
+      eitherT(client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
+        case HttpResponse(HttpStatus(Created, _), _, None, _) => right(true)
+        case _ => right(false)
+      })
     }
   }
 }

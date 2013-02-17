@@ -23,7 +23,6 @@ package jobs
 import com.precog.util.flipBytes
 import com.precog.common.security._
 import com.precog.common.client._
-import com.precog.common.client.BaseClient._
 import com.precog.common.JValueByteChunkTranscoders._
 
 import java.nio.ByteBuffer

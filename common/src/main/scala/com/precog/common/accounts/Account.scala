@@ -70,12 +70,12 @@ object Account {
   val safeDecomposerV1 = decomposer[Account](schemaV1)
 
   object Serialization {
-    implicit val Decomposer = decomposerV1
-    implicit val Extractor = extractorV1
+    implicit val accountDecomposer = decomposerV1
+    implicit val accountExtractor = extractorV1
   }
 
   object SafeSerialization {
-    implicit val Decomposer = safeDecomposerV1
+    implicit val accountDecomposer = safeDecomposerV1
   }
 
   private val randomSource = new java.security.SecureRandom

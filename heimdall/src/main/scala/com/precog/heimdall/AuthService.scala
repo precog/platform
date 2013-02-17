@@ -23,7 +23,6 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.client._
 import com.precog.common.JValueByteChunkTranscoders._
-import BaseClient.Response
 
 import blueeyes._
 import blueeyes.bkka._

@@ -21,7 +21,7 @@ package com.precog.heimdall
 
 import com.precog.common.jobs._
 import com.precog.common.security.APIKey
-import com.precog.common.client.BaseClient
+import com.precog.common.client._
 
 import org.specs2.mutable._
 
@@ -65,7 +65,7 @@ class WebJobManagerSpec extends TestJobService { self =>
       val executionContext = self.executionContext
       val M = self.M
       protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client.path("/jobs/"))
-    }).withM[Future](BaseClient.ResponseAsFuture(M), BaseClient.FutureAsResponse(M), Monad[BaseClient.Response], M)
+    }).withM[Future](ResponseAsFuture(M), FutureAsResponse(M), Monad[Response], M)
   })
 }
 

@@ -21,6 +21,7 @@ package com.precog.auth
 
 import com.precog.common.security._
 import com.precog.common.security.service._
+import com.precog.common.client._
 
 import blueeyes.core.data._
 import blueeyes.core.service._
@@ -61,7 +62,7 @@ class WebAPIKeyFinderSpec extends APIKeyFinderSpec[Future] with AkkaDefaults { s
       protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client.path("/"))
     }
 
-    val result = f(apiKeyFinder)
+    val result = f(apiKeyFinder.withM[Future])
 
     stoppable foreach { stop =>
       Stoppable.stop(stop, Duration(1, "minutes")).copoint

@@ -20,7 +20,7 @@
 package com.precog.heimdall
 
 import com.precog.common.jobs._
-import com.precog.common.client.BaseClient._
+import com.precog.common.client._
 
 import akka.dispatch.Future
 

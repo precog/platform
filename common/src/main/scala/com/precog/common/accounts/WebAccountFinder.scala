@@ -22,6 +22,7 @@ package accounts
 
 import com.precog.common.Path
 import com.precog.common.cache.Cache
+import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.util._
 
@@ -48,12 +49,13 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
 import scalaz.Validation._
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.monad._
 import scalaz.syntax.validation._
 import scalaz.syntax.std.option._
 
 object WebAccountFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): Validation[NonEmptyList[String], AccountFinder[Future]] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): Validation[NonEmptyList[String], AccountFinder[Response]] = {
     val serviceConfig = config.detach("service")
     serviceConfig.get[String]("hardcoded_account") map { accountId =>
       success(new ConstantAccountFinder(accountId))
@@ -72,79 +74,78 @@ object WebAccountFinder {
   }
 }
 
-class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Future] {
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+class WebAccountFinder(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)(implicit executor: ExecutionContext) extends WebClient(protocol, host, port, path) with AccountFinder[Response] with Logging {
+  import scalaz.syntax.monad._
+  import EitherT.{ left => leftT, right => rightT, _ }
+  import \/.{ left, right }
+  import blueeyes.core.data.DefaultBijections._
+  import blueeyes.json.serialization.DefaultSerialization._
 
-  def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
-  def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
-}
-
-class WebAccountFinder(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
   implicit val M: Monad[Future] = new FutureMonad(executor)
 
   private[this] val apiKeyToAccountCache = Cache.simple[APIKey, AccountId](Cache.MaxSize(cacheSize))
 
-  def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = {
-    apiKeyToAccountCache.get(apiKey).map(id => Promise.successful(Some(id))).getOrElse {
+  def findAccountByAPIKey(apiKey: APIKey) : Response[Option[AccountId]] = {
+    logger.debug("Finding account for API key " + apiKey)
+    apiKeyToAccountCache.get(apiKey).map(id => rightT(Promise.successful(Some(id)): Future[Option[AccountId]])).getOrElse {
       invoke { client =>
-        client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue]("") map {
-          case HttpResponse(HttpStatus(OK, _), _, Some(jaccounts), _) =>
-            jaccounts.validated[Set[WrappedAccountId]] match {
-              case Success(accountIds) => 
-                if (accountIds.size > 1) {
-                  // FIXME: The underlying apparatus should now be modified such that
-                  // this case can be interpreted as a fatal error
-                  logger.error("Found more than one account for API key: " + apiKey + 
-                               "; proceeding with random account from those returned.")
-                } 
+        logger.info("Querying accounts service at path " + path)
+        eitherT(client.query("apiKey", apiKey).contentType(application/MimeTypes.json).get[JValue](path) map {
+          case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
+            logger.info("Got response for apiKey " + apiKey)
+            (((_:Extractor.Error).message) <-: jaccountId.validated[WrappedAccountId] :-> { wid =>
+                apiKeyToAccountCache.put(apiKey, wid.accountId)
+                Some(wid.accountId)
+            }).disjunction
 
-                accountIds.headOption.map(_.accountId) tap {
-                  _ foreach { apiKeyToAccountCache.put(apiKey, _) }
-                }
-              
-              case Failure(err) =>
-                logger.error("Unexpected response to account list request: " + err)
-                throw HttpException(BadGateway, "Unexpected response to account list request: " + err)
-            }
+          case HttpResponse(HttpStatus(OK, _), _, None, _) =>
+            logger.warn("No account found for apiKey: " + apiKey)
+            right(None)
 
-          case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) =>
-            logger.error("Fatal error attempting to list accounts: " + failure + ": " + content)
-            throw HttpException(failure, reason)
-
-          case other =>
-            logger.error("Unexpected response from accounts service: " + other)
-            throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
-        }
+          case res =>
+            logger.error("Unexpected response from accounts service: " + res)
+            left("Unexpected response from accounts service; unable to proceed." + res)
+        } recoverWith {
+          case ex => 
+            logger.error("findAccountByAPIKey for " + apiKey + "failed.", ex)
+            Promise.successful(left("Unexpected response from accounts service; unable to proceed." + ex.getMessage))
+        })
       }
     }
   }
 
-  def findAccountById(accountId: AccountId): Future[Option[Account]] = {
+  def findAccountById(accountId: AccountId): Response[Option[Account]] = {
+    logger.debug("Finding accoung for id: " + accountId)
     import Account.Serialization._
     invoke { client =>
-      client.contentType(application/MimeTypes.json).get[JValue](accountId) map {
+      eitherT(client.contentType(application/MimeTypes.json).path(path).get[JValue](accountId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jaccount), _) =>
-         jaccount.validated[Option[Account]] match {
-           case Success(accounts) => accounts
-           case Failure(err) =>
-            logger.error("Unexpected response to find account request: " + err)
-            throw HttpException(BadGateway, "Unexpected response to find account request: " + err)
-         }
+          logger.info("Got response for AccountId " + accountId) 
+          (((_:Extractor.Error).message) <-: jaccount.validated[Option[Account]]).disjunction
 
-        case HttpResponse(HttpStatus(failure: HttpFailure, reason), _, content, _) =>
-          logger.error("Fatal error attempting to find account: " + failure + ": " + content)
-          throw HttpException(failure, reason)
-
-        case other =>
-          logger.error("Unexpected response from accounts service: " + other)
-          throw HttpException(BadGateway, "Unexpected response from accounts service: " + other)
-      }
+        case res =>
+          logger.error("Unexpected response from accounts service: " + res)
+          left("Unexpected response from accounts service; unable to proceed." + res)
+      } recoverWith {
+        case ex =>
+          logger.error("findAccountById for " + accountId + "failed.", ex)
+          Promise.successful(left("Unexpected response from accounts service; unable to proceed." + ex.getMessage))
+      })
     }
   }
 
   def invoke[A](f: HttpClient[ByteChunk] => A): A = {
-    val client = new HttpClientXLightWeb
     val auth = HttpHeaders.Authorization("Basic "+new String(Base64.encodeBase64((user+":"+password).getBytes("UTF-8")), "UTF-8"))
-    f(client.protocol(protocol).host(host).port(port).path(path).header(auth))
+    withJsonClient { client =>
+      f(client.header(auth))
+    }
   }
 }
+
+class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Response] {
+  import EitherT.{ left => leftT, right => rightT, _ }
+  private implicit val M: Monad[Future] = new FutureMonad(executor)
+  def findAccountByAPIKey(apiKey: APIKey) = rightT(Some(accountId).point[Future])
+  def findAccountById(accountId: AccountId) = rightT(None.point[Future])
+}
+

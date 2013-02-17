@@ -78,6 +78,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
   import ServiceHandlerUtil._
 
   def withAccountAdmin[A](accountId: String, auth: Account, request: HttpRequest[_])(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
+    implicit val M = new FutureMonad(executor)
     accountManager.findAccountById(accountId) flatMap { 
       case Some(account) =>
         accountManager.hasAncestor(account, auth) flatMap {
@@ -114,9 +115,9 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
         logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
         
         accountManager.findAccountByAPIKey(keyToFind).map { 
-          case accountIds =>
-            logger.debug("Found accounts for API key: "+keyToFind+" = "+accountIds)
-            HttpResponse[JValue](OK, content = Some(accountIds.map(WrappedAccountId(_)).serialize))
+          case accountId =>
+            logger.debug("Found account for API key: "+keyToFind+" = "+accountId)
+            HttpResponse[JValue](OK, content = accountId.map(id => WrappedAccountId(id).serialize))
         }
       }
     }

@@ -45,7 +45,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
 
   def findAccountByEmail(email: String) : M[Option[Account]]
 
-  def hasAncestor(child: Account, ancestor: Account): M[Boolean] = {
+  def hasAncestor(child: Account, ancestor: Account)(implicit M: Monad[M]): M[Boolean] = {
     if (child == ancestor) {
       true.point[M]
     } else {
@@ -60,7 +60,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
     }
   }
 
-  def authAccount(email: String, password: String): M[Validation[String, Account]] = {
+  def authAccount(email: String, password: String)(implicit M: Monad[M]): M[Validation[String, Account]] = {
     findAccountByEmail(email) map {
       case Some(account) if account.passwordHash == saltAndHashSHA1(password, account.passwordSalt) ||
           account.passwordHash == saltAndHashSHA256(password, account.passwordSalt) ||

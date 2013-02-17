@@ -32,9 +32,7 @@ import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
-trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging {
-  implicit def M : Monad[M]
-
+trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   def findAPIKey(apiKey: APIKey): M[Option[v1.APIKeyDetails]]
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
@@ -42,6 +40,23 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging {
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
 
   def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] 
+
+  def withM[N[+_]](implicit t: M ~> N) = new APIKeyFinder[N] {
+    def findAPIKey(apiKey: APIKey) = 
+      t(self.findAPIKey(apiKey))
+
+    def findAllAPIKeys(fromRoot: APIKey) = 
+      t(self.findAllAPIKeys(fromRoot))
+
+    def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) = 
+      t(self.newAPIKey(accountId, path, keyName, keyDesc))
+
+    def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId) = 
+      t(self.addGrant(authKey, accountKey, grantId))
+
+    def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]) =
+      t(self.hasCapability(apiKey, perms, at))
+  }
 }
  
 class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] {

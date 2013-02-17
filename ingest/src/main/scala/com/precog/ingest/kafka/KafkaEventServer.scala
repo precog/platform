@@ -26,7 +26,7 @@ import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.security.service._
-import com.precog.common.client.BaseClient._
+import com.precog.common.client._
 import com.precog.ingest.service._
 import WebJobManager._
 
@@ -69,7 +69,7 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
-    val accountFinder0 = WebAccountFinder(config.detach("accounts")) valueOr { errs =>
+    val accountFinder0 = WebAccountFinder(config.detach("accounts")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
@@ -77,7 +77,7 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
       sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")) valueOr { errs =>
+    val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 

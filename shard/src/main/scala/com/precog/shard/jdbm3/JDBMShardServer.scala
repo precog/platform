@@ -24,7 +24,7 @@ import com.precog.common.security._
 import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
-import com.precog.common.client.BaseClient._
+import com.precog.common.client._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -51,11 +51,11 @@ object JDBMShardServer extends BlueEyesServer
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   override def configureShardState(config: Configuration) = M.point {
-    val apiKeyFinder = WebAPIKeyFinder(config.detach("security")) valueOr { errs =>
+    val apiKeyFinder = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val accountFinder = WebAccountFinder(config.detach("accounts")) valueOr { errs =>
+    val accountFinder = WebAccountFinder(config.detach("accounts")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 

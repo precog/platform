@@ -33,12 +33,16 @@ import blueeyes.json.serialization.DefaultSerialization._
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 
-trait PathServiceCombinators extends HttpRequestHandlerCombinators {
+import com.weiglewilczek.slf4s.Logging
+
+trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging {
   def dataPath[A, B](prefix: String)(next: HttpService[A, (APIKey, Path) => Future[B]]) = {
     path("""%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n\.])*)/?)?)""".format(prefix)) { 
       new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
+          logger.debug("Handling dataPath request " + request)
+        
           val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
           next.service(request) map { f => (apiKey: APIKey) => f(apiKey, Path(path.getOrElse(""))) }
         }

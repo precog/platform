@@ -59,6 +59,7 @@ final class KafkaRelayAgent(
 
   @volatile private var runnable = false;
   private val stopPromise = Promise[PrecogUnit]()
+  private implicit val M: Monad[Future] = new FutureMonad(executor)
 
   def stop: Future[PrecogUnit] = Future({ runnable = false }) flatMap { _ => stopPromise }
 

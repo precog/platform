@@ -52,13 +52,13 @@ trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
 
   // Convenience combinator for when we know our result is an `HttpResponse` and that
   // we are returning JSON.
-  def jsonApiKey[A, B](apiKeyFinder: APIKeyFinder[Future])(
+  def jsonAPIKey[A, B](apiKeyFinder: APIKeyFinder[Future])(
       service: HttpService[A, APIKey => Future[HttpResponse[B]]])(implicit
       inj: JValue => B, M: Monad[Future]): HttpService[A, Future[HttpResponse[B]]] = {
-    jsonApiKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey)))(service)
+    jsonAPIKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey)))(service)
   }
 
-  def jsonApiKey[A, B](keyFinder: APIKey => Future[Option[APIKey]])(
+  def jsonAPIKey[A, B](keyFinder: APIKey => Future[Option[APIKey]])(
       service: HttpService[A, APIKey => Future[HttpResponse[B]]])(implicit
       inj: JValue => B, M: Monad[Future]): HttpService[A, Future[HttpResponse[B]]] = {
     apiKeyRequired(keyFinder) {
@@ -84,11 +84,13 @@ extends DelegatingService[A, Validation[String, APIKey] => Future[B], A, APIKey 
 class APIKeyRequiredService[A, B](keyFinder: APIKey => Future[Option[APIKey]], val delegate: HttpService[A, Validation[String, APIKey] => Future[B]]) 
 extends DelegatingService[A, Future[B], A, Validation[String, APIKey] => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
+    logger.info("Received request " + request)
     request.parameters.get('apiKey).toSuccess[NotServed] {
       DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")
     } flatMap { apiKey =>
       delegate.service(request) map { (f: Validation[String, APIKey] => Future[B]) =>
         keyFinder(apiKey) flatMap { maybeApiKey =>
+          logger.info("Found API key: " + maybeApiKey)
           f(maybeApiKey.toSuccess[String] {
             logger.warn("Could not locate API key " + apiKey)
             "The specified API key does not exist: " + apiKey

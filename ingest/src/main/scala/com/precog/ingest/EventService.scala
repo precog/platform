@@ -33,6 +33,7 @@ import akka.dispatch.ExecutionContext
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
+import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
@@ -57,7 +58,7 @@ case class EventServiceDeps[M[+_]](
     apiKeyFinder: APIKeyFinder[M], 
     accountFinder: AccountFinder[M], 
     eventStore: EventStore[M], 
-    jobManager: JobManager[({type λ[+α] = BaseClient.ResponseM[M, α]})#λ])
+    jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
 
 trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators { 
   implicit def executionContext: ExecutionContext
@@ -88,19 +89,19 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         request { (state: EventServiceState) =>
           decompress {
             jsonp {
-              produce[ByteChunk, JValue, ByteChunk](application / json) {
-                jsonApiKey(state.accessControl) {
+              (jsonAPIKey(state.accessControl) {
+                dataPath("/fs") {
+                  post(state.ingestHandler) ~ 
+                  delete(state.archiveHandler)
+                } ~ //legacy handler
+                path("/(?<sync>a?sync)") {
                   dataPath("/fs") {
                     post(state.ingestHandler) ~ 
                     delete(state.archiveHandler)
-                  } ~ //legacy handler
-                  path("/(?<sync>a?sync)") {
-                    dataPath("/fs") {
-                      post(state.ingestHandler) ~ 
-                      delete(state.archiveHandler)
-                    } 
-                  }
+                  } 
                 }
+              }) map { 
+                _ map { _ map jvalueToChunk }
               }
             }
           }

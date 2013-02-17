@@ -68,6 +68,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
 
   class AuthenticationService[A, B](accountManager: AccountManager[Future], val delegate: HttpService[A, Account => Future[B]])(err: AuthenticationFailure => B)(implicit executor: ExecutionContext)
       extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
+    private implicit val M = new FutureMonad(executor)
     val service = (request: HttpRequest[A]) => {
       delegate.service(request) map { (f: Account => Future[B]) =>
         request.headers.header[Authorization] flatMap {

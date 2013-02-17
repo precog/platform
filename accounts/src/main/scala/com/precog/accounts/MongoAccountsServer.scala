@@ -19,6 +19,7 @@
  */
 package com.precog.accounts
 
+import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.common.security.service._
 
@@ -61,7 +62,7 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
     (accountManager, Stoppable.fromFuture(accountManager.close()))
   }
 
-  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config) valueOr { errs =>
+  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config).map(_.withM[Future]) valueOr { errs =>
     sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
   }
 }
