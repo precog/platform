@@ -51,6 +51,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
       extends DelegatingService[A, Future[B], A, Account => Future[B]] with Logging {
     private implicit val M = new FutureMonad(executor)
     val service = (request: HttpRequest[A]) => {
+      logger.info("Got authentication request " + request)
       delegate.service(request) map { (f: Account => Future[B]) =>
         request.headers.header[Authorization] flatMap {
           _.basic map {
@@ -72,7 +73,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
   }
 }
 
-trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinators with Logging {
+trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinators with Logging { self =>
   case class State(handlers: AccountServiceHandlers, stop: Stoppable)
 
   implicit val timeout = akka.util.Timeout(120000) //for now
@@ -127,6 +128,10 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                 }
               }
             }
+          } ~
+          orFail { req: HttpRequest[ByteChunk] => 
+            self.logger.error("Request " + req + " could not be serviced.") 
+            (HttpStatusCodes.NotFound, "Request " + req + " could not be serviced.")
           }
         } ->
         stop { s: State =>
