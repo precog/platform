@@ -5,6 +5,7 @@ import bytecode._
 import yggdrasil._
 import yggdrasil.table._
 
+import common._
 import common.json._
 
 import blueeyes.json._
