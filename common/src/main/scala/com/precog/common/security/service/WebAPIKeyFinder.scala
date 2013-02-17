@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => 
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity.Configuration
+import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Validation._
