@@ -107,7 +107,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def coerceToDouble(ctx: EvaluationContext): F1
 
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
-      if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
+      if (optimize) funcs.reverse.map(Endo[DepGraph]).suml.run else identity
 
     // Have to be idempotent on subgraphs
     def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
@@ -119,7 +119,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
       stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
-      composeOptimizations(optimize, List(
+      composeOptimizations(optimize, List[DepGraph => DepGraph](
         // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
         //predicatePullups(_, ctx),
         inferTypes(JType.JUnfixedT),
