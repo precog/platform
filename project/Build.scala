@@ -56,7 +56,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M7.1"
+  val blueeyesVersion = "1.0.0-M7.2"
   val scalazVersion = "7.0-precog-M2"
 
   val commonSettings = Seq(
@@ -85,19 +85,18 @@ object PlatformBuild extends Build {
       "org.scalaz"                  %% "scalaz-core"        % scalazVersion,
       "org.scalaz"                  %% "scalaz-effect"      % scalazVersion,
       "joda-time"                   %  "joda-time"          % "1.6.2",
-      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion changing(),
-      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion changing(),
-      "com.reportgrid"              %% "bkka"               % blueeyesVersion changing(),
-      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion changing(),
+      "com.reportgrid"              %% "blueeyes-json"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-util"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-core"      % blueeyesVersion,
+      "com.reportgrid"              %% "blueeyes-mongo"     % blueeyesVersion,
+      "com.reportgrid"              %% "bkka"               % blueeyesVersion,
+      "com.reportgrid"              %% "akka_testing"       % blueeyesVersion,
       "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
-      "org.specs2"                  %% "specs2"             % "1.12.3-SNAPSHOT" % "test",
+      "org.specs2"                  %% "specs2"             % "1.12.3" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test",
       "javolution"                  %  "javolution"         % "5.5.1",
       "com.chuusai"                 %% "shapeless"          % "1.2.3",
-      //"org.apache.lucene"           %  "lucene-core"        % "3.6.1"
-      "org.spire-math"              % "spire_2.9.1"              % "0.3.0-RC2",
+      "org.spire-math"              % "spire_2.9.1"         % "0.3.0-RC2",
       "com.rubiconproject.oss"      % "jchronic"            % "0.2.6",
       "javax.servlet"               % "servlet-api"         % "2.4" % "provided"
     )

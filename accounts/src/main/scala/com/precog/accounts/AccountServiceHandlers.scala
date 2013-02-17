@@ -313,6 +313,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
 
   object GetAccountDetailsHandler extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] {
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+      logger.debug("Got account details request " + request)
       Success { (auth: Account) =>
         withAccountAdmin(request, auth) { account =>
           import Account.SafeSerialization._
