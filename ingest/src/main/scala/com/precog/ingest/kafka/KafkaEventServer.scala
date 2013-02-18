@@ -43,26 +43,6 @@ import scalaz._
 import scalaz.{NonEmptyList => NEL}
 import scalaz.syntax.std.option._
 
-object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
-    val localConfig = config.detach("local")
-    val centralConfig = config.detach("central")
-
-    centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
-      val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
-      val agent = serviceUID.hostId + serviceUID.serviceId
-
-      val eventIdSeq = new SystemEventIdSequence(agent, coordination)
-      val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
-      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, centralConfig)
-
-      (eventStore, esStop.parent(raStop))
-    }
-  }
-}
-
-
 object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
   val clock = Clock.System
   implicit val executionContext = defaultFutureDispatch

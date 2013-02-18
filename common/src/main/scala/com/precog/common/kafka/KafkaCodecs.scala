@@ -67,6 +67,19 @@ trait EncodingFlags {
   }
 }
 
+class KafkaEventCodec extends Encoder[Event] {
+  def toMessage(event: Event) = {
+    val msgBuf = EventEncoding.toMessageBytes(event)
+    val byteArray = new Array[Byte](msgBuf.limit)
+    msgBuf.get(byteArray) 
+    // If you attempt to simply create the Message passing it the byte buffer,
+    // as one of its constructors permits, the Kafka internal "magic byte"
+    // and checksum do not get integrated, so things blow up deep in the internals
+    // of Kafka. Demand PETA action now to save the kittens!
+    new Message(byteArray)
+  }
+}
+
 object EventEncoding extends EncodingFlags {
   def toMessageBytes(event: Event) = {
     val msgBuffer = charset.encode(event.serialize.renderCompact)
@@ -92,6 +105,19 @@ object EventEncoding extends EncodingFlags {
                   case `jsonArchiveMessageFlag` => (jv \ "archive").validated[Archive]
                 }
     } yield event
+  }
+}
+
+class KafkaEventMessageCodec extends Encoder[EventMessage] {
+  def toMessage(msg: EventMessage) = {
+    val msgBuf = EventMessageEncoding.toMessageBytes(msg)
+    val byteArray = new Array[Byte](msgBuf.limit)
+    msgBuf.get(byteArray)
+    // If you attempt to simply create the Message passing it the byte buffer,
+    // as one of its constructors permits, the Kafka internal "magic byte"
+    // and checksum do not get integrated, so things blow up deep in the internals
+    // of Kafka. Demand PETA action now to save the kittens!
+    new Message(byteArray)
   }
 }
 

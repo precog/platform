@@ -48,12 +48,37 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 
+object KafkaRelayAgent {
+  def apply(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
+
+    val localTopic = localConfig[String]("topic", "local_event_cache")
+    val centralTopic = centralConfig[String]("topic", "central_event_store")
+
+    val centralProperties: java.util.Properties = {
+      val props = JProperties.configurationToProperties(centralConfig)
+      props.setProperty("serializer.class", "com.precog.common.kafka.KafkaEventMessageCodec")
+      props
+    }
+
+    val producer = new Producer[String, EventMessage](new ProducerConfig(centralProperties))
+
+    val consumerHost = localConfig[String]("broker.host", "localhost")
+    val consumerPort = localConfig[String]("broker.port", "9082").toInt
+    val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
+
+    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
+    val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
+
+    new Thread(relayAgent).start()
+    (relayAgent, stoppable)
+  }
+}
 /** An independent agent that will consume records using the specified consumer,
   * augment them with record identities, then send them with the specified producer. */
 final class KafkaRelayAgent(
     accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence,
     consumer: SimpleConsumer, localTopic: String, 
-    producer: Producer[String, Message], centralTopic: String, 
+    producer: Producer[String, EventMessage], centralTopic: String, 
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
@@ -119,13 +144,13 @@ final class KafkaRelayAgent(
   }
 
   private def processor(messages: List[MessageAndOffset]) = {
-    val outgoing: List[Validation[Error, Future[Message]]] = messages map { msg => 
-      EventEncoding.read(msg.message.buffer) map { identify(_, msg.offset) } map { _ map { em => new Message(EventMessageEncoding.toMessageBytes(em)) } }
+    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg => 
+      EventEncoding.read(msg.message.buffer) map { identify(_, msg.offset) } 
     }
 
-    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Message]] map { messageFutures =>
+    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
       Future.sequence(messageFutures) map { messages => 
-        producer.send(new ProducerData[String, Message](centralTopic, messages))
+        producer.send(new ProducerData[String, EventMessage](centralTopic, messages))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
       } onSuccess {
@@ -156,23 +181,3 @@ final class KafkaRelayAgent(
   }
 }
 
-object KafkaRelayAgent {
-  def apply(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
-
-    val localTopic = localConfig[String]("topic", "local_event_cache")
-    val centralTopic = centralConfig[String]("topic", "central_event_store")
-
-    val centralProperties = JProperties.configurationToProperties(centralConfig)
-    val producer = new Producer[String, Message](new ProducerConfig(centralProperties))
-
-    val consumerHost = localConfig[String]("broker.host", "localhost")
-    val consumerPort = localConfig[String]("broker.port", "9082").toInt
-    val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
-
-    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
-    val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
-
-    new Thread(relayAgent).start()
-    (relayAgent, stoppable)
-  }
-}

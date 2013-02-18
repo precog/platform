@@ -88,28 +88,26 @@ class JobServiceSpec extends TestJobService {
     JField("data", JObject(JField("x", JNum(1))))
   ))
 
-  val path = "/jobs"
-
   def startJob(ts: Option[DateTime] = None): JValue = JObject(
     JField("state", JString("started")) ::
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
-  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path+"/")(job)
+  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
 
   def postJobAndGetId(job: JValue, apiKey: String = validAPIKey) = for {
-    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue](path+"/")(job)
+    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
     Some(JString(jobId)) = res.content map (_ \ "id")
   } yield jobId
 
-  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("%s/%s".format(path,jobId))
+  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s".format(jobId))
 
-  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("%s/%s/state".format(path, jobId))(state)
+  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/state".format(jobId))(state)
 
-  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("%s/%s/state".format(path, jobId))
+  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/state".format(jobId))
 
   def postMessage(jobId: String, channel: String, msg: JValue) =
-    client.contentType[ByteChunk](JSON).post[JValue]("%s/%s/messages/%s" format (path, jobId, channel))(msg)
+    client.contentType[ByteChunk](JSON).post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
 
   def postMessageAndGetId(jobId: String, channel: String, msg: JValue) = for {
     res <- postMessage(jobId, channel, msg)
@@ -118,12 +116,12 @@ class JobServiceSpec extends TestJobService {
 
   def getMessages(jobId: String, channel: String, after: Option[BigDecimal]) = {
     val client0 = after map { id => client.query("after", id.toInt.toString) } getOrElse client
-    client0.contentType[ByteChunk](JSON).get[JValue]("%s/%s/messages/%s" format (path, jobId, channel))
+    client0.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/messages/%s" format (jobId, channel))
   }
 
   def putStatusRaw(jobId: String, prev: Option[BigDecimal])(obj: JValue) = {
     val client0 = prev map { id => client.query("prevStatusId", id.toLong.toString) } getOrElse client
-    client0.contentType[ByteChunk](JSON).put[JValue]("%s/%s/status".format(path, jobId))(obj)
+    client0.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/status".format(jobId))(obj)
   }
 
   def putStatus(jobId: String, message: String, progress: BigDecimal, unit: String, info: Option[JValue] = None, prev: Option[BigDecimal] = None) = {
@@ -142,7 +140,7 @@ class JobServiceSpec extends TestJobService {
     } yield id
   }
 
-  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("%s/%s/status".format(path, jobId))
+  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/status".format(jobId))
 
   "job service" should {
     "allow job creation" in {

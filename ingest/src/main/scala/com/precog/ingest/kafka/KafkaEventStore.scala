@@ -21,6 +21,7 @@ package com.precog.ingest
 package kafka
 
 import com.precog.common._
+import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.util._
@@ -41,11 +42,32 @@ import org.streum.configrity.{Configuration, JProperties}
 import com.weiglewilczek.slf4s._ 
 
 import scalaz._
+import scalaz.{ NonEmptyList => NEL }
+import scalaz.syntax.std.option._
 
-class LocalKafkaEventStore(producer: Producer[String, Message], topic: String)(implicit executor: ExecutionContext) extends EventStore[Future] {
+object KafkaEventStore {
+  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
+    val localConfig = config.detach("local")
+    val centralConfig = config.detach("central")
+
+    centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
+      val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
+      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
+      val agent = serviceUID.hostId + serviceUID.serviceId
+
+      val eventIdSeq = new SystemEventIdSequence(agent, coordination)
+      val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
+      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, centralConfig)
+
+      (eventStore, esStop.parent(raStop))
+    }
+  }
+}
+
+class LocalKafkaEventStore(producer: Producer[String, Event], topic: String)(implicit executor: ExecutionContext) extends EventStore[Future] {
   def save(event: Event, timeout: Timeout) = Future {
     producer send {
-      new ProducerData[String, Message](topic, new Message(EventEncoding.toMessageBytes(event)))
+      new ProducerData[String, Event](topic, event)
     }
 
     PrecogUnit
@@ -56,15 +78,16 @@ object LocalKafkaEventStore {
   def apply(config: Configuration)(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
     val localTopic = config[String]("topic")
 
-    val localProperties = {
+    val localProperties: java.util.Properties = {
       val props = JProperties.configurationToProperties(config)
       val host = config[String]("broker.host")
       val port = config[Int]("broker.port")
       props.setProperty("broker.list", "0:%s:%d".format(host, port))
+      props.setProperty("serializer.class", "com.precog.common.kafka.KafkaEventCodec")
       props
     }
 
-    val producer = new Producer[String, Message](new ProducerConfig(localProperties))
+    val producer = new Producer[String, Event](new ProducerConfig(localProperties))
     val stoppable = Stoppable.fromFuture(Future { producer.close })
 
     Some(new LocalKafkaEventStore(producer, localTopic) -> stoppable)

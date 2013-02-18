@@ -151,7 +151,7 @@ trait ShardService extends
     state match {
       case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _) =>
         jsonAPIKey(apiKeyFinder) {
-          path("/analytics/queries") {
+          path("/analytics/queries/") {
             path("'jobId") {
               get(new AsyncQueryResultServiceHandler(jobManager)) ~
               delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
