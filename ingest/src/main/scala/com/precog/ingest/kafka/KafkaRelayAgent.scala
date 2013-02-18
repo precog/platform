@@ -29,7 +29,7 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 
-object KafkaRelayAgent {
+object KafkaRelayAgent extends Logging {
   def apply(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
 
     val localTopic = localConfig[String]("topic", "local_event_cache")
@@ -63,7 +63,7 @@ final class KafkaRelayAgent(
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
-  @volatile private var runnable = false;
+  @volatile private var runnable = true;
   private val stopPromise = Promise[PrecogUnit]()
   private implicit val M: Monad[Future] = new FutureMonad(executor)
 
@@ -92,13 +92,7 @@ final class KafkaRelayAgent(
     val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
 
     val messages = consumer.fetch(fetchRequest)
-
-    // A future optimizatin would be to move this to another thread (or maybe actors)
-    val outgoing = messages.toList
-
-    if(outgoing.size > 0) {
-      processor(outgoing)
-    }
+    forwardAll(messages.toList)
 
     val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
@@ -124,9 +118,9 @@ final class KafkaRelayAgent(
     }
   }
 
-  private def processor(messages: List[MessageAndOffset]) = {
+  private def forwardAll(messages: List[MessageAndOffset]) = {
     val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg => 
-      EventEncoding.read(msg.message.buffer) map { identify(_, msg.offset) } 
+      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) } 
     }
 
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
