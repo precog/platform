@@ -1,6 +1,7 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import common.Path
 
 import org.specs2.execute.Result

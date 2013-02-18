@@ -7,6 +7,8 @@ import org.scalacheck.{Arbitrary, Gen}
 
 import scala.{ specialized => spec }
 
+import com.precog.common._
+
 
 trait CValueGenerators {
   import Gen._

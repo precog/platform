@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common._
 import com.precog.common.json.CPath
 import com.precog.common.json.CPath._
 

@@ -2,6 +2,7 @@ package com.precog.daze
 
 import scala.util.Random
 
+import com.precog.common._
 import com.precog.yggdrasil._
 
 import com.precog.common.Path

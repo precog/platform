@@ -1,6 +1,7 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import util._
 
 import yggdrasil._

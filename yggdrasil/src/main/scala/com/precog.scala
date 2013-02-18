@@ -11,9 +11,9 @@ import com.precog.common.VectorCase
 import com.precog.util.PrecogUnit
 
 package object yggdrasil {
-  type ProjectionDescriptorIO = ProjectionDescriptor => IO[PrecogUnit] 
-  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
-  
+//  type ProjectionDescriptorIO = ProjectionDescriptor => IO[PrecogUnit]
+//  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
+
   type Identity = Long
   type Identities = Array[Identity]
 
@@ -24,7 +24,7 @@ package object yggdrasil {
   type SEvent = (Identities, SValue)
 
   object SEvent {
-    @inline 
+    @inline
     def apply(id: Identities, sv: SValue): SEvent = (id, sv)
   }
 
@@ -35,7 +35,7 @@ package object yggdrasil {
       result = longInstance.order(ids1(i), ids2(i))
       i += 1
     }
-    
+
     result
   }
 
