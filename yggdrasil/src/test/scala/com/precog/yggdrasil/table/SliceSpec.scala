@@ -25,6 +25,7 @@ import scala.util.Random
 
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.security._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
@@ -103,7 +104,7 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
   //      CPath("6") -> CEmptyArray,
   //      CPath("7") -> CNum)
   //    val pd = ProjectionDescriptor(0, paths.toList map { case (cpath, ctype) =>
-  //      ColumnDescriptor(path, cpath, ctype, auth)
+  //      ColumnRef(path, cpath, ctype, auth)
   //    })
 
   //    val size = scala.math.abs(badSize % 100).toInt
@@ -122,26 +123,20 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
   //  } }
   //}
 
-  private def concatProjDesc = {
-    val path = Path("/")
-    val auth = Authorities(Set())
-    val paths = Vector(
-      CPath("0") -> CLong,
-      CPath("1") -> CBoolean,
-      CPath("2") -> CString,
-      CPath("3") -> CDouble,
-      CPath("4") -> CNum,
-      CPath("5") -> CEmptyObject,
-      CPath("6") -> CEmptyArray,
-      CPath("7") -> CNum)
-    ProjectionDescriptor(0, paths.toList map { case (cpath, ctype) =>
-      ColumnDescriptor(path, cpath, ctype, auth)
-    })
-  }
+  private def concatProjDesc = Seq(
+    ColumnRef(CPath("0"), CLong),
+    ColumnRef(CPath("1"), CBoolean),
+    ColumnRef(CPath("2"), CString),
+    ColumnRef(CPath("3"), CDouble),
+    ColumnRef(CPath("4"), CNum),
+    ColumnRef(CPath("5"), CEmptyObject),
+    ColumnRef(CPath("6"), CEmptyArray),
+    ColumnRef(CPath("7"), CNum)
+  )
 
   "concat" should {
     "concat arbitrary slices together" in {
-      implicit def arbSlice = Arbitrary(genSlice(concatProjDesc, 23))
+      implicit def arbSlice = Arbitrary(genSlice(0, concatProjDesc, 23))
 
       check { slices: List[Slice] =>
         val slice = Slice.concat(slices)
@@ -150,7 +145,7 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
     }
 
     "concat small singleton together" in {
-      implicit def arbSlice = Arbitrary(genSlice(concatProjDesc, 1))
+      implicit def arbSlice = Arbitrary(genSlice(0, concatProjDesc, 1))
 
       check { slices: List[Slice] =>
         val slice = Slice.concat(slices)
@@ -164,7 +159,7 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
     }
 
     "concat empty slices correctly" in {
-      implicit def arbSlice = Arbitrary(genSlice(concatProjDesc, 23))
+      implicit def arbSlice = Arbitrary(genSlice(0, concatProjDesc, 23))
 
       check { fullSlices: List[Slice] =>
         val slices = fullSlices collect {
@@ -177,12 +172,8 @@ class SliceSpec extends Specification with ArbitrarySlice with ScalaCheck {
     }
 
     "concat heterogeneous slices" in {
-      def filterColumns(pd: ProjectionDescriptor): ProjectionDescriptor = {
-        pd.copy(columns = pd.columns filter (_ => Random.nextBoolean))
-      }
-
-      val pds = List.fill(25)(filterColumns(concatProjDesc))
-      val g1 :: g2 :: gs = pds.map(genSlice(_, 17))
+      val pds = List.fill(25)(concatProjDesc filter (_ => Random.nextBoolean))
+      val g1 :: g2 :: gs = pds.map(genSlice(0, _, 17))
 
       implicit val arbSlice = Arbitrary(Gen.oneOf(g1, g2, gs: _*))
       

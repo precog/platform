@@ -35,7 +35,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 
-object TableSpec extends Specification with ArbitraryProjectionDescriptor with ArbitrarySlice {
+object TableSpec extends Specification with ArbitrarySlice {
   "a table" should {
     "cogroup" in {
       todo

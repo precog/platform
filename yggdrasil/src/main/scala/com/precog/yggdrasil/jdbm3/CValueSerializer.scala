@@ -27,6 +27,7 @@ import org.joda.time.DateTime
 
 import java.io.{DataInput,DataOutput}
 
+import com.precog.common._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 

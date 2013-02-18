@@ -20,8 +20,8 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import bytecode.RandomLibrary
-import common.Path
 import yggdrasil._
 
 import org.specs2.execute.Result

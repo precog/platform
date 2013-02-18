@@ -20,6 +20,7 @@
 package com.precog
 package daze
 
+import com.precog.common._
 import bytecode.RandomLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._

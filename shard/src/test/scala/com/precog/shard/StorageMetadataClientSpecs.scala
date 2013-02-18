@@ -33,18 +33,18 @@ import scalaz.syntax.copointed._
 import org.specs2.mutable._
 
 abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with Copointed[M]) extends Specification {
-  def colSizeMetadata(descriptor: ColumnDescriptor, size: Long): ColumnMetadata = Map(
+  def colSizeMetadata(descriptor: ColumnRef, size: Long): ColumnMetadata = Map(
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )
 
-  val fbbar = ColumnDescriptor(Path("/foo/bar/"), CPath(".bar"), CString, Authorities(Set()))
-  val fbbaz = ColumnDescriptor(Path("/foo/bar/"), CPath(".baz"), CString, Authorities(Set()))
+  val fbbar = ColumnRef(Path("/foo/bar/"), CPath(".bar"), CString, Authorities(Set()))
+  val fbbaz = ColumnRef(Path("/foo/bar/"), CPath(".baz"), CString, Authorities(Set()))
 
   val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
+    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
+    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
+    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
+    ProjectionDescriptor(1, ColumnRef(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, fbbar :: Nil) -> colSizeMetadata(fbbar, 123L),
     ProjectionDescriptor(1, fbbaz :: Nil) -> colSizeMetadata(fbbaz, 456L)
   )

@@ -28,6 +28,7 @@ import bytecode.Library
 import yggdrasil._
 import yggdrasil.table._
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.util.IdGen
 import com.precog.util._

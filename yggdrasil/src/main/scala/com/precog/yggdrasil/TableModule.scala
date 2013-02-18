@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 
 import com.precog.bytecode.JType
-import com.precog.common.Path
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
 

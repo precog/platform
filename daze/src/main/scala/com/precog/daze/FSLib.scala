@@ -19,8 +19,8 @@
  */
 package com.precog.daze
 
+import com.precog.common._
 import com.precog.bytecode._
-import com.precog.common.Path
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata.StorageMetadata
 import com.precog.yggdrasil.table._
@@ -50,7 +50,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
           if (m.find) {
             m.group(1).trim match {
               case "*" => 
-                prefixes.map(prefix => metadata.findChildren(prefix) map { _ map { prefix / _  } }).sequence flatMap { paths =>
+                prefixes.map(prefix => metadata.findDirectChildren(prefix) map { _ map { prefix / _  } }).sequence flatMap { paths =>
                   traverse(m, paths.flatten)
                 }
   

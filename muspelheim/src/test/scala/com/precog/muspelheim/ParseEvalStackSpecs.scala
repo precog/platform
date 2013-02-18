@@ -63,7 +63,6 @@ import akka.dispatch.ExecutionContext
 
 trait ParseEvalStackSpecs[M[+_]] extends Specification 
     with ParseEvalStack[M]
-    with StorageModule[M]
     with MemoryDatasetConsumer[M] 
     with IdSourceScannerModule { self =>
 

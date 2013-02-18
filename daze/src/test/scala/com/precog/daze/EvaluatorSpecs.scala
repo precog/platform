@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import com.precog.common.Path
+import com.precog.common._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._

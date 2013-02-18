@@ -57,10 +57,9 @@ run <<= inputTask { argTask =>
 
 extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
-  val dataTarget = new File(target, "data")
   def performExtract = {
     s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
-    val rc = SProcess("./regen-jdbm-data.sh", Seq(dataTarget.getCanonicalPath)).!(new FileProcessLogger(new File("./target/test-gendata.log")))
+    val rc = SProcess("./regen-jdbm-data.sh", Seq(target.getCanonicalPath)).!(new FileProcessLogger(new File("./target/test-gendata.log")))
     if (rc != 0) {
       error("Failed to extract data: " + rc)
     } else {
@@ -68,14 +67,14 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
       target.getCanonicalPath
     }
   }  
-  val back = if (!dataTarget.isDirectory()) {
-    if (!dataTarget.mkdirs()) {
+  val back = if (!target.isDirectory()) {
+    if (!target.mkdirs()) {
       error("Failed to make temp projection directory")
     } else {
       performExtract
     }
   } else {
-    if (dataTarget.listFiles.length > 0) {
+    if (target.listFiles.length > 0) {
       s.log.info("Using data in " + target.getCanonicalPath())
       target.getCanonicalPath  
     } else {
@@ -88,7 +87,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
 
 testOptions in Test <<= testOptions dependsOn extractData
 
-parallelExecution in Test := false
+parallelExecution in Test := true
 
 console in Compile <<= (console in Compile) dependsOn extractData
 

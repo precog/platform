@@ -19,6 +19,7 @@
  */
 package com.precog.daze
 
+import com.precog.common._
 import org.apache.commons.lang.StringEscapeUtils.escapeJava
 import com.precog.yggdrasil._
 

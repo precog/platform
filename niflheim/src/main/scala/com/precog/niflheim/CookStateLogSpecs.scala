@@ -17,38 +17,33 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil 
+package com.precog.niflheim
 
-import metadata.StorageMetadata
-import com.precog.common._
-import com.precog.common.ingest._
-import com.precog.util.PrecogUnit
-import com.precog.common.security._
+import com.precog.util.IOUtils
 
-import scalaz._
-import scalaz.effect._
-import scalaz.syntax.bind._
-import scalaz.syntax.monad._
-import scala.annotation.unchecked._
+import org.specs2.mutable.{After, Specification}
 
-trait StorageModule[M[+_]] {
-  type Storage <: StorageLike[M]
+class CookStateLogSpecs extends Specification {
+  trait LogState extends After {
+    val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
 
-  def storage: Storage
-}
+    def after = {
+      IOUtils.recursiveDelete(workDir).unsafePerformIO
+    }
+  }
 
-trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M]
-}
+  "CookStateLog" should {
+    "Properly initialize" in new LogState {
+      val txLog = new CookStateLog(workDir)
 
-trait StorageLike[M[+_]] extends StorageMetadataSource[M] { self =>
-  def storeBatch(msgs: Seq[EventMessage]): M[PrecogUnit]
-  def store(msg: EventMessage): M[PrecogUnit] = storeBatch(Vector(msg))
+      txLog.currentBlockId mustEqual 0l
+      txLog.pendingCookIds must beEmpty
+    }
 
-  def liftM[T[_[+_], +_]](implicit T: Hoist[T], M: Monad[M]) = new StorageLike[({ type λ[+α] = T[M, α] })#λ] {
-    def userMetadataView(apiKey: APIKey) = self.userMetadataView(apiKey).liftM[T]
-    def storeBatch(msgs: Seq[EventMessage]) = self.storeBatch(msgs).liftM[T]
-    override def store(msg: EventMessage) = self.store(msg).liftM[T]
+    "Lock its directory during operation" in new LogState {
+      val txLog = new CookStateLog(workDir)
+
+      (new CookStateLog(workDir)) must throwAn[Exception]
+    }
   }
 }
-

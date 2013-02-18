@@ -47,6 +47,4 @@ class MongoStorageMetadata(mongo: Mongo)(implicit asyncContext: ExecutionContext
   }
 
   def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
-  def findProjections(path: Path, selector: CPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]  = Promise.successful(Map())
-  def findPathMetadata(path: Path, selector: CPath): Future[PathRoot]  = Promise.successful(PathRoot(Set()))
 }

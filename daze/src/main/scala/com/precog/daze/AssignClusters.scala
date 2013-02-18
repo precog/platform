@@ -27,6 +27,7 @@ import table._
 
 import bytecode._
 
+import com.precog.common._
 import common.json._
 
 import scalaz._

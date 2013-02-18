@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 
 import com.precog.common._
+import com.precog.yggdrasil.table.ColumnRef
 
 import scalaz.Monoid
 import scala.collection.mutable
@@ -27,10 +28,10 @@ import scala.collection.mutable
 package object metadata {
   type MetadataMap = Map[MetadataType, Metadata]
   
-  type ColumnMetadata = Map[ColumnDescriptor, MetadataMap]
+  type ColumnMetadata = Map[ColumnRef, MetadataMap]
 
   object ColumnMetadata {
-    val Empty = Map.empty[ColumnDescriptor, MetadataMap]
+    val Empty = Map.empty[ColumnRef, MetadataMap]
 
     implicit object monoid extends Monoid[ColumnMetadata] {
       val zero = Empty

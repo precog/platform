@@ -60,19 +60,7 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     val actualSchema = inferSchema(sampleData.data map { _ \ "value" })
 
     val projections = actualSchema.grouped(1) map { subschema =>
-      val descriptor = ProjectionDescriptor(
-        idCount, 
-        subschema flatMap {
-          case (jpath, CNum | CLong | CDouble) =>
-            List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), CPath(jpath), _, Authorities.None) }
-          
-          case (jpath, ctype) =>
-            List(ColumnDescriptor(Path("/test"), CPath(jpath), ctype, Authorities.None))
-        } toList
-      )
-
-      descriptor -> Projection( 
-        descriptor, 
+      Path("/test") -> Projection( 
         sampleData.data flatMap { jv =>
           val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
             case (obj, (jpath, ctype)) => { 

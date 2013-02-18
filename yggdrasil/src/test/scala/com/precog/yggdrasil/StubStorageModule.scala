@@ -45,30 +45,27 @@ import scalaz.effect._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-class StubStorageMetadata[M[+_]](projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata])(implicit val M: Monad[M]) extends StorageMetadata[M] {
-  val source = new TestMetadataStorage(projectionMetadata)
-  def findChildren(path: Path) = M.point(source.findChildren(path))
-  def findSelectors(path: Path) = M.point(source.findSelectors(path))
-  def findProjections(path: Path, selector: CPath) = M.point {
-    projectionMetadata.collect {
-      case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
-        (descriptor, ColumnMetadata.Empty)
-    }
-  }
+//class StubStorageMetadata[M[+_]](projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata])(implicit val M: Monad[M]) extends StorageMetadata[M] {
+//  val source = new TestMetadataStorage(projectionMetadata)
+//  def findChildren(path: Path) = M.point(source.findChildren(path))
+//  def findSelectors(path: Path) = M.point(source.findSelectors(path))
+//  def findProjections(path: Path, selector: CPath) = M.point {
+//    projectionMetadata.collect {
+//      case (descriptor, _) if descriptor.columns.exists { case ColumnRef(p, s, _, _) => p == path && s == selector } => 
+//        (descriptor, ColumnMetadata.Empty)
+//    }
+//  }
+//
+//  def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+//}
+//
 
-  def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
-}
-
-trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] with StorageMetadataSource[M] { self =>
+trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] { self =>
   implicit def M: Monad[M]
 
-  protected def projections: Map[ProjectionDescriptor, Projection]
-  protected def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
-  protected def metadata = new StubStorageMetadata(projectionMetadata)(M)
+  protected def projections: Map[Path, Projection]
 
   class ProjectionCompanion extends ProjectionCompanionLike[M] {
-    def apply(descriptor: ProjectionDescriptor) = M.point(projections(descriptor))
+    def apply(path: Path) = M.point(projections.get(path))
   }
-
-  def userMetadataView(apiKey: APIKey) = new UserMetadataView[M](apiKey, new UnrestrictedAccessControl(), metadata)
 }

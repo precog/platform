@@ -22,7 +22,7 @@ package table
 package jdbc
 
 import com.precog.bytecode._
-import com.precog.common.{MetadataStats,Path,VectorCase}
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.yggdrasil.jdbm3._

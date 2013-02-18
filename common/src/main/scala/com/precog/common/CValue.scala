@@ -17,9 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
+package com.precog.common
 
-import table._
 import com.precog.util._
 import com.precog.common.json._
 
@@ -203,7 +202,7 @@ sealed trait CType extends Serializable {
   def isNumeric: Boolean = false
 
   @inline 
-  private[yggdrasil] final def typeIndex = this match {
+  private[common] final def typeIndex = this match {
     case CUndefined    => 0
 
     case CBoolean      => 1

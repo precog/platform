@@ -72,16 +72,14 @@ case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestActi
  * this actor. 
  */
 class IngestSupervisor( ingestActor: Option[ActorRef], 
-                        metadataActor: ActorRef,
                         projectionsActor: ActorRef,
                         scheduler: Scheduler,
-                        metadataTimeout: Timeout,
                         idleDelay: Duration,
                         shutdownCheck: Duration) extends Actor {
 
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
-  private val routingTable = new SingleColumnProjectionRoutingTable
+  private val routingTable = new SinglePathProjectionRoutingTable
 
   private var initiated = 0
   private var processed = 0
@@ -136,34 +134,12 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
   //TODO: This needs review; not sure why only archive paths are being considered.
   def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
     logger.debug("Beginning processing of %d messages".format(messages.size))
-    implicit val to = metadataTimeout
-    implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
-    
-    //TODO: Make sure that authorization has been checked here.
-    val archivePaths = messages.collect { case ArchiveMessage(_, Archive(_, path, jobId)) => path } 
+    //implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
 
-    if (archivePaths.nonEmpty) {
-      logger.debug("Processing archive paths: " + archivePaths)
-    } else {
-      logger.debug("No archive paths")
-    }
-
-    Future.sequence {
-      archivePaths map { path =>
-        (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
-      }
-    } onSuccess {
-      case descMaps : Seq[Set[ProjectionDescriptor]] => 
-        val grouped: Map[Path, Seq[ProjectionDescriptor]] = descMaps.flatten.foldLeft(Map.empty[Path, Vector[ProjectionDescriptor]]) {
-          case (acc, descriptor) => descriptor.columns.map(c => (c.path -> Vector(descriptor))).toMap |+| acc
-        }
-        
-        val updates = routingTable.batchMessages(messages, grouped)
-
-        logger.debug("Sending " + updates.size + " update message(s)")
-        batchCoordinator ! ProjectionUpdatesExpected(updates.size)
-        for (update <- updates) projectionsActor.tell(update, batchCoordinator)
-    }
+    val updates = routingTable.batchMessages(messages)
+    logger.debug("Sending " + updates.size + " update message(s)")
+    batchCoordinator ! ProjectionUpdatesExpected(updates.size)
+    for (update <- updates) projectionsActor.tell(update, batchCoordinator)
   }
 
   private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>

@@ -24,6 +24,7 @@ import bytecode._
 
 import blueeyes.json.JNum
 
+import com.precog.common._
 import com.precog.util.IdGen
 import com.precog.yggdrasil._
 
