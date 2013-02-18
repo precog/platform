@@ -17,9 +17,9 @@
   </appender>
 
   <logger name="blueeyes.core.http" level="info" />
-  <logger name="com.precog.yggdrasil.actor.KafkaShardIngestActor" level="debug" />
-  <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="debug" />
-  <logger name="com.precog.yggdrasil.jdbm3.JDBMProjection" level="debug" />
+  <logger name="com.precog.yggdrasil.actor.KafkaShardIngestActor" level="trace" />
+  <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="trace" />
+  <logger name="com.precog.yggdrasil.jdbm3.JDBMProjection" level="trace" />
 
   <root level="trace">
     <appender-ref ref="SERVERLOG" />
