@@ -581,7 +581,7 @@ object ImportTools extends Command with Logging {
         ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
           val update = ProjectionInsert(Path(db), records, config.accountId)
         
-          logger.info(yggConfig.cookThreshold + " events to be inserted")
+          logger.info(records.size + " events to be inserted")
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
         }

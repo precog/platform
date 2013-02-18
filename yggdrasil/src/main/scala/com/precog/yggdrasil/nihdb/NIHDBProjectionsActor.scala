@@ -80,7 +80,9 @@ class NIHDBProjectionsActor(
     accessControl: AccessControl[Future]
     ) extends Actor with Logging {
 
-  logger.debug("Starting projections actor with base = " + baseDir)
+  override def preStart() = {
+    logger.debug("Starting projections actor with base = " + baseDir)
+  }
 
   private final val disallowedPathComponents = Set(".", "..")
 

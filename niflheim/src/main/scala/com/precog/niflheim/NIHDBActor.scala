@@ -155,7 +155,9 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
       }
     } else {
       logger.info("No current descriptor found, creating fresh descriptor")
-      ProjectionState.empty
+      ProjectionState.empty.tap {
+        s => ProjectionState.toFile(s, descriptorFile)
+      }
     }
 
   private[this] var blockState: BlockState = {
