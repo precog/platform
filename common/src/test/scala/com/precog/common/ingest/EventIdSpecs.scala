@@ -1,4 +1,4 @@
-package com.precog.common
+package com.precog.common.ingest
 
 import org.scalacheck.Gen
 
