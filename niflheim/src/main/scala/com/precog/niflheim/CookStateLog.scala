@@ -72,18 +72,23 @@ class CookStateLog(baseDir: File) extends Logging {
       throw e
     }
     def onRecord(r: LogRecord) = {
-      if (r.`type` == LogRecordType.END_OF_LOG) {
-        logger.debug("TXLog Replay complete in " + baseDir.getCanonicalPath)
-      } else {
-        TXLogEntry(r) match {
-          case StartCook(blockId) =>
-            pendingCookIds0 += (blockId -> r.key)
-            currentBlockId0 = currentBlockId0 max blockId
+      r.`type` match {
+        case LogRecordType.END_OF_LOG =>
+          logger.debug("TXLog Replay complete in " + baseDir.getCanonicalPath)
 
-          case CompleteCook(blockId) =>
-            pendingCookIds0 -= blockId
-            currentBlockId0 = currentBlockId0 max blockId
-        }
+        case LogRecordType.USER =>
+          TXLogEntry(r) match {
+            case StartCook(blockId) =>
+              pendingCookIds0 += (blockId -> r.key)
+              currentBlockId0 = currentBlockId0 max blockId
+
+            case CompleteCook(blockId) =>
+              pendingCookIds0 -= blockId
+              currentBlockId0 = currentBlockId0 max blockId
+          }
+
+        case other =>
+          logger.warn("Unknown LogRecord type: " + other)
       }
     }
   })
@@ -124,25 +129,21 @@ sealed trait TXLogEntry {
 case class StartCook(blockId: Long) extends TXLogEntry
 case class CompleteCook(blockId: Long) extends TXLogEntry
 
-object TXLogEntry {
+object TXLogEntry extends Logging {
   def apply(record: LogRecord) = {
-    val buffer = record.dataBuffer
+    val buffer = ByteBuffer.wrap(record.getFields()(0))
 
-    println("Parsing buffer: " + buffer)
-
-    if (!buffer.hasRemaining) {
-      buffer.flip()
-    }
     buffer.getShort match {
       case 0x1 => StartCook(buffer.getLong)
       case 0x2 => CompleteCook(buffer.getLong)
+      case other => logger.error("Unknown TX log record type = %d, isCTRL = %s, isEOB = %s from %s".format(other, record.isCTRL, record.isEOB, record.data.mkString("[", ", ", "]")))
     }
   }
 
-  def toBytes(entry: TXLogEntry): Array[Byte] = {
+  def toBytes(entry: TXLogEntry): Array[Array[Byte]] = {
     val (tpe, size) = entry match {
-      case StartCook(blockId) => (0x1, 10)
-      case CompleteCook(blockId) => (0x2, 10)
+      case StartCook(blockId) => (0x1, 42)
+      case CompleteCook(blockId) => (0x2, 42)
     }
 
     val record = new Array[Byte](size)
@@ -151,7 +152,7 @@ object TXLogEntry {
     buffer.putShort(tpe.toShort)
     buffer.putLong(entry.blockId)
 
-    record
+    Array[Array[Byte]](record)
   }
 }
 

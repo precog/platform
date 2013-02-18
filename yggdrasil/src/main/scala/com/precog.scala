@@ -30,8 +30,8 @@ import com.precog.common.VectorCase
 import com.precog.util.PrecogUnit
 
 package object yggdrasil {
-  type ProjectionDescriptorIO = ProjectionDescriptor => IO[PrecogUnit]
-  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
+//  type ProjectionDescriptorIO = ProjectionDescriptor => IO[PrecogUnit]
+//  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
 
   type Identity = Long
   type Identities = Array[Identity]

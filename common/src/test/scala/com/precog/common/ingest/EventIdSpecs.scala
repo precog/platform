@@ -17,34 +17,22 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package nihdb
+package com.precog.common.ingest
 
-import com.precog.util.IOUtils
+import org.scalacheck.Gen
 
-import org.specs2.mutable.{After, Specification}
+import org.specs2.ScalaCheck
+import org.specs2.mutable.Specification
 
-class CookStateLogSpecs extends Specification {
-  trait LogState extends After {
-    val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
+object EventIdSpecs extends Specification with ScalaCheck {
+  implicit val idRange = Gen.chooseNum[Int](0, Int.MaxValue)
 
-    def after = {
-      IOUtils.recursiveDelete(workDir).unsafePerformIO
-    }
-  }
+  "EventId" should {
+    "support round-trip encap/decap of producer/sequence ids" in check { (prod: Int, seq: Int) =>
+      val uid = EventId(prod, seq).uid
 
-  "CookStateLog" should {
-    "Properly initialize" in new LogState {
-      val txLog = new CookStateLog(workDir)
-
-      txLog.currentBlockId mustEqual 0l
-      txLog.pendingCookIds must beEmpty
-    }
-
-    "Lock its directory during operation" in new LogState {
-      val txLog = new CookStateLog(workDir)
-
-      (new CookStateLog(workDir)) must throwAn[Exception]
+      EventId.producerId(uid) mustEqual prod
+      EventId.sequenceId(uid) mustEqual seq
     }
   }
 }

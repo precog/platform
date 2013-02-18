@@ -202,6 +202,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
   override def postStop() = {
     IO {
       txLog.close
+      ProjectionState.toFile(currentState, descriptorFile)
     }.except { case t: Throwable =>
       IO { logger.error("Error during close", t) }
     }.unsafePerformIO
@@ -276,7 +277,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
       }
 
     case GetLength =>
-      sender ! currentBlocks.values.map(_.length).sum
+      sender ! currentBlocks.values.map(_.length.toLong).sum
 
     case GetStatus =>
       sender ! Status(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)

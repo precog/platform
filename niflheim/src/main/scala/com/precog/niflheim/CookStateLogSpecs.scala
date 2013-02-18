@@ -17,12 +17,33 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import com.precog.yggdrasil.actor
+package com.precog.niflheim
 
-import org.specs2.mutable._
+import com.precog.util.IOUtils
 
-object RoutingActorSpec extends Specification {
-  "routing actor" should {
-    "sending metadata updates when inserts are complete" in todo
+import org.specs2.mutable.{After, Specification}
+
+class CookStateLogSpecs extends Specification {
+  trait LogState extends After {
+    val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
+
+    def after = {
+      IOUtils.recursiveDelete(workDir).unsafePerformIO
+    }
+  }
+
+  "CookStateLog" should {
+    "Properly initialize" in new LogState {
+      val txLog = new CookStateLog(workDir)
+
+      txLog.currentBlockId mustEqual 0l
+      txLog.pendingCookIds must beEmpty
+    }
+
+    "Lock its directory during operation" in new LogState {
+      val txLog = new CookStateLog(workDir)
+
+      (new CookStateLog(workDir)) must throwAn[Exception]
+    }
   }
 }

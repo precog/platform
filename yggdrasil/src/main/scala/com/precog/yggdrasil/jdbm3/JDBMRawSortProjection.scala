@@ -63,9 +63,9 @@ class JDBMRawSortProjection[M[+_]] private[yggdrasil] (dbFile: File, indexName: 
   val rowFormat = RowFormat.forValues(valRefs)
   val keyFormat = RowFormat.forSortingKey(sortKeyRefs)
 
-  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnRef] = Set())(implicit M: Monad[M]): M[Option[BlockProjectionData[Array[Byte], Slice]]] = M.point {
+  override def getBlockAfter(id: Option[Array[Byte]], columns: Option[Set[ColumnRef]])(implicit M: Monad[M]): M[Option[BlockProjectionData[Array[Byte], Slice]]] = M.point {
     // TODO: Make this far, far less ugly
-    if (columns.size > 0) {
+    if (columns.nonEmpty) {
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
     }
 

@@ -539,6 +539,7 @@ object ImportTools extends Command with Logging {
   }
 
   def process(config: Config) {
+    println("Storage root = " + config.storageRoot)
     config.storageRoot.mkdirs
     config.archiveRoot.mkdirs
 
@@ -550,7 +551,7 @@ object ImportTools extends Command with Logging {
         val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
       }
 
-      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
+      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
 
       implicit val actorSystem = ActorSystem("yggutilImport")
       implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -580,7 +581,7 @@ object ImportTools extends Command with Logging {
         ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
           val update = ProjectionInsert(Path(db), records, config.accountId)
         
-          logger.info(ingestRecords.length + " total events to be inserted")
+          logger.info(yggConfig.cookThreshold + " events to be inserted")
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
         }

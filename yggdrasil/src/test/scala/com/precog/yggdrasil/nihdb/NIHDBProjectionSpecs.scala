@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.precog.common.ingest._
 import com.precog.niflheim._
 import com.precog.yggdrasil.table._
 import com.precog.util.IOUtils
@@ -70,7 +71,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
   "NIHDBProjections" should {
     "Properly initialize and close" in new TempContext {
-      val results = projection.getBlockAfter(None)
+      val results = projection.getBlockAfter(None, None)
 
       results must whenDelivered(beNone)
     }
@@ -78,12 +79,14 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
     "Insert and retrieve values below the cook threshold" in new TempContext {
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
+      val toInsert = (0L to 2L).toSeq.map { i =>
+        IngestRecord(EventId.fromLong(i), JNum(i))
+      }
+
       val results =
         for {
-          _ <- projection.insert(Array(0L), Seq(JNum(0L)))
-          _ <- projection.insert(Array(1L), Seq(JNum(1L)))
-          _ <- projection.insert(Array(2L), Seq(JNum(2L)))
-          result <- projection.getBlockAfter(None)
+          _ <- projection.insert(toInsert, "fake")
+          result <- projection.getBlockAfter(None, None)
         } yield result
 
       results must whenDelivered (beLike {
@@ -98,18 +101,18 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
     "Insert, close and re-read values below the cook threshold" in new TempContext {
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
-      projection.insert(Array(0L), Seq(JNum(0L)))
-      projection.insert(Array(1L), Seq(JNum(1L)))
-      projection.insert(Array(2L), Seq(JNum(2L)))
+      projection.insert((0L to 2L).toSeq.map { i =>
+        IngestRecord(EventId.fromLong(i), JNum(i))
+      }, "fake")
 
-      println("Raw log = " + fromFuture(projection.stats).rawSize)
+      println("Raw log = " + fromFuture(projection.status).rawSize)
 
       val result = for {
         _ <- projection.close()
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
-        stats <- projection.stats
-        _ = println("Raw log = " + stats.rawSize)
-        r <- projection.getBlockAfter(None)
+        status <- projection.status
+        _ = println("Raw log = " + status.rawSize)
+        r <- projection.getBlockAfter(None, None)
       } yield r
 
       result must whenDelivered (beLike {
@@ -121,25 +124,29 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
       })
     }
 
+    "Properly filter on constrainted columns" in todo
+
     "Properly convert raw blocks to cooked" in new TempContext {
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
-      expected.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(Array(id.toLong), values) }
+      (0L to 1950L).map {
+        i => IngestRecord(EventId.fromLong(i), JNum(i))
+      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values, "fake") }
 
       var waits = 10
 
-      while (waits > 0 && fromFuture(projection.stats).pending > 0) {
+      while (waits > 0 && fromFuture(projection.status).pending > 0) {
         Thread.sleep(200)
         waits -= 1
       }
 
-      val stats = fromFuture(projection.stats)
+      val status = fromFuture(projection.status)
 
-      stats.cooked mustEqual 1
-      stats.pending mustEqual 0
-      stats.rawSize mustEqual 751
+      status.cooked mustEqual 1
+      status.pending mustEqual 0
+      status.rawSize mustEqual 751
 
-      projection.getBlockAfter(None) must whenDelivered (beLike {
+      projection.getBlockAfter(None, None) must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
@@ -147,7 +154,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           data.toJsonElements must containAllOf(expected.take(1200)).only.inOrder
       })
 
-      projection.getBlockAfter(Some(0)) must whenDelivered (beLike {
+      projection.getBlockAfter(Some(0), None) must whenDelivered (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 1L
           max mustEqual 1L

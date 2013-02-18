@@ -80,6 +80,8 @@ class NIHDBProjectionsActor(
     accessControl: AccessControl[Future]
     ) extends Actor with Logging {
 
+  logger.debug("Starting projections actor with base = " + baseDir)
+
   private final val disallowedPathComponents = Set(".", "..")
 
   implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -186,10 +188,12 @@ class NIHDBProjectionsActor(
       case Some(proj) =>
         proj.authorities.flatMap { authorities =>
           accessControl.hasCapability(apiKey, Set(ReducePermission(path, authorities.ownerAccountIds)), Some(new DateTime)) map { canAccess =>
+            logger.debug("Access for projection at " + path + " = " + canAccess)
             if (canAccess) Some(proj) else None
           }
         }
       case None =>
+        logger.warn("Found no projections at " + path)
         Promise.successful(None)(context.dispatcher)
     }
   }
@@ -203,6 +207,7 @@ class NIHDBProjectionsActor(
       findChildren(path) pipeTo sender
 
     case AccessProjection(path, apiKey) =>
+      logger.debug("Accessing projection at " + path + " => " + findBaseDir(path))
       findProjectionWithAPIKey(path, apiKey) pipeTo sender
 
     case ProjectionInsert(path, records, ownerAccountId) =>

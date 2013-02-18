@@ -97,6 +97,8 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
     })
   }
 
+  def status: Future[Status] = db.status
+
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
 

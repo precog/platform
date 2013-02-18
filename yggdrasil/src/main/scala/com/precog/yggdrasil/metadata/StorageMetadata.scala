@@ -34,7 +34,7 @@ import scalaz.syntax.std.boolean._
 trait StorageMetadata[M[+_]] { self =>
   implicit def M: Monad[M]
 
-  def findChildren(path: Path): M[Set[Path]]
+  def findDirectChildren(path: Path): M[Set[Path]]
   def findSelectors(path: Path): M[Set[CPath]]
 //  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
 //  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
@@ -63,7 +63,7 @@ trait StorageMetadata[M[+_]] { self =>
     private implicit val M0: Monad[M] = self.M
     val M: Monad[({ type λ[+α] = T[M, α] })#λ] = T(M0)
 
-    def findChildren(path: Path) = self.findChildren(path).liftM[T]
+    def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
     def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
 //    def findProjections(path: Path, selector: CPath) = self.findProjections(path, selector).liftM[T]
 //    def findPathMetadata(path: Path, selector: CPath) = self.findPathMetadata(path, selector).liftM
