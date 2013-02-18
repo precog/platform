@@ -26,6 +26,8 @@ import blueeyes.json.JParser
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
 
+import com.weiglewilczek.slf4s.Logging
+
 import _root_.kafka.message._
 import _root_.kafka.serializer._
 
@@ -33,6 +35,7 @@ import java.nio.charset.Charset
 import java.nio.ByteBuffer
 
 import scalaz._
+import scalaz.syntax.id._
 import scalaz.Validation._
 import scalaz.syntax.bifunctor._
 
@@ -80,9 +83,11 @@ class KafkaEventCodec extends Encoder[Event] {
   }
 }
 
-object EventEncoding extends EncodingFlags {
+object EventEncoding extends EncodingFlags with Logging {
   def toMessageBytes(event: Event) = {
-    val msgBuffer = charset.encode(event.serialize.renderCompact)
+    val serialized = event.serialize.renderCompact
+    logger.trace("Serialized event " + event + " to " + serialized)
+    val msgBuffer = charset.encode(serialized)
     val bytes = ByteBuffer.allocate(msgBuffer.limit + 3)
     writeHeader(bytes, event.fold(_ => jsonIngestFlag, _ => jsonArchiveFlag))
     bytes.put(msgBuffer)
@@ -101,8 +106,8 @@ object EventEncoding extends EncodingFlags {
       event <-  msgType match {
                   case `jsonIngestFlag`  => jv.validated[Ingest]
                   case `jsonArchiveFlag` => jv.validated[Archive]
-                  case `jsonIngestMessageFlag`  => (jv \ "event").validated[Ingest]
-                  case `jsonArchiveMessageFlag` => (jv \ "archive").validated[Archive]
+                  case `jsonIngestMessageFlag`  => jv.validated[Ingest]("ingest")
+                  case `jsonArchiveMessageFlag` => jv.validated[Archive]("archive")
                 }
     } yield event
   }
@@ -121,9 +126,11 @@ class KafkaEventMessageCodec extends Encoder[EventMessage] {
   }
 }
 
-object EventMessageEncoding extends EncodingFlags {
+object EventMessageEncoding extends EncodingFlags with Logging {
   def toMessageBytes(msg: EventMessage) = {
-    val msgBuffer = charset.encode(msg.serialize.renderCompact)
+    val serialized = msg.serialize.renderCompact
+    logger.trace("Serialized event " + msg + " to " + serialized)
+    val msgBuffer = charset.encode(serialized)
     val bytes = ByteBuffer.allocate(msgBuffer.limit + 3)
     writeHeader(bytes, msg.fold(_ => jsonIngestMessageFlag, _ => jsonArchiveMessageFlag))
     bytes.put(msgBuffer)
