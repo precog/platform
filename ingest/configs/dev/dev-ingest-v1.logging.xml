@@ -16,9 +16,9 @@
     </encoder>
   </appender>
 
-  <logger name="blueeyes.core.http" level="trace" />
+  <logger name="blueeyes.core.http" level="debug" />
 
-  <root level="trace">
+  <root level="debug">
     <appender-ref ref="SERVERLOG" />
   </root>
 </configuration>
