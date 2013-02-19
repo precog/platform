@@ -35,7 +35,7 @@ object Serialization {
       if (version.forall(v => (jv \ "schemaVersion") == JString(v))) {
         extractor.validated(jv)
       } else {
-        failure(Invalid("Record schema " + (jv \ "schemaVersion") + " does not conform to version " + version))
+        failure(Invalid("Record schema " + (jv \ "schemaVersion") + " of value " + jv.renderCompact + " does not conform to version " + version))
       }
     }
   }

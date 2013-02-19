@@ -148,7 +148,7 @@ final class KafkaRelayAgent(
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
       } onSuccess {
-        case _ => eventIdSeq.saveState(messages.last.offset)
+        case _ => if (messages.nonEmpty) eventIdSeq.saveState(messages.last.offset)
       }
     } valueOr { error =>
       logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
