@@ -116,7 +116,7 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
 
   def findAccountById(accountId: AccountId): Response[Option[Account]] = {
     logger.debug("Finding accoung for id: " + accountId)
-    import Account.Serialization._
+    import Account.SafeSerialization._
     invoke { client =>
       eitherT(client.get[JValue]("/accounts/" + accountId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jaccount), _) =>

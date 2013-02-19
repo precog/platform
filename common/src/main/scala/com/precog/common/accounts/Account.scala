@@ -67,7 +67,6 @@ object Account {
   val safeSchema = "accountId" :: "email" ::           Omit ::           Omit :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" ::       Omit :: "lastPasswordChangeTime" :: HNil
 
   val (decomposerV1, extractorV1) = serializationV[Account](schemaV1, Some("1.0"))
-  val safeDecomposerV1 = decomposer[Account](schemaV1)
 
   object Serialization {
     implicit val accountDecomposer = decomposerV1
@@ -75,7 +74,8 @@ object Account {
   }
 
   object SafeSerialization {
-    implicit val accountDecomposer = safeDecomposerV1
+    implicit val accountDecomposer = decomposer[Account](schemaV1)
+    implicit val accountExtractor = extractor[Account](schemaV1)
   }
 
   private val randomSource = new java.security.SecureRandom
