@@ -31,7 +31,11 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
           if (m.find) {
             m.group(1).trim match {
               case "*" => 
-                prefixes.map(prefix => metadata.findDirectChildren(prefix) map { _ map { prefix / _  } }).sequence flatMap { paths =>
+                prefixes.map { prefix =>
+                  metadata.findDirectChildren(prefix) map { child =>
+                    child map { prefix / _  }
+                  }
+                }.sequence flatMap { paths =>
                   traverse(m, paths.flatten)
                 }
   
