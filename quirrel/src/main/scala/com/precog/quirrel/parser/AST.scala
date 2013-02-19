@@ -87,6 +87,12 @@ trait AST extends Phases {
           indent + "child: \n" + prettyPrint(child, level + 2)
       }
       
+      case Observe(loc, data, samples) => {
+        indent + "type: observe\n" +
+          indent + "data: " + prettyPrint(data, level + 2) +
+          indent + "samples: \n" + prettyPrint(samples, level + 2)
+      }
+      
       case New(loc, child) => {
         indent + "type: new\n" +
           indent + "child:\n" + prettyPrint(child, level + 2)
@@ -385,6 +391,8 @@ trait AST extends Phases {
     
     def loc: LineStream
 
+    def disallowsInfinite: Boolean = false
+
     override def children: List[Expr]
 
     private lazy val subForest: Stream[Tree[Expr]] = {
@@ -450,6 +458,9 @@ trait AST extends Phases {
       
       case (Assert(_, pred1, child1), Assert(_, pred2, child2)) =>
         (child1 equalsIgnoreLoc child2) && (pred1 equalsIgnoreLoc pred2)
+
+      case (Observe(_, data1, samples1), Observe(_, data2, samples2)) =>
+        (data1 equalsIgnoreLoc data2) && (samples1 equalsIgnoreLoc samples2)
 
       case (New(_, child1), New(_, child2)) =>
         child1 equalsIgnoreLoc child2
@@ -595,6 +606,9 @@ trait AST extends Phases {
       
       case Assert(_, pred, child) =>
         pred.hashCodeIgnoreLoc + child.hashCodeIgnoreLoc
+
+      case Observe(_, data, samples) =>
+        data.hashCodeIgnoreLoc + samples.hashCodeIgnoreLoc
 
       case New(_, child) => child.hashCodeIgnoreLoc * 23
 
@@ -785,7 +799,7 @@ trait AST extends Phases {
       def unapply(bin: ComparisonOp): Some[(LineStream, Expr, Expr)] =
         Some((bin.loc, bin.left, bin.right))
     }
-    
+
     /*
      * Raw AST nodes
      */
@@ -854,6 +868,16 @@ trait AST extends Phases {
       def children = List(pred, child)
     }
     
+    final case class Observe(loc: LineStream, data: Expr, samples: Expr) extends Expr {
+      val sym = 'observe
+      def left = data
+      def right = samples
+
+      def children = List(data, samples)
+
+      def form = 'observe ~ 'leftParen ~ data ~ 'comma ~ samples ~ 'rightParen
+    }
+
     final case class New(loc: LineStream, child: Expr) extends Expr with PrecedenceUnaryNode {
       val sym = 'new
       val isPrefix = true
@@ -971,10 +995,12 @@ trait AST extends Phases {
 
     final case class Where(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'where
+      override val disallowsInfinite = true
     }
 
     final case class With(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'with
+      override val disallowsInfinite = true
     }
     
     final case class Union(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
@@ -1031,18 +1057,22 @@ trait AST extends Phases {
     
     final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'eq
+      override val disallowsInfinite = true
     }
     
     final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'noteq
+      override val disallowsInfinite = true
     }
     
     final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'and
+      override val disallowsInfinite = true
     }
     
     final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'or
+      override val disallowsInfinite = true
     }
     
     final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
