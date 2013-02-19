@@ -32,6 +32,7 @@ import scala.collection.mutable
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.Free.Trampoline
 import scalaz.std.either._
+import scalaz.std.function._
 import scalaz.std.option._
 import scalaz.std.list._
 import scalaz.syntax.monad._
@@ -54,7 +55,7 @@ trait DAG extends Instructions {
     
     def loop(loc: Line, roots: List[Either[BucketSpec, DepGraph]], splits: List[OpenSplit], stream: Vector[Instruction]): Trampoline[Either[StackError, DepGraph]] = {
       @inline def continue(f: List[Either[BucketSpec, DepGraph]] => Either[StackError, List[Either[BucketSpec, DepGraph]]]): Trampoline[Either[StackError, DepGraph]] = {
-        M.sequence(f(roots).right map { roots2 => loop(loc, roots2, splits, stream.tail) }).map(_.joinRight)
+        Free.suspend(M.sequence(f(roots).right map { roots2 => loop(loc, roots2, splits, stream.tail) }).map(_.joinRight))
       }
 
       def processJoinInstr(instr: JoinInstr) = {
