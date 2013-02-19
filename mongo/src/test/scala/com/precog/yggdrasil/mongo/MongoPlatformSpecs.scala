@@ -197,13 +197,6 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike[Future] {
-    def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
-    def userMetadataView(apiKey: APIKey) = null
-  }
-  
-  val storage = new Storage
-
   def userMetadataView(apiKey: APIKey) = null
 
   def startup() {
