@@ -57,8 +57,8 @@ trait StaticLibrary extends Library {
   
   lazy val libMorphism1 = Set(
     M1,
+    M11,
     Morphism1(Vector(), "bar33", 0x0002),
-    Morphism1(Vector("std", "random"), "foobar", 0x0006),
     Morphism1(Vector(), "denseRank", 0x0003))
     
   lazy val libMorphism2 = Set(
@@ -69,6 +69,10 @@ trait StaticLibrary extends Library {
   
   object M1 extends Morphism1(Vector(), "bin5", 0x0000) {
     override val retainIds = true
+  }
+
+  object M11 extends Morphism1(Vector("std", "random"), "foobar", 0x0006) {
+    override val isInfinite = true
   }
 
   object M2 extends Morphism2(Vector("std"), "bin9", 0x0001) {

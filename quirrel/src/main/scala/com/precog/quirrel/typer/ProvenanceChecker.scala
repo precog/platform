@@ -49,8 +49,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val unified = unifyProvenance(relations)(left.provenance, right.provenance)
       
       val (provenance, contribErrors, contribConstr) = {
-        if ((left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) &&
-          (expr.isInstanceOf[BooleanOp] || expr.isInstanceOf[EqualityOp] || expr.isInstanceOf[Where] || expr.isInstanceOf[With])) {
+        if ((left.provenance == InfiniteProvenance || right.provenance == InfiniteProvenance) && expr.disallowsInfinite) {
           val provenance = NullProvenance
           val errors = Set(Error(expr, CannotUseDistributionWithoutSampling))
           
@@ -115,7 +114,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val rightCard = right.cardinality
 
       if (left == InfiniteProvenance || right == InfiniteProvenance) {
-        println("case reached!!!!!!!!!!!!!!!")
         (NullProvenance, Set(Error(expr, CannotUseDistributionWithoutSampling)), Set())
       } else if (left == UndefinedProvenance) {
         (right, Set(), Set())
@@ -255,8 +253,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
         
         case Solve(_, solveConstr, child) => {
           val (errorsVec, constrVec) = solveConstr map { loop(_, relations, constraints) } unzip
-
-          val constraintProvs = solveConstr map { _.provenance }
 
           val constrErrors = errorsVec reduce { _ ++ _ }
           val constrConstr = constrVec reduce { _ ++ _ }
@@ -514,7 +510,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
             case Morphism1Binding(morph1) => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
               expr.provenance = {
-                if (morph1.namespace == Vector("std", "random")) InfiniteProvenance
+                if (morph1.isInfinite) InfiniteProvenance
                 else if (morph1.retainIds) actuals.head.provenance 
                 else ValueProvenance
               }

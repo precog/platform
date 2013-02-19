@@ -46,12 +46,12 @@ trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMet
     override def _libMorphism1 = super._libMorphism1 ++ Set(UniformDistribution)
 
     object UniformDistribution extends Morphism1(RandomNamespace, "uniform") {
-      val tpe = UnaryOperationType(JNumberT, JNumberT)  //todo input should be JTextT
+      // todo currently we are seeding with a number, change this to a String
+      val tpe = UnaryOperationType(JNumberT, JNumberT)
+      override val isInfinite = true
 
       type Result = Option[Long]
       
-      implicit def monoid = implicitly[Monoid[Result]]
-
       def reducer(ctx: EvaluationContext) = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val cols = schema.columns(JObjectFixedT(Map(paths.Value.name -> JNumberT)))
@@ -64,7 +64,7 @@ trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMet
           }
 
           if (result.isEmpty) None
-          else result.suml(monoid)
+          else result.suml(implicitly[Monoid[Result]])
         }
       }
 
