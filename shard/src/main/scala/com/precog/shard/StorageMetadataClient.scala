@@ -46,11 +46,10 @@ class StorageMetadataClient[M[+_]: Monad](metadata: StorageMetadataSource[M]) ex
   }
 
   def structure(userUID: String, path: Path, property: CPath): M[Validation[String, JObject]] = {
-    sys.error("FIXME for NIHDB")
     metadata.userMetadataView(userUID).findStructure(path, property) map {
       case PathStructure(types, children) =>
         success(JObject(Map("children" -> children.serialize,
-                            "structure" -> JObject(Map("types" -> types.keySet.serialize)))))
+                            "structure" -> JObject(Map("types" -> types.serialize)))))
     }
   }
 

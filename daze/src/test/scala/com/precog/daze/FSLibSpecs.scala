@@ -62,22 +62,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
     Path("/foo2/bar1/baz/quux1" ) -> Set(ColumnRef(CPath.Identity, CString))
   )                                       
                                           
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StorageMetadata[M] {
-    val M = self.M
-    def findDirectChildren(path: Path) = M.point(projectionMetadata.keySet.filter(_.isDirectChildOf(path)))
-    def findSize(path: Path) = M.point(0L)
-    def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-    def findStructure(path: Path, selector: CPath) = M.point {
-      projectionMetadata.getOrElse(path, Set.empty[ColumnRef]).map { structs: Set[ColumnRef] =>
-        val types : Map[CType, Long] = structs.collect {
-          // FIXME: This should use real counts
-          case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-        }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
-
-        PathStructure(types, structs.map(_.selector))
-      }
-    }
-  }
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadath[M](projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))

@@ -37,26 +37,16 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )
 
-  val storageMetadata = new StorageMetadata[M] {
-    def findDirectChildren(path: Path): M[Set[Path]] = sys.error("todo")
-    def findSelectors(path: Path): M[Set[CPath]] = sys.error("todo")
-    def findSize(path: Path): M[Long] = sys.error("todo")
-    def findStructure(path: Path, selector: CPath): M[PathStructure] = sys.error("todo")
-  }
-  /*
-  val fbbar = ColumnRef(Path("/foo/bar/"), CPath(".bar"))
-  val fbbaz = ColumnRef(Path("/foo/bar/"), CPath(".baz"))
-
-    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnRef(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, fbbar :: Nil) -> colSizeMetadata(fbbar, 123L),
-    ProjectionDescriptor(1, fbbaz :: Nil) -> colSizeMetadata(fbbaz, 456L)
-  */
+  lazy val projectionMetadata: Map[Path, Map[ColumnRef, Long]] = Map(
+    Path("/foo/bar1/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 10L),
+    Path("/foo/bar2/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 20L),
+    Path("/foo/bar2/baz/quux2") -> Map(ColumnRef(CPath(), CString) -> 30L),
+    Path("/foo2/bar1/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 40L),
+    Path("/foo/bar/") -> Map(ColumnRef(CPath(".bar"), CLong) -> 50, ColumnRef(CPath(".baz"), CLong) -> 60L)
+  )
 
   val client = new StorageMetadataClient(new StorageMetadataSource[M] {
-    def userMetadataView(userUID: String) = storageMetadata
+    def userMetadataView(userUID: String) = new StubStorageMetadata(projectionMetadata)
   })
 
   "browse" should {
