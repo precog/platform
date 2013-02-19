@@ -50,7 +50,8 @@ class Path private (val elements: String*) {
 
   def isChildOf(that: Path) = elements.startsWith(that.elements) && length > that.length
 
-  def isDirectChildOf(that: Path) = elements.startsWith(that.elements) && (length - 1) == that.length
+  def isDirectChildOf(that: Path) =
+    elements.startsWith(that.elements) && (length - 1) == that.length
 
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth) 
 

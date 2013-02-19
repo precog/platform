@@ -40,7 +40,8 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   implicit def M: Monad[Future] = new FutureMonad(actorSystem.dispatcher)
 
   def findDirectChildren(path: Path): Future[Set[Path]] = {
-    (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
+    val paths = (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
+    paths.map(_.flatMap(_ - path))
   }
 
   def findSize(path: Path): Future[Long] =

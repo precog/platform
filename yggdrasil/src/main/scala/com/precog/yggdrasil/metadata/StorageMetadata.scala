@@ -37,7 +37,16 @@ object PathStructure {
 }
 
 trait StorageMetadata[M[+_]] { self =>
+
+  /**
+   * Returns the direct children of path.
+   *
+   * The results are the basenames of the children. So for example, if
+   * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
+   * return (bar, baz).
+   */
   def findDirectChildren(path: Path): M[Set[Path]]
+
   def findSelectors(path: Path): M[Set[CPath]]
   def findSize(path: Path): M[Long]
   def findStructure(path: Path, selector: CPath): M[PathStructure]
