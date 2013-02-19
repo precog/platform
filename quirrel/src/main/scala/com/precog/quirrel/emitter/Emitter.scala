@@ -363,7 +363,7 @@ trait Emitter extends AST
         
           val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =
             spec.exprs.map({ expr =>
-              val btrace = buildBacktrace(trace)(Some(expr))
+              val btrace = buildBacktrace(trace)(expr)
               (expr -> btrace)
             })(collection.breakOut)
           

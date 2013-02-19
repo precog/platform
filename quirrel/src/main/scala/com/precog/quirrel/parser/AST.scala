@@ -391,6 +391,8 @@ trait AST extends Phases {
     
     def loc: LineStream
 
+    def disallowsInfinite: Boolean = false
+
     override def children: List[Expr]
 
     private lazy val subForest: Stream[Tree[Expr]] = {
@@ -797,21 +799,7 @@ trait AST extends Phases {
       def unapply(bin: ComparisonOp): Some[(LineStream, Expr, Expr)] =
         Some((bin.loc, bin.left, bin.right))
     }
-    
-    sealed trait EqualityOp extends ComparisonOp
-    
-    object EqualityOp {
-      def unapply(bin: EqualityOp): Some[(LineStream, Expr, Expr)] =
-        Some((bin.loc, bin.left, bin.right))
-    }
-    
-    sealed trait BooleanOp extends BinaryOp
-    
-    object BooleanOp {
-      def unapply(bin: BooleanOp): Some[(LineStream, Expr, Expr)] =
-        Some((bin.loc, bin.left, bin.right))
-    }
-    
+
     /*
      * Raw AST nodes
      */
@@ -880,12 +868,14 @@ trait AST extends Phases {
       def children = List(pred, child)
     }
     
-    final case class Observe(loc: LineStream, data: Expr, samples: Expr) extends Expr with BinaryOp {
+    final case class Observe(loc: LineStream, data: Expr, samples: Expr) extends Expr {
       val sym = 'observe
       def left = data
       def right = samples
 
-      override def form = 'observe ~ 'leftParen ~ data ~ 'comma ~ samples ~ 'rightParen
+      def children = List(data, samples)
+
+      def form = 'observe ~ 'leftParen ~ data ~ 'comma ~ samples ~ 'rightParen
     }
 
     final case class New(loc: LineStream, child: Expr) extends Expr with PrecedenceUnaryNode {
@@ -1005,10 +995,12 @@ trait AST extends Phases {
 
     final case class Where(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'where
+      override val disallowsInfinite = true
     }
 
     final case class With(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'with
+      override val disallowsInfinite = true
     }
     
     final case class Union(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
@@ -1063,20 +1055,24 @@ trait AST extends Phases {
       val sym = 'gteq
     }
     
-    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with EqualityOp {
+    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'eq
+      override val disallowsInfinite = true
     }
     
-    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with EqualityOp {
+    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with ComparisonOp {
       val sym = 'noteq
+      override val disallowsInfinite = true
     }
     
-    final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BooleanOp {
+    final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'and
+      override val disallowsInfinite = true
     }
     
-    final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BooleanOp {
+    final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryOp {
       val sym = 'or
+      override val disallowsInfinite = true
     }
     
     final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryOp with PrecedenceUnaryNode {
