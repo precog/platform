@@ -1,8 +1,7 @@
 package com.precog.yggdrasil
 
-import com.precog.util.PrecogUnit
 import com.precog.common._
-import com.precog.yggdrasil.table.ColumnRef
+import com.precog.util.PrecogUnit
 
 import blueeyes.json.JValue
 

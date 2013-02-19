@@ -1,4 +1,4 @@
-package com.precog.common.json
+package com.precog.common
 
 import org.specs2.mutable.Specification
 

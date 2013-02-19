@@ -1,8 +1,7 @@
 package com.precog.yggdrasil
 
-import com.precog.common.json._
-import com.precog.common.json.CPath.{CPathDecomposer, CPathExtractor}
 import com.precog.common._
+import com.precog.common.json._
 import com.precog.common.accounts._
 import com.precog.common.security.Authorities
 import com.precog.util.IOUtils

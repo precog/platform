@@ -1,7 +1,6 @@
 package com.precog.yggdrasil
 
 import com.precog.common._
-import com.precog.yggdrasil.table.ColumnRef
 
 import scalaz.Monoid
 import scala.collection.mutable

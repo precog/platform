@@ -1,11 +1,8 @@
-package com.precog.common.json
-
+package com.precog.common
 
 import blueeyes.json._
 import blueeyes.json.serialization._
-import blueeyes.json.serialization.DefaultSerialization._
-
-import util.matching.Regex
+import DefaultSerialization._
 
 import scalaz.Order
 import scalaz.Ordering
@@ -289,14 +286,3 @@ object CPath {
 
   implicit val CPathOrdering = CPathOrder.toScalaOrdering
 }
-
-trait CPathImplicits {
-  class StringExtensions(s: String) {
-    def cpath = CPath(s)
-  }
-
-  implicit def stringExtensions(s: String) = new StringExtensions(s)
-}
-
-object CPathImplicits extends CPathImplicits
-
