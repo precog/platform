@@ -1690,8 +1690,20 @@ object EmitterSpecs extends Specification
         Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
         Merge))
     }
+    
+    "emit constraints defined within an inner parametric function" in {
+      val input = """
+        | foo := //foo
+        |
+        | solve 'a
+        |   f(x) := foo where foo.a = 'a & foo.b = x
+        |   f(42)
+        | """.stripMargin
+        
+      emit(compileSingle(input)) must not(throwA[Throwable])
+    }
   }
-  
+   
   val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {
