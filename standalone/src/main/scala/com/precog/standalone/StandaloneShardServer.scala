@@ -3,7 +3,7 @@ package com.precog.standalone
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.BlueEyesServer
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.json.JValue
@@ -16,19 +16,17 @@ import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, Handle
 
 import scalaz.Monad
 
-import com.precog.accounts.StaticAccountManagerClientComponent
-import com.precog.common.security.StaticAPIKeyManagerComponent
+import com.precog.accounts._
+import com.precog.common.security._
 import com.precog.shard.ShardService
 
 
 trait StandaloneShardServer
     extends BlueEyesServer
-    with ShardService
-    with StaticAPIKeyManagerComponent
-    with StaticAccountManagerClientComponent {
+    with ShardService {
   val clock = Clock.System
 
-  implicit def asyncContext: ExecutionContext
+  implicit def executionContext: ExecutionContext
 
   def caveatMessage: Option[String]
 
@@ -66,15 +64,15 @@ trait StandaloneShardServer
       server.setHandler(handlers)
       server.start()
 
-      Future(server)(asyncContext)
+      Future(server)(executionContext)
     } ->
     request { (server: Server) =>
       get {
-        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())(asyncContext)
+        (req: HttpRequest[ByteChunk]) => Promise.successful(HttpResponse[ByteChunk]())(executionContext)
       }
     } ->
     shutdown { (server: Server) =>
-      Future(server.stop())(asyncContext)
+      Future(server.stop())(executionContext)
     }
   }
 }

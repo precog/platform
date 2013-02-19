@@ -31,6 +31,9 @@ class Path private (val elements: String*) {
 
   def isChildOf(that: Path) = elements.startsWith(that.elements) && length > that.length
 
+  def isDirectChildOf(that: Path) =
+    elements.startsWith(that.elements) && (length - 1) == that.length
+
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth) 
 
   override def equals(that: Any) = that match {
@@ -43,17 +46,11 @@ class Path private (val elements: String*) {
   override def toString = path
 }
 
-trait PathSerialization {
-    final implicit val PathDecomposer = new Decomposer[Path] {
-    def decompose(v: Path): JValue = JString(v.toString)
-  }
 
-  final implicit val PathExtractor = new Extractor[Path] {
-    def extract(v: JValue): Path = Path(v.deserialize[String])
-  }
-}
+object Path {
+  implicit val PathDecomposer: Decomposer[Path] = StringDecomposer contramap { (_:Path).toString }
+  implicit val PathExtractor: Extractor[Path] = StringExtractor map { Path(_) }
 
-object Path extends PathSerialization {
   val Root = new Path()
 
   private def cleanPath(string: String): String = string.replaceAll("^/|/$", "").replaceAll("/+", "/")

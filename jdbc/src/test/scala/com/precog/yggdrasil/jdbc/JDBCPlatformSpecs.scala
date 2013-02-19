@@ -9,6 +9,7 @@ import blueeyes.json._
 
 import com.precog.bytecode._
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.daze._
@@ -226,14 +227,6 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
       super.load(transformed, apiKey, tpe)
     }
   }
-
-  class Storage extends StorageLike[Future] {
-    def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
-    def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
-    def userMetadataView(apiKey: APIKey) = null
-  }
-  
-  val storage = new Storage
 
   def userMetadataView(apiKey: APIKey) = null
 

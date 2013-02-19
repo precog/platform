@@ -77,7 +77,7 @@ trait QueryLogger[M[+_], -P] { self =>
 /**
  * Reports errors to a job's channel.
  */
-trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait JobQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   import JobManager._
 
   implicit def M: Monad[M]
@@ -111,7 +111,7 @@ trait JobQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
   def log(pos: P, msg: String): M[Unit] = send(channels.Log, pos, msg)
 }
 
-trait LoggingQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
+trait LoggingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   implicit def M: Applicative[M]
 
   protected val logger = LoggerFactory.getLogger("com.precog.daze.QueryLogger")

@@ -29,7 +29,7 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
 
   lazy val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  implicit val M = AkkaTypeClasses.futureApplicative(executionContext)
+  implicit val M = new FutureMonad(executionContext)
 
   lazy val clock = blueeyes.util.Clock.System
 
@@ -69,9 +69,8 @@ class JobServiceSpec extends TestJobService {
     JField("data", JObject(JField("x", JNum(1))))
   ))
 
-
   def startJob(ts: Option[DateTime] = None): JValue = JObject(
-    JField("state", "started") ::
+    JField("state", JString("started")) ::
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
@@ -82,11 +81,11 @@ class JobServiceSpec extends TestJobService {
     Some(JString(jobId)) = res.content map (_ \ "id")
   } yield jobId
 
-  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/" + jobId)
+  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s".format(jobId))
 
-  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("/jobs/" + jobId + "/state")(state)
+  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/state".format(jobId))(state)
 
-  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/" + jobId + "/state")
+  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/state".format(jobId))
 
   def postMessage(jobId: String, channel: String, msg: JValue) =
     client.contentType[ByteChunk](JSON).post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
@@ -103,7 +102,7 @@ class JobServiceSpec extends TestJobService {
 
   def putStatusRaw(jobId: String, prev: Option[BigDecimal])(obj: JValue) = {
     val client0 = prev map { id => client.query("prevStatusId", id.toLong.toString) } getOrElse client
-    client0.contentType[ByteChunk](JSON).put[JValue]("/jobs/" + jobId + "/status")(obj)
+    client0.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/status".format(jobId))(obj)
   }
 
   def putStatus(jobId: String, message: String, progress: BigDecimal, unit: String, info: Option[JValue] = None, prev: Option[BigDecimal] = None) = {
@@ -122,7 +121,7 @@ class JobServiceSpec extends TestJobService {
     } yield id
   }
 
-  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/" + jobId + "/status")
+  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/status".format(jobId))
 
   "job service" should {
     "allow job creation" in {
@@ -199,7 +198,7 @@ class JobServiceSpec extends TestJobService {
         job <- postJob(simpleJob)
         Some(JString(jobId)) = job.content map (_ \ "id")
         _ <- putState(jobId, startJob())
-        res <- putState(jobId, JObject(JField("state", "cancelled") :: Nil))
+        res <- putState(jobId, JObject(JField("state", JString("cancelled")) :: Nil))
       } yield res).copoint must beLike {
         case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok
       }

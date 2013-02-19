@@ -1,10 +1,13 @@
 package com.precog.yggdrasil
 package actor
 
+import table._
 import util.CPathUtils
 
-import com.precog.common.json._
 import com.precog.common._
+import com.precog.common.ingest._
+import com.precog.common.json._
+import com.precog.yggdrasil.nihdb._
 
 import blueeyes.json._
 
@@ -12,87 +15,88 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
-case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) {
-  def toJValue: JValue = {
-    assert(descriptor.columns.size == values.size)
-    (descriptor.columns zip values).foldLeft[JValue](JObject(Nil)) {
-      case (acc, (colDesc, cv)) => {
-        CPathUtils.cPathToJPaths(colDesc.selector, cv).foldLeft(acc) {
-          case (acc, (path, value)) => acc.set(path, value.toJValue)
-        }
-      }
-    }
-  }
-}
-
-case class ArchiveData(descriptor: ProjectionDescriptor)
+import scalaz.std.function._
+import scalaz.std.stream._
+import scalaz.syntax.arrow._
+import scalaz.syntax.traverse._
 
 trait RoutingTable {
-  def routeEvent(msg: EventMessage): Seq[ProjectionData]
+  def routeIngest(msg: IngestMessage): ProjectionInsert
   
-  def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData]
+  def routeArchive(msg: ArchiveMessage): ProjectionArchive
 
-  def batchMessages(events: Iterable[IngestMessage], descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ShardProjectionAction] = {
-    import ProjectionInsert.Row
-    
-    val updates = events.flatMap {
-      case em @ EventMessage(eventId, _) => routeEvent(em).map {
-        case ProjectionData(descriptor, values, metadata) => (descriptor, Row(eventId, values, metadata)) 
-      }
-      
-      case am @ ArchiveMessage(archiveId, _) => routeArchive(am, descriptorMap).map { 
-        case ArchiveData(descriptor) => (descriptor, archiveId)
-      }
-    }
-    
-    val grouped = updates.groupBy(_._1).mapValues(_.map(_._2))
-    
-    // Group consecutive inserts into atomic ProjectionInsert messages for batching, but split at any archive requests
-    val revBatched = grouped.flatMap {
-      case (desc, updates) => updates.foldLeft(List.empty[ShardProjectionAction]) {
-        case (rest, id : ArchiveId) => ProjectionArchive(desc, id) :: rest
-        case (ProjectionInsert(_, inserts) :: rest, insert : Row) => ProjectionInsert(desc, insert +: inserts) :: rest
-        case (rest, insert : Row) => ProjectionInsert(desc, Seq(insert)) :: rest
+  def batchMessages(events: Seq[EventMessage]): Seq[ProjectionUpdate] = {
+    // coalesce adjacent inserts into single inserts
+    @tailrec def accumulate(updates: Stream[ProjectionUpdate], acc: Vector[ProjectionUpdate], last: Option[ProjectionInsert]): Vector[ProjectionUpdate] = {
+      updates match {
+        case (insert @ ProjectionInsert(path, values, ownerAccountId)) #:: xs => 
+          accumulate(xs, acc, last map { i =>
+            ProjectionInsert(i.path, i.values ++ values, ownerAccountId)
+          } orElse Some(insert))
+
+        case archive #:: xs => 
+          accumulate(xs, acc ++ last :+ archive, None)
+
+        case empty => 
+          acc ++ last
       }
     }
     
-    revBatched.map {
-      case ProjectionInsert(desc, inserts) => ProjectionInsert(desc, inserts.reverse)
-      case archive => archive
-    }.toSeq.reverse
+    val projectionUpdates: Seq[ProjectionUpdate] = 
+      for {
+        event <- events
+        val projectionEvent = event.fold[ProjectionUpdate](routeIngest, routeArchive)
+      } yield projectionEvent
+
+    // sequence the updates to interleave updates to the various projections; otherwise
+    // each projection will get all of its updates at once. This may not really make
+    // much of a difference.
+
+    projectionUpdates.groupBy(_.path).values.toStream.flatMap(g => accumulate(g.toStream, Vector(), None))
   }
 }
 
-
-class SingleColumnProjectionRoutingTable extends RoutingTable {
-  final def routeEvent(msg: EventMessage): Seq[ProjectionData] = {
-    msg.event.data.flattenWithPath map { 
-      case (selector, value) => toProjectionData(msg, CPath(selector), value)
-    }
-  }
-
-  final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ArchiveData] = {
-    (for {
-      desc <- descriptorMap.get(msg.archive.path).flatten 
-    } yield ArchiveData(desc))(collection.breakOut)
+class SinglePathProjectionRoutingTable extends RoutingTable {
+  final def routeIngest(msg: IngestMessage): ProjectionInsert = {
+    // val authorities = Authorities(Set(msg.ownerAccountId))
+    // val projDesc = ProjectionDescriptor(1, msg.path, authorities)
+    ProjectionInsert(msg.path, msg.data, msg.ownerAccountId)
   }
   
-  @inline
-  private final def toProjectionData(msg: EventMessage, selector: CPath, value: JValue): ProjectionData = {
-    val authorities = Set.empty + (msg.event.ownerAccountId getOrElse {
-      throw new IllegalArgumentException("Cannot process an event without an ownerAccountId: " + msg.event)
-    })
-
-    val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forJValue(value).get, Authorities(authorities))
-
-    val projDesc = ProjectionDescriptor(1, List(colDesc))
-
-    val values = Vector1(CType.toCValue(value))
-    val metadata: List[Set[Metadata]] = CPathUtils.cPathToJPaths(selector, values.head) map {
-      case (path, _) => 
-        msg.event.metadata.get(path).getOrElse(Set()).asInstanceOf[Set[Metadata]]       // and now I hate my life...
-    }
-
-    ProjectionData(projDesc, values, metadata)
+  final def routeArchive(msg: ArchiveMessage): ProjectionArchive = {
+    ProjectionArchive(msg.archive.path, msg.eventId)
   }
 }
+
+// class SingleColumnProjectionRoutingTable extends RoutingTable {
+//   final def routeIngest(msg: IngestMessage): Seq[ProjectionInsert] = {
+//     val categorized = msg.data.foldLeft(Map.empty[(JPath, CType), Vector[ProjectionInsert.Row]]) {
+//       case (acc, IngestRecord(eventId, jv)) =>
+//         jv.flattenWithPath.foldLeft(acc) {
+//           case (acc0, (selector, value)) => 
+//             CType.forJValue(value) match { 
+//               case Some(ctype) =>
+//                 val key = (selector, ctype) 
+//                 val row = ProjectionInsert.Row(eventId, List(CType.toCValue(value)), Nil)
+//                 acc0 + (key -> (acc.getOrElse(key, Vector()) :+ row))
+// 
+//               case None =>
+//                 // should never happen, since flattenWithPath only gives us the
+//                 // leaf types and CType.forJValue is total in this set.
+//                 sys.error("Could not determine ctype for ingest leaf " + value)
+//             }
+//         }
+//     } 
+// 
+//     for (((selector, ctype), values) <- categorized.toStream) yield {
+//       val colDesc = ColumnRef(msg.path, CPath(selector), ctype, Authorities(Set(msg.ownerAccountId)))
+//       val projDesc = ProjectionDescriptor(1, List(colDesc))
+// 
+//       ProjectionInsert(projDesc, values)
+//     }
+//   }
+// 
+//   final def routeArchive(msg: ArchiveMessage, descriptorMap: Map[Path, Seq[ProjectionDescriptor]]): Seq[ProjectionArchive] = {
+//     descriptorMap.get(msg.archive.path).flatten map { desc => ProjectionArchive(desc, msg.eventId) } toStream
+//   }
+// }

@@ -1,4 +1,7 @@
-package com.precog.ingest.service
+package com.precog.ingest
+package service
+
+import com.precog.common.ingest._
 
 import blueeyes.bkka._
 import akka.actor.ActorSystem
@@ -135,25 +138,25 @@ class DecompressByteChunkSpec extends Specification with ScalaCheck {
   "InflateByteChunk" should {
     "reinflate trivial ByteChunk" in {
       val chunk: ByteChunk = Left(ByteBuffer.wrap(deflate("Hello, world!")))
-      val inflated = reassemble(InflateByteChunk().apply(chunk))
+      val inflated = reassemble((new InflateByteChunk).apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes" in {
       val chunk: ByteChunk = split(deflate("Hello, world!"))
-      val inflated = reassemble(InflateByteChunk().apply(chunk))
+      val inflated = reassemble((new InflateByteChunk).apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes with empty parts" in {
       val chunk: ByteChunk = spaceout(split(deflate("Hello, world!")))
-      val inflated = reassemble(InflateByteChunk().apply(chunk))
+      val inflated = reassemble((new InflateByteChunk).apply(chunk))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate arbitrary strings" in {
       check { (s: String) =>
-        val inflated = reassemble(InflateByteChunk().apply(split(deflate(s))))
+        val inflated = reassemble((new InflateByteChunk).apply(split(deflate(s))))
         new String(inflated, "UTF-8") must_== s
       }
     }
@@ -162,23 +165,23 @@ class DecompressByteChunkSpec extends Specification with ScalaCheck {
   "GunzipByteChunk" should {
     "unzip trivial ByteChunk" in {
       val chunk: ByteChunk = Left(ByteBuffer.wrap(gzip("Hello, world!")))
-      val fbc = GunzipByteChunk().apply(chunk)
+      val fbc = (new GunzipByteChunk).apply(chunk)
       val inflated = reassemble(fbc)
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes" in {
-      val inflated = reassemble(GunzipByteChunk().apply(split(gzip("Hello, world!"))))
+      val inflated = reassemble((new GunzipByteChunk).apply(split(gzip("Hello, world!"))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes with empty parts" in {
-      val inflated = reassemble(GunzipByteChunk().apply(spaceout(split(gzip("Hello, world!")))))
+      val inflated = reassemble((new GunzipByteChunk).apply(spaceout(split(gzip("Hello, world!")))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate arbitrary strings" in { check { (s: String) =>
-      val inflated = reassemble(GunzipByteChunk().apply(split(gzip(s))))
+      val inflated = reassemble((new GunzipByteChunk).apply(split(gzip(s))))
       new String(inflated, "UTF-8") must_== s
     } }
   }
@@ -186,23 +189,23 @@ class DecompressByteChunkSpec extends Specification with ScalaCheck {
   "UnzipByteChunk" should {
     "unzip trivial ByteChunk" in {
       val chunk: ByteChunk = Left(ByteBuffer.wrap(xzip("Hello, world!")))
-      val fbc = UnzipByteChunk().apply(chunk)
+      val fbc = (new UnzipByteChunk).apply(chunk)
       val inflated = reassemble(fbc)
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes" in {
-      val inflated = reassemble(UnzipByteChunk().apply(split(xzip("Hello, world!"))))
+      val inflated = reassemble((new UnzipByteChunk).apply(split(xzip("Hello, world!"))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate chunked bytes with empty parts" in {
-      val inflated = reassemble(UnzipByteChunk().apply(spaceout(split(xzip("Hello, world!")))))
+      val inflated = reassemble((new UnzipByteChunk).apply(spaceout(split(xzip("Hello, world!")))))
       new String(inflated, "UTF-8") must_== "Hello, world!"
     }
 
     "reinflate arbitrary strings" in { check { (s: String) =>
-      val inflated = reassemble(UnzipByteChunk().apply(split(xzip(s))))
+      val inflated = reassemble((new UnzipByteChunk).apply(split(xzip(s))))
       new String(inflated, "UTF-8") must_== s
     } }
   }

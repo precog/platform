@@ -391,7 +391,7 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
      * Returns the index of the next {@code true} bit, from the specified bit
      * (inclusive). If there is none, {@code -1} is returned. 
      * The following code will iterates through the bit set:[code]
-     *    for (int i=nextSetBit(0); i >= 0; i = nextSetBit(i)) {
+     *    for (int i=nextSetBit(0); i >= 0; i = nextSetBit(i + 1)) {
      *         ...
      *    }[/code]
      *
@@ -573,8 +573,8 @@ public class BitSet extends FastCollection <Index>  implements Set <Index> , Reu
     // Optimization.
     public int hashCode() {
         int h = 0;
-         for (int i=nextSetBit(0); i >= 0; i = nextSetBit(i)) {
-             h += i;
+        for (int i=nextSetBit(0); i >= 0; i = nextSetBit(i + 1)) {
+            h += i;
         }
         return h;
     }

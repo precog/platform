@@ -1,8 +1,7 @@
 package com.precog
 package muspelheim
 
-import common.Path
-import common.json.CPathField
+import common._
 import common.kafka._
 
 import daze._
@@ -44,7 +43,6 @@ import akka.dispatch.ExecutionContext
 
 trait ParseEvalStackSpecs[M[+_]] extends Specification 
     with ParseEvalStack[M]
-    with StorageModule[M]
     with MemoryDatasetConsumer[M] 
     with IdSourceScannerModule { self =>
 

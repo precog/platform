@@ -3,6 +3,9 @@ package daze
 
 import annotation.tailrec
 
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule._
 import com.precog.yggdrasil.table._
@@ -10,11 +13,6 @@ import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util._
-import com.precog.common.json._
-import com.precog.common.{Path, VectorCase}
-import com.precog.common.json.{CPath, CPathField, CPathIndex}
-import com.precog.common.security._
-import com.precog.bytecode._
 
 import org.joda.time._
 import org.joda.time.format._
@@ -1068,8 +1066,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
     
     private def zip[A](table1: StateT[N, EvaluatorState, A], table2: StateT[N, EvaluatorState, A]): StateT[N, EvaluatorState, (A, A)] =
-      monadState.apply(table1, table2) { (_, _) }
-
+      monadState.apply2(table1, table2) { (_, _) }
+    
     private case class EvaluatorState(
       assume: Map[DepGraph, Table] = Map.empty,
       reductions: Map[DepGraph, Option[RValue]] = Map.empty,

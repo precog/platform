@@ -15,6 +15,7 @@ import com.mongodb.Mongo
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
@@ -176,13 +177,6 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
       super.load(transformed, apiKey, tpe)
     }
   }
-
-  class Storage extends StorageLike[Future] {
-    def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
-    def userMetadataView(apiKey: APIKey) = null
-  }
-  
-  val storage = new Storage
 
   def userMetadataView(apiKey: APIKey) = null
 

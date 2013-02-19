@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
@@ -8,7 +9,7 @@ import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 
-import blueeyes.bkka.AkkaTypeClasses
+import blueeyes.bkka._
 import blueeyes.json._
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
