@@ -247,14 +247,6 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
     }
   }
 
-  class Storage extends StorageLike[Future] {
-    def projection(descriptor: ProjectionDescriptor) = Promise.successful(null) // FIXME: Just to get it compiling...
-    def storeBatch(msgs: Seq[EventMessage]) = Promise.successful(PrecogUnit)
-    def userMetadataView(apiKey: APIKey) = null
-  }
-  
-  val storage = new Storage
-
   def userMetadataView(apiKey: APIKey) = null
 
   def startup() {
