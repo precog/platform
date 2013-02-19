@@ -100,6 +100,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Assert(_, pred, child) =>
         loop(dispatches)(pred) ++ loop(dispatches)(child)
       
+      case Observe(_, data, samples) =>
+        loop(dispatches)(data) ++ loop(dispatches)(samples)
+      
       case New(_, child) => loop(dispatches)(child)
       
       case Relate(_, from, to, in) =>

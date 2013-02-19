@@ -667,7 +667,10 @@ object EmitterSpecs extends Specification
     }
 
     "emit morphism1" in {
-      forall(libMorphism1) { f =>
+      // std::random::foobar(12) is not valid Quirrel and results in a compiler error
+      val rand = Morphism1(Vector("std", "random"), "foobar", 0x0006)
+
+      forall(libMorphism1 - rand) { f =>
         testEmit("""%s(4224)""".format(f.fqn))(
           Vector(
             PushNum("4224"),

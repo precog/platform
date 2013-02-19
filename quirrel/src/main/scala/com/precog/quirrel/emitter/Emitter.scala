@@ -411,6 +411,9 @@ trait Emitter extends AST
         case ast.Assert(_, pred, child) =>
           emitExpr(pred, dispatches) >> emitExpr(child, dispatches) >> emitInstr(Assert)
 
+        case ast.Observe(_, data, samples) =>
+          emitExpr(data, dispatches) >> emitExpr(samples, dispatches) >> emitInstr(Observe)
+
         case ast.New(loc, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(New))
         

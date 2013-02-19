@@ -67,7 +67,8 @@ import scalaz.syntax.monoid._
 import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
-
+import scalaz.syntax.applicative._
+      
 import java.nio.CharBuffer
 
 trait ColumnarTableTypes {
@@ -135,6 +136,15 @@ trait ColumnarTableModule[M[+_]]
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
     def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
+
+    def uniformDistribution(init: MmixPrng): Table = {
+      val gen: StreamT[M, Slice] = StreamT.unfoldM[M, Slice, MmixPrng](init) { prng =>
+        val (column, nextGen) = Column.uniformDistribution(prng)
+        Some((Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), yggConfig.maxSliceSize), nextGen)).point[M]
+      }
+
+      Table(gen, InfiniteSize)
+    }
     
     def constBoolean(v: collection.Set[Boolean]): Table = {
       val column = ArrayBoolColumn(v.toArray)
@@ -645,6 +655,37 @@ trait ColumnarTableModule[M[+_]]
       val resultSize = TableSize(size.maxSize + t2.size.maxSize)
       val resultSlices = slices ++ t2.slices
       Table(resultSlices, resultSize)
+    }
+
+    /**
+     * Zips two tables together in their current sorted order.
+     * If the tables are not normalized first and thus have different slices sizes,
+     * then since the zipping is done per slice, this can produce a result that is
+     * different than if the tables were normalized. 
+     */
+    def zip(t2: Table): M[Table] = {
+      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
+
+      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice], acc: StreamT[M, Slice]): M[StreamT[M, Slice]] = {
+        slices1.uncons flatMap { 
+          case Some((head1, tail1)) =>
+            slices2.uncons flatMap {
+              case Some((head2, tail2)) => {
+                rec(tail1, tail2, head1.zip(head2) :: acc)
+              }
+              case None => M.point(acc)
+            }
+          case None => M.point(acc)
+        }
+      }
+
+      val resultSlices = rec(slices, t2.slices, StreamT.empty[M, Slice])
+
+      resultSlices map { sl => Table(sl, resultSize) }
+
+      // todo investigate why the code below makes all of RandomLibSpecs explode
+      // val resultSlices = Apply[({ type l[a] = StreamT[M, a] })#l].zip.zip(slices, t2.slices) map { case (s1, s2) => s1.zip(s2) }
+      // Table(resultSlices, resultSize)
     }
 
     def toArray[A](implicit tpe: CValueType[A]): Table = {
@@ -1288,6 +1329,7 @@ trait ColumnarTableModule[M[+_]]
         case ExactSize(sz) => ExactSize(calcNewSize(sz))
         case EstimateSize(sMin, sMax) => TableSize(calcNewSize(sMin), calcNewSize(sMax))
         case UnknownSize => UnknownSize
+        case InfiniteSize => InfiniteSize
       }
 
       Table(StreamT.wrapEffect(loop(slices, 0)), newSize)

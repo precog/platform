@@ -166,6 +166,8 @@ class JDBMLinearRegressionSpecs extends LinearRegressionSpecs with JDBMPlatformS
 
 class JDBMClusteringSpecs extends ClusteringSpecs with JDBMPlatformSpecs
 
+class JDBMRandomStackSpecs extends RandomStackSpecs with JDBMPlatformSpecs
+
 class JDBMMiscStackSpecs extends MiscStackSpecs with JDBMPlatformSpecs
 
 class JDBMNonObjectStackSpecs extends NonObjectStackSpecs with JDBMPlatformSpecs

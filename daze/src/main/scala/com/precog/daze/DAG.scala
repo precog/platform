@@ -76,6 +76,13 @@ trait DAG extends Instructions {
         }
         
         val eitherRootsAbom = Some(instr) collect {
+          case instr @ instructions.Observe => 
+            continue {
+              case Right(samples) :: Right(data) :: tl => Right(Right(Observe(data, samples)(loc)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          
           case instr @ instructions.Assert => 
             continue {
               case Right(child) :: Right(pred) :: tl => Right(Right(Assert(pred, child)(loc)) :: tl)
@@ -495,6 +502,8 @@ trait DAG extends Instructions {
             
           case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
 
+          case graph @ dag.Observe(data, samples) => dag.Observe(memoized(splits)(data), memoized(splits)(samples))(graph.loc)
+
           case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(graph.loc)
 
           case graph @ dag.Diff(left, right) => dag.Diff(memoized(splits)(left), memoized(splits)(right))(graph.loc)
@@ -681,6 +690,12 @@ trait DAG extends Instructions {
                       newChild <- memoized(child)
                     } yield dag.Assert(newPred, newChild)(graph.loc)
                   
+                  case graph @ dag.Observe(data, samples) => 
+                    for {
+                      newData <- memoized(data)
+                      newSamples <- memoized(samples)
+                    } yield dag.Observe(newData, newSamples)(graph.loc)
+                  
                   case graph @ dag.IUI(union, left, right) =>
                     for {
                       newLeft <- memoized(left)
@@ -848,6 +863,10 @@ trait DAG extends Instructions {
         case dag.Assert(pred, child) =>
           val acc2 = foldDown0(pred, acc |+| f(pred))
           foldDown0(child, acc2 |+| f(child))
+
+        case dag.Observe(data, samples) =>
+          val acc2 = foldDown0(data, acc |+| f(data))
+          foldDown0(samples, acc2 |+| f(samples))
 
         case dag.IUI(_, left, right) =>
           val acc2 = foldDown0(left, acc |+| f(left))
@@ -1084,6 +1103,16 @@ trait DAG extends Instructions {
       lazy val isSingleton = child.isSingleton
       
       lazy val containsSplitArg = pred.containsSplitArg || child.containsSplitArg
+    }
+    
+    case class Observe(data: DepGraph, samples: DepGraph)(val loc: Line) extends DepGraph {
+      lazy val identities = data.identities
+      
+      val sorting = data.sorting
+      
+      lazy val isSingleton = data.isSingleton
+      
+      lazy val containsSplitArg = data.containsSplitArg || samples.containsSplitArg
     }
     
     case class IUI(union: Boolean, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
