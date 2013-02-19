@@ -7,6 +7,7 @@ import DefaultSerialization._
 import scalaz.Order
 import scalaz.Ordering
 import scalaz.Ordering._
+import scalaz.syntax.std.boolean._
 
 sealed trait CPath { self =>
   def nodes: List[CPathNode]
@@ -39,6 +40,8 @@ sealed trait CPath { self =>
   def \: (that: Int):    CPath = CPath(CPathIndex(that) +: self.nodes)
 
   def hasPrefix(p: CPath): Boolean = nodes.startsWith(p.nodes)
+
+  def take(length: Int): Option[CPath] = (nodes.length > length).option(CPath(nodes.take(length)))
 
   def dropPrefix(p: CPath): Option[CPath] = {
     def remainder(nodes: List[CPathNode], toDrop: List[CPathNode]): Option[CPath] = {
