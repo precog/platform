@@ -76,7 +76,7 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
 
   val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
 
-  val projections = Map.empty[ProjectionDescriptor, Projection]
+  val projections = Map.empty[Path, Projection]
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {

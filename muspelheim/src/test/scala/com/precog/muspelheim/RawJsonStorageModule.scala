@@ -108,17 +108,18 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
 
   private val metadata = new StorageMetadata[M] {
     val M = self.M
-//    val source = new TestMetadataStorage(projectionMetadata)
     def findDirectChildren(path: Path) = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
+    def findSize(path: Path) = M.point(projections.get(path).map(_.size.toLong).getOrElse(0L))
     def findSelectors(path: Path) = M.point(structures.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-//    def findProjections(path: Path, selector: CPath) = M.point {
-//      projections.collect {
-//        case (descriptor, _) if descriptor.columns.exists { case ColumnRef(p, s, _, _) => p == path && s == selector } => 
-//          (descriptor, ColumnMetadata.Empty)
-//      }
-//    }
-//
-//    def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+    def findStructure(path: Path, selector: CPath) = M.point {
+      val structs = structures.getOrElse(path, Set.empty[ColumnRef])
+      val types : Map[CType, Long] = structs.collect {
+        // FIXME: This should use real counts
+        case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+      }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+
+      PathStructure(types, structs.map(_.selector))
+    }
   }
 }
 
