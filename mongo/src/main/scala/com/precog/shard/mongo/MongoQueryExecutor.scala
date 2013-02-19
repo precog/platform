@@ -138,6 +138,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
   }
 
   val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Promise.successful(Failure("Size not yet supported"))
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {

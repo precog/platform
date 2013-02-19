@@ -41,10 +41,14 @@ class MongoStorageMetadata(mongo: Mongo)(implicit asyncContext: ExecutionContext
   implicit val M = new FutureMonad(asyncContext) 
 
   // FIXME: Actually implement these for Mongo
-  def findChildren(path: Path): Future[Set[Path]] = {
+  def findDirectChildren(path: Path): Future[Set[Path]] = {
     logger.warn("Path globs will be supported in a future release of Precog for MongoDB")
     Promise.successful(Set())
   }
 
+  def findSize(path: Path) = Promise.successful(0L)
+
   def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
+
+  def findStructure(path: Path, selector: CPath) = Promise.successful(PathStructure.Empty)
 }

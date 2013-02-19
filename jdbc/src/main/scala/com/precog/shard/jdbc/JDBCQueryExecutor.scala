@@ -133,6 +133,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
   }
 
   val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Promise.successful(Failure("Size not yet supported"))
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {

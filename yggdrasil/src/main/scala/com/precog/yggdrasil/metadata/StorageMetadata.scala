@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package metadata
 
-import com.precog.common.Path
+import com.precog.common.{CType, Path}
 import com.precog.common.json.CPath
 
 import scalaz._
@@ -31,11 +31,19 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
+case class PathStructure(types: Map[CType, Long], children: Set[CPath])
+
+object PathStructure {
+  val Empty = PathStructure(Map.empty, Set.empty)
+}
+
 trait StorageMetadata[M[+_]] { self =>
   implicit def M: Monad[M]
 
   def findDirectChildren(path: Path): M[Set[Path]]
   def findSelectors(path: Path): M[Set[CPath]]
+  def findSize(path: Path): M[Long]
+  def findStructure(path: Path, selector: CPath): M[PathStructure]
 //  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
 //  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
 //
@@ -65,6 +73,9 @@ trait StorageMetadata[M[+_]] { self =>
 
     def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
     def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
+    def findSize(path: Path) = self.findSize(path).liftM[T]
+    def findStructure(path: Path, selector: CPath) = self.findStructure(path, selector).liftM[T]
+
 //    def findProjections(path: Path, selector: CPath) = self.findProjections(path, selector).liftM[T]
 //    def findPathMetadata(path: Path, selector: CPath) = self.findPathMetadata(path, selector).liftM
 //

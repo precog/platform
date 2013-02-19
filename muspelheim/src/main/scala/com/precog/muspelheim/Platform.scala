@@ -27,6 +27,7 @@ import blueeyes.json._
 import scalaz.Validation
 
 trait MetadataClient[M[+_]] {
+  def size(userUID: String, path: Path): M[Validation[String, JNum]]
   def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
   def structure(apiKey: APIKey, path: Path, property: CPath): M[Validation[String, JObject]]
 }

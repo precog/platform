@@ -49,7 +49,9 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
   val service = (request: HttpRequest[A]) => Success({ (apiKey: APIKey, path: Path) =>
     val result: Future[Validation[(HttpStatusCode, NonEmptyList[String]), JObject]] = request.parameters.get('type).map(_.toLowerCase) match {
       case Some("size") =>
-        Future((NotImplemented, NonEmptyList("Collection size metadata not yet available.")).failure[JObject])
+        metadataClient.size(apiKey, path) map { v =>
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JNum => JObject("size" -> a) } 
+        }
 
       case Some("children") =>
         metadataClient.browse(apiKey, path) map { v =>
@@ -63,11 +65,11 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
         }
 
       case _ =>
-        (metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map { 
-          case (childrenV, structureV) =>
+        (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map { 
+          case ((sizeV, childrenV), structureV) =>
             {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: { 
-              (childrenV.toValidationNEL |@| structureV.toValidationNEL) { (children, structure) =>
-                JObject("children" -> children, "structure" -> structure)
+              (sizeV.toValidationNEL |@| childrenV.toValidationNEL |@| structureV.toValidationNEL) { (size, children, structure) =>
+                JObject("size" -> size, "children" -> children, "structure" -> structure)
               }
             }
         }
