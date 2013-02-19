@@ -44,23 +44,9 @@ case class ArraySegment[A](blockid: Long, cpath: CPath, ctype: CValueType[A], de
 
   override def equals(that: Any): Boolean = that match {
     case ArraySegment(`blockid`, `cpath`, ct2, d2, values2) =>
-      if (ctype != ct2 || defined != d2 || values2.length != values.length) return false
-      var i = 0
-      val len = values.length
-      while (i < len) {
-        if (values2(i) != values(i)) return false
-        i += 1
-      }
-      true
+      ctype == ct2 && defined == d2 && arrayEq[A](values, values2.asInstanceOf[Array[A]])
     case _ =>
       false
-  }
-
-  def ++(rhs: ArraySegment[A]): ArraySegment[A] = rhs match {
-    case ArraySegment(`blockid`, `cpath`, `ctype`, d2, values2) =>
-      ArraySegment(blockid, cpath, ctype, defined ++ d2, (values ++ values2).toArray)
-    case _ =>
-      throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
   }
 
   def length = values.length
@@ -78,15 +64,10 @@ case class BooleanSegment(blockid: Long, cpath: CPath, defined: BitSet, values: 
   val ctype = CBoolean
 
   override def equals(that: Any) = that match {
-    case BooleanSegment(`blockid`, `cpath`, d2, values2, `length`) => defined == d2 && values == values2
-    case _ => false
-  }
-
-  def ++(rhs: BooleanSegment): BooleanSegment = rhs match {
-    case BooleanSegment(`blockid`, `cpath`, d2, values2, length2) =>
-      BooleanSegment(blockid, cpath, defined ++ d2, values ++ values2, length + length2)
+    case BooleanSegment(`blockid`, `cpath`, d2, values2, `length`) =>
+      defined == d2 && values == values2
     case _ =>
-      throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
+      false
   }
 
   def extend(amount: Int) = BooleanSegment(blockid, cpath, defined.copy, values.copy, length + amount)
@@ -95,15 +76,10 @@ case class BooleanSegment(blockid: Long, cpath: CPath, defined: BitSet, values: 
 case class NullSegment(blockid: Long, cpath: CPath, ctype: CNullType, defined: BitSet, length: Int) extends Segment {
 
   override def equals(that: Any) = that match {
-    case NullSegment(`blockid`, `cpath`, `ctype`, d2, `length`) => defined == d2
-    case _ => false
-  }
-
-  def ++(rhs: NullSegment): NullSegment = rhs match {
-    case NullSegment(`blockid`, `cpath`, `ctype`, d2, length2) =>
-      NullSegment(blockid, cpath, ctype, defined ++ d2, length + length2)
+    case NullSegment(`blockid`, `cpath`, `ctype`, d2, `length`) =>
+      defined == d2
     case _ =>
-      throw new IllegalArgumentException("mismatched Segments: %s and %s" format (this, rhs))
+      false
   }
 
   def extend(amount: Int) = NullSegment(blockid, cpath, ctype, defined.copy, length + amount)
