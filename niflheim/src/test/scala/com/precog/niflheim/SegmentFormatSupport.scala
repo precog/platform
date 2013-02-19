@@ -38,6 +38,8 @@ import org.scalacheck._
 
 import scalaz._
 
+import org.joda.time.Period
+
 trait SegmentFormatSupport {
   import Gen._
   import Arbitrary.arbitrary
@@ -60,6 +62,7 @@ trait SegmentFormatSupport {
   }
 
   def genForCType[A](ctype: CValueType[A]): Gen[A] = ctype match {
+    case CPeriod => arbitrary[Long].map(new Period(_))
     case CBoolean => arbitrary[Boolean]
     case CString => arbitrary[String]
     case CLong => arbitrary[Long]
