@@ -20,11 +20,9 @@
 package com.precog.yggdrasil
 package nihdb
 
-import com.precog.common.{CType, Path}
-import com.precog.common.json.CPath
+import com.precog.common._
 import com.precog.common.security.APIKey
 import com.precog.yggdrasil.metadata.{PathStructure, StorageMetadata}
-import com.precog.yggdrasil.table.ColumnRef
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.dispatch.{Future, Promise}

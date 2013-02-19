@@ -20,8 +20,7 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.{ Path, VectorCase } 
-import com.precog.common.json._
+import com.precog.common._
 import com.precog.common.security._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._

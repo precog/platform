@@ -23,11 +23,11 @@ package service
 import kafka._
 
 import com.precog.daze._
+import com.precog.common._
 import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.common.json._
 import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
@@ -384,6 +384,8 @@ trait TestPlatform extends ManagedPlatform { self =>
   }
 
   val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path) = sys.error("todo")
+
     def browse(apiKey: APIKey, path: Path) = Future {
       if (path == Path("/errpath")) {
         failure("Bad path; this is just used to stimulate an error response and not duplicate any genuine failure.")

@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.bytecode._
-import com.precog.common.json._
+import com.precog.common._
 import scala.util.Random
 
 import blueeyes.json._

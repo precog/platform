@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.util._
-import com.precog.common.json._
+import com.precog.common._
 
 import blueeyes.json._
 

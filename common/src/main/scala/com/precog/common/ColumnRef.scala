@@ -17,14 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package table
+package com.precog.common
 
-import com.precog.common._
-import com.precog.common.json.CPath
-import com.precog.common.json.CPath._
-
-import com.precog.common.Path
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 

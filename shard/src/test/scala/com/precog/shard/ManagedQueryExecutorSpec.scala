@@ -216,6 +216,7 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
   }
 
   val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
   }

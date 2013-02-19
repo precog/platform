@@ -20,8 +20,7 @@
 package com.precog.yggdrasil
 package metadata
 
-import com.precog.common.{CType, Path}
-import com.precog.common.json.CPath
+import com.precog.common._
 
 import scalaz._
 import scalaz.std.option._
@@ -38,8 +37,6 @@ object PathStructure {
 }
 
 trait StorageMetadata[M[+_]] { self =>
-  implicit def M: Monad[M]
-
   def findDirectChildren(path: Path): M[Set[Path]]
   def findSelectors(path: Path): M[Set[CPath]]
   def findSize(path: Path): M[Long]
@@ -67,10 +64,7 @@ trait StorageMetadata[M[+_]] { self =>
 //  }
 
 
-  def liftM[T[_[+_], +_]](implicit T: Hoist[T]) = new StorageMetadata[({ type λ[+α] = T[M, α] })#λ] {
-    private implicit val M0: Monad[M] = self.M
-    val M: Monad[({ type λ[+α] = T[M, α] })#λ] = T(M0)
-
+  def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M]) = new StorageMetadata[({ type λ[+α] = T[M, α] })#λ] {
     def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
     def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
     def findSize(path: Path) = self.findSize(path).liftM[T]

@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 
 import com.precog.bytecode._
 
-import com.precog.common.json._
+import com.precog.common._
 
 import org.specs2.mutable.Specification
 

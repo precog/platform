@@ -170,31 +170,31 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         def defined(x: Double, y: Double) = doubleIsDefined(x) && doubleIsDefined(y)
         def f2(ctx: EvaluationContext): F2 = CF2P(cf2pName) {
           case (c1: DoubleColumn, c2: DoubleColumn) =>
-            new DoubleFrom.DD(c1, c2, defined, Math.pow)
+            new DoubleFrom.DD(c1, c2, defined, scala.math.pow)
 
           case (c1: DoubleColumn, c2: LongColumn) =>
-            new DoubleFrom.DL(c1, c2, defined, Math.pow)
+            new DoubleFrom.DL(c1, c2, defined, scala.math.pow)
 
           case (c1: DoubleColumn, c2: NumColumn) =>
-            new DoubleFrom.DN(c1, c2, defined, Math.pow)
+            new DoubleFrom.DN(c1, c2, defined, scala.math.pow)
 
           case (c1: LongColumn, c2: DoubleColumn) =>
-            new DoubleFrom.LD(c1, c2, defined, Math.pow)
+            new DoubleFrom.LD(c1, c2, defined, scala.math.pow)
 
           case (c1: NumColumn, c2: DoubleColumn) =>
-            new DoubleFrom.ND(c1, c2, defined, Math.pow)
+            new DoubleFrom.ND(c1, c2, defined, scala.math.pow)
 
           case (c1: LongColumn, c2: LongColumn) =>
-            new DoubleFrom.LL(c1, c2, defined, Math.pow)
+            new DoubleFrom.LL(c1, c2, defined, scala.math.pow)
 
           case (c1: LongColumn, c2: NumColumn) =>
-            new DoubleFrom.LN(c1, c2, defined, Math.pow)
+            new DoubleFrom.LN(c1, c2, defined, scala.math.pow)
 
           case (c1: NumColumn, c2: LongColumn) =>
-            new DoubleFrom.NL(c1, c2, defined, Math.pow)
+            new DoubleFrom.NL(c1, c2, defined, scala.math.pow)
 
           case (c1: NumColumn, c2: NumColumn) =>
-            new DoubleFrom.NN(c1, c2, defined, Math.pow)
+            new DoubleFrom.NN(c1, c2, defined, scala.math.pow)
         }
       }
 

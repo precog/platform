@@ -20,7 +20,6 @@
 package com.precog.daze
 
 import com.precog.common._
-import com.precog.common.json.{ CPathField, CPathIndex, CPathMeta }
 
 import com.precog.bytecode._
 import com.precog.yggdrasil._

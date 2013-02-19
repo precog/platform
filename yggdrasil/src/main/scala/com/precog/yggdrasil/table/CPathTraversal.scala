@@ -18,10 +18,11 @@
  *
  */
 package com.precog.yggdrasil
-package util
+package table
 
-import com.precog.yggdrasil.table._
+import com.precog.common._
 import com.precog.common.json._
+import com.precog.yggdrasil.util._
 
 import org.joda.time.DateTime
 

@@ -20,8 +20,8 @@
 package com.precog.yggdrasil
 package jdbm3
 
+import com.precog.common._
 import com.precog.common.json._
-import com.precog.common.Path
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.TableModule._
 

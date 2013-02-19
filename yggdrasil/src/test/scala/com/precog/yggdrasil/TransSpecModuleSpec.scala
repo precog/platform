@@ -22,7 +22,7 @@ package com.precog.yggdrasil
 import test._
 import table._
 
-import com.precog.common.json._
+import com.precog.common._
 
 import org.specs2.mutable.Specification
 

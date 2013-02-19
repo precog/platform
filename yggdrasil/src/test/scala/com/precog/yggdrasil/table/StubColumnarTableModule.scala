@@ -22,7 +22,7 @@ package table
 
 import com.precog.bytecode.JType
 import com.precog.common.{ Path, VectorCase } 
-import com.precog.common.json._
+import com.precog.common._
 import com.precog.common.security._
 
 import akka.actor.ActorSystem

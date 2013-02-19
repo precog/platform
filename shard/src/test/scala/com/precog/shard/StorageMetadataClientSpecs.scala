@@ -20,8 +20,8 @@
 package com.precog.shard
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
@@ -37,20 +37,26 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )
 
-  val fbbar = ColumnRef(Path("/foo/bar/"), CPath(".bar"), CString, Authorities(Set()))
-  val fbbaz = ColumnRef(Path("/foo/bar/"), CPath(".baz"), CString, Authorities(Set()))
+  val storageMetadata = new StorageMetadata[M] {
+    def findDirectChildren(path: Path): M[Set[Path]] = sys.error("todo")
+    def findSelectors(path: Path): M[Set[CPath]] = sys.error("todo")
+    def findSize(path: Path): M[Long] = sys.error("todo")
+    def findStructure(path: Path, selector: CPath): M[PathStructure] = sys.error("todo")
+  }
+  /*
+  val fbbar = ColumnRef(Path("/foo/bar/"), CPath(".bar"))
+  val fbbaz = ColumnRef(Path("/foo/bar/"), CPath(".baz"))
 
-  val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
     ProjectionDescriptor(1, ColumnRef(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, ColumnRef(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, ColumnRef(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
     ProjectionDescriptor(1, fbbar :: Nil) -> colSizeMetadata(fbbar, 123L),
     ProjectionDescriptor(1, fbbaz :: Nil) -> colSizeMetadata(fbbaz, 456L)
-  )
+  */
 
   val client = new StorageMetadataClient(new StorageMetadataSource[M] {
-    def userMetadataView(userUID: String) = new StubStorageMetadata[M](projectionMetadata)
+    def userMetadataView(userUID: String) = storageMetadata
   })
 
   "browse" should {

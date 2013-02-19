@@ -20,8 +20,7 @@
 package com.precog
 package muspelheim
 
-import common.Path
-import common.json.CPathField
+import common._
 import common.kafka._
 
 import daze._

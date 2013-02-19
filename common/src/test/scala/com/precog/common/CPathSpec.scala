@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.json
+package com.precog.common
 
 import org.specs2.mutable.Specification
 

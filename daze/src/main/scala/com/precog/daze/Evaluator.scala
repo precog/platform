@@ -23,6 +23,8 @@ package daze
 import annotation.tailrec
 
 import com.precog.common._
+import com.precog.common.security._
+import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule._
 import com.precog.yggdrasil.table._
@@ -30,11 +32,6 @@ import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
 import com.precog.util._
-import com.precog.common.json._
-import com.precog.common.{Path, VectorCase}
-import com.precog.common.json.{CPath, CPathField, CPathIndex}
-import com.precog.common.security._
-import com.precog.bytecode._
 
 import org.joda.time._
 import org.joda.time.format._
