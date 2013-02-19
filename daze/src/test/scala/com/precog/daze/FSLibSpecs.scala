@@ -55,14 +55,14 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
 
   lazy val yggConfig = new YggConfig
 
-  lazy val projectionMetadata: Map[Path, Set[ColumnRef]] = Map(
-    Path("/foo/bar1/baz/quux1")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo/bar2/baz/quux1")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo/bar2/baz/quux2")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo2/bar1/baz/quux1" ) -> Set(ColumnRef(CPath.Identity, CString))
+  lazy val projectionMetadata: Map[Path, Map[ColumnRef, Long]] = Map(
+    Path("/foo/bar1/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 10L),
+    Path("/foo/bar2/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 20L),
+    Path("/foo/bar2/baz/quux2")   -> Map(ColumnRef(CPath.Identity, CString) -> 30L),
+    Path("/foo2/bar1/baz/quux1" ) -> Map(ColumnRef(CPath.Identity, CString) -> 40L)
   )                                       
                                           
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadath[M](projectionMetadata)
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata[M](projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
@@ -96,7 +96,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
       val expected: List[JValue] = List(JString("/foo/bar1/baz/quux1/"), JString("/foo/bar2/baz/quux1/"))
       runExpansion(table) must_== expected
     }
-
+    
     "expand multiple globbed segments" in {
       val table = pathTable("/foo/*/baz/*")
       val expected: List[JValue] = List(JString("/foo/bar1/baz/quux1/"), JString("/foo/bar2/baz/quux1/"), JString("/foo/bar2/baz/quux2/"))

@@ -59,58 +59,28 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
   def length: Int = count
 
   def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
-    val segs = if (rows.isEmpty) {
-      segments
-    } else {
+    if (!rows.isEmpty) {
       segments.synchronized {
-        if (rows.isEmpty) {
-          segments
-        } else {
-          val segs = segments.copy
-          segs.extendWithRows(rows)
-          // start locking here?
+        if (!rows.isEmpty) {
+          segments.extendWithRows(rows)
           rows.clear()
-          segments = segs
-          // end locking here?
-          segs
         }
+        segments
       }
     }
 
     pathConstraint.map { cpaths =>
-      segs.a.filter { seg => cpaths(seg.cpath) }
-    }.getOrElse(segs.a.clone)
+      segments.a.filter { seg => cpaths(seg.cpath) }
+    }.getOrElse(segments.a.clone)
   }
 
-
-  /**
-["rawlog", blockid, version]
-...
-
-##rawlog blockid version
-##start <932,123>
-json1
-json2
-json3
-##end <932,123>
-##start <932,9991>
-...
-##end <932,9991>
-##start <123,9923>
-...EOF
-   */
-
   def write(eventid: Long, values: Seq[JValue]) {
-    // start locking here?
     if (!values.isEmpty) {
       count += values.length
       RawLoader.writeEvents(os, eventid, values)
       rows ++= values
     }
-    // end locking here?
   }
 
-  def close(): Unit = {
-    os.close()
-  }
+  def close(): Unit = os.close()
 }

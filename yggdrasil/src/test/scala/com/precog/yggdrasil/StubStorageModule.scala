@@ -47,7 +47,12 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
 class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]])(implicit M: Monad[M]) extends StorageMetadata[M]{
-  def findDirectChildren(path: Path) = M.point(projectionMetadata.keySet.filter(_.isDirectChildOf(path)))
+  def findDirectChildren(path: Path) = M point {
+    projectionMetadata.keySet collect {
+      case key if key.isChildOf(path) => Path(key.components(path.length))
+    }
+  }
+
   def findSize(path: Path) = M.point(0L)
   def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]).keySet.map(_.selector))
   def findStructure(path: Path, selector: CPath) = M.point {
