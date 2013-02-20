@@ -17,6 +17,8 @@ check file shard-v1.server.log with path /var/log/precog/shard-v1.server.log
   if match "Too many open files" for 1 cycles
       then exec "/usr/bin/lsof -p $(cat /var/run/precog/shard-v1.pid) > /tmp/lsof-dump-$(date '+%s').txt"
   if match "Too many open files" for 1 cycles then alert
+  if match "AskTimeoutException" for 2 cycles then alert
+  if match "block read, retrying" for 2 cycles then alert
   if match "Exception" for 1 cycles then alert
   if match "Error" for 1 cycles then alert
   if match "Halting ingest" for 1 cycle then restart
