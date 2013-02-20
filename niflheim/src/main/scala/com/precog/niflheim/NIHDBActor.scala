@@ -56,9 +56,12 @@ import shapeless._
 case class Insert(id: Long, values: Seq[JValue], ownerAccountId: AccountId)
 
 case class GetBlock(id: Option[Long], columns: Option[Set[CPath]])
+case class GetBlockAfter(id: Option[Long], columns: Option[Set[CPath]])
 case class Block(id: Long, snapshot: Seq[Segment])
 
 case object GetLength
+case class Count(id: Option[Long], paths: Option[Set[CPath]])
+case class CountResult(id: Long, count: Long)
 
 case object GetStatus
 case class Status(cooked: Int, pending: Int, rawSize: Int)
@@ -86,7 +89,11 @@ class NIHDB(val baseDir: File, chef: ActorRef,
   def insert(id: Long, values: Seq[JValue], ownerAccountId: AccountId): Future[PrecogUnit] =
     (actor ? Insert(id, values, ownerAccountId)) map { _ => PrecogUnit }
 
+  // TODO: We should require an `Option[Set[(CPath, CType)]]`.
   def getBlockAfter(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
+    (actor ? GetBlockAfter(id, cols)).mapTo[Option[Block]]
+
+  def getBlock(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
     (actor ? GetBlock(id, cols)).mapTo[Option[Block]]
 
   def length: Future[Long] =
@@ -97,6 +104,34 @@ class NIHDB(val baseDir: File, chef: ActorRef,
 
   def structure: Future[Set[(CPath, CType)]] =
     (actor ? GetStructure).mapTo[Structure].map(_.columns)
+
+  /**
+   * Returns the total number of defined objects for a given `CPath` *mask*.
+   * Since this punches holes in our rows, it is not simply the length of the
+   * block. Instead we count the number of rows that have at least one defined
+   * value at each path (and their children).
+   */
+  def count(id: Option[Long], paths0: Option[Set[CPath]]): Future[Option[CountResult]] = {
+    paths0 map { paths =>
+      structure flatMap { struct =>
+        val constraints = struct collect {
+          case (path, _) if paths.exists { prefix => path.hasPrefix(prefix) } => path
+        }
+        getBlock(id, Some(constraints)) map (_ map { case Block(id0, snapshot) =>
+            CountResult(id0, snapshot.foldLeft(BitSetUtil.create()) { (acc, seg) =>
+              acc.or(seg.defined)
+              acc
+            }.cardinality)
+        })
+      }
+    } getOrElse {
+      getBlock(id, None) map (_ map { case Block(id0, snapshot) =>
+        CountResult(id0, snapshot.foldLeft(0)(_ max _.length).toLong)
+      })
+    }
+  }
+
+  // def reduce[A](from: Option[Long], cols: Option[Set[(CPath, CType)]])(reduction: Reduction[A]): Future[Option[A]]
 
   def close(): Future[PrecogUnit] = 
     gracefulStop(actor, timeout.duration)(actorSystem).map { _ => PrecogUnit }
@@ -201,6 +236,15 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
     case (id, reader) => chef ! Prepare(id, cookSequence.getAndIncrement, cookedDir, reader)
   }
 
+  def getBlockAfter(id: Option[Long]): Option[(Long, StorageReader)] = {
+    val blocks = id.map { i => currentBlocks.from(i).drop(1) }.getOrElse(currentBlocks)
+    blocks.headOption
+  }
+
+  def getBlock(idO: Option[Long]): Option[(Long, StorageReader)] = {
+    idO flatMap { id => currentBlocks get id map (id -> _) }
+  }
+
   override def postStop() = {
     IO {
       txLog.close
@@ -269,9 +313,16 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
       }
       sender ! ()
 
+    case GetBlockAfter(id, selectors) =>
+      sender ! getBlockAfter(id).flatMap {
+        case (id, reader) if reader.length > 0 =>
+          Some(Block(id, reader.snapshot(selectors)))
+        case _ =>
+          None
+      }
+
     case GetBlock(id, selectors) =>
-      val blocks = id.map { i => currentBlocks.from(i).drop(1) }.getOrElse(currentBlocks)
-      sender ! blocks.headOption.flatMap {
+      sender ! getBlock(id).flatMap {
         case (id, reader) if reader.length > 0 =>
           Some(Block(id, reader.snapshot(selectors)))
         case _ =>
