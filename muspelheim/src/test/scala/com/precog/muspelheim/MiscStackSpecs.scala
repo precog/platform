@@ -2185,6 +2185,62 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = eval(input)
       results must not(beEmpty)
     }
+    
+    "correctly filter the results of a non-trivial solve" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | import std::string::*
+        | 
+        | contains(set, string) := indexOf(set, string) >= 0
+        | 
+        | allAccounts := //byAccount
+        | accounts := allAccounts where !(contains(allAccounts.email, "test")) & !(contains(allAccounts.email, "precog.com")) & !(contains(allAccounts.email, "precog.io")) & !(contains(allAccounts.email, "reportgrid.com"))  & allAccounts.usage > 0
+        | 
+        | accounts' := accounts with {millis: getMillis(accounts.timestamp)}
+        | accounts'' := accounts' with {rank: denseRank(accounts'.millis)}
+        | 
+        | r := solve 'email
+        |   byEmail := accounts'' where accounts''.email = 'email
+        |   
+        |   today := byEmail where byEmail.rank = max(byEmail.rank)
+        |   firstDay := byEmail where byEmail.rank = min(byEmail.rank)
+        |   lastWeek := byEmail where byEmail.rank = max(byEmail.rank) - 7
+        |   past30days := byEmail where byEmail.rank = max(byEmail.rank) - 30
+        | 
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Current Usage",
+        |     value: sum(today.usage union (new 0) )
+        | 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past Week",
+        |     value:sum(lastWeek.usage union (new 0)) 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past 30 Days",
+        |     value: sum(past30days.usage union (new 0))
+        |   }
+        |   
+        | r where r.value > 0
+        | """.stripMargin
+        
+      eval(input) must not(beEmpty)
+    }
   }
 }
 
