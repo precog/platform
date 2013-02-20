@@ -157,11 +157,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
       val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
 
-      val valueSpec = {
-        if (isLeft) spec(leftValueSpec, rightValueSpec)
-        else spec(rightValueSpec, leftValueSpec)
-      }
-      
+      val valueSpec = spec(leftValueSpec, rightValueSpec)
       val wrappedValueSpec = trans.WrapObject(valueSpec, paths.Value.name)
 
       InnerObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
