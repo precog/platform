@@ -509,6 +509,50 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray)))
     }
 
+    "emit join of wrapped arrays for array with four elements having either value provenance or static provenance" in {
+      val input = """
+        | a := new 4
+        | [a, 5, a, 5]
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushNum("5"),
+          Map1(WrapArray),
+          PushNum("5"),
+          Map1(WrapArray),
+          Map2Cross(JoinArray),
+          PushNum("4"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map1(WrapArray),
+          Swap(1),
+          Swap(2),
+          Map1(WrapArray),
+          Map2Match(JoinArray),
+          Map2Cross(JoinArray),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("1"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("3"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap)))
+    }
+
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
       testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
@@ -540,6 +584,10 @@ object EmitterSpecs extends Specification
           Map1(WrapArray),
           Map2Match(JoinArray),
           Map2Cross(JoinArray),
+          PushNum("1"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap),
           PushNum("1"),
           Map2Cross(ArraySwap)))
     }
