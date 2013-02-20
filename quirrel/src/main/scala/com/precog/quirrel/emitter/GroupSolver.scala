@@ -550,6 +550,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Assert(_, pred, child) => listTicVars(b, pred, sigma) ++ listTicVars(b, child, sigma)
     
+    case Observe(_, data, samples) => listTicVars(b, data, sigma) ++ listTicVars(b, samples, sigma)
+    
     case New(_, child) => listTicVars(b, child, sigma)
     
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
@@ -663,6 +665,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?
     
     case Assert(_, pred, child) => (Set(pred, child), sigma)
+    
+    case Observe(_, data, samples) => (Set(data, samples), sigma)
     
     case New(_, child) => (Set(child), sigma)
     
