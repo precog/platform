@@ -20,7 +20,6 @@
 package com.precog.shard
 package service
 
-
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._

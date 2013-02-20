@@ -33,6 +33,7 @@ import scala.collection.mutable
 
 import scalaz._
 
+// private case class JobState(job: Job, channels: Map[String, List[Message]], status: List[Status])
 
 final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
     extends JobManager[M] with JobStateManager[M] with JobResultManager[M] {
@@ -49,8 +50,8 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
 
   val status: mutable.Map[JobId, Status] = new mutable.HashMap[JobId, Status] with mutable.SynchronizedMap[JobId, Status]
 
-  val result: mutable.Map[JobId, (List[MimeType], StreamT[M, Array[Byte]])] =
-    new mutable.HashMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])] with mutable.SynchronizedMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])]
+  //val result: mutable.Map[JobId, (List[MimeType], StreamT[M, Array[Byte]])] =
+  //  new mutable.HashMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])] with mutable.SynchronizedMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])]
 
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
