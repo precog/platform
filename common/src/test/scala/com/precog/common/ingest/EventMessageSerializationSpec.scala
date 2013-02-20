@@ -41,7 +41,7 @@ object EventMessageSerializationSpec extends Specification with ScalaCheck with 
     "maintain event content" in { check { (in: EventMessage) => 
       val buf = EventMessageEncoding.toMessageBytes(in)
       EventMessageEncoding.read(buf) must beLike {
-        case Success(out) => out must_== in
+        case Success(\/-(out)) => out must_== in
         case Failure(Extractor.Thrown(ex)) => throw ex
       }
     }}

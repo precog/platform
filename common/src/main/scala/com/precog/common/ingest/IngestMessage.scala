@@ -43,12 +43,13 @@ import scalaz.syntax.validation._
 
 import shapeless._
 
-
 sealed trait EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A
 }
 
 object EventMessage {
+  type EventMessageExtraction = \/[(APIKey, AccountId => EventMessage), EventMessage]
+
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
       eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _)
@@ -84,7 +85,7 @@ object IngestRecord {
 }
 
 /**
- * ownerAccountId must be determined before the message is sent to the central queue; we have to 
+ * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
 case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, data: Seq[IngestRecord], jobId: Option[JobId]) extends EventMessage {
@@ -92,9 +93,7 @@ case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, 
 }
 
 object IngestMessage {
-  //def fromIngest[M[+_]](ingest: Ingest, accountFinder: AccountFinder[M]): M[Validation[String, IngestMessage]] = {
-  //  sys.error("todo")
-  //}
+  import EventMessage.EventMessageExtraction
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
@@ -102,22 +101,31 @@ object IngestMessage {
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[IngestMessage] = extractorV[IngestMessage](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
+    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.0"))
+    override def validated(jv: JValue) = extractor.validated(jv).map(\/.right(_))
+  }
 
-  val extractorV0: Extractor[IngestMessage] = new Extractor[IngestMessage] {
-    override def validated(obj: JValue): Validation[Error, IngestMessage] = {
-      ( (obj \ "producerId" ).validated[Int] |@|
-        (obj \ "eventId").validated[Int] |@|
-        Ingest.extractorV0.validated(obj \ "event") ) { (producerId, sequenceId, ingest) =>
-        assert(ingest.data.size == 1)
-        val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
-        IngestMessage(ingest.apiKey, ingest.path, ingest.ownerAccountId.getOrElse(sys.error("fixme")), eventRecords, ingest.jobId)
-      }
+  val extractorV0: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
+    override def validated(obj: JValue): Validation[Error, EventMessageExtraction] =
+      Ingest.extractorV0.validated(obj \ "event").flatMap { ingest =>
+        ((obj \ "producerId" ).validated[Int] |@|
+         (obj \ "eventId").validated[Int]) { (producerId, sequenceId) =>
+          val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
+          ingest.ownerAccountId.map { ownerAccountId =>
+            assert(ingest.data.size == 1)
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, ownerAccountId, eventRecords, ingest.jobId))
+          }.getOrElse {
+            \/.left((ingest.apiKey, (account: AccountId) =>
+              IngestMessage(ingest.apiKey, ingest.path, account, eventRecords, ingest.jobId))
+            )
+          }
+        }
     }
   }
 
   implicit val Decomposer: Decomposer[IngestMessage] = decomposerV1
-  implicit val Extractor: Extractor[IngestMessage] = extractorV1 <+> extractorV0
+  implicit val Extractor: Extractor[EventMessageExtraction] = extractorV1 <+> extractorV0
 }
 
 case class ArchiveMessage(eventId: EventId, archive: Archive) extends EventMessage {

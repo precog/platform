@@ -23,7 +23,7 @@ package security
 import json._
 
 import blueeyes.json.JValue
-import blueeyes.json.serialization.{ Decomposer, Extractor } 
+import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
@@ -42,12 +42,12 @@ case class APIKeyRecord(
 
 object APIKeyRecord {
   implicit val apiKeyRecordIso = Iso.hlist(APIKeyRecord.apply _, APIKeyRecord.unapply _)
-  
+
   val schemaV1 =       "apiKey"  :: "name" :: "description" :: ("issuerKey" ||| "(undefined)") :: "grants" :: "isRoot" :: HNil
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
   val schemaV0 =       "tid"     :: "name" :: "description" :: ("cid" ||| "(undefined)") :: "gids" :: ("isRoot" ||| false) :: HNil
-  
+
   val decomposerV1: Decomposer[APIKeyRecord]= decomposerV[APIKeyRecord](schemaV1, Some("1.0"))
   val extractorV2: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0"))
   val extractorV1: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, None)

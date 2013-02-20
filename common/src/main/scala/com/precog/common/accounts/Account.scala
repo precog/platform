@@ -37,10 +37,11 @@ import org.joda.time.format.ISODateTimeFormat
 
 import scalaz.Validation
 import scalaz.syntax.apply._
+import scalaz.syntax.plus._
 
 import shapeless._
 
-case class AccountPlan(planType: String) 
+case class AccountPlan(planType: String)
 object AccountPlan {
   val Root = AccountPlan("Root")
   val Free = AccountPlan("Free")
@@ -50,32 +51,36 @@ object AccountPlan {
   implicit val (decomposer, extractor) = IsoSerialization.serialization[AccountPlan](schema)
 }
 
-case class Account(accountId: String, 
-                   email: String, 
-                   passwordHash: String, 
-                   passwordSalt: String, 
-                   accountCreationDate: DateTime, 
-                   apiKey: String, 
-                   rootPath: Path, 
-                   plan: AccountPlan, 
+case class Account(accountId: String,
+                   email: String,
+                   passwordHash: String,
+                   passwordSalt: String,
+                   accountCreationDate: DateTime,
+                   apiKey: String,
+                   rootPath: Path,
+                   plan: AccountPlan,
                    parentId: Option[String] = None,
                    lastPasswordChangeTime: Option[DateTime] = None)
 
 object Account {
   implicit val iso = Iso.hlist(Account.apply _, Account.unapply _)
-  val schemaV1   = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: HNil
-  val safeSchema = "accountId" :: "email" ::           Omit ::           Omit :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" ::       Omit :: "lastPasswordChangeTime" :: HNil
+  val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: HNil
+  val safeSchemaV1 = "accountId" :: "email" ::           Omit ::           Omit :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" ::       Omit :: "lastPasswordChangeTime" :: HNil
 
+  val extractorPreV = extractorV[Account](schemaV1, None)
   val (decomposerV1, extractorV1) = serializationV[Account](schemaV1, Some("1.0"))
+  val safeDecomposer = decomposerV[Account](safeSchemaV1, Some("1.0"))
+
+  val extractor = extractorV1 <+> extractorPreV
 
   object Serialization {
     implicit val accountDecomposer = decomposerV1
-    implicit val accountExtractor = extractorV1
+    implicit val accountExtractor = extractor
   }
 
   object SafeSerialization {
-    implicit val accountDecomposer = decomposer[Account](schemaV1)
-    implicit val accountExtractor = extractor[Account](schemaV1)
+    implicit val accountDecomposer = safeDecomposer
+    implicit val accountExtractor = extractor
   }
 
   private val randomSource = new java.security.SecureRandom
@@ -110,11 +115,8 @@ case class WrappedAccountId(accountId: AccountId)
 
 object WrappedAccountId {
   implicit val wrappedAccountIdIso = Iso.hlist(WrappedAccountId.apply _, WrappedAccountId.unapply _)
-  
+
   val schema = "accountId" :: HNil
 
   implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = IsoSerialization.serialization[WrappedAccountId](schema)
 }
-
-
-
