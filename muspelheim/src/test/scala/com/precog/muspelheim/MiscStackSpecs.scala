@@ -2185,6 +2185,36 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = eval(input)
       results must not(beEmpty)
     }
+    
+    // regression test for PLATFORM-986
+    "not explode on mysterious error" in {
+      val input = """
+        | import std::random::*
+        | 
+        | buckets := //benchmark/buckets/1361210162753
+        | test := //test
+        | 
+        | r := observe(test, uniform(38))
+        | 
+        | pred := test ~ buckets
+        |   range := buckets.range
+        | 
+        |   low := r >= range[1]
+        |   hi := r < range[0]
+        | 
+        |   test with {prediction: buckets.name where low & hi}
+        | 
+        | solve 'zone
+        |   pred' := pred where pred.currentZone = 'zone
+        | 
+        |   {
+        |     tp: count(pred'.prediction where pred'.prediction = pred'.currentZone),
+        |     fp: count(pred'.prediction where pred'.prediction != pred'.currentZone)    
+        |   }
+        | """.stripMargin
+        
+      eval(input) must not(throwA[Throwable])
+    }
   }
 }
 
