@@ -38,11 +38,36 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   import buckets._
   
   override def inferBuckets(tree: Expr): Set[Error] = {
+    def loopSpec(dispatches: Set[Dispatch])(spec: BucketSpec): Set[Error] = spec match {
+      case UnionBucketSpec(left, right) =>
+        loopSpec(dispatches)(left) ++ loopSpec(dispatches)(right)
+      
+      case IntersectBucketSpec(left, right) =>
+        loopSpec(dispatches)(left) ++ loopSpec(dispatches)(right)
+      
+      case Group(origin, target, forest, _) => {
+        val originErrors = origin map loop(dispatches) getOrElse Set()
+        val targetErrors = loop(dispatches)(target)
+        val forestErrors = loopSpec(dispatches)(forest)
+        
+        originErrors ++ targetErrors ++ forestErrors
+      }
+      
+      case UnfixedSolution(_, solution, _) => loop(dispatches)(solution)
+      
+      case FixedSolution(_, solution, expr, _) =>
+        loop(dispatches)(solution) ++ loop(dispatches)(expr)
+      
+      case Extra(expr, _) => loop(dispatches)(expr)
+    }
+    
     def loop(dispatches: Set[Dispatch])(tree: Expr): Set[Error] = tree match {
       case Let(_, _, _, _, right) => loop(dispatches)(right)
       
       case expr @ Solve(_, constraints, child) => {
-        val constrLoopErrors = constraints map loop(dispatches) reduce { _ ++ _ }
+        // this can populate buckets with more dispatches than emitter will
+        // have.  that's ok though, because we *add* the correct dispatch set
+        // below when we use loopSpec
         val childErrors = loop(dispatches)(child)
         
         val sigma: Map[Formal, Expr] = dispatches flatMap { dispatch =>
@@ -82,9 +107,11 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
             expr.vars map UnableToSolveTicVariable map { Error(expr, _) }
         }
         
-        specM foreach { spec =>
+        val specErrors = specM map { spec =>
           expr buckets_+= (dispatches -> spec)
-        }
+          
+          loopSpec(dispatches)(spec)
+        } getOrElse Set()
         
         val forestErrors2 = if (finalErrors.isEmpty) {
           forestErrors filter {
@@ -94,7 +121,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           forestErrors
         }
         
-        constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
+        childErrors ++ specErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
       case Assert(_, pred, child) =>

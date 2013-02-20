@@ -1702,8 +1702,26 @@ object EmitterSpecs extends Specification
         
       emit(compileSingle(input)) must not(throwA[Throwable])
     }
+    
+    "not explode on consecutive solves with name-bound constraints" in {
+      val input = """
+        | train := //train
+        | 
+        | cumProb := solve 'rank
+        |   train where train = 'rank
+        | 
+        | buckets := solve 'rank
+        |   minimum := cumProb where cumProb = 'rank
+        |   minimum
+        | 
+        | buckets
+        | """.stripMargin
+        
+      emit(compileSingle(input))
+      true mustEqual true
+    }
   }
-   
+  
   val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {
