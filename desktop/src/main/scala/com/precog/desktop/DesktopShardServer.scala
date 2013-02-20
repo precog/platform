@@ -57,7 +57,8 @@ object DesktopShardServer
       } yield ()
     }
 
-    ManagedQueryShardState(platform, apiKeyManager, accountManager, jobManager, clock, stoppable)
+    ManagedQueryShardState(platform, apiKeyManager, accountManager, jobManager,
+      clock, ShardStateOptions.NoOptions, stoppable)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start JDBM Shard server!!!")
