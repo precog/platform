@@ -504,36 +504,26 @@ trait Emitter extends AST
 
           val joined = reduce(groups ++ joins)
 
-          // This function takes a list of indices and a state, and produces
-          // a new list of indices and a new state, where the Nth index of the
-          // array will be moved into the correct location.
-          def fixN(n: Int): StateT[Id, (Seq[Int], EmitterState), Unit] = StateT.apply[Id, (Seq[Int], EmitterState), Unit] { 
-            case (indices, state) =>
-              val currentIndex = indices.indexOf(n)
-              val targetIndex  = n
+          def resolve(remap: Map[Int, Int])(i: Int): Int =
+            remap get i map resolve(remap) getOrElse i
 
-              (if (currentIndex == targetIndex) (indices, state)
-                else {
-                  var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
+          val (_, swaps) = indices.zipWithIndex.foldLeft((Map[Int, Int](), mzero[EmitterState])) {
+            case ((remap, state), (j, i)) if resolve(remap)(i) != j => {
+              // swap(i')
+              // swap(j)
+              // swap(i')
 
-                  val startValue = indices(startIndex)
-                  val newIndices = indices.updated(startIndex, indices(endIndex)).updated(endIndex, startValue)
+              val i2 = resolve(remap)(i)
 
-                  val newState = (startIndex until endIndex).foldLeft(state) {
-                    case (state, idx) =>
-                      state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
-                  }
+              val state2 = (i2 :: j :: i2 :: Nil) map { idx => emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)) } reduce { _ >> _ }
 
-                  (newIndices, newState)
-                }
-              , ())
+              (remap + (j -> i2), state >> state2)
+            }
+
+            case (pair, _) => pair
           }
 
-          val fixAll = (0 until indices.length).map(fixN)
-
-          val fixedState = fixAll.foldLeft[StateT[Id, (Seq[Int], EmitterState), Unit]](StateT.stateT(()))(_ >> _).exec((indices, mzero[EmitterState]))._2
-
-          joined >> fixedState
+          joined >> swaps
         
         case ast.Descent(loc, child, property) => 
           emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
