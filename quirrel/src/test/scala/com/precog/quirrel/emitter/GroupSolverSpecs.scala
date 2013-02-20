@@ -1065,5 +1065,15 @@ object GroupSolverSpecs extends Specification
       solve.errors must beEmpty
       solve.buckets mustEqual(Map(Set() -> expected))
     }
+    
+    "reject a solve with a doubly-compared tic variable" in {
+      val input = """
+        | foo := //foo
+        | solve 'a = foo = 'a
+        |   'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must contain(ExtraVarsInGroupConstraint("'a"))
+    }
   }
 }
