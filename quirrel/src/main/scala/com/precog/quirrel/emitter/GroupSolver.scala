@@ -287,12 +287,21 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         (None, Set(Error(expr, InseparablePairedTicVariables(ticVars))))
       } else {
         val tv = vars.head._2
-        val result = solveRelation(expr, sigma)(pred(b, tv, free, sigma))
+        val resultM = solveRelation(expr, sigma)(pred(b, tv, free, sigma))
         
-        if (result.isDefined)
-          (result map { UnfixedSolution(tv, _, dtrace) }, Set())
-        else
-          (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
+        resultM map { result =>
+          val innerVars = listTicVars(Some(b), result, sigma)
+          
+          if (innerVars.isEmpty) {
+            (Some(UnfixedSolution(tv, result, dtrace)), Set[Error]())
+          } else {
+            val errors = innerVars map {
+              case (_, id) => Error(expr, ExtraVarsInGroupConstraint(id))
+            }
+            
+            (None, errors)
+          }
+        } getOrElse (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
       }
     }
     
