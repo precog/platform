@@ -61,7 +61,8 @@ class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Lo
     }
 
     val children = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) flatMap {
-      case (ColumnRef(s, ctype), count) => if (s.hasPrefix(selector)) s.take(selector.length) else None
+      case t @ (ColumnRef(s, ctype), count) => 
+        if (s.hasPrefix(selector)) s.take(selector.length + 1) else None
     }
 
     PathStructure(types, children.toSet)

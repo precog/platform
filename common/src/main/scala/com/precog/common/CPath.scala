@@ -60,7 +60,9 @@ sealed trait CPath { self =>
 
   def hasPrefix(p: CPath): Boolean = nodes.startsWith(p.nodes)
 
-  def take(length: Int): Option[CPath] = (nodes.length > length).option(CPath(nodes.take(length)))
+  def take(length: Int): Option[CPath] = {
+    (nodes.length >= length).option(CPath(nodes.take(length)))
+  }
 
   def dropPrefix(p: CPath): Option[CPath] = {
     def remainder(nodes: List[CPathNode], toDrop: List[CPathNode]): Option[CPath] = {
