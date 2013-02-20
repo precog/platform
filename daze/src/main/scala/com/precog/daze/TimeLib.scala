@@ -79,6 +79,12 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       HourMinute,
       HourMinuteSecond,
 
+      DateHourMin,
+      DateHourMinSec,
+      DateHourMinSecMilli,
+      HourMin,
+      HourMinSec,
+
       ParseDateTimeFuzzy,
       ParsePeriod
     )
@@ -672,7 +678,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     @deprecated
-    object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
+    object DateHourMin extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinute()
     }
 
@@ -681,7 +687,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     @deprecated
-    object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
+    object DateHourMinSec extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecond()
     }
 
@@ -690,7 +696,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     @deprecated
-    object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+    object DateHourMinSecMilli extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
     }
 
@@ -707,7 +713,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     @deprecated
-    object HourMinute extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
+    object HourMin extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinute()
     }
 
@@ -716,7 +722,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     @deprecated
-    object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
+    object HourMinSec extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinuteSecond()
     }
 
