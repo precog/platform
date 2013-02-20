@@ -34,6 +34,8 @@ import org.joda.time.DateTime
 
 import scala.collection.mutable
 
+import org.streum.configrity.Configuration
+
 import scalaz._
 
 private[jobs] case class JobData(job: Job, channels: Map[String, List[Message]], status: Option[Status])
@@ -45,6 +47,13 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends BaseInMe
 
 final class ExpiringJobManager[M[+_]](timeout: Duration)(implicit val M: Monad[M]) extends BaseInMemoryJobManager[M] {
   private[jobs] val jobs: mutable.Map[JobId, JobData] = Cache.simple(Cache.ExpireAfterAccess(timeout))
+}
+
+object ExpiringJobManager {
+  def apply[M[+_]: Monad](config: Configuration): ExpiringJobManager[M] = {
+    val timeout = Duration(config[Int]("service.timeout", 900), "seconds")
+    new ExpiringJobManager[M](timeout)
+  }
 }
 
 trait BaseInMemoryJobManager[M[+_]] extends JobManager[M]

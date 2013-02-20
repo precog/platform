@@ -51,7 +51,13 @@ object JDBMShardServer extends BlueEyesServer
   override def configureShardState(config: Configuration) = M.point {
     val apiKeyManager = apiKeyManagerFactory(config.detach("security"))
     val accountManager = accountManagerFactory(config.detach("accounts"))
-    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val jobManager = {
+      if (config[Boolean]("jobs.service.in_memory", false)) {
+        ExpiringJobManager[Future](config.detach("jobs"))
+      } else {
+        WebJobManager(config.detach("jobs")).withM[Future]
+      }
+    }
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyManager, accountManager, jobManager)
 
     val stoppable = Stoppable.fromFuture {
