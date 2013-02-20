@@ -671,15 +671,15 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       val fmt = ISODateTimeFormat.dateHour()
     }
 
-    object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
+    object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMinute") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinute()
     }
 
-    object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
+    object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinuteSecond") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecond()
     }
 
-    object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+    object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinuteSecondMillis") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
     }
 
@@ -691,11 +691,11 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
     }
 
-    object HourMinute extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
+    object HourMinute extends Op1F1(TimeNamespace, "hourMinute") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinute()
     }
 
-    object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
+    object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinuteSecond") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinuteSecond()
     }
   }
