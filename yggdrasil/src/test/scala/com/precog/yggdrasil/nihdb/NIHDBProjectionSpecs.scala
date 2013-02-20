@@ -94,7 +94,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           min mustEqual 0L
           max mustEqual 0L
           data.size mustEqual 3
-          data.toJsonElements must containAllOf(expected).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
       })
     }
 
@@ -120,7 +120,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           min mustEqual 0L
           max mustEqual 0L
           data.size mustEqual 3
-          data.toJsonElements must containAllOf(expected).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
       })
     }
 
@@ -151,7 +151,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           min mustEqual 0L
           max mustEqual 0L
           data.size mustEqual 1200
-          data.toJsonElements must containAllOf(expected.take(1200)).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected.take(1200)).only.inOrder
       })
 
       projection.getBlockAfter(Some(0), None) must whenDelivered (beLike {
@@ -159,7 +159,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           min mustEqual 1L
           max mustEqual 1L
           data.size mustEqual 751
-          data.toJsonElements must containAllOf(expected.drop(1200)).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected.drop(1200)).only.inOrder
       })
     }
   }

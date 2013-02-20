@@ -66,24 +66,33 @@ trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule
 
     def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
       for {
-        paths          <- pathsM(table)
-        projections    <- paths.map { path =>
-          Projection(path)
-        }.sequence map (_.flatten)
-        totalLength    = projections.map(_.length).sum
+        paths       <- pathsM(table)
+        projections <- paths.map(Projection(_)).sequence.map(_.flatten)
+        totalLength = projections.map(_.length).sum
       } yield {
         def slices(proj: Projection, constraints: Option[Set[ColumnRef]]): StreamT[M, Slice] = {
           StreamT.unfoldM[M, Slice, Option[Key]](None) { key =>
-            proj.getBlockAfter(key, constraints).map(_.map { case BlockProjectionData(_, maxKey, slice) => (slice, Some(maxKey)) })
+            proj.getBlockAfter(key, constraints).map { b =>
+              b.map {
+                case BlockProjectionData(_, maxKey, slice) =>
+                  (slice, Some(maxKey))
+              }
+            }
           }
         }
 
-        Table(projections.foldLeft(StreamT.empty[M, Slice]) { (acc, proj) =>
+        val stream = projections.foldLeft(StreamT.empty[M, Slice]) {
+          (acc, proj) =>
           // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
-          val constraints = proj.structure.map { struct => Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet) }
-          acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) }) 
-        }, ExactSize(totalLength))
-
+          val constraints = proj.structure.map { struct =>
+            val set = Schema.flatten(tpe, struct.toList).map {
+              case (p, t) => ColumnRef(p, t)
+            }.toSet
+            Some(set)
+          }
+          acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) })
+        }
+        Table(stream, ExactSize(totalLength))
       }
     }
   }
