@@ -634,9 +634,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
 
               result = if (isLeft)
-                leftResult.paged(maxSliceSize).compact(valueSpec).cross(rightResult)(buildWrappedCrossSpec(isLeft)(transFromBinOp(op, ctx)))
+                leftResult.paged(maxSliceSize).compact(valueSpec).cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op, ctx)))
               else
-                rightResult.paged(maxSliceSize).compact(valueSpec).cross(leftResult)(buildWrappedCrossSpec(isLeft)(flip(transFromBinOp(op, ctx))))
+                rightResult.paged(maxSliceSize).compact(valueSpec).cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op, ctx))))
             } yield {
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -654,12 +654,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
 
               result = if (isLeft) {
-                val spec = buildWrappedCrossSpec(isLeft) { (srcLeft, srcRight) =>
+                val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
                   trans.Filter(srcLeft, srcRight)
                 }
                 targetResult.paged(maxSliceSize).compact(valueSpec).cross(booleanResult)(spec)
               } else {
-                val spec = buildWrappedCrossSpec(isLeft) { (srcLeft, srcRight) =>
+                val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
                   trans.Filter(srcRight, srcLeft)
                 }
                 booleanResult.paged(maxSliceSize).compact(valueSpec).cross(targetResult)(spec)
