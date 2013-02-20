@@ -146,7 +146,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
     }
     
-    def buildWrappedCrossSpec(isLeft: Boolean)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
       val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
       val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
       
