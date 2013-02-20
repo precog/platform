@@ -137,9 +137,14 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
         resultVN map { nt => 
           val faultN = faults map {
-            case Fault.Error(pos, msg) => queryReport.warn(pos, msg) 
-            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg)
-          } reduceOption { _ >> _ } getOrElse (N point ())
+            case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
+            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
+          } reduceOption { (a, b) =>
+            (a |@| b)(_ || _)
+          } getOrElse (N point false) flatMap {
+            case true => queryReport.die()
+            case false => N point ()
+          }
 
           val chunks = outputChunks(opts.output) {
             faultN >> nt

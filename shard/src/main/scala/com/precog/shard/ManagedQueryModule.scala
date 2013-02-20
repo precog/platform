@@ -93,9 +93,9 @@ trait ManagedQueryModule extends YggConfigComponent {
   trait ShardQueryLogger[M[+_], -P] extends QueryLogger[M, P] {
     def M: ShardQueryMonad
 
-    abstract override def fatal(pos: P, msg: String): M[Unit] = {
+    abstract override def die(): M[Unit] = {
       M.Q.abort()
-      super.fatal(pos, msg)
+      super.die()
     }
   }
 

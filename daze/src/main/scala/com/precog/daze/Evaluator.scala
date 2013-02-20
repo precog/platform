@@ -586,7 +586,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               
               truthiness <- transState liftM mn(predTable.reduce(Forall reducer ctx)(Forall.monoid))
             
-              assertion = if (truthiness getOrElse false) N.point(()) else report.fatal(graph.loc, "Assertion failed")
+              assertion = if (truthiness getOrElse false) {
+                N.point(())
+              } else {
+                report.error(graph.loc, "Assertion failed")
+                report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
+              }
               _ <- transState liftM assertion
               
               result = childPending.table transform liftToValues(childPending.trans)

@@ -275,17 +275,7 @@ trait Emitter extends AST
       
       case buckets.Group(origin, target, forest, dtrace) => {
         nextId { id =>
-          val candidates: Set[List[ast.Dispatch]] = contextualDispatches(target)
-          
-          val dtracePrefix = dtrace.reverse
-          
-          val context = if (!(candidates forall { _.isEmpty })) {
-            candidates map { _.reverse } find { c =>
-              (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
-            } get
-          } else {
-            Nil
-          }
+          val context = generateContext(target, contextualDispatches, dtrace)
           
           emitBucketSpec(solve, forest, contextualDispatches, dispatches) >>
             prepareContext(context, dispatches) { dispatches => emitExpr(target, dispatches) } >>
@@ -294,9 +284,11 @@ trait Emitter extends AST
         }
       }
       
-      case buckets.UnfixedSolution(name, solution) => {
+      case buckets.UnfixedSolution(name, solution, dtrace) => {
+        val context = generateContext(solution, contextualDispatches, dtrace)
+        
         def state(id: Int) = {
-          emitExpr(solution, dispatches) >>
+          prepareContext(context, dispatches) { dispatches => emitExpr(solution, dispatches) } >>
             labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
         }
@@ -317,11 +309,30 @@ trait Emitter extends AST
         }
       }
       
-      case buckets.FixedSolution(_, solution, expr) =>
-        emitMap(solution, expr, Eq, dispatches) >> emitInstr(Extra)
+      case buckets.FixedSolution(_, solution, expr, dtrace) => {
+        val context = generateContext(solution, contextualDispatches, dtrace)
+        
+        prepareContext(context, dispatches) { dispatches => emitMap(solution, expr, Eq, dispatches) } >> emitInstr(Extra)
+      }
       
-      case buckets.Extra(expr) =>
-        emitExpr(expr, dispatches) >> emitInstr(Extra)
+      case buckets.Extra(expr, dtrace) => {
+        val context = generateContext(expr, contextualDispatches, dtrace)
+        
+        prepareContext(context, dispatches) { dispatches => emitExpr(expr, dispatches) } >> emitInstr(Extra)
+      }
+    }
+    
+    def generateContext(target: Expr, contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]], dtrace: List[ast.Dispatch]) = {
+      val candidates: Set[List[ast.Dispatch]] = contextualDispatches(target)
+      val dtracePrefix = dtrace.reverse
+      
+      if (!(candidates forall { _.isEmpty })) {
+        candidates map { _.reverse } find { c =>
+          (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
+        } get
+      } else {
+        Nil
+      }
     }
     
     def prepareContext(context: List[ast.Dispatch], dispatches: Set[ast.Dispatch])(f: Set[ast.Dispatch] => EmitterState): EmitterState = context match {
@@ -377,7 +388,7 @@ trait Emitter extends AST
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right, dispatches)
 
-        case expr @ ast.Solve(loc, _, body) => 
+        case expr @ ast.Solve(loc, _, body) =>
           val spec = expr.buckets(dispatches)
         
           val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =

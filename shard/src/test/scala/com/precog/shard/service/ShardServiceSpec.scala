@@ -147,7 +147,8 @@ trait TestShardService extends
       Future(())
     }
 
-    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager, clock, stoppable)
+    ManagedQueryShardState(queryExecutorFactory, apiKeyManager, inMemAccountMgr, jobManager,
+      clock, ShardStateOptions.NoOptions, stoppable)
   }
 
   implicit val queryResultByteChunkTranscoder =
