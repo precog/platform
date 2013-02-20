@@ -21,7 +21,6 @@ package com.precog.pandora
 
 import com.precog.bytecode._
 import com.precog.common._
-import com.precog.common.json.CPath
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
 
