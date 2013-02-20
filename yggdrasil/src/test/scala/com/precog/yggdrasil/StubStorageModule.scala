@@ -41,24 +41,33 @@ import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.std.boolean._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-//class StubStorageMetadata[M[+_]](projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata])(implicit val M: Monad[M]) extends StorageMetadata[M] {
-//  val source = new TestMetadataStorage(projectionMetadata)
-//  def findChildren(path: Path) = M.point(source.findChildren(path))
-//  def findSelectors(path: Path) = M.point(source.findSelectors(path))
-//  def findProjections(path: Path, selector: CPath) = M.point {
-//    projectionMetadata.collect {
-//      case (descriptor, _) if descriptor.columns.exists { case ColumnRef(p, s, _, _) => p == path && s == selector } => 
-//        (descriptor, ColumnMetadata.Empty)
-//    }
-//  }
-//
-//  def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
-//}
-//
+class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]])(implicit M: Monad[M]) extends StorageMetadata[M]{
+  def findDirectChildren(path: Path) = M point {
+    projectionMetadata.keySet collect {
+      case key if key.isChildOf(path) => Path(key.components(path.length))
+    }
+  }
+
+  def findSize(path: Path) = M.point(0L)
+  def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]).keySet.map(_.selector))
+  def findStructure(path: Path, selector: CPath) = M.point {
+    val types: Map[CType, Long] = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) collect {
+      case (ColumnRef(`selector`, ctype), count) => (ctype, count)
+    }
+
+    val children = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) flatMap {
+      case t @ (ColumnRef(s, ctype), count) => 
+        if (s.hasPrefix(selector)) s.take(selector.length + 1) else None
+    }
+
+    PathStructure(types, children.toSet)
+  }
+}
 
 trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] { self =>
   implicit def M: Monad[M]

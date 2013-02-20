@@ -55,35 +55,14 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
 
   lazy val yggConfig = new YggConfig
 
-  lazy val projectionMetadata: Map[Path, Set[ColumnRef]] = Map(
-    Path("/foo/bar1/baz/quux1")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo/bar2/baz/quux1")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo/bar2/baz/quux2")   -> Set(ColumnRef(CPath.Identity, CString)),
-    Path("/foo2/bar1/baz/quux1" ) -> Set(ColumnRef(CPath.Identity, CString))
+  lazy val projectionMetadata: Map[Path, Map[ColumnRef, Long]] = Map(
+    Path("/foo/bar1/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 10L),
+    Path("/foo/bar2/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 20L),
+    Path("/foo/bar2/baz/quux2")   -> Map(ColumnRef(CPath.Identity, CString) -> 30L),
+    Path("/foo2/bar1/baz/quux1" ) -> Map(ColumnRef(CPath.Identity, CString) -> 40L)
   )                                       
                                           
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StorageMetadata[M] {
-    val M = self.M
-    def findDirectChildren(path: Path): M[Set[Path]] = {
-      val keyset = projectionMetadata.keySet
-      val children = keyset collect {
-        case key if key.isChildOf(path) =>
-          Path(key.components(path.length))
-      }
-      M.point(children)
-    }
-    def findSize(path: Path) = M.point(0L)
-    def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-    def findStructure(path: Path, selector: CPath) = M.point {
-      val structs: Set[ColumnRef] = projectionMetadata.getOrElse(path, Set.empty[ColumnRef])
-      val types : Map[CType, Long] = structs.collect {
-        // FIXME: This should use real counts
-        case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-      }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
-      
-      PathStructure(types, structs.map(_.selector))
-    }
-  }
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata[M](projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))

@@ -384,7 +384,7 @@ trait TestPlatform extends ManagedPlatform { self =>
   }
 
   val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path) = sys.error("todo")
+    def size(userUID: String, path: Path) = Future { success(JNum(1)) }
 
     def browse(apiKey: APIKey, path: Path) = Future {
       if (path == Path("/errpath")) {
