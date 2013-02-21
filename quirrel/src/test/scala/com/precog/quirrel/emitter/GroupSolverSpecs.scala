@@ -1094,5 +1094,17 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must contain(ExtraVarsInGroupConstraint("'a"))
     }
+    
+    "accept a solve on the results of an observation" in {
+      val input = """
+        | foo := //foo
+        | r := observe(foo, std::random::foobar(42))
+        | 
+        | solve 'a
+        |   r where r = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
   }
 }

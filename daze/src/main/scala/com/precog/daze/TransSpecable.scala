@@ -110,8 +110,9 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def DerefArrayStatic(node: Join)(parent: N[S], index: Int) =
           parent.flatMap(leftMap(_)(trans.DerefArrayStatic(_, CPathIndex(index))))
         
-        def ArraySwap(node: Join)(parent: N[S], index: Int) = 
+        def ArraySwap(node: Join)(parent: N[S], index: Int) = {
           parent.flatMap(leftMap(_)(trans.ArraySwap(_, index)))
+        }
         
         def InnerObjectConcat(node: Join)(parent: N[S]) =
           parent.flatMap(leftMap(_)(trans.InnerObjectConcat(_)))
