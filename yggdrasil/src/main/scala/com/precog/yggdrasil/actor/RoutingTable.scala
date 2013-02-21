@@ -39,22 +39,22 @@ trait RoutingTable {
     // the sequence of ProjectionUpdate objects to return
     val updates = ArrayBuffer.empty[ProjectionUpdate]
 
-    // map used to aggregate IngestMessages by Path
-    val recordsByPath = mutable.Map.empty[Path, (Path, AccountId, ArrayBuffer[IngestRecord])]
+    // map used to aggregate IngestMessages by (Path, AccountId)
+    val recordsByPath = mutable.Map.empty[(Path, AccountId), ArrayBuffer[IngestRecord]]
 
     // process each message, aggregating ingest messages
     events.foreach {
       case IngestMessage(key, path, owner, data, jobid) =>
-        val tpl = recordsByPath.getOrElseUpdate(path, (path, owner, ArrayBuffer.empty[IngestRecord]))
-        tpl._3 ++= data
+        val recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
+        buf ++= data
 
       case msg: ArchiveMessage =>
         updates += ProjectionArchive(msg.archive.path, msg.eventId)
     }
 
-    // combine ingest messages by path and add to updates, then return
-    recordsByPath.values.foreach {
-      case (path, owner, values) =>
+    // combine ingest messages by (path, owner), add to updates, then return
+    recordsByPath.foreach {
+      case ((path, owner), values) =>
         updates += ProjectionInsert(path, values, owner)
     }
     updates
