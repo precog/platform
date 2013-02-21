@@ -1,0 +1,105 @@
+/*
+ *  ____    ____    _____    ____    ___     ____ 
+ * |  _ \  |  _ \  | ____|  / ___|  / _/    / ___|        Precog (R)
+ * | |_) | | |_) | |  _|   | |     | |  /| | |  _         Advanced Analytics Engine for NoSQL Data
+ * |  __/  |  _ <  | |___  | |___  |/ _| | | |_| |        Copyright (C) 2010 - 2013 SlamData, Inc.
+ * |_|     |_| \_\ |_____|  \____|   /__/   \____|        All Rights Reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms of the 
+ * GNU Affero General Public License as published by the Free Software Foundation, either version 
+ * 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See 
+ * the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this 
+ * program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+package com.precog.niflheim
+
+import com.precog.common._
+import com.precog.common.accounts.AccountId
+import com.precog.common.ingest.EventId
+import com.precog.common.json._
+import com.precog.common.security.Authorities
+import com.precog.util._
+
+import scala.collection.mutable
+import scala.collection.immutable.SortedMap
+
+import java.util.Arrays
+
+object NIHDBSnapshot {
+  def apply(m: SortedMap[Long, StorageReader]): NIHDBSnapshot =
+    new NIHDBSnapshot {
+      val readers = m.values.toArray
+      val blockIds = readers.map(_.id)
+    }
+}
+
+trait NIHDBSnapshot {
+  def blockIds: Array[Long]
+  def readers: Array[StorageReader]
+
+  protected[this] def findReader(id0: Option[Long]): Option[StorageReader] = {
+    if (readers.isEmpty) {
+      None
+    } else {
+      val i = id0.map(Arrays.binarySearch(blockIds, _)) getOrElse 0
+      if (i >= 0) Some(readers(i)) else None
+    }
+  }
+
+  protected[this] def findReaderAfter(id0: Option[Long]): Option[StorageReader] = {
+    // be careful! the semantics of findReaderAfter are somewhat subtle
+    val i = id0.map(Arrays.binarySearch(blockIds, _)) getOrElse -1
+    val j = if (i < 0) -i - 1 else i + 1
+    if (j >= blockIds.length) None else Some(readers(j))
+  }
+
+  def getBlock(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
+    findReader(id0).map(_.snapshot(cols))
+
+  def getBlockAfter(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
+    findReaderAfter(id0).map(_.snapshot(cols))
+
+  def structure: Set[(CPath, CType)] =
+    readers.map(_.structure.toSet).toSet.flatten
+
+  def getConstraints(columns: Iterable[(CPath, CType)], cpaths: Set[CPath]) = {
+    columns.collect {
+      case (cpath, _) if cpaths.exists(cpath.hasPrefix(_)) => cpath
+    }
+  }
+
+  /**
+   * Returns the total number of defined objects for a given `CPath` *mask*.
+   * Since this punches holes in our rows, it is not simply the length of the
+   * block. Instead we count the number of rows that have at least one defined
+   * value at each path (and their children).
+   */
+  def count(id: Option[Long], paths0: Option[Set[CPath]]): Option[Long] = {
+    def countSegments(segs: Seq[Segment]): Long = segs.foldLeft(new BitSet) { (acc, seg) =>
+      acc.or(seg.defined)
+      acc
+    }.cardinality
+
+    findReader(id).map { reader =>
+      paths0 map { paths =>
+        val constraints = getConstraints(reader.structure, paths)
+        val Block(_, cols, _) = reader.snapshot(Some(constraints.toSet))
+        countSegments(cols)
+      } getOrElse {
+        reader.length
+      }
+    }
+  }
+
+  def count(paths0: Option[Set[CPath]] = None): Long = {
+    blockIds.foldLeft(0L) { (total, id) =>
+      count(Some(id), paths0).getOrElse(0L)
+    }
+  }
+}

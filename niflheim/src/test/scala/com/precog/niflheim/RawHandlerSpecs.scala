@@ -79,7 +79,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val h = RawHandler.empty(blockid, tmp1)
       h.length must_== 0
 
-      h.snapshot(None).length must_== 0
+      h.snapshot(None).segments.length must_== 0
 
       h.write(16, json("""
 {"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
@@ -89,7 +89,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       h.length must_== 3
 
-      val segs1 = h.snapshot(None)
+      val segs1 = h.snapshot(None).segments
       segs1 must contain(ArraySegment(blockid, CPath(".a"), CNum, bitset(0, 1, 2), decs(123, 9999.0, 0)))
       segs1 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2), bitset(0), 3))
 
@@ -103,7 +103,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       h.length must_== 8
 
-      val segs2 = h.snapshot(None)
+      val segs2 = h.snapshot(None).segments
       segs2 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2, 7), bitset(0, 7), 8))
     }
 
@@ -126,11 +126,11 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 """.trim
 
       h1.write(18, json(js))
-      val s1 = h1.snapshot(None)
+      val s1 = h1.snapshot(None).segments
       h1.close()
 
       val (h2, events, true) = RawHandler.load(blockid, tmp2)
-      val s2 = h2.snapshot(None)
+      val s2 = h2.snapshot(None).segments
 
       implicit val ord: Ordering[Segment] = Ordering.by[Segment, String](_.toString)
 
@@ -257,8 +257,8 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val sa = ArraySegment(blockid, cpa, CNum, bs.copy, range.map(i => BigDecimal(i * 2)).toArray)
       val sb = ArraySegment(blockid, cpb, CNum, bs.copy, range.map(i => BigDecimal(i * 3)).toArray)
 
-      h.snapshot(Some(Set(cpa))) must contain(sa)
-      h.snapshot(Some(Set(cpb))) must contain(sb)
+      h.snapshot(Some(Set(cpa))).segments must contain(sa)
+      h.snapshot(Some(Set(cpb))).segments must contain(sb)
     }
 
     val tmp9 = tempfile()
@@ -270,10 +270,10 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val struct1 = h.structure
       struct1.toSet must_== Set()
 
-      val snap1 = h.snapshot(None)
+      val snap1 = h.snapshot(None).segments
       snap1.toSet must_== Set()
 
-      val a1 = h.snapshot(Some(Set(cpa)))
+      val a1 = h.snapshot(Some(Set(cpa))).segments
       a1.toSet must_== Set()
 
       h.write(16, json("""{"a": "foo"} {"a": "bar"}"""))
@@ -282,11 +282,11 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       struct1.toSet must_== Set()
       struct2.toSet must_== Set((cpa, CString))
 
-      val snap2 = h.snapshot(None)
+      val snap2 = h.snapshot(None).segments
       snap1.toSet must_== Set()
       snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
 
-      val a2 = h.snapshot(Some(Set(cpa)))
+      val a2 = h.snapshot(Some(Set(cpa))).segments
       a1.toSet must_== Set()
       a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
 
@@ -297,7 +297,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       struct2.toSet must_== Set((cpa, CString))
       struct3.toSet must_== Set((cpa, CString), (cpb, CString))
 
-      val snap3 = h.snapshot(None)
+      val snap3 = h.snapshot(None).segments
       snap1.toSet must_== Set()
       snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
       snap3.toSet must_== Set(
@@ -305,7 +305,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
         ArraySegment(blockid, cpb, CString, bitset(2, 3), Array(null, null, "xyz", "bla"))
       )
 
-      val a3 = h.snapshot(Some(Set(cpa)))
+      val a3 = h.snapshot(Some(Set(cpa))).segments
       a1.toSet must_== Set()
       a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
       a3.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")))

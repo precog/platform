@@ -70,8 +70,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
   def id: Long = metadata.valueOr(throw _).blockid
   def length: Int = metadata.valueOr(throw _).length
 
-  def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
-    pathConstraint map { paths =>
+  def snapshot(pathConstraint: Option[Set[CPath]]): Block = {
+    val segments: Seq[Segment] = pathConstraint map { paths =>
       load(paths.toList).map({ segs =>
         segs flatMap (_._2)
       }).valueOr { nel => throw nel.head }
@@ -82,6 +82,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
         }.valueOr(throw _)
       }
     }
+
+    Block(id, segments, isStable)
   }
 
   def structure: Iterable[(CPath, CType)] = metadata.valueOr(throw _).segments map {

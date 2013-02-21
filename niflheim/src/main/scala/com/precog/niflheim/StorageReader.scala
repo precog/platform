@@ -23,7 +23,7 @@ import com.precog.common._
 import com.precog.util._
 
 trait StorageReader {
-  def snapshot(pathConstraints: Option[Set[CPath]]): Seq[Segment]
+  def snapshot(pathConstraints: Option[Set[CPath]]): Block
   def structure: Iterable[(CPath, CType)]
 
   def isStable: Boolean
