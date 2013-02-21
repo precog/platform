@@ -590,7 +590,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 N.point(())
               } else {
                 report.error(graph.loc, "Assertion failed")
-                report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
+                // FIXME!!!! Also, flatMap.
+                // report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
               }
               _ <- transState liftM assertion
               
