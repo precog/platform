@@ -41,6 +41,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
 
   private val lock = new AnyRef { }
 
+  def isStable: Boolean = true
+
   @volatile
   private var block: SoftReference[CookedBlockMetadata] = null
 

@@ -22,6 +22,7 @@ package nihdb
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.cache.Cache
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.common.security._
@@ -171,6 +172,10 @@ class NIHDBProjectionsActor(
     Await.result(projections.values.toList.map (_.close).sequence, storageTimeout.duration)
     logger.info("Projection shutdown complete")
   }
+
+  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
+
+  //private val reductionCache = Cache.simple[ReductionId, AnyRef](MaxSize(1024 * 1024))
 
   private val projections = mutable.Map.empty[Path, NIHDBProjection]
 

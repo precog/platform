@@ -60,7 +60,7 @@ sealed trait ValueSegment[@spec(Boolean,Long,Double) A] extends Segment {
 }
 
 case class ArraySegment[@spec(Boolean,Long,Double) A](blockid: Long, cpath: CPath, ctype: CValueType[A], defined: BitSet, values: Array[A]) extends ValueSegment[A] {
-  private implicit val m = ctype.manifest
+  private implicit def m = ctype.manifest
 
   override def equals(that: Any): Boolean = that match {
     case ArraySegment(`blockid`, `cpath`, ct2, d2, values2) =>

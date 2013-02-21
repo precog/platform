@@ -44,17 +44,22 @@ object RawHandler {
     val os = new BufferedOutputStream(new FileOutputStream(f, true))
     (new RawHandler(id, f, rows, os), events, ok)
   }
+
+  def loadReadonly(id: Long, f: File): (RawReader, Seq[Long], Boolean) = {
+    val (rows, events, ok) = RawLoader.load(id, f)
+    (new RawReader(id, f, rows), events, ok)
+  }
 }
 
-// TODO: extend derek's reader/writer traits
-class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue], os: OutputStream) extends StorageReader {
-  @volatile
-  private var rows = mutable.ArrayBuffer.empty[JValue] ++ rs // TODO: weakref?
-  @volatile
-  private var segments = Segments.empty(id) // TODO: weakref?
-  private var count = rows.length
+class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]) extends StorageReader {
+  // TODO: weakrefs?
+  @volatile protected[this] var rows = mutable.ArrayBuffer.empty[JValue] ++ rs
+  @volatile protected[this] var segments = Segments.empty(id)
+  protected[this] var count = rows.length
 
-  def structure = snapshot(None).map { seg => (seg.cpath, seg.ctype) }
+  def isStable: Boolean = true
+
+  def structure: Iterable[(CPath, CType)] = snapshot(None).map { seg => (seg.cpath, seg.ctype) }
 
   def length: Int = count
 
@@ -73,7 +78,9 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
       segments.a.filter { seg => cpaths(seg.cpath) }
     }.getOrElse(segments.a.clone)
   }
+}
 
+class RawHandler private[niflheim] (id: Long, log: File, rs: Seq[JValue], private var os: OutputStream) extends RawReader(id, log, rs) {
   def write(eventid: Long, values: Seq[JValue]) {
     if (!values.isEmpty) {
       count += values.length
@@ -82,5 +89,10 @@ class RawHandler private[niflheim] (val id: Long, val log: File, rs: Seq[JValue]
     }
   }
 
-  def close(): Unit = os.close()
+  override def isStable: Boolean = os == null
+
+  def close(): Unit = if (os != null) {
+    os.close()
+    os = null
+  }
 }

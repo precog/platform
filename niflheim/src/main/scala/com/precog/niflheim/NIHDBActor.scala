@@ -57,7 +57,7 @@ case class Insert(id: Long, values: Seq[JValue], ownerAccountId: AccountId)
 
 case class GetBlock(id: Option[Long], columns: Option[Set[CPath]])
 case class GetBlockAfter(id: Option[Long], columns: Option[Set[CPath]])
-case class Block(id: Long, snapshot: Seq[Segment])
+case class Block(id: Long, snapshot: Seq[Segment], stable: Boolean)
 
 case object GetLength
 case class Count(id: Option[Long], paths: Option[Set[CPath]])
@@ -117,7 +117,7 @@ class NIHDB(val baseDir: File, chef: ActorRef,
         val constraints = struct collect {
           case (path, _) if paths.exists { prefix => path.hasPrefix(prefix) } => path
         }
-        getBlock(id, Some(constraints)) map (_ map { case Block(id0, snapshot) =>
+        getBlock(id, Some(constraints)) map (_ map { case Block(id0, snapshot, stable) =>
             CountResult(id0, snapshot.foldLeft(BitSetUtil.create()) { (acc, seg) =>
               acc.or(seg.defined)
               acc
@@ -125,7 +125,7 @@ class NIHDB(val baseDir: File, chef: ActorRef,
         })
       }
     } getOrElse {
-      getBlock(id, None) map (_ map { case Block(id0, snapshot) =>
+      getBlock(id, None) map (_ map { case Block(id0, snapshot, stable) =>
         CountResult(id0, snapshot.foldLeft(0)(_ max _.length).toLong)
       })
     }
@@ -316,7 +316,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
     case GetBlockAfter(id, selectors) =>
       sender ! getBlockAfter(id).flatMap {
         case (id, reader) if reader.length > 0 =>
-          Some(Block(id, reader.snapshot(selectors)))
+          Some(Block(id, reader.snapshot(selectors), reader.isStable))
         case _ =>
           None
       }
@@ -324,7 +324,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
     case GetBlock(id, selectors) =>
       sender ! getBlock(id).flatMap {
         case (id, reader) if reader.length > 0 =>
-          Some(Block(id, reader.snapshot(selectors)))
+          Some(Block(id, reader.snapshot(selectors), reader.isStable))
         case _ =>
           None
       }
