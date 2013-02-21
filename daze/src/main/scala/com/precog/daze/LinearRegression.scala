@@ -53,7 +53,9 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
       lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
       type Beta = Array[Double]
-      type Result = Beta
+
+      case class Accumulator(beta: Beta, count: Int)
+      type Result = Accumulator
 
       /**
        * http://adrem.ua.ac.be/sites/adrem.ua.ac.be/files/StreamFitter.pdf
@@ -68,6 +70,12 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
        * or something related, be an optional parameter in the regression model.
        */
 
+
+      /**
+       * This code here will necessary when we have online models and users want to weight
+       * the most recent data with a higher (or lower) weight than the data already seen.
+       * But since we don't have this capability yet, all data is weighted equally.
+
       val alpha = 0.5
 
       implicit def monoid = new Monoid[Result] {
@@ -81,10 +89,20 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
           else arraySum(newr1, newr2)
         }
       }
+      */
 
-      implicit def resultMonoid = new Monoid[Option[Array[Result]]] {
+      implicit def monoid = new Monoid[Result] {
+        def zero = Accumulator(Array.empty[Double], 0)
+        def append(r1: Result, r2: => Result) = {
+          if (r1.beta isEmpty) r2
+          else if (r2.beta isEmpty) r1
+          else Accumulator(arraySum(r1.beta, r2.beta), r1.count + r2.count)
+        }
+      }
+
+      implicit def betaMonoid = new Monoid[Option[Array[Beta]]] {
         def zero = None
-        def append(t1: Option[Array[Result]], t2: => Option[Array[Result]]) = {
+        def append(t1: Option[Array[Beta]], t2: => Option[Array[Beta]]) = {
           t1 match {
             case None => t2
             case Some(c1) => t2 match {
@@ -110,7 +128,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
           val arrays = {
             if (values.isEmpty) None
-            else values.suml(resultMonoid)
+            else values.suml(betaMonoid)
           }
 
           val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
@@ -137,18 +155,22 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
             (inverse).times(y.transpose)
           }
 
-          matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
+          val res = matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
+          
+          Accumulator(res, 1)
         }
       }
 
       def extract(res: Result, jtype: JType): Table = {
         val cpaths = Schema.cpath(jtype)
 
-        val tree = CPath.makeTree(cpaths, Range(1, res.length).toSeq :+ 0)
+        val tree = CPath.makeTree(cpaths, Range(1, res.beta.length).toSeq :+ 0)
 
         val spec = TransSpec.concatChildren(tree)
-  
-        val theta = Table.fromRValues(Stream(RArray(res.map(CNum(_)).toList)))
+
+        val mean = res match { case Accumulator(beta, count) => beta map { _ / count } }
+
+        val theta = Table.fromRValues(Stream(RArray(mean.map(CNum(_)).toList)))
 
         val result = theta.transform(spec)
 
