@@ -12,11 +12,15 @@ import com.precog.yggdrasil.nihdb._
 
 import blueeyes.json._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-trait RoutingTable {
+trait RoutingTable extends Logging {
   def batchMessages(events: Seq[EventMessage]): Seq[ProjectionUpdate] = {
+    val start = System.currentTimeMillis
+
     // the sequence of ProjectionUpdate objects to return
     val updates = ArrayBuffer.empty[ProjectionUpdate]
 
@@ -26,7 +30,7 @@ trait RoutingTable {
     // process each message, aggregating ingest messages
     events.foreach {
       case IngestMessage(key, path, owner, data, jobid) =>
-        val recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
+        val buf = recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
         buf ++= data
 
       case msg: ArchiveMessage =>
@@ -38,6 +42,9 @@ trait RoutingTable {
       case ((path, owner), values) =>
         updates += ProjectionInsert(path, values, owner)
     }
+
+    logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))
+
     updates
   }
 }
