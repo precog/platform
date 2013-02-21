@@ -123,7 +123,7 @@ class NIHDBProjectionsActor(
       case None =>
         IO { logger.warn("Base dir " + path + " doesn't exist, skipping archive"); PrecogUnit }
 
-      case Some(base) => { 
+      case Some(base) => {
         val archive = archiveDir(path)
         val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis())
         val archiveParent = timeStampedArchive.getParentFile
@@ -214,23 +214,38 @@ class NIHDBProjectionsActor(
 
     case ProjectionInsert(path, records, ownerAccountId) =>
       val requestor = sender
-      getProjection(path).map { 
+      getProjection(path).map {
         _.insert(records, ownerAccountId) map { _ =>
           requestor ! InsertComplete(path)
         }
-      }.except { 
-        case t: Throwable => IO { logger.error("Failure during projection insert", t) } 
+      }.except {
+        case t: Throwable => IO { logger.error("Failure during projection insert", t) }
       }.unsafePerformIO
 
     case ProjectionArchive(path, _) =>
       val requestor = sender
-      projections.get(path).foreach { proj =>
-        proj.close()
-        archive(path).map { _ => 
+      logger.debug("Beginning archive of " + path)
+
+      (projections.get(path) match {
+        case Some(proj) =>
+          logger.debug("Closing projection at " + path)
+          proj.close()
+
+        case None => Promise.successful(PrecogUnit)(context.dispatcher)
+      }).map { _ =>
+        logger.debug("Clearing projection from cache")
+        projections -= path
+
+        archive(path).map { _ =>
+          logger.debug("Archive complete on " + path)
           requestor ! ArchiveComplete(path)
         }.except {
           case t: Throwable => IO { logger.error("Failure during archive of " + path, t) }
         }.unsafePerformIO
+
+        logger.debug("Processing of archive request complete on " + path)
+      }.onFailure {
+        case t: Throwable => logger.error("Failure during archive of " + path, t)
       }
 
     case ProjectionGetBlock(path, id, columns) =>
@@ -238,7 +253,7 @@ class NIHDBProjectionsActor(
       try {
         projections.get(path) match {
           case Some(p) => p.getBlockAfter(id, columns).pipeTo(requestor)
-          case None => findBaseDir(path).map { 
+          case None => findBaseDir(path).map {
             _ => getProjection(path).unsafePerformIO.getBlockAfter(id, columns) pipeTo requestor
           }
         }

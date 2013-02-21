@@ -43,6 +43,7 @@ import org.slf4j._
 
 import java.io._
 import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.atomic.AtomicInteger
 
 import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
@@ -198,6 +199,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   private var failureLog = ingestFailureLog
   private var totalConsecutiveFailures = 0
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[(Long, EventMessage)]]
+  private val runningBatches = new AtomicInteger
   private var pendingCompletes = Vector.empty[BatchComplete]
 
   implicit def M: Monad[Future]
@@ -205,7 +207,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   def receive = {
     case Status => sender ! status
 
-    case complete @ BatchComplete(checkpoint) =>
+    case complete @ BatchComplete(requestor, checkpoint) =>
       pendingCompletes :+= complete
 
       // the minimum value in the ingest cache is complete, so
@@ -220,7 +222,7 @@ abstract class KafkaShardIngestActor(shardId: String,
           // FIXME: Carefully review this logic; previously, the comparison here was being done using "<="
           // by the serialized JSON representation of the vector clocks (a silent side effect of
           // the silent implicit conversions to JValue in BlueEyes)
-          case BatchComplete(pendingCheckpoint @ YggCheckpoint(_, clock)) if clock isDominatedBy checkpoint.messageClock =>
+          case BatchComplete(_, pendingCheckpoint @ YggCheckpoint(_, clock)) if clock isDominatedBy checkpoint.messageClock =>
             handleBatchComplete(pendingCheckpoint)
             None
 
@@ -230,6 +232,11 @@ abstract class KafkaShardIngestActor(shardId: String,
       }
 
       ingestCache -= checkpoint
+      runningBatches.getAndDecrement
+
+      // Send off a new batch now that we've completed this one
+      logger.debug("Pre-firing new GetMessages on batch completion to " + requestor)
+      self.tell(GetMessages(requestor), requestor)
 
     case BatchFailed(requestor, checkpoint) =>
       logger.warn("Incomplete ingest at " + checkpoint)
@@ -247,15 +254,19 @@ abstract class KafkaShardIngestActor(shardId: String,
         logger.error("Ingest will continue, but query results may be inconsistent until the problem is resolved.")
         for (messages <- ingestCache.get(checkpoint).toSeq; (offset, ingestMessage) <- messages) {
           failureLog = failureLog.logFailed(offset, ingestMessage, lastCheckpoint)
-      }
+        }
+
+        runningBatches.getAndDecrement
 
         // Blow up in spectacular fashion.
         //self ! PoisonPill
       }
 
     case GetMessages(requestor) => try {
-      logger.trace("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
-        if (ingestCache.size < maxCacheSize) {
+      logger.trace("Responding to GetMessages from %s starting from checkpoint %s. Running batches = %d/%d".format(requestor, lastCheckpoint, runningBatches.get, maxCacheSize))
+        if (runningBatches.get < maxCacheSize) {
+          // Funky handling of current count due to the fact that any errors will occur within a future
+          runningBatches.getAndIncrement
           readRemote(lastCheckpoint).onSuccess {
             case Success((messages, checkpoint)) =>
               if (messages.size > 0) {
@@ -267,21 +278,25 @@ abstract class KafkaShardIngestActor(shardId: String,
 
                 // create a handler for the batch, then reply to the sender with the message set
                 // using that handler reference as the sender to which the ingest system will reply
-                val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout)))
+                val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
                 requestor.tell(IngestData(messages.map(_._2)), batchHandler)
               } else {
                 logger.trace("No new data found after checkpoint: " + checkpoint)
+                runningBatches.getAndDecrement
                 requestor ! IngestData(Nil)
               }
 
             case Failure(error)    =>
               logger.error("Error(s) occurred retrieving data from Kafka: " + error.message)
+              runningBatches.getAndDecrement
               requestor ! IngestErrors(List("Error(s) retrieving data from Kafka: " + error.message))
           }.onFailure {
-            case t: Throwable => logger.error("Failure during remote message read", t); requestor ! IngestData(Nil)
+            case t: Throwable =>
+              runningBatches.getAndDecrement
+              logger.error("Failure during remote message read", t); requestor ! IngestData(Nil)
           }
         } else {
-          logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(ingestCache.size))
+          logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(runningBatches.get))
           requestor ! IngestData(Nil)
         }
     } catch {

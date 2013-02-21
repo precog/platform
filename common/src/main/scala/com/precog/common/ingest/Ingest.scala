@@ -58,36 +58,37 @@ case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId],
 
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
-  
+
   val schemaV1 = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
-  
-  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0")) <+> extractorV1a
 
+  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0"))
+
+  // A transitionary format similar to V1 structure, but lacks a version number and only carries a single data element
   val extractorV1a = new Extractor[Ingest] {
     def validated(obj: JValue): Validation[Error, Ingest] = {
       ( obj.validated[APIKey]("apiKey") |@|
         obj.validated[Path]("path") |@|
         obj.validated[Option[AccountId]]("ownerAccountId") ) { (apiKey, path, ownerAccountId) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, ownerAccountId, if (jv == JUndefined) Vector() else Vector(jv), None) 
+          Ingest(apiKey, path, ownerAccountId, if (jv == JUndefined) Vector() else Vector(jv), None)
         }
     }
   }
 
   val extractorV0 = new Extractor[Ingest] {
     def validated(obj: JValue): Validation[Error, Ingest] = {
-      ( obj.validated[String]("tokenId") |@| 
-        obj.validated[Path]("path") ) { (apiKey, path) => 
+      ( obj.validated[String]("tokenId") |@|
+        obj.validated[Path]("path") ) { (apiKey, path) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None) 
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None)
         }
     }
   }
 
   implicit val Decomposer: Decomposer[Ingest] = decomposerV1
-  implicit val Extractor: Extractor[Ingest] = extractorV1 <+> extractorV0
+  implicit val Extractor: Extractor[Ingest] = extractorV1 <+> extractorV1a <+> extractorV0
 }
 
 case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId]) extends Event {
@@ -99,7 +100,7 @@ object Archive {
 
   val schemaV1 = "apiKey" :: "path" :: "jobId" :: HNil
   val schemaV0 = "tokenId" :: "path" :: Omit :: HNil
-  
+
   val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0"))
   val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0")) <+> extractorV1a
 

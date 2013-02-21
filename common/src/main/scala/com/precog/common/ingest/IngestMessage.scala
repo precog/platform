@@ -108,9 +108,9 @@ object IngestMessage {
 
   val extractorV0: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
     override def validated(obj: JValue): Validation[Error, EventMessageExtraction] =
-      Ingest.extractorV0.validated(obj \ "event").flatMap { ingest =>
-        ((obj \ "producerId" ).validated[Int] |@|
-         (obj \ "eventId").validated[Int]) { (producerId, sequenceId) =>
+      obj.validated[Ingest]("event").flatMap { ingest =>
+        (obj.validated[Int]("producerId") |@|
+         obj.validated[Int]("eventId")) { (producerId, sequenceId) =>
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.ownerAccountId.map { ownerAccountId =>
             assert(ingest.data.size == 1)
@@ -141,9 +141,9 @@ object ArchiveMessage {
   val extractorV1: Extractor[ArchiveMessage] = extractorV[ArchiveMessage](schemaV1, Some("1.0"))
   val extractorV0: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] = {
-      ( (obj \ "producerId" ).validated[Int] |@|
-        (obj \ "deletionId").validated[Int] |@|
-        Archive.extractorV0.validated(obj \ "deletion") ) { (producerId, sequenceId, archive) =>
+      (obj.validated[Int]("producerId") |@|
+       obj.validated[Int]("deletionId") |@|
+       obj.validated[Archive]("deletion")) { (producerId, sequenceId, archive) =>
         ArchiveMessage(EventId(producerId, sequenceId), archive)
       }
     }

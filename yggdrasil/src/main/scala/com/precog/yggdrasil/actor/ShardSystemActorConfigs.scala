@@ -52,14 +52,14 @@ import scalaz.syntax.id._
 trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
   case class IngestConfig(
     bufferSize: Int,
-    maxParallel: Int, 
-    batchTimeout: Timeout, 
+    maxParallel: Int,
+    batchTimeout: Timeout,
     failureLogRoot: File,
     maxConsecutiveFailures: Int)
 
   def kafkaHost: String = config[String]("kafka.batch.host")
   def kafkaPort: Int = config[Int]("kafka.batch.port")
-  def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  def kafkaTopic: String = config[String]("kafka.batch.topic")
   def kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
   def kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
 
@@ -78,7 +78,7 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
 
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
   //def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  //def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  //def zookeeperPrefix: String = config[String]("zookeeper.prefix")
 
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 
@@ -96,17 +96,17 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
   def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
   override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]) = {
-    yggConfig.ingestConfig map { conf => 
-      val consumer = new SimpleConsumer(yggConfig.kafkaHost, 
-                                        yggConfig.kafkaPort, 
-                                        yggConfig.kafkaSocketTimeout.toMillis.toInt, 
+    yggConfig.ingestConfig map { conf =>
+      val consumer = new SimpleConsumer(yggConfig.kafkaHost,
+                                        yggConfig.kafkaPort,
+                                        yggConfig.kafkaSocketTimeout.toMillis.toInt,
                                         yggConfig.kafkaBufferSize)
 
       actorSystem.actorOf(Props(
-        new KafkaShardIngestActor( shardId = yggConfig.shardId, 
+        new KafkaShardIngestActor( shardId = yggConfig.shardId,
                                    initialCheckpoint = checkpoint,
-                                   consumer = consumer, 
-                                   topic = yggConfig.kafkaTopic, 
+                                   consumer = consumer,
+                                   topic = yggConfig.kafkaTopic,
                                    accountFinder = accountFinder,
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
@@ -125,7 +125,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
     }
   }
 
-  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined) 
+  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined)
 }
 
 trait StandaloneShardSystemConfig extends ShardConfig {
@@ -142,4 +142,3 @@ trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
 // vim: set ts=4 sw=4 et:
 /* tmux
 type ShardSystemActorConfigs */
-
