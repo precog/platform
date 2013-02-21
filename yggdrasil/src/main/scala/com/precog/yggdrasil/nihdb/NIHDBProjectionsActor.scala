@@ -237,7 +237,6 @@ class NIHDBProjectionsActor(
         projections -= path
 
         archive(path).map { _ =>
-          logger.debug("Archive complete on " + path)
           requestor ! ArchiveComplete(path)
         }.except {
           case t: Throwable => IO { logger.error("Failure during archive of " + path, t) }

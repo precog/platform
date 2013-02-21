@@ -235,7 +235,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       runningBatches.getAndDecrement
 
       // Send off a new batch now that we've completed this one
-      logger.debug("Pre-firing new GetMessages on batch completion to " + requestor)
+      logger.trace("Pre-firing new GetMessages on batch completion to " + requestor)
       self.tell(GetMessages(requestor), requestor)
 
     case BatchFailed(requestor, checkpoint) =>

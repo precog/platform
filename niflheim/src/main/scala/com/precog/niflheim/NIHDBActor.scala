@@ -251,7 +251,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
       val pid = EventId.producerId(eventId)
       val sid = EventId.sequenceId(eventId)
       if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
-        logger.debug("Inserting %d rows for %d:%d".format(values.length, pid, sid))
+        logger.debug("Inserting %d rows for %d:%d at %s".format(values.length, pid, sid, baseDir.getCanonicalPath))
         blockState.rawLog.write(eventId, values)
 
         // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
