@@ -34,7 +34,7 @@ import java.util.Arrays
 object NIHDBSnapshot {
   def apply(m: SortedMap[Long, StorageReader]): NIHDBSnapshot =
     new NIHDBSnapshot {
-      val readers = m.values.toArray
+      val readers = m.values.filter(_.length > 0).toArray
       val blockIds = readers.map(_.id)
     }
 }
