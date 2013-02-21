@@ -45,7 +45,7 @@ trait RoutingTable {
     // process each message, aggregating ingest messages
     events.foreach {
       case IngestMessage(key, path, owner, data, jobid) =>
-        val recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
+        val buf = recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
         buf ++= data
 
       case msg: ArchiveMessage =>
