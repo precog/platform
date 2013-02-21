@@ -170,3 +170,7 @@ case object GroupTargetSetNotIndependent extends ErrorType {
 case object InvalidGroupConstraint extends ErrorType {
   override def toString = "solve constraint lacking variables"
 }
+
+case class ExtraVarsInGroupConstraint(id: TicId) extends ErrorType {
+  override def toString = "invalid free variable usage (%s) in solve constraint".format(id)
+}
