@@ -27,6 +27,61 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "ensure that two array elements are not switched in a solve" in {
+      val input = """
+        | orders := //orders
+        | orders' := orders with { rank: std::stats::rank(orders.total) }
+        |  
+        | buckets := solve 'rank = orders'.rank
+        |   minimum:= orders'.total where orders'.rank = 'rank
+        |   maximum:= min(orders'.total where orders'.rank > 'rank)
+        |   [minimum, maximum]
+        | 
+        | buckets
+        | """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(1)
+
+          elems must haveSize(2)
+          
+          elems(0) must beLike { case SDecimal(d0) =>
+            elems(1) must beLike { case SDecimal(d1) =>
+              d0 must be_<(d1)
+            }
+          }
+      }
+    }
+
+    "ensure that more than two array elements are not scrambled in a solve" in {
+      val input = """
+        | orders := //orders
+        | orders' := orders with { rank: std::stats::rank(orders.total) }
+        |  
+        | minimum:= orders'.total where orders'.rank = 1
+        | maximum:= min(orders'.total where orders'.rank > 1)
+        | [minimum, maximum, minimum, maximum]
+        | """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(1)
+
+          elems must haveSize(4)
+
+          val decimals = elems collect { case SDecimal(d) => d }
+
+          decimals(0) must be<(decimals(1))
+          decimals(0) mustEqual decimals(2)
+          decimals(1) mustEqual decimals(3)
+      }
+    }
+
     "ensure that with operation uses inner-join semantics" in {
       val input = """
         | clicks := //clicks
@@ -2304,6 +2359,36 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       eval(input) must not(beEmpty)
+    }
+    
+    // regression test for PLATFORM-986
+    "not explode on mysterious error" in {
+      val input = """
+        | import std::random::*
+        | 
+        | buckets := //benchmark/buckets/1361210162753
+        | test := //test
+        | 
+        | r := observe(test, uniform(38))
+        | 
+        | pred := test ~ buckets
+        |   range := buckets.range
+        | 
+        |   low := r >= range[1]
+        |   hi := r < range[0]
+        | 
+        |   test with {prediction: buckets.name where low & hi}
+        | 
+        | solve 'zone
+        |   pred' := pred where pred.currentZone = 'zone
+        | 
+        |   {
+        |     tp: count(pred'.prediction where pred'.prediction = pred'.currentZone),
+        |     fp: count(pred'.prediction where pred'.prediction != pred'.currentZone)    
+        |   }
+        | """.stripMargin
+        
+      eval(input) must not(throwA[Throwable])
     }
   }
 }
