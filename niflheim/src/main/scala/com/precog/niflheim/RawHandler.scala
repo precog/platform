@@ -40,11 +40,12 @@ class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue])
 
   def isStable: Boolean = true
 
-  def structure: Iterable[(CPath, CType)] = snapshot(None).map { seg => (seg.cpath, seg.ctype) }
+  def structure: Iterable[(CPath, CType)] =
+    snapshot(None).segments.map { seg => (seg.cpath, seg.ctype) }
 
   def length: Int = count
 
-  def snapshot(pathConstraint: Option[Set[CPath]]): Seq[Segment] = {
+  def snapshot(pathConstraint: Option[Set[CPath]]): Block = {
     if (!rows.isEmpty) {
       segments.synchronized {
         if (!rows.isEmpty) {
@@ -55,9 +56,11 @@ class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue])
       }
     }
 
-    pathConstraint.map { cpaths =>
+    val segs = pathConstraint.map { cpaths =>
       segments.a.filter { seg => cpaths(seg.cpath) }
     }.getOrElse(segments.a.clone)
+
+    Block(id, segs, isStable)
   }
 }
 
