@@ -34,7 +34,7 @@ import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.std.option._
 
-class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKey, Path, AccountId) => Future[B]])(implicit err: (HttpFailure, String) => B, executor: ExecutionContext) 
+class AccountRequiredService[A, B](accountFinder: AccountFinder[Future], val delegate: HttpService[A, (APIKey, Path, AccountId) => Future[B]])(implicit err: (HttpFailure, String) => B, executor: ExecutionContext)
 extends DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, AccountId) => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     delegate.service(request) map { f => (apiKey: APIKey, path: Path) =>
@@ -42,13 +42,13 @@ extends DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Acco
 
       request.parameters.get('ownerAccountId) map { accountId =>
         logger.debug("Using provided ownerAccountId: " + accountId)
-        accountFinder.findAccountById(accountId) flatMap {
+        accountFinder.findAccountDetailsById(accountId) flatMap {
           case Some(account) => f(apiKey, path, account.accountId)
           case None => Future(err(BadRequest, "Unknown account Id: " + accountId))
         }
       } getOrElse {
         logger.trace("Looking up accounts based on apiKey " + apiKey)
-        accountFinder.findAccountByAPIKey(apiKey) flatMap { 
+        accountFinder.findAccountByAPIKey(apiKey) flatMap {
           case Some(accountId) => f(apiKey, path, accountId)
           case None =>
             logger.warn("Unable to determine account Id from api key: " + apiKey)

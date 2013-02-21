@@ -316,8 +316,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       logger.debug("Got account details request " + request)
       Success { (auth: Account) =>
         withAccountAdmin(request, auth) { account =>
-          import Account.SafeSerialization._
-          Future(HttpResponse[JValue](OK, content = Some(account.jv)))
+          Future(HttpResponse[JValue](OK, content = Some(AccountDetails.from(account).jv)))
         }
       }
     }

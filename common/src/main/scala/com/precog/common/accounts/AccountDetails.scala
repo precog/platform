@@ -20,24 +20,36 @@
 package com.precog.common
 package accounts
 
-import akka.dispatch.{ExecutionContext, Future, Promise}
+import com.precog.common.json._
+import com.precog.common.security.APIKey
 
-import blueeyes.bkka._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.IsoSerialization._
+import blueeyes.json.serialization.DefaultSerialization._
 
-import com.weiglewilczek.slf4s.Logging
+import org.joda.time.DateTime
 
-import org.streum.configrity.Configuration
+import shapeless._
 
-import scalaz.Monad
+case class AccountDetails(
+  accountId: AccountId,
+  email: String,
+  accountCreationDate: DateTime,
+  apiKey: APIKey,
+  rootPath: Path,
+  plan: AccountPlan,
+  lastPasswordChangeTime: Option[DateTime] = None)
 
-import com.precog.common.security._
+object AccountDetails {
+  def from(account: Account): AccountDetails = {
+    import account._
+    AccountDetails(accountId, email, accountCreationDate, apiKey, rootPath, plan, lastPasswordChangeTime)
+  }
 
-class StaticAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
-  logger.debug("Constructed new static account manager. All queries resolve to \"%s\"".format(accountId))
+  implicit val accountDetailsIso = Iso.hlist(AccountDetails.apply _, AccountDetails.unapply _)
 
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+  val schema = "accountId" :: "email" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "lastPasswordChangeTime" :: HNil
 
-  def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
-
-  def findAccountDetailsById(accountId: AccountId): Future[Option[AccountDetails]] = Promise.successful(None)
+  implicit val accountDetailsDecomposer = decomposerV[AccountDetails](schema, None)
+  implicit val accountDetailsExtractor = extractorV[AccountDetails](schema, None)
 }

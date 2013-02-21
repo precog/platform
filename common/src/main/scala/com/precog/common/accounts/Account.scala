@@ -20,14 +20,13 @@
 package com.precog.common
 package accounts
 
-import com.precog.common.json._
 import com.precog.common.Path
+import com.precog.common.json._
+import com.precog.common.security.APIKey
 
-import blueeyes.json._
-import blueeyes.json.serialization.{ Extractor, Decomposer, IsoSerialization }
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.Extractor._
 
 import com.google.common.base.Charsets
 import com.google.common.hash.Hashing
@@ -48,15 +47,15 @@ object AccountPlan {
 
   implicit val iso = Iso.hlist(AccountPlan.apply _, AccountPlan.unapply _)
   val schema = "type" :: HNil
-  implicit val (decomposer, extractor) = IsoSerialization.serialization[AccountPlan](schema)
+  implicit val (decomposer, extractor) = serializationV[AccountPlan](schema, None)
 }
 
-case class Account(accountId: String,
+case class Account(accountId: AccountId,
                    email: String,
                    passwordHash: String,
                    passwordSalt: String,
                    accountCreationDate: DateTime,
-                   apiKey: String,
+                   apiKey: APIKey,
                    rootPath: Path,
                    plan: AccountPlan,
                    parentId: Option[String] = None,
@@ -65,23 +64,12 @@ case class Account(accountId: String,
 object Account {
   implicit val iso = Iso.hlist(Account.apply _, Account.unapply _)
   val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: HNil
-  val safeSchemaV1 = "accountId" :: "email" ::           Omit ::           Omit :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" ::       Omit :: "lastPasswordChangeTime" :: HNil
 
   val extractorPreV = extractorV[Account](schemaV1, None)
-  val (decomposerV1, extractorV1) = serializationV[Account](schemaV1, Some("1.0"))
-  val safeDecomposer = decomposerV[Account](safeSchemaV1, Some("1.0"))
+  val extractorV1 = extractorV[Account](schemaV1, Some("1.0"))
+  implicit val accountExtractor = extractorV1 <+> extractorPreV
 
-  val extractor = extractorV1 <+> extractorPreV
-
-  object Serialization {
-    implicit val accountDecomposer = decomposerV1
-    implicit val accountExtractor = extractor
-  }
-
-  object SafeSerialization {
-    implicit val accountDecomposer = safeDecomposer
-    implicit val accountExtractor = extractor
-  }
+  implicit val decomposerV1 = decomposerV[Account](schemaV1, Some("1.0"))
 
   private val randomSource = new java.security.SecureRandom
 
@@ -118,5 +106,6 @@ object WrappedAccountId {
 
   val schema = "accountId" :: HNil
 
-  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = IsoSerialization.serialization[WrappedAccountId](schema)
+  implicit val (wrappedAccountIdDecomposer, wrappedAccountIdExtractor) = serializationV[WrappedAccountId](schema, None)
 }
+

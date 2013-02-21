@@ -143,7 +143,7 @@ object ArchiveMessage {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] = {
       ( (obj \ "producerId" ).validated[Int] |@|
         (obj \ "deletionId").validated[Int] |@|
-        Archive.extractorV0.validated(obj \ "archive") ) { (producerId, sequenceId, archive) =>
+        Archive.extractorV0.validated(obj \ "deletion") ) { (producerId, sequenceId, archive) =>
         ArchiveMessage(EventId(producerId, sequenceId), archive)
       }
     }
