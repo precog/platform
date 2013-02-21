@@ -97,7 +97,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       makeTableTrans(Map(paths.Value -> trans))
 
     def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
-      specs map { trans.WrapArray(_): TransSpec1 } reduceOption { trans.OuterArrayConcat(_, _) } get
+      specs map { trans.WrapArray(_): TransSpec1 } reduceLeftOption { trans.OuterArrayConcat(_, _) } get
 
     //TODO don't use Map1, returns an empty array of type CNum
     def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  
@@ -113,7 +113,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       val components = for (i <- 0 until sharedLength)
         yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
 
-      components reduce { trans.InnerArrayConcat(_, _) }
+      components reduceLeft { trans.InnerArrayConcat(_, _) }
     }
     
     def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
@@ -134,13 +134,13 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       val newIdentitySpec = if (derefs.isEmpty)
         trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
       else
-        derefs reduce { trans.InnerArrayConcat(_, _) }
+        derefs reduceLeft { trans.InnerArrayConcat(_, _) }
       
       val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
       
       val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
       val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
-      
+
       val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
         
       InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
@@ -156,8 +156,9 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
 
       val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
       val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
-      
-      val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
+
+      val valueSpec = spec(leftValueSpec, rightValueSpec)
+      val wrappedValueSpec = trans.WrapObject(valueSpec, paths.Value.name)
 
       InnerObjectConcat(wrappedIdentitySpec, wrappedValueSpec)
     }
@@ -165,7 +166,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
     def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {
       indexes map { idx =>
         trans.WrapArray(DerefArrayStatic(Leaf(Source), CPathIndex(idx))): TransSpec1
-      } reduce { trans.InnerArrayConcat(_, _) }
+      } reduceLeft { trans.InnerArrayConcat(_, _) }
     }
   }
 }

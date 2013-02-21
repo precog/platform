@@ -134,7 +134,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      */
     def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): N[Table] = {
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
-  
+
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
 
       def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {

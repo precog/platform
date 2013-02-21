@@ -1084,5 +1084,17 @@ object GroupSolverSpecs extends Specification
       solve.errors must beEmpty
       solve.buckets mustEqual(Map(Set() -> expected))
     }
+    
+    "accept a solve on the results of an observation" in {
+      val input = """
+        | foo := //foo
+        | r := observe(foo, std::random::foobar(42))
+        | 
+        | solve 'a
+        |   r where r = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
   }
 }
