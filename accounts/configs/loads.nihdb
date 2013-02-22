@@ -1,0 +1,6 @@
+/etc/precog/accounts-v1-nihdb.conf=nihdb/accounts-v1.conf
+default=nihdb/accounts-v1.default
+init=nihdb/accounts-v1.init
+/etc/monit/conf.d/accounts-v1-nihdb.monit=nihdb/accounts-v1.monit
+/etc/precog/accounts-v1-nihdb.logging.xml=nihdb/accounts-v1.logging.xml
+postinstall=nihdb/postinstall.sh
