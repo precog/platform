@@ -176,29 +176,34 @@ trait ShardService extends
   }
 
   private def asyncHandler(state: ShardState) = {
-    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = apiKey(state.apiKeyManager) {
-      path("/analytics/queries") {
-        asyncQuery(post(asyncQueryService(state)))
+    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = 
+      path("/analytics") {
+        apiKey(state.apiKeyManager) {
+          path("/queries") {
+            asyncQuery(post(asyncQueryService(state)))
+          }
+        }
       }
-    }
 
     state match {
       case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock, _, _) =>
-        apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
-          path("/analytics/queries") {
-            path("'jobId") {
-              get(new AsyncQueryResultServiceHandler(jobManager)) ~
-              delete(new QueryDeleteHandler(jobManager, clock))
+        path("/analytics") {
+          apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+            path("/queries") {
+              path("'jobId") {
+                get(new AsyncQueryResultServiceHandler(jobManager)) ~
+                delete(new QueryDeleteHandler(jobManager, clock))
+              }
             }
-          }
+          } 
         } ~ queryHandler
 
       case _ =>
-        val x: HttpService[Future[JValue], Future[HttpResponse[ByteChunk]]] = queryHandler map (_ map { response =>
-          response.copy(content = response.content map queryResult2byteChunk)
-        })
-        val f: ByteChunk => Future[JValue] = implicitly
-        x contramap f
+        queryHandler map {
+          _ map { response => response.copy(content = response.content map queryResult2byteChunk) }
+        } contramap {
+          implicitly[ByteChunk => Future[JValue]]
+        }
     }
   }
 
