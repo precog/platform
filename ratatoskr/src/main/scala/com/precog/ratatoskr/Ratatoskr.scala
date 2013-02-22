@@ -72,7 +72,7 @@ import scala.io.Source
 object Ratatoskr {
   def usage(message: String*): String = {
     val initial = message ++ List("Usage: yggutils {command} {flags/args}",""," For details on a particular command enter yggutils {command} -help", "")
-    
+
     commands.foldLeft(initial) {
       case (acc, cmd) => acc :+ "%-20s : %s".format(cmd.name, cmd.description)
     }.mkString("\n")
@@ -116,9 +116,9 @@ trait Command {
 }
 
 object ChownTools extends Command {
-  val name = "dbchown" 
-  val description = "change ownership" 
- 
+  val name = "dbchown"
+  val description = "change ownership"
+
   def run(args: Array[String]) {
     sys.error("FIXME for NIHDB")
   }
@@ -131,7 +131,7 @@ object KafkaTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils kafka") {
-      opt("r", "range", "<start:stop>", "show message range ie: 5:10 :100 10:", {s: String => 
+      opt("r", "range", "<start:stop>", "show message range ie: 5:10 :100 10:", {s: String =>
         val range = MessageRange.parse(s)
         config.range = range.getOrElse(sys.error("Invalid range specification: " + s))
       })
@@ -142,21 +142,21 @@ object KafkaTools extends Command {
     }
     if (parser.parse(args)) {
       process(config)
-    } else { 
+    } else {
       parser
     }
   }
 
   def process(config: Config) {
     import config._
-    dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) } 
-    dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) } 
+    dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) }
+    dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) }
     dumpRaw.foreach { f => dump(new File(f), range, RawFormat) }
     convertCentral.foreach { convert(_) }
   }
 
   def dump(file: File, range: MessageRange, format: Format) {
-    def traverse(itr: Iterator[MessageAndOffset], 
+    def traverse(itr: Iterator[MessageAndOffset],
                  range: MessageRange,
                  format: Format,
                  i: Int = 0): Unit = {
@@ -172,16 +172,16 @@ object KafkaTools extends Command {
       }
     }
 
-    val ms = new FileMessageSet(file, false) 
+    val ms = new FileMessageSet(file, false)
 
     traverse(ms.iterator, range, format)
   }
- 
-  def convert(central: String): Unit = convert(new File(central), new File(central + ".local")) 
-  
+
+  def convert(central: String): Unit = convert(new File(central), new File(central + ".local"))
+
   def convert(source: File, destination: File) {
-    val src = new FileMessageSet(source, false) 
-    val dest = new FileMessageSet(destination, true) 
+    val src = new FileMessageSet(source, false)
+    val dest = new FileMessageSet(destination, true)
 
     dest.append(src)
 
@@ -189,7 +189,7 @@ object KafkaTools extends Command {
     dest.close
   }
 
-  class Config(var convertCentral: Option[String] = None, 
+  class Config(var convertCentral: Option[String] = None,
                var dumpLocal: Option[String] = None,
                var dumpCentral: Option[String] = None,
                var dumpRaw: Option[String] = None,
@@ -200,7 +200,7 @@ object KafkaTools extends Command {
     def done(i: Int): Boolean = finish.map { i >= _ }.getOrElse(false)
 
     def contains(i: Int): Boolean =
-      (start.map{_ <= i}, finish.map{i < _}) match { 
+      (start.map{_ <= i}, finish.map{i < _}) match {
         case (Some(s), Some(f)) => s && f
         case (Some(s), None   ) => s
         case (None   , Some(f)) => f
@@ -222,7 +222,7 @@ object KafkaTools extends Command {
         None
       }
     }
-    
+
     def parseOffset(s: String): Either[Unit, Option[Int]] = {
        try {
          Right(if(s.trim.length == 0) {
@@ -305,7 +305,7 @@ object ZookeeperTools extends Command {
       } finally {
         client.close
       }
-    } else { 
+    } else {
       parser
     }
   }
@@ -318,13 +318,13 @@ object ZookeeperTools extends Command {
       showChildren("agents", path, pathsAt(path, client))
     }
 
-    def parseCheckpoint(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[YggCheckpoint]) 
+    def parseCheckpoint(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[YggCheckpoint])
 
     def setCheckpoint(path: String, data: YggCheckpoint) {
       if (!client.exists(path)) client.createPersistent(path, true)
 
       val updater = new DataUpdater[Array[Byte]] {
-        def update(cur: Array[Byte]): Array[Byte] = data.serialize.renderCompact.getBytes 
+        def update(cur: Array[Byte]): Array[Byte] = data.serialize.renderCompact.getBytes
       }
 
       client.updateDataSerialized(path, updater)
@@ -334,27 +334,27 @@ object ZookeeperTools extends Command {
     config.checkpointUpdate.foreach {
       case (path, data) =>
         data match {
-          case "initial" => 
+          case "initial" =>
             println("Loading initial checkpoint")
             setCheckpoint(path, YggCheckpoint.Empty)
-          case s => 
+          case s =>
             println("Loading initial checkpoint from : " + s)
             setCheckpoint(path, parseCheckpoint(s).valueOr(err => sys.error(err.message)))
         }
     }
 
-    config.relayAgentUpdate.foreach { 
-      case (path, data) => 
+    config.relayAgentUpdate.foreach {
+      case (path, data) =>
         setCheckpoint(path, parseCheckpoint(data).valueOr(err => sys.error(err.message)))
     }
   }
 
   def showChildren(name: String, path: String, children: Buffer[(String, String)]) { children match {
-      case l if l.size == 0 => 
+      case l if l.size == 0 =>
         println("no %s at: %s".format(name, path))
       case children =>
         println("%s for: %s".format(name, path))
-        children.foreach { 
+        children.foreach {
           case (child, data) =>
             println("  %s".format(child))
             println("    %s".format(data))
@@ -412,7 +412,7 @@ object IngestTools extends Command {
       } finally {
         client.close
       }
-    } else { 
+    } else {
       parser
     }
   }
@@ -424,7 +424,7 @@ object IngestTools extends Command {
     val relayRaw = getJsonAt(config.relayZkPath, client).getOrElse(sys.error("Error reading relay agent state"))
     val shardRaw = getJsonAt(config.shardZkPath, client).getOrElse(sys.error("Error reading shard state"))
 
-    val relayState = relayRaw.deserialize[EventRelayState]  
+    val relayState = relayRaw.deserialize[EventRelayState]
     val shardState = shardRaw.deserialize[YggCheckpoint]
 
     val shardValues = shardState.messageClock.map
@@ -435,7 +435,7 @@ object IngestTools extends Command {
     println("Messaging State")
     println("PID: %d Shard SID: %s Ingest (relay) SID: %s".format(pid, shardSID, relaySID))
 
-    val syncDelta = relayState.nextSequenceId - 1 - shardValues.get(pid).getOrElse(0) 
+    val syncDelta = relayState.nextSequenceId - 1 - shardValues.get(pid).getOrElse(0)
 
     if(syncDelta > config.limit) {
       println("Message sync limit exceeded: %d > %d".format(syncDelta, config.limit))
@@ -474,7 +474,7 @@ object IngestTools extends Command {
     val zk = conn.getZookeeper
     Option(zk.exists(path, null))
   }
-  
+
   class Config(var limit: Int = 0,
                var lag: Int = 60,
                var zkConn: String = "localhost:2181",
@@ -485,11 +485,11 @@ object IngestTools extends Command {
 object ImportTools extends Command with Logging {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
-  
+
   val sid = new AtomicInteger(0)
 
   class Config(
-    var input: Vector[(String, String)] = Vector.empty, 
+    var input: Vector[(String, String)] = Vector.empty,
     val batchSize: Int = 10000,
     var apiKey: APIKey = "root",     // FIXME
     var accountId: AccountId = "",
@@ -505,7 +505,7 @@ object ImportTools extends Command with Logging {
       opt("o", "owner", "<account id>", "Owner account ID to insert data under", { s: String => config.accountId = s })
       opt("s", "storage", "<storage root>", "directory containing data files", { s: String => config.storageRoot = new File(s) })
       opt("a", "archive", "<archive root>", "directory containing archived data files", { s: String => config.archiveRoot = new File(s) })
-      arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
+      arglist("<json input> ...", "json input file mappings {db}={input}", {s: String =>
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
         config.input = config.input :+ t
@@ -514,7 +514,7 @@ object ImportTools extends Command with Logging {
 
     if (parser.parse(args)) {
       process(config)
-    } else { 
+    } else {
       parser
     }
   }
@@ -561,7 +561,7 @@ object ImportTools extends Command with Logging {
 
         ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
           val update = ProjectionInsert(Path(db), records, config.accountId)
-        
+
           logger.info(records.size + " events to be inserted")
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
@@ -592,7 +592,7 @@ object CSVTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
-      opt("d","delimeter","field delimeter", {s: String => 
+      opt("d","delimeter","field delimeter", {s: String =>
         if(s.length == 1) {
           config.delimeter = s.charAt(0)
         } else {
@@ -601,11 +601,11 @@ object CSVTools extends Command {
       })
       opt("t","mapTimestamps","Map timestamps to expected format.", { config.teaseTimestamps = true })
       opt("v","verbose","Map timestamps to expected format.", { config.verbose = true })
-      arg("<csv_file>", "csv file to convert (headers required)", {s: String => config.input = s}) 
+      arg("<csv_file>", "csv file to convert (headers required)", {s: String => config.input = s})
     }
     if (parser.parse(args)) {
       process(config)
-    } else { 
+    } else {
       parser
     }
   }
@@ -617,8 +617,8 @@ object CSVTools extends Command {
   }
 
   class Config(
-    var input: String = "", 
-    var delimeter: Char = ',', 
+    var input: String = "",
+    var delimeter: Char = ',',
     var teaseTimestamps: Boolean = false,
     var verbose: Boolean = false)
 }
@@ -627,7 +627,7 @@ object CSVTools extends Command {
 object APIKeyTools extends Command with AkkaDefaults with Logging {
   val name = "tokens"
   val description = "APIKey management utils"
-    
+
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
@@ -639,17 +639,17 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
       opt("a","name","Human-readable name for new API key", { s: String => config.newAPIKeyName = s })
       opt("x","delete","Delete API key", { s: String => config.delete = Some(s) })
       opt("d","database","APIKey database name (ie: beta_auth_v1)", {s: String => config.database = s })
-      opt("t","tokens","APIKeys collection name", {s: String => config.collection = s }) 
+      opt("t","tokens","APIKeys collection name", {s: String => config.collection = s })
       opt("a","archive","Collection for deleted API keys", {s: String => config.deleted = Some(s) })
       opt("s","servers","Mongo server config", {s: String => config.servers = s})
     }
     if (parser.parse(args)) {
       process(config)
-    } else { 
+    } else {
       parser
     }
   }
-  
+
   def process(config: Config) {
     val job = for {
       (apiKeys, stoppable) <- apiKeyManager(config)
@@ -658,7 +658,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 //              config.listChildren.map(listChildren(_, apiKeys)) ++
                 config.accountId.map(p => create(p, config.newAPIKeyName, apiKeys)) ++
                 config.delete.map(delete(_, apiKeys))
-      _ <- Future.sequence(actions) 
+      _ <- Future.sequence(actions)
       _ <- Stoppable.stop(stoppable)
     } yield {
       defaultActorSystem.shutdown
@@ -677,7 +677,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     val rootKey: Future[APIKeyRecord] = if (config.createRoot) {
       MongoAPIKeyManager.createRootAPIKey(
         database,
-        config.mongoSettings.apiKeys, 
+        config.mongoSettings.apiKeys,
         config.mongoSettings.grants
       )
     } else {
@@ -737,7 +737,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
 //      printAPIKey(apiKey)
 //    }
 //  }
-  
+
   class Config {
     var delete: Option[String] = None
     var accountId: Option[String] = None
@@ -749,14 +749,14 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
     var database: String = "auth_v1"
     var collection: String = "tokens"
     var deleted: Option[String] = None
-    var servers: String = "localhost" 
+    var servers: String = "localhost"
 
     def deletedCollection: String = {
       deleted.getOrElse( collection + "_deleted" )
     }
 
     def mongoSettings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings(
-      apiKeys = collection, 
+      apiKeys = collection,
       deletedAPIKeys = deletedCollection
     )
 
@@ -775,13 +775,13 @@ object CSVToJSONConverter {
   def convert(file: String, delimeter: Char = ',', timestampConversion: Boolean = false, verbose: Boolean = false): Iterator[JValue] = new Iterator[JValue] {
 
     private val reader = new CSVReader(new FileReader(file), delimeter)
-    private val header = reader.readNext 
+    private val header = reader.readNext
     private var line = reader.readNext
 
-    def hasNext(): Boolean = line != null 
+    def hasNext(): Boolean = line != null
 
     def next(): JValue = {
-      val result = JObject(header.zip(line).map{ 
+      val result = JObject(header.zip(line).map{
         case (k, v) => JField(k, parse(v, timestampConversion, verbose))
       }.toList)
       line = reader.readNext
