@@ -52,6 +52,7 @@ object PlatformBuild extends Build {
     },
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
+    fork in Test := true,
 
     defaultJarName in assembly <<= (name) { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
 
