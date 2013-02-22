@@ -30,12 +30,19 @@ import java.nio.ByteBuffer
 
 import scala.collection.immutable.SortedMap
 
+object CookStateLog {
+  final val lockName = "txLog"
+  final val logName = "CookStateLog"
+}
+
 class CookStateLog(baseDir: File) extends Logging {
-  private[this] val workLock = FileLock(baseDir, "txLog")
+  import CookStateLog._
+
+  private[this] val workLock = FileLock(baseDir, lockName)
 
   private[this] val txLogConfig = new Configuration()
   txLogConfig.setLogFileDir(baseDir.getCanonicalPath)
-  txLogConfig.setLogFileName("CookStateLog")
+  txLogConfig.setLogFileName(logName)
   txLogConfig.setLogFileMode("rwd") // Force file sync to underlying hardware
   txLogConfig.setChecksumEnabled(true)
 

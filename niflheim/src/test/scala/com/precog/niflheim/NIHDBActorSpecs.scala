@@ -33,7 +33,7 @@ class NIHDBActorSpecs extends Specification with ScalaCheck {
     case prefix => prefix + NIHDBActor.escapeSuffix
   }(Arbitrary(alphaStr))
 
-  val componentGen: Gen[String] = Gen.oneOf(Gen.value(NIHDBActor.cookedSubdir), Gen.value(NIHDBActor.rawSubdir), hasSuffixGen, alphaStr)
+  val componentGen: Gen[String] = Gen.oneOf(Gen.oneOf(NIHDBActor.internalDirs.toSeq), hasSuffixGen, alphaStr)
 
   implicit val pathGen: Arbitrary[Path] =
     Arbitrary(for {
