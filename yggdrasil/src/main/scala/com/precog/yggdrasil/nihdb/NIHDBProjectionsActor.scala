@@ -160,13 +160,13 @@ class NIHDBProjectionsActor(
 
     def descendantHasProjection(dir: File): Boolean = {
       if (!NIHDBActor.hasProjection(dir)) {
-        dir.listFiles(pathFileFilter) filter (_.isDirectory) exists descendantHasProjection
+        Option(dir.listFiles(pathFileFilter)).map(_.filter (_.isDirectory) exists descendantHasProjection).getOrElse(false)
       } else true
     }
 
-    (start.listFiles(pathFileFilter).toSet filter descendantHasProjection).map {
+    Option(start.listFiles(pathFileFilter)).map { _.toSet.filter(descendantHasProjection).map {
       d => NIHDBActor.unescapePath(path / Path(d.getName))
-    }
+    }}.getOrElse(Set.empty)
   }(context.dispatcher)
 
   override def postStop() = {
