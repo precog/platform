@@ -105,8 +105,24 @@ class NIHDB(val baseDir: File, chef: ActorRef,
 
 object NIHDBActor {
   final val descriptorFilename = "NIHDBDescriptor.json"
-  final val cookedSubdir = "cooked"
-  final val rawSubdir = "raw"
+  final val cookedSubdir = "cooked_blocks"
+  final val rawSubdir = "raw_blocks"
+
+  private[niflheim] final val escapeSuffix = "_byUser"
+
+  def escapePath(path: Path) =
+    Path(path.elements.map {
+      case needsEscape if needsEscape == cookedSubdir || needsEscape == rawSubdir || needsEscape.endsWith(escapeSuffix) =>
+        needsEscape + escapeSuffix
+      case fine => fine
+    }.toList)
+
+  def unescapePath(path: Path) =
+    Path(path.elements.map {
+      case escaped if escaped.endsWith(escapeSuffix) =>
+        escaped.substring(0, escaped.length - escapeSuffix.length)
+      case fine => fine
+    }.toList)
 
   final def hasProjection(dir: File) = (new File(dir, descriptorFilename)).exists
 }

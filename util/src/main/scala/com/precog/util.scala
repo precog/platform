@@ -118,6 +118,14 @@ package object util {
     }
     true
   }
+
+  def msTime[A](log: Long => Unit)(f : => A): A = {
+    val start = System.currentTimeMillis
+    val result = f
+    log(System.currentTimeMillis - start)
+    result
+  }
+
 }
 
 // vim: set ts=4 sw=4 et:

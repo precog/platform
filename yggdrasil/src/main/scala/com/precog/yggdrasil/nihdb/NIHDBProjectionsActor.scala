@@ -93,7 +93,7 @@ class NIHDBProjectionsActor(
   private def descriptorDir(baseDir: File, path: Path): File = {
     // The path component maps directly to the FS
     // FIXME: escape user-provided components that match NIHDB internal paths
-    val prefix = path.elements.filterNot(disallowedPathComponents)
+    val prefix = NIHDBActor.escapePath(path).elements.filterNot(disallowedPathComponents)
     new File(baseDir, prefix.mkString(File.separator))
   }
 
@@ -163,7 +163,9 @@ class NIHDBProjectionsActor(
       } else true
     }
 
-    (start.listFiles(pathFileFilter).toSet filter descendantHasProjection).map { d => path / Path(d.getName) }
+    (start.listFiles(pathFileFilter).toSet filter descendantHasProjection).map {
+      d => NIHDBActor.unescapePath(path / Path(d.getName))
+    }
   }(context.dispatcher)
 
   override def postStop() = {

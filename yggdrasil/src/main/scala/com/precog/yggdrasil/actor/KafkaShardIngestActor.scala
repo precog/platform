@@ -377,9 +377,17 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       // read a fetch buffer worth of messages from kafka, deserializing each one
       // and recording the offset
-      val eventMessages: List[Validation[Error, (Long, EventMessage.EventMessageExtraction)]] = consumer.fetch(req).toList.map { msgAndOffset =>
-        EventMessageEncoding.read(msgAndOffset.message.payload) map { (msgAndOffset.offset, _) }
+
+      val rawMessages = msTime({ t => logger.debug("Kafka fetch in %d ms".format(t))}) {
+        consumer.fetch(req)
       }
+
+      val eventMessages: List[Validation[Error, (Long, EventMessage.EventMessageExtraction)]] =
+        msTime({t => logger.debug("Raw kafka deserialization in %d ms".format(t)) }) {
+          rawMessages.toList.map { msgAndOffset =>
+            EventMessageEncoding.read(msgAndOffset.message.payload) map { (msgAndOffset.offset, _) }
+          }
+        }
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
         eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage.EventMessageExtraction)] map { messageSet =>
