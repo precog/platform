@@ -15,13 +15,15 @@ import scalaz.std.stream._
 trait AccountManager[M[+_]] extends AccountFinder[M] {
   import Account._
 
+  def findAccountById(accountId: AccountId): M[Option[Account]]
+
   def updateAccount(account: Account): M[Boolean]
-  
+
   def updateAccountPassword(account: Account, newPassword: String): M[Boolean] = {
     val salt = randomSalt()
     updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt, lastPasswordChangeTime = Some(new DateTime)))
   }
- 
+
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
 
   def findAccountByEmail(email: String) : M[Option[Account]]
@@ -52,4 +54,4 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
   }
 
   def deleteAccount(accountId: AccountId): M[Option[Account]]
-} 
+}
