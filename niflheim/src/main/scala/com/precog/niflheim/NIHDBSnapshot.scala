@@ -102,4 +102,18 @@ trait NIHDBSnapshot {
       count(Some(id), paths0).getOrElse(0L)
     }
   }
+
+  def reduce[A](reduction: Reduction[A], path: CPath): Map[CType, A] = {
+    blockIds.foldLeft(Map.empty[CType, A]) { (acc, id) =>
+      getBlock(Some(id), Some(Set(path))) map { case Block(_, segments, _) =>
+        segments.foldLeft(acc) { (acc, segment) =>
+          reduction.reduce(segment, None) map { a =>
+            val key = segment.ctype
+            val value = acc.get(key).map(reduction.semigroup.append(_, a)).getOrElse(a)
+            acc + (key -> value)
+          } getOrElse acc
+        }
+      } getOrElse acc
+    }
+  }
 }
