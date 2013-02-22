@@ -71,18 +71,18 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                   path("'grantId") {
                     delete(DeleteAPIKeyGrantHandler)
                   }
-                } 
-              } ~ 
+                }
+              } ~
               path("/grants/'grantId") {
                 get(ReadGrantDetailsHandler) ~
                 path("/children/") {
-                  get(ReadGrantChildrenHandler) 
+                  get(ReadGrantChildrenHandler)
                 }
               } ~
               jsonAPIKey(k => handlers.apiKeyManager.findAPIKey(k).map(_.map(_.apiKey))) {
                 path("/apikeys/") {
                   get(ReadAPIKeysHandler) ~
-                  post(CreateAPIKeyHandler) 
+                  post(CreateAPIKeyHandler)
                 } ~
                 path("/grants/") {
                   get(ReadGrantsHandler) ~

@@ -39,29 +39,29 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
 
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] 
+  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean]
 
   def withM[N[+_]](implicit t: M ~> N) = new APIKeyFinder[N] {
-    def findAPIKey(apiKey: APIKey) = 
+    def findAPIKey(apiKey: APIKey) =
       t(self.findAPIKey(apiKey))
 
-    def findAllAPIKeys(fromRoot: APIKey) = 
+    def findAllAPIKeys(fromRoot: APIKey) =
       t(self.findAllAPIKeys(fromRoot))
 
-    def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) = 
+    def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) =
       t(self.newAPIKey(accountId, path, keyName, keyDesc))
 
-    def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId) = 
+    def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId) =
       t(self.addGrant(authKey, accountKey, grantId))
 
     def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]) =
       t(self.hasCapability(apiKey, perms, at))
   }
 }
- 
-class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] {
+
+class DirectAPIKeyFinder[M[+_]](val underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] {
   val grantDetails: Grant => v1.GrantDetails = {
-    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp) 
+    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp)
   }
 
   val recordDetails: PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = {
@@ -76,19 +76,19 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
   }
 
   def findAPIKey(apiKey: APIKey) = {
-    underlying.findAPIKey(apiKey) flatMap { 
+    underlying.findAPIKey(apiKey) flatMap {
       _ collect recordDetails sequence
     }
   }
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = {
     underlying.findAPIKey(fromRoot) flatMap {
-      case Some(record) => 
-        underlying.findAPIKeyChildren(record.apiKey) flatMap { 
-          _ collect recordDetails sequence 
+      case Some(record) =>
+        underlying.findAPIKeyChildren(record.apiKey) flatMap {
+          _ collect recordDetails sequence
         }
 
-      case None => 
+      case None =>
         M.point(Set())
     }
   }
