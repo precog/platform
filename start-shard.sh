@@ -128,6 +128,8 @@ for ASM in "$INGEST_ASSEMBLY" "$SHARD_ASSEMBLY" "$RATATOSKR_ASSEMBLY" "$AUTH_ASS
         else
             MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
         fi
+    else
+        echo "Found good $ASM"
     fi
 done
 

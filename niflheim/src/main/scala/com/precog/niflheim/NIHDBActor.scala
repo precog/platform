@@ -46,6 +46,7 @@ import scalaz.effect.IO
 import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.SortedMap
@@ -70,7 +71,7 @@ case object GetAuthorities
 object NIHDB
 
 class NIHDB(val baseDir: File, chef: ActorRef,
-    cookThreshold: Int, timeout: Timeout)(implicit 
+    cookThreshold: Int, timeout: Timeout)(implicit
     actorSystem: ActorSystem) extends GracefulStopSupport with AskSupport {
 
   private implicit val asyncContext: ExecutionContext = actorSystem.dispatcher
@@ -79,7 +80,7 @@ class NIHDB(val baseDir: File, chef: ActorRef,
   private val actor = actorSystem.actorOf(Props(
     new NIHDBActor(baseDir, chef, cookThreshold)))
 
-  def authorities: Future[Authorities] = 
+  def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
 
   def insert(id: Long, values: Seq[JValue], ownerAccountId: AccountId): Future[PrecogUnit] =
@@ -115,14 +116,30 @@ class NIHDB(val baseDir: File, chef: ActorRef,
 
   // def reduce[A](from: Option[Long], cols: Option[Set[(CPath, CType)]])(reduction: Reduction[A]): Future[Option[A]]
 
-  def close(): Future[PrecogUnit] = 
+  def close(): Future[PrecogUnit] =
     gracefulStop(actor, timeout.duration)(actorSystem).map { _ => PrecogUnit }
 }
 
 object NIHDBActor {
   final val descriptorFilename = "NIHDBDescriptor.json"
-  final val cookedSubdir = "cooked"
-  final val rawSubdir = "raw"
+  final val cookedSubdir = "cooked_blocks"
+  final val rawSubdir = "raw_blocks"
+
+  private[niflheim] final val escapeSuffix = "_byUser"
+
+  def escapePath(path: Path) =
+    Path(path.elements.map {
+      case needsEscape if needsEscape == cookedSubdir || needsEscape == rawSubdir || needsEscape.endsWith(escapeSuffix) =>
+        needsEscape + escapeSuffix
+      case fine => fine
+    }.toList)
+
+  def unescapePath(path: Path) =
+    Path(path.elements.map {
+      case escaped if escaped.endsWith(escapeSuffix) =>
+        escaped.substring(0, escaped.length - escapeSuffix.length)
+      case fine => fine
+    }.toList)
 
   final def hasProjection(dir: File) = (new File(dir, descriptorFilename)).exists
 }
@@ -146,8 +163,9 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
   private[this] val cookSequence = new AtomicLong
 
   def initDirs(f: File) {
-    if (!f.isDirectory && !f.mkdirs())
-      throw new IOException("Failed to create %s" format f)
+    if (!f.isDirectory) {
+      Files.createDirectories(f.toPath)
+    }
   }
 
   try {
@@ -271,11 +289,17 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
       val pid = EventId.producerId(eventId)
       val sid = EventId.sequenceId(eventId)
       if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
-        logger.debug("Inserting %d rows for %d:%d".format(values.length, pid, sid))
+        logger.debug("Inserting %d rows for %d:%d at %s".format(values.length, pid, sid, baseDir.getCanonicalPath))
         blockState.rawLog.write(eventId, values)
 
         // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
+        val oldOwners = currentState.authorities.ownerAccountIds
         currentState = currentState.copy(producerThresholds = updatedThresholds(currentState.producerThresholds, Seq(eventId)), authorities = currentState.authorities.expand(ownerAccountId))
+
+        // Make sure that ownership is updated immediately on disk
+        if (!oldOwners.contains(ownerAccountId)) {
+          ProjectionState.toFile(currentState, descriptorFile)
+        }
 
         if (blockState.rawLog.length >= cookThreshold) {
           blockState.rawLog.close
@@ -301,9 +325,9 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
 
 case class ProjectionState(producerThresholds: Map[Int, Int], cookedMap: Map[Long, String], authorities: Authorities) {
   def readers(baseDir: File): List[CookedReader] =
-    cookedMap.map { 
-      case (id, metadataFile) => 
-        CookedReader.load(new File(baseDir, metadataFile)) 
+    cookedMap.map {
+      case (id, metadataFile) =>
+        CookedReader.load(new File(baseDir, metadataFile))
     }.toList
 }
 

@@ -53,7 +53,7 @@ class Path private (val elements: String*) {
   def isDirectChildOf(that: Path) =
     elements.startsWith(that.elements) && (length - 1) == that.length
 
-  def rollups(depth: Int): List[Path] = this :: ancestors.take(depth) 
+  def rollups(depth: Int): List[Path] = this :: ancestors.take(depth)
 
   override def equals(that: Any) = that match {
     case Path(`path`) => true

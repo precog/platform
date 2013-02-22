@@ -65,7 +65,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
 
-import scalaz.{Success, Failure}
+import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.bifunctor._
@@ -291,7 +291,7 @@ object KafkaTools extends Command {
   case object CentralFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventMessageEncoding.read(msg.message.buffer) match {
-        case Success(IngestMessage(apiKey, path, ownerAccountId, data, _)) =>
+        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _))) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
 
