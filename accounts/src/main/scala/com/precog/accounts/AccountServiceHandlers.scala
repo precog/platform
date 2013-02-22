@@ -63,23 +63,23 @@ import org.joda.time.format.ISODateTimeFormat
 import com.precog.common.security.service.v1
 
 object Responses {
-  def failure(error: HttpStatusCode, message: String) = 
-    HttpResponse[JValue](HttpStatus(error), content = Some(JString(message))) 
+  def failure(error: HttpStatusCode, message: String) =
+    HttpResponse[JValue](HttpStatus(error), content = Some(JString(message)))
 
-  def failure(error: HttpStatusCode, statMessage: String, message: String) = 
+  def failure(error: HttpStatusCode, statMessage: String, message: String) =
     HttpResponse[JValue](HttpStatus(error, statMessage), content = Some(JString(message)))
-  
-  def failure(error: HttpStatus, message: String) = 
+
+  def failure(error: HttpStatus, message: String) =
     HttpResponse[JValue](error, content = Some(JString(message)))
 }
 
-class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyFinder: APIKeyFinder[Future], clock: Clock, rootAccountId: String)(implicit executor: ExecutionContext) 
+class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyFinder: DirectAPIKeyFinder[Future], clock: Clock, rootAccountId: String)(implicit executor: ExecutionContext)
     extends Logging {
   import ServiceHandlerUtil._
 
   def withAccountAdmin[A](accountId: String, auth: Account, request: HttpRequest[_])(f: Account => Future[HttpResponse[JValue]])(implicit executor: ExecutionContext): Future[HttpResponse[JValue]] = {
     implicit val M = new FutureMonad(executor)
-    accountManager.findAccountById(accountId) flatMap { 
+    accountManager.findAccountById(accountId) flatMap {
       case Some(account) =>
         accountManager.hasAncestor(account, auth) flatMap {
           case true  => f(account)
@@ -89,7 +89,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           }
         }
 
-      case None => 
+      case None =>
         Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
     }
   }
@@ -113,11 +113,33 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
         }
 
         logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
-        
-        accountManager.findAccountByAPIKey(keyToFind).map { 
-          case accountId =>
-            logger.debug("Found account for API key: "+keyToFind+" = "+accountId)
-            HttpResponse[JValue](OK, content = accountId.map(id => WrappedAccountId(id).serialize))
+
+        def lookup(key: APIKey): Future[Option[AccountId]] =
+          accountManager.findAccountByAPIKey(key).flatMap {
+            case Some(accountId) =>
+              logger.debug("Found account for API key: "+keyToFind+" = "+accountId)
+              Promise.successful(Some(accountId))
+
+            case None =>
+              // No account found, so we should check the parent apiKey
+              apiKeyFinder.underlying.findAPIKey(key).flatMap {
+                case Some(APIKeyRecord(_, _, _, "(undefined)", _, _)) =>
+                  // Root apikey, so we can't search any further
+                  logger.warn("Exhausted parent chain trying to find account for " + keyToFind)
+                  Promise.successful(None)
+
+                case Some(APIKeyRecord(_, _, _, issuer, _, _)) =>
+                  logger.debug("No account found for %s, trying issuer %s".format(key, issuer))
+                  lookup(issuer)
+
+                case None =>
+                  logger.warn("Issuer key " + key + " not found!")
+                  Promise.successful(None)
+              }
+          }
+
+        lookup(keyToFind).map { accountId =>
+          HttpResponse[JValue](OK, content = accountId.map(id => WrappedAccountId(id).serialize))
         }
       }
     }
@@ -125,13 +147,13 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val metadata = None
   }
 
-  //returns accountId of account if exists, else creates account, 
+  //returns accountId of account if exists, else creates account,
   //we are working on path accountId.. do we use this to get the account the user wants to create?
   //because we also need auth at this stage.. auth will give us the root key for permmissions
   object PostAccountHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
       logger.trace("Got request in PostAccountHandler: " + request)
-      request.content map { futureContent => 
+      request.content map { futureContent =>
         Success(
           futureContent flatMap { jv =>
             (jv \ "email", jv \ "password") match {
@@ -139,7 +161,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                 logger.debug("About to create account for email " + email)
                 for {
                   existingAccountOpt <- accountManager.findAccountByEmail(email)
-                  accountResponse <- 
+                  accountResponse <-
                     existingAccountOpt map { account =>
                       logger.debug("Found existing account: " + account.accountId)
                       Future(HttpResponse[JValue](OK, content = Some(jobject(jfield("accountId", account.accountId)))))
@@ -175,8 +197,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
         // cannot use withAccountAdmin here because of the ability to add grants to others' accounts.
         request.parameters.get('accountId) map { accountId =>
           accountManager.findAccountById(accountId) flatMap {
-            case Some(account) => 
-              request.content map { futureContent => 
+            case Some(account) =>
+              request.content map { futureContent =>
                 futureContent flatMap { jvalue =>
                   jvalue.validated[GrantId]("grantId") match {
                     case Success(grantId) =>
@@ -197,8 +219,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
               } getOrElse {
                 Promise successful badRequest("Missing request body.")
               }
-                  
-            case _  => 
+
+            case _  =>
               Promise.successful(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find account "+ accountId))))
           }
         } getOrElse {
@@ -213,7 +235,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
   //returns plan for account
   object GetAccountPlanHandler extends CustomHttpService[Future[JValue],Account => Future[HttpResponse[JValue]]] {
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
-      Success { (auth: Account) => 
+      Success { (auth: Account) =>
         withAccountAdmin(request, auth) { account =>
           Future(HttpResponse[JValue](OK, content = Some(jobject(jfield("type", account.plan.planType)))))
         }
@@ -232,17 +254,17 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           request.content map { futureContent =>
             futureContent flatMap { jvalue =>
               (jvalue \ "password").validated[String] match {
-                case Success(newPassword) => 
+                case Success(newPassword) =>
                   accountManager.updateAccountPassword(account, newPassword) map {
-                    case true => 
+                    case true =>
                       logger.info("Password for account %s successfully updated by %s".format(account.accountId, remoteIpFrom(request)))
                       HttpResponse[JValue](OK, content = None)
-                    case _ => 
+                    case _ =>
                       logger.error("Password update for account %s from %s failed".format(account.accountId, remoteIpFrom(request)))
                       Responses.failure(InternalServerError, "Account update failed, please contact support.")
-                  } 
+                  }
 
-                case Failure(error) => 
+                case Failure(error) =>
                   logger.warn("Invalid password update body \"%s\" for account %s from %s: %s".format(jvalue.renderCompact, account.accountId, remoteIpFrom(request), error))
                   Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine replacement password from request body."))))
               }
@@ -266,17 +288,17 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           request.content.map { futureContent =>
             futureContent flatMap { jvalue =>
               (jvalue \ "type").validated[String] match {
-                case Success(planType) => 
-                  accountManager.updateAccount(account.copy(plan = new AccountPlan(planType))) map { 
-                    case true => 
+                case Success(planType) =>
+                  accountManager.updateAccount(account.copy(plan = new AccountPlan(planType))) map {
+                    case true =>
                       logger.info("Plan changed for %s to %s from %s".format(account.accountId, planType, remoteIpFrom(request)))
                       HttpResponse[JValue](OK, content = None)
-                    case _ => 
+                    case _ =>
                       logger.error("Plan change to %s for account %s by %s failed".format(planType, account.accountId, remoteIpFrom(request)))
                       Responses.failure(InternalServerError, "Account update failed, please contact support.")
                   }
 
-                case Failure(error) => 
+                case Failure(error) =>
                   Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body."), content = Some(JString("Could not determine new account type from request body."))))
               }
             }
@@ -296,10 +318,10 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       Success { (auth: Account) =>
         withAccountAdmin(request, auth) { account =>
           accountManager.updateAccount(account.copy(plan = AccountPlan.Free)) map {
-            case true => 
+            case true =>
               logger.info("Account plan for %s deleted (converted to free plan) by %s".format(account.accountId, remoteIpFrom(request)))
               HttpResponse[JValue](OK, content = Some(jobject(jfield("type",account.plan.planType))))
-            case _ => 
+            case _ =>
               logger.error("Account plan for %s deletion by %s failed".format(account.accountId, remoteIpFrom(request)))
               Responses.failure(InternalServerError, "Account update failed, please contact support.")
           }
@@ -329,11 +351,11 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
       Success { (auth: Account) =>
         withAccountAdmin(request, auth) { account =>
-          accountManager.deleteAccount(account.accountId).map { 
-            case Some(_) => 
+          accountManager.deleteAccount(account.accountId).map {
+            case Some(_) =>
               logger.warn("Account %s deleted by %s".format(account.accountId, remoteIpFrom(request)))
               HttpResponse[JValue](HttpStatus(NoContent))
-            case None    => 
+            case None    =>
               logger.error("Account %s deletion by %s failed".format(account.accountId, remoteIpFrom(request)))
               HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("Account deletion failed, please contact support.")))
           }
