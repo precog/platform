@@ -122,7 +122,7 @@ object PlatformBuild extends Build {
     jprofilerLib := "/Applications/jprofiler7/bin/macos/libjprofilerti.jnilib",
     jprofilerConf := "src/main/resources/jprofile.xml",
     jprofilerId := "116",
-    
+
     javaOptions in profileTask <<= (javaOptions, jprofilerLib, jprofilerConf, jprofilerId, baseDirectory) {
       (opts, lib, conf, id, d) =>
       // download jnilib if necessary. a bit sketchy, but convenient
@@ -143,7 +143,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, /* ragnarok ,*/ heimdall, ratatoskr, mongo, jdbc, desktop)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common, ragnarok , heimdall, ratatoskr, mongo, jdbc, desktop)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
@@ -202,7 +202,7 @@ object PlatformBuild extends Build {
 
   lazy val accounts     = Project(id = "accounts", base = file("accounts")).
     settings(commonAssemblySettings: _*) dependsOn (common % "compile->compile;test->test", auth, logging % "test->test")
- 
+
   lazy val ingest = Project(id = "ingest", base = file("ingest")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil, logging % "test->test")
 
@@ -211,12 +211,6 @@ object PlatformBuild extends Build {
 
   lazy val shard = Project(id = "shard", base = file("shard")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", muspelheim, pandora % "test->test")
-
-  //lazy val mongo = Project(id = "mongo", base = file("mongo")).
-  //  settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
-
-  //lazy val jdbc = Project(id = "jdbc", base = file("jdbc")).
-  //  settings((commonAssemblySettings ++ jettySettings): _*).dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, ingest, shard, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   /// Tooling ///
 
