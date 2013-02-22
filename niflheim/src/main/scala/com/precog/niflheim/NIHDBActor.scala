@@ -124,12 +124,16 @@ object NIHDBActor {
   final val descriptorFilename = "NIHDBDescriptor.json"
   final val cookedSubdir = "cooked_blocks"
   final val rawSubdir = "raw_blocks"
+  final val lockName = "NIHDBProjection"
 
   private[niflheim] final val escapeSuffix = "_byUser"
 
+  private[niflheim] final val internalDirs =
+    Set(cookedSubdir, rawSubdir, descriptorFilename, CookStateLog.logName + "_1.log", CookStateLog.logName + "_2.log",  lockName + ".lock", CookStateLog.lockName + ".lock")
+
   def escapePath(path: Path) =
     Path(path.elements.map {
-      case needsEscape if needsEscape == cookedSubdir || needsEscape == rawSubdir || needsEscape.endsWith(escapeSuffix) =>
+      case needsEscape if internalDirs.contains(needsEscape) || needsEscape.endsWith(escapeSuffix) =>
         needsEscape + escapeSuffix
       case fine => fine
     }.toList)
@@ -154,7 +158,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
   assert(cookThreshold > 0)
   assert(cookThreshold < (1 << 16))
 
-  private[this] val workLock = FileLock(baseDir, "NIHProjection")
+  private[this] val workLock = FileLock(baseDir, lockName)
 
   private[this] val cookedDir = new File(baseDir, cookedSubdir)
   private[this] val rawDir    = new File(baseDir, rawSubdir)

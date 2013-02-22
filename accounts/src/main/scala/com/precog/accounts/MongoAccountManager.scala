@@ -127,8 +127,6 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   def findAccountById(accountId: String) = findOneMatching[Account]("accountId", accountId, settings.accounts)
 
-  def findAccountDetailsById(accountId: String) = findAccountById(accountId).map(_.map(AccountDetails.from(_)))
-
   def findAccountByEmail(email: String) = findOneMatching[Account]("email", email, settings.accounts)
 
   def updateAccount(account: Account): Future[Boolean] = {

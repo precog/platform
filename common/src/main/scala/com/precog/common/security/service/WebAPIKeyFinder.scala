@@ -68,7 +68,7 @@ object WebAPIKeyFinder {
   }
 }
 
-class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey)(implicit val executor: ExecutionContext) 
+class RealWebAPIKeyFinder(protocol: String, host: String, port: Int, path: String, val rootAPIKey: APIKey)(implicit val executor: ExecutionContext)
     extends WebClient(protocol, host, port, path) with WebAPIKeyFinder {
   implicit val M = new FutureMonad(executor)
 }
@@ -87,10 +87,10 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
   def findAPIKey(apiKey: APIKey): Response[Option[v1.APIKeyDetails]] = {
     withJsonClient { client =>
       eitherT(client.get[JValue]("apikeys/" + apiKey) map {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => 
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_: Extractor.Error).message) <-: jvalue.validated[v1.APIKeyDetails] :-> { details => Some(details) }).disjunction
 
-        case res @ HttpResponse(HttpStatus(NotFound, _), _, _, _) => 
+        case res @ HttpResponse(HttpStatus(NotFound, _), _, _, _) =>
           logger.warn("apiKey " + apiKey + " not found:\n" + res)
           right(None)
 
@@ -136,7 +136,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
       findPermissions(apiKey, path, at) map { actualPathPerms =>
         requiredPathPerms forall { perm => actualPathPerms exists (_ implies perm) }
       }
-    } 
+    }
 
     results.toStream.sequence.map(_.foldLeft(true)(_ && _))
   }
@@ -144,7 +144,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Response[v1.APIKeyDetails] = {
     val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set())
 
-    withJsonClient { client => 
+    withJsonClient { client =>
       eitherT(client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(wrappedKey), _) =>
           (((_:Extractor.Error).message) <-: wrappedKey.validated[v1.APIKeyDetails]).disjunction
