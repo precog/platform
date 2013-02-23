@@ -41,8 +41,19 @@ import scalaz.std.stream._
 import scalaz.std.set._
 import scalaz.syntax.traverse._
 
-trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] with PredictionLibModule[M] {
-  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport with PredictionSupport with EvaluatorMethods {
+trait LinearRegressionLibModule[M[+_]] 
+    extends ColumnarTableLibModule[M]
+    with ReductionLibModule[M]
+    with EvaluatorMethodsModule[M]
+    with PredictionLibModule[M] {
+
+  trait LinearRegressionLib 
+      extends ColumnarTableLib
+      with RegressionSupport
+      with PredictionSupport
+      with ReductionLib
+      with EvaluatorMethods {
+
     import trans._
 
     override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression, LinearPrediction)
@@ -54,7 +65,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
       type Beta = Array[Double]
 
-      case class Accumulator(beta: Beta, count: Int)
+      case class Accumulator(beta: Beta, count: Long)
       type Result = Accumulator
 
       /**
@@ -72,7 +83,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
 
       /**
-       * This code here will necessary when we have online models and users want to weight
+       * The following code will necessary when we have online models and users want to weight
        * the most recent data with a higher (or lower) weight than the data already seen.
        * But since we don't have this capability yet, all data is weighted equally.
 
@@ -117,6 +128,14 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
         def reduce(schema: CSchema, range: Range): Result = {
           val features = schema.columns(JArrayHomogeneousT(JNumberT))
 
+          val count = {
+            var countAcc = 0L
+            RangeUtil.loop(range) { i =>
+              if (Column.isDefinedAt(features.toArray, i)) countAcc += 1L
+            }
+            countAcc
+          }
+
           val values: Set[Option[Array[Array[Double]]]] = features map {
             case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
               val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
@@ -156,8 +175,13 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
           }
 
           val res = matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
+
+          // We weight the results to handle slices of different sizes.
+          // Even though we canonicalize the slices, the last slice may be smaller 
+          // than all the others.
+          val weightedRes = res map { _ * count }
           
-          Accumulator(res, 1)
+          Accumulator(weightedRes, count)
         }
       }
 
