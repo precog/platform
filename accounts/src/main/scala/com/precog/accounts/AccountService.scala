@@ -19,7 +19,6 @@
  */
 package com.precog.accounts
 
-import com.precog.auth.MongoAPIKeyManager
 import com.precog.util._
 import com.precog.common.NetUtils
 import com.precog.common.accounts._
@@ -102,7 +101,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
   implicit def M: Monad[Future]
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
+  def APIKeyFinder(config: Configuration): (APIKeyManager[Future], Stoppable)
 
   def clock: Clock
 
@@ -116,7 +115,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
             logger.debug("Building account service state...")
             val (accountManager, stoppable) = AccountManager(config)
             //val apiKeyFinder = APIKeyFinder(config.detach("security"))
-            val (apiKeyManager, stoppable2) = MongoAPIKeyManager(config.detach("security"))
+            val (apiKeyManager, stoppable2) = APIKeyFinder(config.detach("security"))
             val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
             val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId)
