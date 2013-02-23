@@ -3,8 +3,11 @@ package daze
 
 import util.NumericComparisons
 import util.DateTimeUtil._
+import util.BitSetUtil
 
 import bytecode._
+
+import common.json._
 
 import yggdrasil._
 import yggdrasil.table._
@@ -17,8 +20,10 @@ import com.precog.util.BitSet
 
 import TransSpecModule._
 
-trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  trait TimeLib extends ColumnarTableLib {
+import scala.collection.mutable.ArrayBuffer
+
+trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
+  trait TimeLib extends ColumnarTableLib with EvaluatorMethods {
     import trans._
 
     val TimeNamespace = Vector("std", "time")
@@ -27,6 +32,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       GetMillis,
       TimeZone,
       Season,
+      TimeRange,
 
       Year,
       QuarterOfYear,
@@ -54,7 +60,14 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       HourMinute,
       HourMinuteSecond,
 
-      ParseDateTimeFuzzy
+      DateHourMin,
+      DateHourMinSec,
+      DateHourMinSecMilli,
+      HourMin,
+      HourMinSec,
+
+      ParseDateTimeFuzzy,
+      ParsePeriod
     )
 
     override def _lib2 = super._lib2 ++ Set(
@@ -128,8 +141,18 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-   //ok to `get` because CoerceToDate is defined for StrColumn
-   def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
+    object ParsePeriod extends Op1F1(TimeNamespace, "parsePeriod") {
+      val tpe = UnaryOperationType(JTextT, JPeriodT)
+      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parsePeriod") {
+        case (c: StrColumn) => new PeriodColumn {
+          def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidPeriod(c(row))
+          def apply(row: Int): Period = new Period(c(row))
+        }
+      }
+    }
+
+    //ok to `get` because CoerceToDate is defined for StrColumn
+    def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
 
     object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
       def checkDefined(c1: Column, c2: StrColumn, row: Int) =
@@ -166,6 +189,71 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           }
         }
       }
+    }
+
+    object TimeRange extends Op1(TimeNamespace, "range") {
+      val start = "start"
+      val end = "end"
+      val step = "step"
+
+      val tpe = UnaryOperationType(
+        JObjectFixedT(Map(
+          start -> JDateT,
+          end -> JDateT,
+          step -> JPeriodT)),
+        JArrayHomogeneousT(JDateT))
+
+      override val retainIds = true
+
+      def scanner = new CScanner {
+        type A = Unit
+        def init = ()
+
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          val startCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(start) => col }
+          val endCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(end) => col }
+          val stepCol = cols collectFirst { case (ref, col: PeriodColumn) if ref.selector == CPath(step) => col }
+
+          val rawCols: Array[Column] = {
+            if (startCol.isEmpty || endCol.isEmpty || stepCol.isEmpty) Array.empty[Column]
+            else Array(startCol.get, endCol.get, stepCol.get)
+          }
+
+          val defined = BitSetUtil.filteredRange(range.start, range.end) {
+            i => Column.isDefinedAtAll(rawCols, i)
+          }
+
+          val definedRange = range.filter(defined(_))
+
+          val dateTimeArrays = new Array[Array[DateTime]](range.length)
+
+          val dateTimes: Array[Array[DateTime]] = {
+            definedRange.toArray map { i =>
+              val startTime = startCol.get(i)
+              val endTime = endCol.get(i)
+              val stepPeriod = stepCol.get(i)
+
+              var rowAcc = ArrayBuffer(startTime)
+              var lastTime = startTime
+
+              while (lastTime.plus(stepPeriod).compareTo(endTime) <= 0) {
+                val timePlus = lastTime.plus(stepPeriod)
+                rowAcc = rowAcc :+ timePlus
+
+                lastTime = timePlus
+              }
+
+              dateTimeArrays(i) = rowAcc.toArray
+            }
+            dateTimeArrays
+          }
+          
+          ((), Map(ColumnRef(CPathArray, CArrayType(CDate)) -> ArrayHomogeneousArrayColumn(defined, dateTimes)))
+        }
+      }
+
+      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+        Scan(source, scanner)
     }
 
     trait ExtremeTime extends Op2F2 {
@@ -289,7 +377,6 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def plus(d: DateTime, i: Int) = d.plus(Period.millis(i))
     }
     
-
     trait TimeBetween extends Op2F2 {
       val tpe = BinaryOperationType(textAndDate, textAndDate, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
@@ -571,15 +658,30 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val fmt = ISODateTimeFormat.dateHour()
     }
 
-    object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
+    @deprecated
+    object DateHourMin extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinute()
     }
 
-    object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
+    object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMinute") with TimeTruncation {
+      val fmt = ISODateTimeFormat.dateHourMinute()
+    }
+
+    @deprecated
+    object DateHourMinSec extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecond()
     }
 
-    object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+    object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinuteSecond") with TimeTruncation {
+      val fmt = ISODateTimeFormat.dateHourMinuteSecond()
+    }
+
+    @deprecated
+    object DateHourMinSecMilli extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+      val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
+    }
+
+    object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinuteSecondMillis") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
     }
 
@@ -591,11 +693,21 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
     }
 
-    object HourMinute extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
+    @deprecated
+    object HourMin extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinute()
     }
 
-    object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
+    object HourMinute extends Op1F1(TimeNamespace, "hourMinute") with TimeTruncation {
+      val fmt = ISODateTimeFormat.hourMinute()
+    }
+
+    @deprecated
+    object HourMinSec extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
+      val fmt = ISODateTimeFormat.hourMinuteSecond()
+    }
+
+    object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinuteSecond") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinuteSecond()
     }
   }

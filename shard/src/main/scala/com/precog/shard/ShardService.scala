@@ -39,6 +39,12 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 import scalaz._
 
+sealed trait ShardStateOptions
+object ShardStateOptions {
+  case object NoOptions extends ShardStateOptions
+  case object DisableAsyncQueries extends ShardStateOptions
+}
+
 sealed trait ShardState {
   def platform: Platform[Future, StreamT[Future, CharBuffer]]
   def apiKeyManager: APIKeyManager[Future]
@@ -51,6 +57,7 @@ case class ManagedQueryShardState(
   accountManager: BasicAccountManager[Future],
   jobManager: JobManager[Future],
   clock: Clock,
+  options: ShardStateOptions = ShardStateOptions.NoOptions,
   stoppable: Stoppable) extends ShardState
 
 case class BasicShardState(
@@ -62,6 +69,8 @@ trait ShardService extends
     BlueEyesServiceBuilder with
     ShardServiceCombinators with
     Logging {
+
+  import ShardStateOptions.DisableAsyncQueries
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
@@ -134,44 +143,48 @@ trait ShardService extends
   }
 
   private def asyncQueryService(state: ShardState) = state match {
-    case BasicShardState(_, _, _) =>
+    case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, _, DisableAsyncQueries, _) =>
       new QueryServiceNotAvailable
-    case ManagedQueryShardState(platform, _, _, _, _, _) =>
+    case ManagedQueryShardState(platform, _, _, _, _, _, _) =>
       new AsyncQueryServiceHandler(platform.asynchronous)
   }
 
   private def syncQueryService(state: ShardState) = state match {
     case BasicShardState(platform, _, _) =>
       new BasicQueryServiceHandler(platform)
-    case ManagedQueryShardState(platform, _, _, jobManager, _, _) =>
+    case ManagedQueryShardState(platform, _, _, jobManager, _, _, _) =>
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
   private def asyncHandler(state: ShardState) = {
-    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = apiKey(state.apiKeyManager) {
-      path("/analytics/queries") {
-        asyncQuery(post(asyncQueryService(state)))
+    val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = 
+      path("/analytics") {
+        apiKey(state.apiKeyManager) {
+          path("/queries") {
+            asyncQuery(post(asyncQueryService(state)))
+          }
+        }
       }
-    }
 
     state match {
-      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock, _) =>
-        // [ByteChunk, Future[HttpResponse[ByteChunk]]]
-        apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
-          path("/analytics/queries") {
-            path("'jobId") {
-              get(new AsyncQueryResultServiceHandler(jobManager)) ~
-              delete(new QueryDeleteHandler(jobManager, clock))
+      case ManagedQueryShardState(_, apiKeyManager, _, jobManager, clock, _, _) =>
+        path("/analytics") {
+          apiKey[ByteChunk, HttpResponse[ByteChunk]](apiKeyManager) {
+            path("/queries") {
+              path("'jobId") {
+                get(new AsyncQueryResultServiceHandler(jobManager)) ~
+                delete(new QueryDeleteHandler(jobManager, clock))
+              }
             }
-          }
+          } 
         } ~ queryHandler
 
       case _ =>
-        val x: HttpService[Future[JValue], Future[HttpResponse[ByteChunk]]] = queryHandler map (_ map { response =>
-          response.copy(content = response.content map queryResult2byteChunk)
-        })
-        val f: ByteChunk => Future[JValue] = implicitly
-        x contramap f
+        queryHandler map {
+          _ map { response => response.copy(content = response.content map queryResult2byteChunk) }
+        } contramap {
+          implicitly[ByteChunk => Future[JValue]]
+        }
     }
   }
 

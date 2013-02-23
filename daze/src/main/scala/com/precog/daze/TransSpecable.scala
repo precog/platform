@@ -2,6 +2,8 @@ package com.precog.daze
 
 import com.precog.common.Path
 import com.precog.common.json.{ CPathField, CPathIndex, CPathMeta }
+
+import com.precog.bytecode._
 import com.precog.yggdrasil._
 
 import scalaz._
@@ -89,8 +91,9 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def DerefArrayStatic(node: Join)(parent: N[S], index: Int) =
           parent.flatMap(leftMap(_)(trans.DerefArrayStatic(_, CPathIndex(index))))
         
-        def ArraySwap(node: Join)(parent: N[S], index: Int) = 
+        def ArraySwap(node: Join)(parent: N[S], index: Int) = {
           parent.flatMap(leftMap(_)(trans.ArraySwap(_, index)))
+        }
         
         def InnerObjectConcat(node: Join)(parent: N[S]) =
           parent.flatMap(leftMap(_)(trans.InnerObjectConcat(_)))
@@ -100,12 +103,24 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
 
         def Map1Left(node: Join)(parent: N[S], op: Op2F2, graph: DepGraph, value: RValue) =
           parent.flatMap(leftMap(_) { target =>
-            trans.Map2(target, transRValue(value, target), op.f2(ctx))
+            value match {
+              case cv: CValue =>
+                trans.Map1(target, op.f2(ctx).applyr(cv))
+              
+              case _ =>
+                trans.Typed(trans.Typed(target, JNullT), JTextT)     // nuke all the things
+            }
           })
           
         def Map1Right(node: Join)(parent: N[S], op: Op2F2, graph: DepGraph, value: RValue) =
           parent.flatMap(leftMap(_) { target =>
-            trans.Map2(transRValue(value, target), target, op.f2(ctx))
+            value match {
+              case cv: CValue =>
+                trans.Map1(target, op.f2(ctx).applyl(cv))
+              
+              case _ =>
+                trans.Typed(trans.Typed(target, JNullT), JTextT)     // nuke all the things
+            }
           })
         
         def binOp(node: Join)(leftParent: N[S], rightParent: => N[S], op: BinaryOperation) = {

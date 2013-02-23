@@ -16,6 +16,7 @@ object JobManager {
     val Error = "error"
     val Warning = "warning"
     val Info = "info"
+    val Log = "log"
   }
 }
 

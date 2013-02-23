@@ -1,11 +1,10 @@
-package com.precog
-package daze
+package com.precog.daze
 
-import common.{ Path, VectorCase }
-import common.security._
+import com.precog.common.{ Path, VectorCase }
+import com.precog.common.security._
 
-import yggdrasil._
-import yggdrasil.table._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 
 import akka.dispatch.Await
 import akka.util.Duration
@@ -29,6 +28,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   type SEvent = (Vector[IdType], SValue)
 
   implicit def M: Monad[M] with Copointed[M]
+
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   
   def extractIds(jv: JValue): Seq[IdType]
 
@@ -36,7 +37,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
     val ctx = EvaluationContext(apiKey, prefix, new DateTime())
     Validation.fromTryCatch {
       implicit val nt = NaturalTransformation.refl[M]
-      val result = Evaluator(M).eval(graph, ctx, optimize)
+      val evaluator = Evaluator(M)
+      val result = evaluator.eval(graph, ctx, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JUndefined
       }}
@@ -45,7 +47,9 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
         (Vector(extractIds(jvalue \ "key"): _*), jvalueToSValue(jvalue \ "value"))
       }
       
-      events.toSet
+      val back = events.toSet
+      evaluator.report.done.copoint
+      back
     }
   }
   

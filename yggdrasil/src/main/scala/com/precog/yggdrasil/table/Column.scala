@@ -4,7 +4,7 @@ package table
 import cf._
 
 import blueeyes.json._
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import java.math.MathContext
 
@@ -115,6 +115,11 @@ object HomogeneousArrayColumn {
         i >= 0 && col.isDefinedAt(row) && i < col(row).length
       def apply(row: Int): DateTime = col(row)(i)
     }
+    case col @ HomogeneousArrayColumn(CPeriod) => new PeriodColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Period = col(row)(i)
+    }
     case col @ HomogeneousArrayColumn(cType: CArrayType[a]) => new HomogeneousArrayColumn[a] {
       val tpe = cType
       def isDefinedAt(row: Int): Boolean =
@@ -204,6 +209,16 @@ trait DateColumn extends Column with (Int => DateTime) {
   override def toString = "DateColumn"
 }
 
+trait PeriodColumn extends Column with (Int => Period) {
+  def apply(row: Int): Period
+  def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+
+  override val tpe = CPeriod
+  override def jValue(row: Int) = JString(this(row).toString)
+  override def cValue(row: Int) = CPeriod(this(row))
+  override def strValue(row: Int): String = this(row).toString
+  override def toString = "PeriodColumn"
+}
 
 trait EmptyArrayColumn extends Column {
   def rowEq(row1: Int, row2: Int): Boolean = true
@@ -264,6 +279,21 @@ object UndefinedColumn {
   }
 }
 
+case class MmixPrng(_seed: Long) {
+  private var seed: Long = _seed
+
+  def nextLong(): Long = {
+    val next: Long = 6364136223846793005L * seed + 1442695040888963407L
+    seed = next
+    next
+  }
+
+  def nextDouble(): Double = {
+    val n = nextLong()
+    (n >>> 11) * 1.1102230246251565e-16
+  }
+}
+
 object Column {
   @inline def const(cv: CValue): Column = cv match {
     case CBoolean(v)  => const(v)
@@ -277,6 +307,32 @@ object Column {
     case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
     case CNull        => new InfiniteColumn with NullColumn 
     case CUndefined   => UndefinedColumn.raw
+  }
+
+  @inline def uniformDistribution(init: MmixPrng): (Column, MmixPrng) = {
+    val col = new InfiniteColumn with DoubleColumn {
+      var memo = scala.collection.mutable.ArrayBuffer.empty[Double]
+
+      def apply(row: Int) = {
+        val maxRowComputed = memo.length
+
+        if (row < maxRowComputed) {
+          memo(row)
+        } else {
+          var i = maxRowComputed
+          var res = 0d
+
+          while (i <= row) {
+            res = init.nextDouble()
+            memo += res
+            i += 1
+          }
+
+          res
+        }
+      }
+    }
+    (col, init)
   }
 
   @inline def const(v: Boolean) = new InfiniteColumn with BoolColumn {
@@ -300,6 +356,10 @@ object Column {
   }
 
   @inline def const(v: DateTime) = new InfiniteColumn with DateColumn {
+    def apply(row: Int) = v
+  }
+
+  @inline def const(v: Period) = new InfiniteColumn with PeriodColumn {
     def apply(row: Int) = v
   }
 
@@ -339,6 +399,11 @@ object Column {
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
       def apply(row: Int) = Array(col(row))
     }
+    case col: PeriodColumn => new HomogeneousArrayColumn[Period] {
+      val tpe = CArrayType(CPeriod)
+      def isDefinedAt(row: Int) = col.isDefinedAt(row)
+      def apply(row: Int) = Array(col(row))
+    }
     case col: HomogeneousArrayColumn[a] => new HomogeneousArrayColumn[Array[a]] {
       val tpe = CArrayType(col.tpe)
       def isDefinedAt(row: Int) = col.isDefinedAt(row)
@@ -361,6 +426,18 @@ object Column {
       i += 1
     }
     i < cols.length
+  }
+
+  def isDefinedAtAll(cols: Array[Column], row: Int): Boolean = {
+    if (cols.isEmpty) {
+      false
+    } else {
+      var i = 0
+      while (i < cols.length && cols(i).isDefinedAt(row)) {
+        i += 1
+      }
+      i == cols.length
+    }
   }
 }
   

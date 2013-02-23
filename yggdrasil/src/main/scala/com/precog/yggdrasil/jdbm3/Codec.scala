@@ -6,7 +6,7 @@ import scalaz._
 import com.precog.yggdrasil.table._
 import com.precog.util._
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, Period}
 
 import java.nio.{ ByteBuffer, CharBuffer }
 import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
@@ -350,6 +350,8 @@ object Codec {
   }
 
   implicit val DateCodec = Codec[Long].as[DateTime](_.getMillis, new DateTime(_))
+
+  implicit val PeriodCodec = Codec[Long].as[Period](_.getMillis, new Period(_))
 
   implicit case object DoubleCodec extends FixedWidthCodec[Double] {
     val size = 8

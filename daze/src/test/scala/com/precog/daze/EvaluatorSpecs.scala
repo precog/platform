@@ -42,7 +42,7 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
       
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) = 
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
-      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] {
+      val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
       class YggConfig extends EvaluatorConfig {
@@ -1183,12 +1183,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveSize(1)
-              obj must haveKey("aa")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveSize(1)
+            obj must haveKey("aa")
         }
       }
     }
@@ -1680,8 +1679,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(100)
-      } must throwA[FatalQueryException[instructions.Line]]
-    }
+      } must throwA[FatalQueryException]
+    }.pendingUntilFixed
     
     "fail an assertion according to forall semantics" in {
       val line = Line(1, 1, "")
@@ -1695,8 +1694,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
       testEval(input) { result =>
         result must haveSize(100)
-      } must throwA[FatalQueryException[instructions.Line]]
-    }
+      } must throwA[FatalQueryException]
+    }.pendingUntilFixed
 
     "compute the set difference of two sets" in {
       val line = Line(1, 1, "")
@@ -1715,14 +1714,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(6)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must not haveKey("time")
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must not haveKey("time")
   
-            case (ids, SString(s)) if ids.size == 1 => 
-              s mustEqual "string cheese"
-          }
+          case (ids, SString(s)) => 
+            ids must haveSize(1)
+            s mustEqual "string cheese"
         }
       }
     }
@@ -1747,11 +1746,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(101)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveKey("time")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveKey("time")
         }
       }
     }
@@ -2395,13 +2393,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         testEval(input) { result =>
           result must haveSize(1)
 
-          forall(result) {
-            _ must beLike {
-              case (ids, SObject(obj)) if ids.size == 1 => {
-                obj must haveKey("foo")
-                obj must haveValue(SString("bar"))
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SObject(obj)) =>
+              ids must haveSize(1)
+              obj must haveKey("foo")
+              obj must haveValue(SString("bar"))
           }
         }
       }
@@ -2908,30 +2904,28 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(10)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => {
-              obj must haveKey("user")
-              obj must haveKey("num")
-              
-              obj("user") must beLike {
-                case SString(str) => {
-                  str must beOneOf("daniel", "kris", "derek", "nick", "john",
-                    "alissa", "franco", "matthew", "jason")
-                }
-                case SNull => ok
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) =>
+            ids must haveSize(1)
+            obj must haveKey("user")
+            obj must haveKey("num")
+            
+            obj("user") must beLike {
+              case SString(str) => {
+                str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                  "alissa", "franco", "matthew", "jason")
               }
-  
-              val user = (obj("user"): @unchecked) match {
-                case SString(user) => user
-                case SNull => SNull
-              }
-                
-              obj("num") must beLike {
-                case SDecimal(d) => d mustEqual Expected(user)
-              }
+              case SNull => ok
             }
-          }
+  
+            val user = (obj("user"): @unchecked) match {
+              case SString(user) => user
+              case SNull => SNull
+            }
+              
+            obj("num") must beLike {
+              case SDecimal(d) => d mustEqual Expected(user)
+            }
         }
       }
     }
@@ -2948,8 +2942,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
         
-        forall(result) {
-          case (ids, SObject(obj)) if ids.size == 1 => 
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
             obj must haveKey("user")
             obj must haveKey("time")
             obj must haveKey("page")
@@ -2997,7 +2992,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           a)(line))(line)
           
       testEval(input) { result =>
-        forall(result) {
+        result must haveAllElementsLike {
           case (ids, SObject(fields)) => fields must haveKey("a")
         }
       }
@@ -3022,12 +3017,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(3)
 
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 1 => 
-              obj must haveKey("user")
-              obj("user") must_== SNull
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids must haveSize(1)
+            obj must haveKey("user")
+            obj("user") must_== SNull
         }
       }
     }
@@ -3171,13 +3165,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(10000)
         
-        forall(result) {
-          _ must beLike {
-            case (ids, SObject(obj)) if ids.size == 2 => 
-              obj must haveSize(2)
-              obj must haveKey("aa")
-              obj must haveKey("bb")
-          }
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) => 
+            ids.size mustEqual(2)
+            obj must haveSize(2)
+            obj must haveKey("aa")
+            obj must haveKey("bb")
         }
       }
     }
@@ -3255,13 +3248,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
           decis.sorted mustEqual expectedResult.sorted
 
-          forall(result) { result =>
-            result must beLike {
-              case (ids, SDecimal(d)) => {
-                ids must haveSize(2)
-                expectedResult must contain(d)
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SDecimal(d)) =>
+              ids must haveSize(2)
+              expectedResult must contain(d)
           }
         }
       }
@@ -3332,13 +3322,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           decis.sorted mustEqual expectedResult.sorted
 
           
-          forall(result) { result =>
-            result must beLike {
-              case (ids, SDecimal(d)) => {
-                ids must haveSize(2)
-                expectedResult must contain(d)
-              }
-            }
+          result must haveAllElementsLike {
+            case (ids, SDecimal(d)) =>
+              ids must haveSize(2)
+              expectedResult must contain(d)
           }
         }
       }

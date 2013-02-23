@@ -48,7 +48,8 @@ import scalaz.syntax.monoid._
 import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
-
+import scalaz.syntax.applicative._
+      
 import java.nio.CharBuffer
 
 trait ColumnarTableTypes {
@@ -116,6 +117,15 @@ trait ColumnarTableModule[M[+_]]
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
 
     def empty: Table = Table(StreamT.empty[M, Slice], ExactSize(0))
+
+    def uniformDistribution(init: MmixPrng): Table = {
+      val gen: StreamT[M, Slice] = StreamT.unfoldM[M, Slice, MmixPrng](init) { prng =>
+        val (column, nextGen) = Column.uniformDistribution(prng)
+        Some((Slice(Map(ColumnRef(CPath.Identity, CDouble) -> column), yggConfig.maxSliceSize), nextGen)).point[M]
+      }
+
+      Table(gen, InfiniteSize)
+    }
     
     def constBoolean(v: collection.Set[Boolean]): Table = {
       val column = ArrayBoolColumn(v.toArray)
@@ -448,6 +458,8 @@ trait ColumnarTableModule[M[+_]]
 
               case CNum =>
                 acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+              case _ => sys.error("non-numeric type reached")
             }
               
             case JString(s) =>
@@ -456,10 +468,57 @@ trait ColumnarTableModule[M[+_]]
             case JArray(Nil) =>
               acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
               
-            case JObject(_) =>
+            case JObject.empty =>
               acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
               
             case JNull        =>
+              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
+
+            case _ => sys.error("non-flattened value reached")
+          }
+          
+          acc + (ref -> updatedColumn)
+      }
+    }
+
+    def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
+      rv.flattenWithPath.foldLeft(into) {
+        case (acc, (cpath, CUndefined)) => acc
+        case (acc, (cpath, cvalue)) =>
+          val ref = ColumnRef(cpath, (cvalue.cType))
+          
+          val updatedColumn: ArrayColumn[_] = cvalue match {
+            case CBoolean(b) =>
+              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
+              
+            case CLong(d) =>
+              acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
+
+            case CDouble(d) =>
+              acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
+
+            case CNum(d) =>
+              acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CString(s) =>
+              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
+
+            case CDate(d) =>
+              acc.getOrElse(ref, ArrayDateColumn.empty(sliceSize)).asInstanceOf[ArrayDateColumn].tap { c => c.update(sliceIndex, d) }
+
+            case CPeriod(p) =>
+              acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
+
+            case CArray(arr, cType) =>
+              acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(cType)).asInstanceOf[ArrayHomogeneousArrayColumn[cType.tpe]].tap { c => c.update(sliceIndex, arr) }
+              
+            case CEmptyArray =>
+              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CEmptyObject =>
+              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
+              
+            case CNull =>
               acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
           }
           
@@ -467,32 +526,29 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
+    def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
+      
+      def makeSlice(data: Stream[RValue]): (Slice, Stream[RValue]) = {
+        val (prefix, suffix) = data.splitAt(sliceSize)
   
-      def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
-        val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
-        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+        @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
           from match {
             case jv #:: xs =>
-              val refs = withIdsAndValues(jv, into, sliceIndex, sliceSize)
+              val refs = updateRefs(jv, into, sliceIndex, sliceSize)
               buildColArrays(xs, refs, sliceIndex + 1)
             case _ =>
               (into, sliceIndex)
           }
         }
     
-        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-        // Slice#typed to fail unless it allows for vacuous success
         val slice = new Slice {
           val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
         }
     
         (slice, suffix)
       }
-      
+
       Table(
         StreamT.unfoldM(values) { events =>
           M.point {
@@ -580,6 +636,37 @@ trait ColumnarTableModule[M[+_]]
       val resultSize = TableSize(size.maxSize + t2.size.maxSize)
       val resultSlices = slices ++ t2.slices
       Table(resultSlices, resultSize)
+    }
+
+    /**
+     * Zips two tables together in their current sorted order.
+     * If the tables are not normalized first and thus have different slices sizes,
+     * then since the zipping is done per slice, this can produce a result that is
+     * different than if the tables were normalized. 
+     */
+    def zip(t2: Table): M[Table] = {
+      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
+
+      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice], acc: StreamT[M, Slice]): M[StreamT[M, Slice]] = {
+        slices1.uncons flatMap { 
+          case Some((head1, tail1)) =>
+            slices2.uncons flatMap {
+              case Some((head2, tail2)) => {
+                rec(tail1, tail2, head1.zip(head2) :: acc)
+              }
+              case None => M.point(acc)
+            }
+          case None => M.point(acc)
+        }
+      }
+
+      val resultSlices = rec(slices, t2.slices, StreamT.empty[M, Slice])
+
+      resultSlices map { sl => Table(sl, resultSize) }
+
+      // todo investigate why the code below makes all of RandomLibSpecs explode
+      // val resultSlices = Apply[({ type l[a] = StreamT[M, a] })#l].zip.zip(slices, t2.slices) map { case (s1, s2) => s1.zip(s2) }
+      // Table(resultSlices, resultSize)
     }
 
     def toArray[A](implicit tpe: CValueType[A]): Table = {
@@ -1223,6 +1310,7 @@ trait ColumnarTableModule[M[+_]]
         case ExactSize(sz) => ExactSize(calcNewSize(sz))
         case EstimateSize(sMin, sMax) => TableSize(calcNewSize(sMin), calcNewSize(sMax))
         case UnknownSize => UnknownSize
+        case InfiniteSize => InfiniteSize
       }
 
       Table(StreamT.wrapEffect(loop(slices, 0)), newSize)
@@ -1373,11 +1461,13 @@ trait ColumnarTableModule[M[+_]]
           case CBoolean => JBooleanT
           case CLong | CDouble | CNum => JNumberT
           case CString => JTextT
-          case CDate => JTextT
+          case CDate => JDateT
+          case CPeriod => JPeriodT
           case CArrayType(elemType) => leafType(elemType)
           case CEmptyObject => JObjectFixedT(Map.empty)
           case CEmptyArray => JArrayFixedT(Map.empty)
           case CNull => JNullT
+          case CUndefined => sys.error("not supported")
         }
 
         def fresh(paths: List[CPathNode], leaf: JType): Option[JType] = paths match {
