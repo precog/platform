@@ -71,6 +71,12 @@ testOptions in Test <<= testOptions dependsOn extractData
 
 parallelExecution in Test := false
 
+fork in Test := true
+
+javaOptions in Test <<= extractData map { (target: String) =>
+  Seq("-Xmx2G", "-XX:MaxPermSize=512m", "-Dprecog.storage.root=" + target)
+}
+
 console in Compile <<= (console in Compile) dependsOn extractData
 
 initialCommands in console := """
