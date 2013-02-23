@@ -40,17 +40,29 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1")
 
-          val SArray(arr1) = elems("Model1")
+          val SArray(arr) = elems("Model1")
 
-          arr1(0) must beLike { case SObject(elems) => 
-            elems("height") must beLike { 
-              case SDecimal(d) => elems must haveSize(1)
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("height")
+
+            obj("height") must beLike {
+              case SObject(height) => 
+                height.keys mustEqual Set("coefficient", "standard error")
+
+                height("coefficient") must beLike { case SDecimal(d) => ok }
+                height("standard error") must beLike { case SDecimal(d) => ok }
             }
           }
-          arr1(1) must beLike { case SDecimal(d) => ok }
+
+          arr(1) must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("coefficient", "standard error")
+
+            obj("coefficient") must beLike { case SDecimal(d) => ok }
+            obj("standard error") must beLike { case SDecimal(d) => ok }
+          }
       }
     }    
-    
+
     "predict linear regression" in {
       val input = """
         medals := //summer_games/london_medals

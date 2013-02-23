@@ -34,8 +34,10 @@ import java.io.File
 
 import scalaz._
 
-trait LinearRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+trait LinearRegressionTestSupport[M[+_]]
+    extends StdLibEvaluatorStack[M]
     with RegressionTestSupport[M] {
+
   import library._
   import dag._
   import instructions._
@@ -104,68 +106,100 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
         dag.Const(CLong(0))(line))(line))(line)
   }
 
+  def produceResult(cpaths: Seq[CPath], num: Int, actualThetas: Array[Double]) = {
+    val samples = createLinearSamplePoints(num, 100, actualThetas)
+
+    val points = jvalues(samples, cpaths) map { _.renderCompact }
+
+    val suffix = ".json"
+    val tmpFile = File.createTempFile("values", suffix)
+    IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
+
+    val pointsString0 = "filesystem" + tmpFile.toString
+    val pointsString = pointsString0.take(pointsString0.length - suffix.length)
+
+    val input = makeDAG(pointsString)
+
+    val result = testEval(input)
+    tmpFile.delete()
+
+    result
+  }
+
+  def returnValues(obj: Map[String, SValue]) = {
+    obj.keys mustEqual Set("coefficient", "standard error")
+    (obj("coefficient"), obj("standard error"))
+  }
+
   def testTrivial = {
     val num = 2
-    val loops = 50
+    val loops = 100
 
     val actualThetas = makeThetas(num)
 
     var thetas = List.empty[List[Double]]
+    var errors = List.empty[List[Double]]
+
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
+    //runs the linear regression function on `loops` sets of data generated from the same distribution
     while (i < loops) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathIndex(0)),
         CPath(CPathIndex(1))) sorted
 
-      val samples = createLinearSamplePoints(num, 100, actualThetas)
-      val points = jvalues(samples, cpaths) map { _.renderCompact }
+      val result = produceResult(cpaths, num, actualThetas)
 
-      val tmpFile = File.createTempFile("values", ".json")
-      IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
-
-      val pointsString0 = "filesystem" + tmpFile.toString
-      val pointsString = pointsString0.take(pointsString0.length - 5)
-
-      val input = makeDAG(pointsString)
-
-      val result = testEval(input)
-      tmpFile.delete()
-
-      val theta = result collect {
-        case (ids, SObject(elems)) if ids.length == 0 => {
+      val collection = result collect {
+        case (ids, SObject(elems)) if ids.length == 0 =>
           elems.keys mustEqual Set("Model1")
 
-          val SArray(arr1) = elems("Model1")
+          val SArray(arr) = elems("Model1")
 
-          val SDecimal(theta1) = arr1(0) match { case SArray(elems2) => elems2(0) }
-          val SDecimal(theta0) = arr1(1)
-          List(theta0.toDouble, theta1.toDouble)
-        }
+          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match {
+            case SArray(Vector(SObject(obj))) => returnValues(obj)
+          }
+
+          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match {
+            case SObject(obj) => returnValues(obj)
+          }
+              
+          (List(theta0.toDouble, theta1.toDouble), List(error0.toDouble, error1.toDouble))
       }
 
-      thetas = thetas ++ theta
+      thetas = thetas ++ List(collection.head._1)
+      errors = errors ++ List(collection.head._2)
       i += 1
     }
 
-    val allThetas = actualThetas zip combineResults(num, thetas)
+    val combinedThetas = combineResults(num, thetas)
+    val combinedErrors = combineResults(num, errors)
 
-    val ok = allThetas map { case (t, ts) => isOk(t, ts) }
+    val allThetas = actualThetas zip combinedThetas
+    val okThetas = allThetas map { case (t, ts) => isOk(t, ts) }
 
-    ok mustEqual Array.fill(num)(true)
+    val actualErrors = combinedThetas map { t => madMedian(t)._1 }
+
+    val allErrors = actualErrors zip combinedErrors
+
+    val okErrors = allErrors map { case (e, es) => isOk(e, es) } toArray
+
+    okThetas mustEqual Array.fill(num)(true)
+    okErrors mustEqual Array.fill(num)(true)
   }
 
   def testThreeFeatures = {
     val num = 4
-    val loops = 50
+    val loops = 100
 
     val actualThetas = makeThetas(num)
 
-    var thetas: List[List[Double]] = List.empty[List[Double]]
+    var thetas = List.empty[List[Double]]
+    var errors = List.empty[List[Double]]
+
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
+    //runs the linear regression function on `loops` sets of data generated from the same distribution
     while (i < loops) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathField("foo")),
@@ -173,48 +207,63 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
         CPath(CPathIndex(0), CPathField("baz")),
         CPath(CPathIndex(1))) sorted
 
-      val samples = createLinearSamplePoints(num, 100, actualThetas)
-      val points = jvalues(samples, cpaths) map { _.renderCompact }
+      val result = produceResult(cpaths, num, actualThetas)
 
-      val tmpFile = File.createTempFile("values", ".json")
-      IOUtils.writeSeqToFile(points, tmpFile).unsafePerformIO
-
-      val pointsString0 = "filesystem" + tmpFile.toString
-      val pointsString = pointsString0.take(pointsString0.length - 5)
-      
-      val input = makeDAG(pointsString)
-
-      val result = testEval(input)
-      tmpFile.delete()
-
-      val theta = result collect {
-        case (ids, SObject(elems)) if ids.length == 0 => {
+      val collection = result collect {
+        case (ids, SObject(elems)) if ids.length == 0 =>
           elems.keys mustEqual Set("Model1")
 
-          val SArray(arr1) = elems("Model1")
+          val SArray(arr) = elems("Model1")
 
-          val SDecimal(theta1) = arr1(0) match { case SObject(map) => map("bar") }
-          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("baz") }
-          val SDecimal(theta3) = arr1(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = arr1(1) 
-          List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
-        }
+          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match { case SObject(map) =>
+            map("bar") match { case SObject(obj) =>
+              returnValues(obj)
+            }
+          }
+
+          val (SDecimal(theta2), SDecimal(error2)) = arr(0) match { case SObject(map) =>
+            map("baz") match { case SObject(obj) =>
+              returnValues(obj)
+            }
+          }
+
+          val (SDecimal(theta3), SDecimal(error3)) = arr(0) match { case SObject(map) =>
+            map("foo") match { case SObject(obj) =>
+              returnValues(obj)
+            }
+          }
+
+          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match { case SObject(obj) =>
+            returnValues(obj)
+          }
+
+          (List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble),
+            List(error0.toDouble, error1.toDouble, error2.toDouble, error3.toDouble))
       }
 
-      thetas = thetas ++ theta
+      thetas = thetas ++ List(collection.head._1)
+      errors = errors ++ List(collection.head._2)
       i += 1
     }
 
+    val combinedThetas = combineResults(num, thetas)
+    val combinedErrors = combineResults(num, errors)
+
     val allThetas = actualThetas zip combineResults(num, thetas)
+    val okThetas = allThetas map { case (t, ts) => isOk(t, ts) }
 
-    val ok = allThetas map { case (t, ts) => isOk(t, ts) }
+    val actualErrors = combinedThetas map { t => madMedian(t)._1 }
 
-    ok mustEqual Array.fill(num)(true)
+    val allErrors = actualErrors zip combinedErrors
+    val okErrors = allErrors map { case (e, es) => isOk(e, es) } toArray
+
+    okThetas mustEqual Array.fill(num)(true)
+    okErrors mustEqual Array.fill(num)(true)
   }
 
   def testThreeSchemata = {
     val num = 3
-    val loops = 50
+    val loops = 100
 
     val actualThetas = makeThetas(num)
 
@@ -222,9 +271,13 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     var thetasSchema2 = List.empty[List[Double]]
     var thetasSchema3 = List.empty[List[Double]]
 
+    var errorsSchema1 = List.empty[List[Double]]
+    var errorsSchema2 = List.empty[List[Double]]
+    var errorsSchema3 = List.empty[List[Double]]
+
     var i = 0
 
-    //runs the linear regression function on 50 sets of data generated from the same distribution
+    //runs the linear regression function on `loops` sets of data generated from the same distribution
     while (i < loops) {
       val cpaths = Seq(
         CPath(CPathIndex(0), CPathField("ack"), CPathIndex(0)),
@@ -257,40 +310,71 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
         case (ids, SObject(elems)) if ids.length == 0 =>
           elems.keys mustEqual Set("Model1", "Model2", "Model3")
 
-          val SArray(arr1) = elems(model)
+          val SArray(arr) = elems(model)
 
-          val SDecimal(theta1) = arr1(0) match { case SObject(map) => 
+          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match { case SObject(map) => 
             map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(elems) =>
-                elems(0)
+              map("baz") match { case SArray(Vector(SObject(obj))) =>
+                returnValues(obj)
               }
-            } 
+            }
           }
-          val SDecimal(theta2) = arr1(0) match { case SObject(map) => map("foo") }
-          val SDecimal(theta0) = arr1(1) 
-          List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
+
+          val (SDecimal(theta2), SDecimal(error2)) = arr(0) match { case SObject(map) =>
+            map("foo") match { case SObject(obj) =>
+              returnValues(obj)
+            }
+          }
+
+          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match {
+            case SObject(obj) =>
+              returnValues(obj)
+          }
+
+          (List(theta0.toDouble, theta1.toDouble, theta2.toDouble), 
+            List(error0.toDouble, error1.toDouble, error2.toDouble))
       }
 
-      thetasSchema1 = thetasSchema1 ++ theta("Model1")
-      thetasSchema2 = thetasSchema2 ++ theta("Model2")
-      thetasSchema3 = thetasSchema3 ++ theta("Model3")
+      thetasSchema1 = thetasSchema1 ++ List(theta("Model1").head._1)
+      thetasSchema2 = thetasSchema2 ++ List(theta("Model2").head._1)
+      thetasSchema3 = thetasSchema3 ++ List(theta("Model3").head._1)
+
+      errorsSchema1 = errorsSchema1 ++ List(theta("Model1").head._2)
+      errorsSchema2 = errorsSchema2 ++ List(theta("Model2").head._2)
+      errorsSchema3 = errorsSchema3 ++ List(theta("Model3").head._2)
 
       i += 1
     }
 
-    def getBooleans(thetas: List[List[Double]]): Array[Boolean] = {
-      val zipped = actualThetas zip combineResults(num, thetas)
-      zipped map { case (t, ts) => isOk(t, ts) }
+    def getBooleans(actuals: List[Double], values: List[List[Double]]): Array[Boolean] = {
+      val zipped = actuals zip combineResults(num, values)
+      zipped map { case (t, ts) => isOk(t, ts) } toArray
     }
 
-    val allThetas = List(thetasSchema1, thetasSchema2, thetasSchema3)
+    val thetas = List(thetasSchema1, thetasSchema2, thetasSchema3)
+    val errors = List(errorsSchema1, errorsSchema2, errorsSchema3)
 
-    val result = allThetas map { getBooleans }
+    val resultThetas: List[Array[Boolean]] = thetas map { ts => getBooleans(actualThetas.toList, ts) }
+
+    val actualErrors: List[Seq[Double]] = thetas map { ts => combineResults(num, ts) map { arr => madMedian(arr)._1 } }
+
+
+    val zipped = actualErrors zip errors
+
+    val resultErrors = zipped map { case (actual, err) =>
+      val z = actual zip combineResults(num, err) 
+      z map { case (e, es) => isOk(e, es) }
+    }
+
     val expected = Array.fill(num)(true)
 
-    result(0) mustEqual expected
-    result(1) mustEqual expected
-    result(2) mustEqual expected
+    resultThetas(0) mustEqual expected
+    resultThetas(1) mustEqual expected
+    resultThetas(2) mustEqual expected
+
+    resultErrors(0).toArray mustEqual expected
+    resultErrors(1).toArray mustEqual expected
+    resultErrors(2).toArray mustEqual expected
   }
 
   "linear regression" should {
