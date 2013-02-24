@@ -48,7 +48,7 @@ significantly saner.
 Getting Started
 ===============
 
-Step one: obtain `PaulP's script`_.  At this point, you should be able to run
+Step one: obtain `sbt installer`_.  At this point, you should be able to run
 ``$ ./build-test.sh`` as a sanity check, but this will take a long time.  Instead,
 run ``$ sbt``.  Once it is up and running, run ``test:compile``.  This should take
 about 5-10 minutes.  After this, run ``yggdrasil/assembly``, followed by ``test``.
@@ -57,7 +57,7 @@ The build should be green once your machine stops burning.
 In order to more easily navigate the codebase, it is highly recommended that you
 install CTAGS_, if your editor supports it.  Our filename conventions are…inconsistent.
 
-.. _PaulP's script: https://github.com/paulp/sbt-extras/blob/master/sbt
+.. _sbt installer: http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html
 .. _CTAGS: http://ctags.sourceforge.net/
 
 
