@@ -257,7 +257,7 @@ trait IndicesModule[M[+_]]
         emptySlice
       } else {
         val arr = new ArrayIntList(rows.size)
-        rows.foreach(arr.add)
+        rows.toList.sorted.foreach(arr.add) // TODO: we should probably refactor to ArrayBuffer or similar
         valueSlice.remap(arr)
       }
   }

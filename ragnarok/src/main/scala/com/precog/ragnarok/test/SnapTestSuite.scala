@@ -21,19 +21,39 @@ package com.precog
 package ragnarok
 package test
 
-object MedalsTestSuite extends PerfTestSuite {
+object SnapTestSuite extends PerfTestSuite {
   query(
     """
-      | import std::math::floor
-      | 
-      | historic := //summer_games/historic_medals
-      | 
-      | histogram := solve 'year
-      |   maleCount := count(historic.Gender where historic.Gender = "Men" & historic.Edition = 'year)
-      |   femaleCount := count(historic.Gender where historic.Gender = "Women" & historic.Edition = 'year)
-      | 
-      |   {year: 'year, ratio: floor(100 * maleCount / femaleCount)}
-      | 
-      | histogram
-      | """.stripMargin)
+import std::stats::*
+import std::time::*
+--agents := //8504352d-b063-400b-a10b-d6c637539469/status
+agents := //snap
+--se8429501/8504352d-b063-400b-a10b-d6c637539469
+
+lowerBound :=  1353135306278 
+upperBound :=  lowerBound + (1000*60*60*24*95)
+--count(agents where agents.timestamp > lowerBound & agents.timestamp < upperBound)
+
+--millisToISO(upperBound, "+00:00")
+extraLB := lowerBound - (24*60*60000)
+
+results := solve 'agent
+  agents' := agents where agents.timestamp <= upperBound & agents.timestamp >= extraLB & agents.agentId = 'agent
+  order := denseRank(agents'.timestamp)
+
+  agents'' := agents' with { rank: order }
+  newagents := new agents''
+  newagents' := newagents with { rank: newagents.rank - 1 }
+
+  result := newagents' ~ agents'' { first: agents'', second: newagents' } where newagents'.rank = agents''.rank
+
+ {start: std::math::max(result.first.timestamp, lowerBound),
+  end: result.second.timestamp,
+  agentId: result.first.agentId,
+  status: result.first.status,
+  name: result.first.agentAlias,
+  data: result.first}
+
+results where results.end > lowerBound
+    """)
 }
