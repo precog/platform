@@ -2,7 +2,6 @@ package com.precog.ragnarok
 
 import scalaz._
 
-
 sealed trait PerfTest
 case class RunQuery(query: String) extends PerfTest
 case object RunSequential extends PerfTest
