@@ -45,7 +45,7 @@ import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 
 import org.joda.time.DateTime
-import org.I0Itec.zkclient.ZkClient 
+import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.DataUpdater
 import org.streum.configrity.Configuration
 
@@ -75,7 +75,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
         request.headers.header[Authorization] flatMap {
           _.basic map {
             case BasicAuthCredentials(email,  password) =>
-              accountManager.authAccount(email, password) flatMap { 
+              accountManager.authAccount(email, password) flatMap {
                 case Success(account)   => f(account)
                 case Failure(error)     =>
                   logger.warn("Authentication failure from %s for %s: %s".format(NetUtils.remoteIpFrom(request), email, error))
@@ -87,7 +87,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
         }
       }
     }
-    
+
     val metadata = Some(AboutMetadata(ParameterMetadata('accountId, None), DescriptionMetadata("A accountId is required for the use of this service.")))
   }
 }
@@ -101,7 +101,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
   implicit def M: Monad[Future]
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)
-  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
+  def APIKeyFinder(config: Configuration): (APIKeyManager[Future], Stoppable)
 
   def clock: Clock
 
@@ -114,11 +114,13 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           Future {
             logger.debug("Building account service state...")
             val (accountManager, stoppable) = AccountManager(config)
-            val apiKeyFinder = APIKeyFinder(config.detach("security"))
+            //val apiKeyFinder = APIKeyFinder(config.detach("security"))
+            val (apiKeyManager, stoppable2) = APIKeyFinder(config.detach("security"))
+            val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
             val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId)
 
-            State(handlers, stoppable)
+            State(handlers, stoppable.append(stoppable2))
           }
         } ->
         request { case State(handlers, _) =>
@@ -128,28 +130,28 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
               path("/accounts/") {
                 post(PostAccountHandler) ~
                 auth(handlers.accountManager) {
-                  get(ListAccountsHandler) ~ 
+                  get(ListAccountsHandler) ~
                   path("'accountId") {
-                    get(GetAccountDetailsHandler) ~ 
+                    get(GetAccountDetailsHandler) ~
                     delete(DeleteAccountHandler) ~
                     path("/password") {
                       put(PutAccountPasswordHandler)
-                    } ~ 
+                    } ~
                     path("/grants/") {
                       post(CreateAccountGrantHandler)
                     } ~
                     path("/plan") {
                       get(GetAccountPlanHandler) ~
-                      put(PutAccountPlanHandler) ~ 
+                      put(PutAccountPlanHandler) ~
                       delete(DeleteAccountPlanHandler)
                     }
-                  } 
+                  }
                 }
               }
             }
           } ~
-          orFail { req: HttpRequest[ByteChunk] => 
-            self.logger.error("Request " + req + " could not be serviced.") 
+          orFail { req: HttpRequest[ByteChunk] =>
+            self.logger.error("Request " + req + " could not be serviced.")
             (HttpStatusCodes.NotFound, "Request " + req + " could not be serviced.")
           }
         } ->

@@ -70,6 +70,9 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
 
   def authorities = db.authorities
 
+  // TODO: Rewrite NIHDBProjection to use a snapshot.
+  def getSnapshot(): Future[NIHDBSnapshot] = db.getSnapshot()
+
   def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
     // FIXME: We probably want to change this semantic throughout Yggdrasil
     val constraint = columns.map(_.map(_.selector))

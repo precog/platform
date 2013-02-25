@@ -91,14 +91,6 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
       invoke { client =>
         logger.info("Querying accounts service.")
         eitherT(client.query("apiKey", apiKey).get[JValue]("/accounts/") map {
-          // TODO: remove this legacy version once we're on the new accounts service
-          case HttpResponse(HttpStatus(OK, _), _, Some(JArray(jaccountIds)), _) if jaccountIds.length == 1 =>
-            logger.info("Got response for apiKey " + apiKey)
-            (((_:Extractor.Error).message) <-: jaccountIds.head.validated[WrappedAccountId] :-> { wid =>
-                apiKeyToAccountCache.put(apiKey, wid.accountId)
-                Some(wid.accountId)
-            }).disjunction
-
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
             logger.info("Got response for apiKey " + apiKey)
             (((_:Extractor.Error).message) <-: jaccountId.validated[WrappedAccountId] :-> { wid =>

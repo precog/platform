@@ -72,7 +72,9 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
     def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(5, "seconds"))
   }
 
-  val config = """ 
+  val keyManager = new InMemoryAPIKeyManager[Future]()
+
+  val config = """
     security {
       test = true
       mongo {
@@ -80,13 +82,15 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
         servers = [localhost]
         database = test
       }
-    }   
-  """
+
+      rootKey = %s
+    }
+  """.format(keyManager.rootAPIKeyRecord.apiKey)
 
   override val configuration = "services { accounts { v1 { " + config + " } } }"
 
   def AccountManager(config: Configuration) = (new InMemoryAccountManager()(M), Stoppable.Noop)
-  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(new InMemoryAPIKeyManager())
+  def APIKeyFinder(config: Configuration) = (keyManager, Stoppable.Noop)
 
   val clock = Clock.System
 
@@ -104,7 +108,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
     HttpHeaders.Authorization("Basic " + encoded)
   }
 
-  def listAccounts(request: JValue) = 
+  def listAccounts(request: JValue) =
     accounts.query("", "").post("")(request)
 
   def createAccount(email: String, password: String) = {
@@ -112,10 +116,10 @@ class AccountServiceSpec extends TestAccountService with Tags {
     accounts.post("")(request)
   }
 
-  def getAccount(accountId: String, user: String, pass: String) = 
+  def getAccount(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).get(accountId)
 
-  def deleteAccount(accountId: String, user: String, pass: String) = 
+  def deleteAccount(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).delete(accountId)
 
   def changePassword(accountId: String, user: String, oldPass: String, newPass: String) = {
@@ -123,18 +127,18 @@ class AccountServiceSpec extends TestAccountService with Tags {
     accounts.header(auth(user, oldPass)).put(accountId + "/password")(request)
   }
 
-  def addGrantToAccount(accountId: String,request: JValue) = 
+  def addGrantToAccount(accountId: String,request: JValue) =
     accounts.query("accountId",accountId).post(accountId + "/grants/")(request)
 
-  def getAccountPlan(accountId: String, user: String, pass: String) = 
+  def getAccountPlan(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).get(accountId + "/plan")
-  
+
   def putAccountPlan(accountId: String, user: String, pass: String, planType: String) = {
     val request: JValue = JObject(JField("type", JString(planType)) :: Nil)
     accounts.header(auth(user, pass)).put(accountId + "/plan")(request)
   }
-  
-  def removeAccountPlan(accountId: String, user: String, pass: String) = 
+
+  def removeAccountPlan(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).delete(accountId + "/plan")
 
   def createAccountAndGetId(email: String, pass: String): Future[String] = {
