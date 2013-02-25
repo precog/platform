@@ -65,6 +65,10 @@ trait LineErrors extends Errors with Phases with parser.AST {
 
 sealed trait ErrorType 
 
+case object CannotUseDistributionWithoutSampling extends ErrorType {
+  override def toString = "cannot use distribution without sampling"
+}
+
 case class UndefinedTicVariable(name: TicId) extends ErrorType {
   override def toString = "undefined tic-variable: %s".format(name)
 }
@@ -165,4 +169,8 @@ case object GroupTargetSetNotIndependent extends ErrorType {
 
 case object InvalidGroupConstraint extends ErrorType {
   override def toString = "solve constraint lacking variables"
+}
+
+case class ExtraVarsInGroupConstraint(id: TicId) extends ErrorType {
+  override def toString = "invalid free variable usage (%s) in solve constraint".format(id)
 }

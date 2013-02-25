@@ -509,6 +509,50 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray)))
     }
 
+    "emit join of wrapped arrays for array with four elements having either value provenance or static provenance" in {
+      val input = """
+        | a := new 4
+        | [a, 5, a, 5]
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushNum("5"),
+          Map1(WrapArray),
+          PushNum("5"),
+          Map1(WrapArray),
+          Map2Cross(JoinArray),
+          PushNum("4"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map1(WrapArray),
+          Swap(1),
+          Swap(2),
+          Map1(WrapArray),
+          Map2Match(JoinArray),
+          Map2Cross(JoinArray),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("1"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("3"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap),
+          PushNum("0"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap)))
+    }
+
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
       testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
@@ -540,6 +584,10 @@ object EmitterSpecs extends Specification
           Map1(WrapArray),
           Map2Match(JoinArray),
           Map2Cross(JoinArray),
+          PushNum("1"),
+          Map2Cross(ArraySwap),
+          PushNum("2"),
+          Map2Cross(ArraySwap),
           PushNum("1"),
           Map2Cross(ArraySwap)))
     }
@@ -667,7 +715,10 @@ object EmitterSpecs extends Specification
     }
 
     "emit morphism1" in {
-      forall(libMorphism1) { f =>
+      // std::random::foobar(12) is not valid Quirrel and results in a compiler error
+      val rand = Morphism1(Vector("std", "random"), "foobar", 0x0006)
+
+      forall(libMorphism1 - rand) { f =>
         testEmit("""%s(4224)""".format(f.fqn))(
           Vector(
             PushNum("4224"),
@@ -1686,6 +1737,36 @@ object EmitterSpecs extends Specification
         FilterMatch,
         Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
         Merge))
+    }
+    
+    "emit constraints defined within an inner parametric function" in {
+      val input = """
+        | foo := //foo
+        |
+        | solve 'a
+        |   f(x) := foo where foo.a = 'a & foo.b = x
+        |   f(42)
+        | """.stripMargin
+        
+      emit(compileSingle(input)) must not(throwA[Throwable])
+    }
+    
+    "not explode on consecutive solves with name-bound constraints" in {
+      val input = """
+        | train := //train
+        | 
+        | cumProb := solve 'rank
+        |   train where train = 'rank
+        | 
+        | buckets := solve 'rank
+        |   minimum := cumProb where cumProb = 'rank
+        |   minimum
+        | 
+        | buckets
+        | """.stripMargin
+        
+      emit(compileSingle(input))
+      true mustEqual true
     }
   }
   

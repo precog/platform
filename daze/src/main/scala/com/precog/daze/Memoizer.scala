@@ -131,6 +131,13 @@ trait Memoizer extends DAG {
             dag.Assert(memoized(splits)(pred), memoized(splits)(child))(node.loc)
         }
         
+        case node @ dag.Observe(data, samples) => {
+          if (numRefs(node) > MemoThreshold)
+            Memoize(dag.Observe(memoized(splits)(data), memoized(splits)(samples))(node.loc), scaleMemoPriority(numRefs(node)))
+          else
+            dag.Observe(memoized(splits)(data), memoized(splits)(samples))(node.loc)
+        }
+        
         case node @ dag.IUI(union, left, right) => {
           if (numRefs(node) > MemoThreshold)
             Memoize(dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
@@ -250,6 +257,11 @@ trait Memoizer extends DAG {
     
     case Assert(pred, child) => {
       val merged = findForcingRefs(pred, OpSide.Left(graph)) |+| findForcingRefs(child, OpSide.Right(graph))
+      updateMap(merged, graph, force)
+    }
+    
+    case Observe(data, samples) => {
+      val merged = findForcingRefs(data, OpSide.Left(graph)) |+| findForcingRefs(samples, OpSide.Right(graph))
       updateMap(merged, graph, force)
     }
     

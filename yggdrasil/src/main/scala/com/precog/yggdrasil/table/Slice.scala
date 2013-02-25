@@ -743,7 +743,7 @@ trait Slice { source =>
 
   def zip(other: Slice): Slice = {
     new Slice {
-      val size = source.size max other.size
+      val size = source.size min other.size
       val columns: Map[ColumnRef, Column] = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => acc + (ref -> (acc get ref flatMap { c => cf.util.UnionRight(c, col) } getOrElse col))
       }

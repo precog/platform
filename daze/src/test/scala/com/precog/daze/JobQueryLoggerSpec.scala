@@ -65,12 +65,13 @@ class JobQueryLoggerSpec extends Specification {
   "Job error report" should {
     "report info messages to the correct channel" in testChannel(channels.Info) { (report, msg) => report.info((), msg) }
     "report warn messages to the correct channel" in testChannel(channels.Warning) { (report, msg) => report.warn((), msg) }
-    "report fatal messages to the correct channel" in testChannel(channels.Error) { (report, msg) => report.fatal((), msg) }
-    "cancel jobs on a fatal message" in {
+    "report error messages to the correct channel" in testChannel(channels.Error) { (report, msg) => report.error((), msg) }
+    "cancel jobs on a die" in {
       withReport { report =>
         val reason = "Arrrgggggggggggghhhhhhh....."
         (for {
-          _ <- report.fatal((), reason)
+          _ <- report.error((), reason)
+          _ <- report.die()
           job <- report.jobManager.findJob(report.jobId)
         } yield job).copoint must beLike {
           case Some(Job(_, _, _, _, _, Cancelled(_, _, _))) => ok

@@ -111,7 +111,10 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
       import EvaluationError._
 
-      val solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
+      // This should be executed within the outer N returned above, so keep
+      // this as a def, and use within an N.point.
+
+      def solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
         val (faults, bytecode) = asBytecode(query) 
         
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
@@ -137,20 +140,23 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         }
 
         resultVN map { nt => 
-          val faultN = faults map {
-            case Fault.Error(pos, msg) => queryReport.warn(pos, msg) 
-            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg)
-          } reduceOption { _ >> _ } getOrElse (N point ())
+          StreamT.wrapEffect {
+            faults map {
+              case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
+              case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
+            } reduceOption { (a, b) =>
+              (a |@| b)(_ || _)
+            } getOrElse (N point false) map {
+              case true =>
+                //FIXME: we should die here, maybe?
+                //queryReport.die() map { _ => StreamT.empty[N, CharBuffer] }
+                outputChunks(opts.output)(N point Table.empty)
 
-          val chunks = outputChunks(opts.output) {
-            faultN >> nt
+              case false =>
+                val chunks = outputChunks(opts.output) { nt }
+                chunks ++ StreamT.wrapEffect(queryReport.done map { _ => StreamT.empty[N, CharBuffer] })
+            }
           }
-          
-          val effect = queryReport.done map { _ =>
-            StreamT.empty[N, CharBuffer]
-          }
-          
-          chunks ++ (StreamT wrapEffect effect)
         }
       } 
       

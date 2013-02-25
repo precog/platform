@@ -50,7 +50,7 @@ object GroupSolverSpecs extends Specification
           origin @ Where(_, target, Eq(_, solution, _)))) = compileSingle(input)
           
       val btrace = List()
-      val expected = Group(Some(origin), target, UnfixedSolution("'day", solution), btrace)
+      val expected = Group(Some(origin), target, UnfixedSolution("'day", solution, btrace), btrace)
       tree.errors must beEmpty
       tree.buckets mustEqual Map(Set() -> expected)
     }
@@ -65,8 +65,8 @@ object GroupSolverSpecs extends Specification
       val btrace = List()
       val expected = Group(Some(origin), target,
         IntersectBucketSpec(
-          UnfixedSolution("'day", leftSol),
-          UnfixedSolution("'day", rightSol)),
+          UnfixedSolution("'day", leftSol, btrace),
+          UnfixedSolution("'day", rightSol, btrace)),
         btrace)
       
       tree.errors must beEmpty
@@ -258,10 +258,10 @@ object GroupSolverSpecs extends Specification
       val btrace2 = List()
       val expected = IntersectBucketSpec(
         Group(Some(origin), target,
-          UnfixedSolution("'a", bodySol),
+          UnfixedSolution("'a", bodySol, btrace1),
           btrace1),
         Group(None, constrSol,
-          UnfixedSolution("'a", constrSol),
+          UnfixedSolution("'a", constrSol, btrace2),
           btrace2))
       
       tree.errors must beEmpty
@@ -287,10 +287,10 @@ object GroupSolverSpecs extends Specification
       val btrace2 = List()
       val expected = IntersectBucketSpec(
         Group(Some(origin), target,
-          UnfixedSolution("'a", bodySol),
+          UnfixedSolution("'a", bodySol, btrace1),
           btrace1),
         Group(None, constrSol,
-          UnfixedSolution("'a", constrSol),
+          UnfixedSolution("'a", constrSol, btrace2),
           btrace2))
       
       tree.errors must beEmpty
@@ -308,7 +308,7 @@ object GroupSolverSpecs extends Specification
         tree @ Solve(_,
           Vector(Eq(_, _, constrSol)), _)) = compileSingle(input)
           
-      val expected = Group(None, constrSol, UnfixedSolution("'a", constrSol), List()) 
+      val expected = Group(None, constrSol, UnfixedSolution("'a", constrSol, Nil), Nil) 
       
       tree.errors must beEmpty
       tree.buckets mustEqual Map(Set() -> expected)
@@ -334,10 +334,10 @@ object GroupSolverSpecs extends Specification
       val btrace2 = List()
       val expected = IntersectBucketSpec(
         Group(Some(originA), targetA,
-          UnfixedSolution("'a", solA),
+          UnfixedSolution("'a", solA, btrace1),
           btrace1),
         Group(Some(originB), targetB,
-          UnfixedSolution("'b", solB),
+          UnfixedSolution("'b", solB, btrace2),
           btrace2))
       
       tree.errors must beEmpty
@@ -368,9 +368,9 @@ object GroupSolverSpecs extends Specification
               
       val expected = IntersectBucketSpec(
         Group(Some(originA), targetA,
-          UnfixedSolution("'a", solA), btraceA),
+          UnfixedSolution("'a", solA, btraceA), btraceA),
         Group(Some(originB), targetB,
-          UnfixedSolution("'b", solB), btraceB))
+          UnfixedSolution("'b", solB, btraceB), btraceB))
       
       tree.errors must beEmpty
       tree.buckets mustEqual Map(Set() -> expected)
@@ -583,7 +583,7 @@ object GroupSolverSpecs extends Specification
       tree.errors must beEmpty
       
       tree.buckets(Set()) must beLike {
-        case Group(origin, target, UnfixedSolution("'a", sub @ Sub(_, fooa, n)), _) => {
+        case Group(origin, target, UnfixedSolution("'a", sub @ Sub(_, fooa, n), _), _) => {
           sub.provenance mustEqual StaticProvenance("/foo")
           // anything else?
         }
@@ -690,11 +690,11 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, Eq(_, _, solution),
           solve @ Solve(_, _,
-            where @ Where(_, target, _)))) = compileSingle(input)
+            where @ Where(_, target, d: Dispatch)))) = compileSingle(input)
         
       val btrace = List()
       
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, d :: btrace), btrace)
         
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -726,7 +726,7 @@ object GroupSolverSpecs extends Specification
             d @ Dispatch(_, _, Vector(where @ Where(_, target, Eq(_, solution, _))))))) = compileSingle(input)
             
       val btrace = List(d)
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, btrace), btrace)
       
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -756,11 +756,11 @@ object GroupSolverSpecs extends Specification
       val Let(_, _, _, _,
         Let(_, _, _, _,
           solve @ Solve(_, _,
-            where @ Where(_, target, Dispatch(_, _, Vector(Eq(_, _, solution))))))) = compileSingle(input)
+            where @ Where(_, target, d @ Dispatch(_, _, Vector(Eq(_, _, solution))))))) = compileSingle(input)
       
       val btrace = List()
       
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, d :: btrace), btrace)
         
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -795,7 +795,7 @@ object GroupSolverSpecs extends Specification
               
       val btrace = List(d)
               
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, btrace), btrace)
       
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -826,7 +826,7 @@ object GroupSolverSpecs extends Specification
 
       val btrace = List(d2)
                     
-      val expected = Group(Some(where), target, UnfixedSolution("'winner", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'winner", solution, btrace), btrace)
 
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -862,7 +862,7 @@ object GroupSolverSpecs extends Specification
           
       val btrace = List(d)
           
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, btrace), btrace)
       
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set(d) -> expected)
@@ -889,7 +889,7 @@ object GroupSolverSpecs extends Specification
           
       val btrace = List(d, d2)
           
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), btrace)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, btrace), btrace)
       
       solve.errors must beEmpty
       solve.buckets mustEqual Map(Set(d, d2) -> expected)
@@ -984,7 +984,7 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _, _,
           solve @ Solve(_, Vector(Eq(_, _, target)), _))) = compileSingle(input)
           
-      val expected = Group(None, target, UnfixedSolution("'bins", target), Nil)
+      val expected = Group(None, target, UnfixedSolution("'bins", target, Nil), Nil)
       
       tree.errors must beEmpty
       solve.buckets mustEqual Map(Set() -> expected)
@@ -1079,10 +1079,32 @@ object GroupSolverSpecs extends Specification
             where @ Where(_, target, Eq(_, solution, _)),
             _))) = compileSingle(input) 
             
-      val expected = Group(Some(where), target, UnfixedSolution("'a", solution), Nil)
+      val expected = Group(Some(where), target, UnfixedSolution("'a", solution, Nil), Nil)
       
       solve.errors must beEmpty
       solve.buckets mustEqual(Map(Set() -> expected))
+    }
+    
+    "reject a solve with a doubly-compared tic variable" in {
+      val input = """
+        | foo := //foo
+        | solve 'a = foo = 'a
+        |   'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must contain(ExtraVarsInGroupConstraint("'a"))
+    }
+    
+    "accept a solve on the results of an observation" in {
+      val input = """
+        | foo := //foo
+        | r := observe(foo, std::random::foobar(42))
+        | 
+        | solve 'a
+        |   r where r = 'a
+        | """.stripMargin
+        
+      compileSingle(input).errors must beEmpty
     }
   }
 }

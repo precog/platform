@@ -59,11 +59,18 @@ object NIHDBShardServer extends BlueEyesServer
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val jobManager = WebJobManager(config.detach("jobs")).withM[Future]
+    val (asyncQueries, jobManager) = {
+      if (config[Boolean]("jobs.service.in_memory", false)) {
+        (ShardStateOptions.DisableAsyncQueries, ExpiringJobManager[Future](config.detach("jobs")))
+      } else {
+        (ShardStateOptions.NoOptions, WebJobManager(config.detach("jobs")).withM[Future])
+      }
+    }
+
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
     val stoppable = Stoppable.fromFuture(platform.shutdown)
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
+    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, asyncQueries, stoppable)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")
