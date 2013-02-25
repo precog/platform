@@ -1,5 +1,7 @@
 package com.precog.yggdrasil
 
+import com.precog.common._
+
 trait FNModule {
   type F1 
   type F2

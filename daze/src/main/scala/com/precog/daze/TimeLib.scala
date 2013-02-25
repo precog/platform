@@ -7,6 +7,7 @@ import util.BitSetUtil
 
 import bytecode._
 
+import common._
 import common.json._
 
 import yggdrasil._

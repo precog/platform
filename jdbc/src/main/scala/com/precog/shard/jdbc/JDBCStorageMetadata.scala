@@ -17,15 +17,17 @@ class JDBCStorageMetadataSource(dbMap: Map[String, String])(implicit asyncContex
 }
 
 class JDBCStorageMetadata(dbMap: Map[String, String])(implicit asyncContext: ExecutionContext) extends StorageMetadata[Future] with Logging {
-  implicit val M = AkkaTypeClasses.futureApplicative(asyncContext) 
+  implicit val M = new FutureMonad(asyncContext) 
 
   // FIXME: Actually implement these for JDBC
-  def findChildren(path: Path): Future[Set[Path]] = {
+  def findDirectChildren(path: Path): Future[Set[Path]] = {
     logger.warn("Path globs will be supported in a future release of Precog for JDBC")
     Promise.successful(Set())
   }
 
+  def findSize(path: Path) = Promise.successful(0L)
+
   def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
-  def findProjections(path: Path, selector: CPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]  = Promise.successful(Map())
-  def findPathMetadata(path: Path, selector: CPath): Future[PathRoot]  = Promise.successful(PathRoot(Set()))
+
+  def findStructure(path: Path, selector: CPath) = Promise.successful(PathStructure.Empty)
 }

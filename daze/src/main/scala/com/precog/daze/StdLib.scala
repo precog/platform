@@ -13,6 +13,7 @@ import bytecode.ReductionLike
 
 import common.json._
 
+import com.precog.common._
 import yggdrasil._
 import yggdrasil.table._
 

@@ -3,12 +3,14 @@ package com.precog.yggdrasil
 import actor._
 import metadata._
 import util._
-import com.precog.util._
 import SValue._
 import com.precog.common._
+import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.util._
 import com.precog.common.json._
+import com.precog.util._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -20,34 +22,40 @@ import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
+import scalaz.syntax.std.boolean._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-class StubStorageMetadata[M[+_]](projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata])(implicit val M: Monad[M]) extends StorageMetadata[M] {
-  val source = new TestMetadataStorage(projectionMetadata)
-  def findChildren(path: Path) = M.point(source.findChildren(path))
-  def findSelectors(path: Path) = M.point(source.findSelectors(path))
-  def findProjections(path: Path, selector: CPath) = M.point {
-    projectionMetadata.collect {
-      case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
-        (descriptor, ColumnMetadata.Empty)
+class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]])(implicit M: Monad[M]) extends StorageMetadata[M]{
+  def findDirectChildren(path: Path) = M point {
+    projectionMetadata.keySet collect {
+      case key if key.isChildOf(path) => Path(key.components(path.length))
     }
   }
 
-  def findPathMetadata(path: Path, selector: CPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
+  def findSize(path: Path) = M.point(0L)
+  def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]).keySet.map(_.selector))
+  def findStructure(path: Path, selector: CPath) = M.point {
+    val types: Map[CType, Long] = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) collect {
+      case (ColumnRef(`selector`, ctype), count) => (ctype, count)
+    }
+
+    val children = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) flatMap {
+      case t @ (ColumnRef(s, ctype), count) => 
+        if (s.hasPrefix(selector)) s.take(selector.length + 1) else None
+    }
+
+    PathStructure(types, children.toSet)
+  }
 }
 
-trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] with StorageMetadataSource[M] { self =>
+trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] { self =>
   implicit def M: Monad[M]
 
-  protected def projections: Map[ProjectionDescriptor, Projection]
-  protected def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
-  protected def metadata = new StubStorageMetadata(projectionMetadata)(M)
+  protected def projections: Map[Path, Projection]
 
   class ProjectionCompanion extends ProjectionCompanionLike[M] {
-    def apply(descriptor: ProjectionDescriptor) = M.point(projections(descriptor))
+    def apply(path: Path) = M.point(projections.get(path))
   }
-
-  def userMetadataView(apiKey: APIKey) = new UserMetadataView[M](apiKey, new UnrestrictedAccessControl(), metadata)
 }

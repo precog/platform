@@ -5,6 +5,7 @@ import table._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import com.precog.common._
 import com.precog.common.json._
 import com.precog.bytecode._
 
@@ -37,6 +38,79 @@ object Schema {
     }
 
     cpaths sorted
+  }
+
+  def flatten(jtype: JType, refsOriginal: List[ColumnRef]): List[(CPath, CType)] = {
+    def buildPath(nodes: List[CPathNode], refs: List[ColumnRef], jType: JType): List[(CPath, CType)] = jType match {
+      case JArrayFixedT(indices) if indices.isEmpty =>
+        (CPath(nodes.reverse), CEmptyArray) :: Nil
+        
+      case JObjectFixedT(fields) if fields.isEmpty =>
+        (CPath(nodes.reverse), CEmptyObject) :: Nil
+        
+      case JArrayFixedT(indices) =>
+        indices.toList.flatMap { case (idx, tpe) =>
+          val refs0 = refs collect { case ColumnRef(CPath(CPathIndex(`idx`), rest @ _*), ctype) =>
+            ColumnRef(CPath(rest: _*), ctype)
+          }
+          buildPath(CPathIndex(idx) :: nodes, refs0, tpe)
+        }
+
+      case JObjectFixedT(fields) => {
+        fields.toList.flatMap { case (field, tpe) =>
+          val refs0 = refs collect { case ColumnRef(CPath(CPathField(`field`), rest @ _*), ctype) =>
+            ColumnRef(CPath(rest: _*), ctype)
+          }
+          buildPath(CPathField(field) :: nodes, refs0, tpe)
+        }
+      }
+
+      case JArrayUnfixedT =>
+        refs collect { 
+          case ColumnRef(p @ CPath(CPathIndex(i), rest @ _*), ctype) =>
+            (CPath(nodes.reverse) \ p, ctype)
+          case ColumnRef(CPath(), CEmptyArray) =>
+            (CPath(nodes.reverse), CEmptyArray)
+        }
+
+      case JObjectUnfixedT =>
+        refs collect { 
+          case ColumnRef(p @ CPath(CPathField(i), rest @ _*), ctype) =>
+            (CPath(nodes.reverse) \ p, ctype)
+          case ColumnRef(CPath(), CEmptyObject) =>
+            (CPath(nodes.reverse), CEmptyObject)
+        }
+
+      case JArrayHomogeneousT(tpe) =>
+        val refs0 = refs collect { case ColumnRef(CPath(CPathArray, rest @ _*), ctype) =>
+          ColumnRef(CPath(rest: _*), ctype)
+        }
+        buildPath(CPathArray :: nodes, refs0, tpe)
+
+      case JNumberT =>
+        val path = CPath(nodes.reverse)
+        (path, CLong: CType) :: (path, CDouble) :: (path, CNum) :: Nil
+
+      case JTextT =>
+        (CPath(nodes.reverse), CString) :: Nil
+
+      case JBooleanT =>
+        (CPath(nodes.reverse), CBoolean) :: Nil
+
+      case JDateT =>
+        (CPath(nodes.reverse), CDate) :: Nil
+
+      case JPeriodT =>
+        (CPath(nodes.reverse), CPeriod) :: Nil
+
+      case JNullT =>
+        (CPath(nodes.reverse), CNull) :: Nil
+
+      case JUnionT(ltpe, rtpe) =>
+        buildPath(nodes, refs, ltpe) ++ buildPath(nodes, refs, rtpe)
+    }
+
+    buildPath(Nil, refsOriginal, jtype)
   }
 
   private def fromCValueType(t: CValueType[_]): Option[JType] = t match {

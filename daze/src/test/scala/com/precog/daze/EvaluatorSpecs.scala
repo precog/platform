@@ -1,7 +1,7 @@
 package com.precog
 package daze
 
-import com.precog.common.Path
+import com.precog.common._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
@@ -57,7 +57,7 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
 
   val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
 
-  val projections = Map.empty[ProjectionDescriptor, Projection]
+  val projections = Map.empty[Path, Projection]
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
@@ -75,16 +75,13 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
               val prefix = "filesystem"
               val target = path.path.replaceAll("/$", ".json")
               
-              val src = {
-                if (pathStr startsWith prefix) {
-                  val (_, target1) = target.splitAt(prefix.length + 1)
-                  io.Source fromFile (new File(target1))
-              } else {
-                  io.Source fromInputStream getClass.getResourceAsStream(target)
-                }
-              }
+              val src = if (pathStr startsWith prefix) {
+                          io.Source.fromFile(new File(target.substring(prefix.length + 1)))
+                        } else {
+                          io.Source.fromInputStream(getClass.getResourceAsStream(target))
+                        }
 
-              val parsed: Stream[JValue] = src.getLines map JParser.parse toStream
+              val parsed: Stream[JValue] = src.getLines map JParser.parseUnsafe toStream
 
               currentIndex += parsed.length
               
@@ -120,7 +117,6 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   }
 
   object yggConfig extends YggConfig 
-
 }
 
 trait EvaluatorSpecs[M[+_]] extends Specification

@@ -2,6 +2,7 @@ package com.precog
 package muspelheim
 
 import com.precog.yggdrasil._
+import com.precog.common._
 
 trait ClusteringSpecs extends EvalStackSpecs {
 

@@ -1,0 +1,6 @@
+/etc/precog/auth-v1-nihdb.conf=nihdb/auth-v1.conf
+default=nihdb/auth-v1.default
+init=nihdb/auth-v1.init
+/etc/monit/conf.d/auth-v1-nihdb.monit=nihdb/auth-v1.monit
+/etc/precog/auth-v1-nihdb.logging.xml=nihdb/auth-v1.logging.xml
+postinstall=nihdb/postinstall.sh

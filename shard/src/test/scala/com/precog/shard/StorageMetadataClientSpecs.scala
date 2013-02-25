@@ -1,8 +1,8 @@
 package com.precog.shard
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
@@ -14,24 +14,20 @@ import scalaz.syntax.copointed._
 import org.specs2.mutable._
 
 abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with Copointed[M]) extends Specification {
-  def colSizeMetadata(descriptor: ColumnDescriptor, size: Long): ColumnMetadata = Map(
+  def colSizeMetadata(descriptor: ColumnRef, size: Long): ColumnMetadata = Map(
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )
 
-  val fbbar = ColumnDescriptor(Path("/foo/bar/"), CPath(".bar"), CString, Authorities(Set()))
-  val fbbaz = ColumnDescriptor(Path("/foo/bar/"), CPath(".baz"), CString, Authorities(Set()))
-
-  val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, fbbar :: Nil) -> colSizeMetadata(fbbar, 123L),
-    ProjectionDescriptor(1, fbbaz :: Nil) -> colSizeMetadata(fbbaz, 456L)
+  lazy val projectionMetadata: Map[Path, Map[ColumnRef, Long]] = Map(
+    Path("/foo/bar1/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 10L),
+    Path("/foo/bar2/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 20L),
+    Path("/foo/bar2/baz/quux2") -> Map(ColumnRef(CPath(), CString) -> 30L),
+    Path("/foo2/bar1/baz/quux1") -> Map(ColumnRef(CPath(), CString) -> 40L),
+    Path("/foo/bar/") -> Map(ColumnRef(CPath(".bar"), CLong) -> 50, ColumnRef(CPath(".baz"), CLong) -> 60L)
   )
 
   val client = new StorageMetadataClient(new StorageMetadataSource[M] {
-    def userMetadataView(userUID: String) = new StubStorageMetadata[M](projectionMetadata)
+    def userMetadataView(userUID: String) = new StubStorageMetadata(projectionMetadata)
   })
 
   "browse" should {
@@ -51,7 +47,7 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
 
     "find correct leaf types" in {
       client.structure("", Path("/foo/bar"), CPath("bar")).copoint must beLike {
-        case Success(result) => result must_== JObject("children" -> JArray(), "types" -> JObject("String" -> JNum(123L)))
+        case Success(result) => result must_== JObject("children" -> JArray(), "types" -> JObject("Long" -> JNum(50)))
       }
     }
   }

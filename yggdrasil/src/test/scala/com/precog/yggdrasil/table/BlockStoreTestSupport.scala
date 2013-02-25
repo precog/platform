@@ -2,9 +2,9 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.bytecode.JType
-import com.precog.common.Path
+import com.precog.common._
 import com.precog.common.json._
-import com.precog.common.VectorCase
+import com.precog.common.security.APIKey
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.util._
 import jdbm3._
@@ -55,10 +55,10 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
   object Table extends TableCompanion
 }
 
-trait BaseBlockStoreTestModule[M[+_]] extends 
-    ColumnarTableModuleTestSupport[M] with 
-    SliceColumnarTableModule[M, JArray] with
-    StubProjectionModule[M, JArray, Slice] {
+trait BaseBlockStoreTestModule[M[+_]]
+    extends ColumnarTableModuleTestSupport[M]
+    with SliceColumnarTableModule[M, JArray]
+    with StubProjectionModule[M, JArray, Slice] {
 
   import trans._
   import CValueGenerators._
@@ -67,12 +67,18 @@ trait BaseBlockStoreTestModule[M[+_]] extends
 
   object Projection extends ProjectionCompanion
 
-  case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends ProjectionLike[M, JArray, Slice] {
+  case class Projection(data: Stream[JValue]) extends ProjectionLike[M, JArray, Slice] {
     private val slices = fromJson(data).slices.toStream.copoint
+
+    val length: Long = data.length
+    val xyz = slices.foldLeft(Set.empty[ColumnRef]) {
+      case (acc, slice) => acc ++ slice.columns.keySet
+    }
+    val structure = M.point(xyz)
 
     private implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 
-    def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set())(implicit M: Monad[M]) = M.point {
+    def getBlockAfter(id: Option[JArray], colSelection: Option[Set[ColumnRef]])(implicit M: Monad[M]) = M.point {
       @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
         blocks.filterNot(_.isEmpty) match {
           case x #:: xs =>
@@ -91,12 +97,14 @@ trait BaseBlockStoreTestModule[M[+_]] extends
       slice map { s => 
         val s0 = new Slice {
           val size = s.size
-          val columns = s.columns filter {
-            case (ColumnRef(jpath, ctype), _) =>
-              colSelection.isEmpty || 
-              jpath.nodes.head == CPathField("key") ||
-              colSelection.exists { desc => (CPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
-          }
+          val columns = colSelection.map { reqCols => 
+            s.columns.filter {
+              case (ref @ ColumnRef(jpath, ctype), _) =>
+                jpath.nodes.head == CPathField("key") || reqCols.exists { ref =>
+                  (CPathField("value") \ ref.selector) == jpath && ref.ctype == ctype
+                }
+            }
+          }.getOrElse(s.columns)
         }
 
         BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JUndefined) \ "key" --> classOf[JArray], s0)
@@ -104,9 +112,9 @@ trait BaseBlockStoreTestModule[M[+_]] extends
     }
   }
 
-  trait BaseBlockStoreTestTableCompanion extends SliceColumnarTableCompanion {
-    implicit val geq: scalaz.Equal[Int] = intInstance
-  }
+  trait BaseBlockStoreTestTableCompanion extends SliceColumnarTableCompanion
+
+  def userMetadataView(apiKey: APIKey) = sys.error("TODO")
 
   def compliesWithSchema(jv: JValue, ctype: CType): Boolean = (jv, ctype) match {
     case (_: JNum, CNum | CLong | CDouble) => true
@@ -133,7 +141,7 @@ trait BaseBlockStoreTestModule[M[+_]] extends
 object BlockStoreTestModule {
   def empty[M[+_]](implicit M0: Monad[M] with Copointed[M]) = new BlockStoreTestModule[M] {
     val M = M0 
-    val projections = Map.empty[ProjectionDescriptor, Projection]
+    val projections = Map.empty[Path, Projection]
   }
 }
 

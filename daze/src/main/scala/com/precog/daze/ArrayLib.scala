@@ -2,6 +2,7 @@ package com.precog
 package daze
 
 import com.precog.bytecode._
+import com.precog.common._
 import com.precog.common.json._
 
 import com.precog.yggdrasil._

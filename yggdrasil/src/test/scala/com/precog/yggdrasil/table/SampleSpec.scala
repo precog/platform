@@ -3,7 +3,7 @@ package table
 
 import blueeyes.json._
 
-import com.precog.common.json._
+import com.precog.common._
 
 import scalaz.StreamT
 import scalaz.syntax.copointed._

@@ -2,9 +2,9 @@ package com.precog.yggdrasil
 package actor
 
 import metadata.ColumnMetadata
-import com.precog.accounts.BasicAccountManager
 import com.precog.util._
 import com.precog.common._
+import com.precog.common.accounts.AccountFinder
 import com.precog.common.kafka._
 
 import akka.actor._
@@ -14,6 +14,9 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
+import _root_.kafka.consumer._
+
+import blueeyes.bkka._
 import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
@@ -30,14 +33,14 @@ import scalaz.syntax.id._
 trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
   case class IngestConfig(
     bufferSize: Int,
-    maxParallel: Int, 
-    batchTimeout: Timeout, 
+    maxParallel: Int,
+    batchTimeout: Timeout,
     failureLogRoot: File,
     maxConsecutiveFailures: Int)
 
   def kafkaHost: String = config[String]("kafka.batch.host")
   def kafkaPort: Int = config[Int]("kafka.batch.port")
-  def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  def kafkaTopic: String = config[String]("kafka.batch.topic")
   def kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
   def kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
 
@@ -56,7 +59,7 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
 
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
   //def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  //def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  //def zookeeperPrefix: String = config[String]("zookeeper.prefix")
 
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 
@@ -73,34 +76,37 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 
   def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = {
-    yggConfig.ingestConfig map { conf => 
-      val consumer = new SimpleConsumer(yggConfig.kafkaHost, 
-                                        yggConfig.kafkaPort, 
-                                        yggConfig.kafkaSocketTimeout.toMillis.toInt, 
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]) = {
+    yggConfig.ingestConfig map { conf =>
+      val consumer = new SimpleConsumer(yggConfig.kafkaHost,
+                                        yggConfig.kafkaPort,
+                                        yggConfig.kafkaSocketTimeout.toMillis.toInt,
                                         yggConfig.kafkaBufferSize)
 
       actorSystem.actorOf(Props(
-        new KafkaShardIngestActor( shardId = yggConfig.shardId, 
-                                   initialCheckpoint = checkpoint, 
-                                   consumer = consumer, 
-                                   topic = yggConfig.kafkaTopic, 
-                                   accountManager = accountManager,
+        new KafkaShardIngestActor( shardId = yggConfig.shardId,
+                                   initialCheckpoint = checkpoint,
+                                   consumer = consumer,
+                                   topic = yggConfig.kafkaTopic,
+                                   accountFinder = accountFinder,
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
                                    ingestTimeout = conf.batchTimeout,
                                    maxCacheSize = conf.maxParallel,
                                    maxConsecutiveFailures = conf.maxConsecutiveFailures) {
 
-        def handleBatchComplete(ck: YggCheckpoint, updates: Seq[(ProjectionDescriptor, Option[ColumnMetadata])]) {
-          logger.debug(ck + " to be updated")
-          metadataActor ! IngestBatchMetadata(updates, ck.messageClock, Some(ck.offset))
+        implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
+
+        def handleBatchComplete(ck: YggCheckpoint) {
+          logger.debug("Complete up to " + ck)
+          checkpointCoordination.saveYggCheckpoint(yggConfig.shardId, ck)
+          logger.info("Saved checkpoint: " + ck)
         }
       }), "ingest")
     }
   }
 
-  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined) 
+  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined)
 }
 
 trait StandaloneShardSystemConfig extends ShardConfig {
@@ -110,11 +116,10 @@ trait StandaloneShardSystemConfig extends ShardConfig {
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, metadataActor: ActorRef, accountManager: BasicAccountManager[Future]) = None
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]) = None
   override def checkpointCoordination = CheckpointCoordination.Noop
 }
 
 // vim: set ts=4 sw=4 et:
 /* tmux
 type ShardSystemActorConfigs */
-

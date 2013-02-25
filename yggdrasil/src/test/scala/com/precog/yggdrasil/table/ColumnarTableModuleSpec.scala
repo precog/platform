@@ -1,8 +1,7 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.{ Path, VectorCase } 
-import com.precog.common.json._
+import com.precog.common._
 import com.precog.common.security._
 import com.precog.bytecode.JType
 import com.precog.yggdrasil.util._
@@ -37,22 +36,7 @@ import java.nio.CharBuffer
 import TableModule._
 import SampleData._
 
-trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] 
-    with TableModuleSpec[M]
-    with CogroupSpec[M]
-    with CrossSpec[M]
-    with TransformSpec[M]
-    with CompactSpec[M] 
-    with TakeRangeSpec[M]
-    with ToArraySpec[M]
-    with ConcatSpec[M]
-    with SampleSpec[M]
-    with CanonicalizeSpec[M]
-    with PartitionMergeSpec[M]
-    with DistinctSpec[M] 
-    with SchemasSpec[M]
-    { spec => 
-
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   type GroupId = Int
   import trans._
   import constants._
@@ -88,6 +72,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     with TakeRangeSpec[M]
     with CanonicalizeSpec[M]
     with PartitionMergeSpec[M]
+    with ToArraySpec[M]
+    with ConcatSpec[M]
+    with SampleSpec[M]
+    //with UnionAllSpec[M]
+    //with CrossAllSpec[M]
+    //with GroupingGraphSpec[M]
     with DistinctSpec[M] 
     with SchemasSpec[M]
     { spec => 
@@ -239,7 +229,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       
       val arrayM = strM map { body =>
         val input = "[%s]".format(body)
-        JParser.parse(input)
+        JParser.parseUnsafe(input)
       }
       
       val minimized = minimize(expected) getOrElse JArray(Nil)
@@ -369,7 +359,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
       "delete elements according to a JType" in checkObjectDelete
       "delete only field in object without removing from array" in {
-        val JArray(elements) = JParser.parse("""[
+        val JArray(elements) = JParser.parseUnsafe("""[
           {"foo": 4, "bar": 12},
           {"foo": 5},
           {"bar": 45},
@@ -382,7 +372,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
         val spec = ObjectDelete(Leaf(Source), Set(CPathField("foo")))
         val results = toJson(table.transform(spec))
-        val JArray(expected) = JParser.parse("""[
+        val JArray(expected) = JParser.parseUnsafe("""[
           {"bar": 12},
           {},
           {"bar": 45},

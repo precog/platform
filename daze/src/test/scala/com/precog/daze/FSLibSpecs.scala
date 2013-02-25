@@ -1,5 +1,6 @@
 package com.precog.daze
 
+import com.precog.common._
 import com.precog.bytecode._
 import com.precog.common.Path
 import com.precog.common.json._
@@ -18,7 +19,7 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
-trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColumnarTableModule[M] {
+trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColumnarTableModule[M] { self =>
   import trans._
   import constants._
 
@@ -35,14 +36,14 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
 
   lazy val yggConfig = new YggConfig
 
-  lazy val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = Map(
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo/bar2/baz/quux2"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty,
-    ProjectionDescriptor(1, ColumnDescriptor(Path("/foo2/bar1/baz/quux1"), CPath(), CString, Authorities(Set())) :: Nil) -> ColumnMetadata.Empty
-  )
-
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata(projectionMetadata)
+  lazy val projectionMetadata: Map[Path, Map[ColumnRef, Long]] = Map(
+    Path("/foo/bar1/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 10L),
+    Path("/foo/bar2/baz/quux1")   -> Map(ColumnRef(CPath.Identity, CString) -> 20L),
+    Path("/foo/bar2/baz/quux2")   -> Map(ColumnRef(CPath.Identity, CString) -> 30L),
+    Path("/foo2/bar1/baz/quux1" ) -> Map(ColumnRef(CPath.Identity, CString) -> 40L)
+  )                                       
+                                          
+  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata[M](projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
@@ -76,7 +77,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
       val expected: List[JValue] = List(JString("/foo/bar1/baz/quux1/"), JString("/foo/bar2/baz/quux1/"))
       runExpansion(table) must_== expected
     }
-
+    
     "expand multiple globbed segments" in {
       val table = pathTable("/foo/*/baz/*")
       val expected: List[JValue] = List(JString("/foo/bar1/baz/quux1/"), JString("/foo/bar2/baz/quux1/"), JString("/foo/bar2/baz/quux2/"))

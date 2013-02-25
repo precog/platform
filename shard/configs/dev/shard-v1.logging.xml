@@ -21,7 +21,7 @@
   <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="debug" />
   <logger name="com.precog.yggdrasil.jdbm3.JDBMProjection" level="debug" />
 
-  <root level="trace">
+  <root level="debug">
     <appender-ref ref="SERVERLOG" />
   </root>
 </configuration>

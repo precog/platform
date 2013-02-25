@@ -5,18 +5,12 @@ import blueeyes.json._
 import blueeyes.json.serialization._
 import DefaultSerialization._
 
-import com.precog.accounts._
-
 import com.precog.common._
 import com.precog.common.json._
+import com.precog.common.accounts._
 import com.precog.common.security._
-
 import com.precog.daze._
-
 import com.precog.muspelheim._
-
-import com.precog.util.FilesystemFileOps
-
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
@@ -25,6 +19,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.jdbc._
 import com.precog.yggdrasil.util._
+import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -111,22 +106,15 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
-    val queryReport = LoggingQueryLogger(M)
+    val queryReport = LoggingQueryLogger[Future](M)
   }
 
   def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
     Future(Success(executor))
   }
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-    new Evaluator[N](N0) with IdSourceScannerModule {
-      type YggConfig = platform.YggConfig // JDBMQueryExecutorConfig
-      val yggConfig = platform.yggConfig
-      val report = LoggingQueryLogger[N](N0)
-    }
-  }
-
   val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Promise.successful(Failure("Size not yet supported"))
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {

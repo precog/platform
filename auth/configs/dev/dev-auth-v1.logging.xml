@@ -18,7 +18,7 @@
 
   <logger name="blueeyes.core.http" level="trace" />
 
-  <root level="debug">
+  <root level="trace">
     <appender-ref ref="SERVERLOG" />
   </root>
 </configuration>

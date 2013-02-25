@@ -1,5 +1,6 @@
 package com.precog.yggdrasil
 
+import com.precog.common._
 import com.precog.common.json._
 
 import akka.dispatch.Await
@@ -181,7 +182,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testMod2Filter = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":-6.846973248137671E+307,
         "key":[7.0]
@@ -354,7 +355,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def checkEqualSelfArray = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [[9,10,11]]""")
 
     val data: Stream[JValue] = (array match {
@@ -397,7 +398,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testSimpleEqual = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
           "value2":-2874857152017741205
@@ -439,7 +440,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testAnotherSimpleEqual = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
           "value2":-2874857152017741205
@@ -478,7 +479,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testYetAnotherSimpleEqual = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
           "value1":-1380814338912438254,
@@ -520,7 +521,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
   
   def testASimpleNonEqual = {
-    val array: JValue = JParser.parse("""
+    val array: JValue = JParser.parseUnsafe("""
       [{
         "value":{
           "value1":-1380814338912438254,
@@ -615,7 +616,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testEqual1 = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {
         "value":{
           "value1":-1503074360046022108,
@@ -796,7 +797,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerObjectConcatEmptyObject = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": {}, "bar": {"ack": 12}},
       {"foo": {}, "bar": {"ack": 12, "bak": 13}},
       {"foo": {"ook": 99}, "bar": {}},
@@ -838,7 +839,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterObjectConcatEmptyObject = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": {}, "bar": {"ack": 12}},
       {"foo": {}, "bar": {"ack": 12, "bak": 13}},
       {"foo": {"ook": 99}, "bar": {}},
@@ -885,7 +886,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerObjectConcatUndefined = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": {"baz": 4}, "bar": {"ack": 12}},
       {"foo": {"baz": 5}},
       {"bar": {"ack": 45}},
@@ -909,7 +910,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterObjectConcatUndefined = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": {"baz": 4}, "bar": {"ack": 12}},
       {"foo": {"baz": 5}},
       {"bar": {"ack": 45}},
@@ -935,7 +936,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerObjectConcatLeftEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -957,7 +958,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterObjectConcatLeftEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -1122,7 +1123,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerArrayConcatUndefined = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -1146,7 +1147,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterArrayConcatUndefined = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -1172,7 +1173,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerArrayConcatEmptyArray = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": [], "bar": [12]},
       {"foo": [], "bar": [12, 13]},
       {"foo": [99], "bar": []},
@@ -1217,7 +1218,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterArrayConcatEmptyArray = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": [], "bar": [12]},
       {"foo": [], "bar": [12, 13]},
       {"foo": [99], "bar": []},
@@ -1266,7 +1267,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testInnerArrayConcatLeftEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -1288,7 +1289,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testOuterArrayConcatLeftEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"foo": 4, "bar": 12},
       {"foo": 5},
       {"bar": 45},
@@ -1479,7 +1480,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   */
 
   def testIsTypeNumeric = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value": "value1"},
       45,
       true,
@@ -1507,7 +1508,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeUnionTrivial = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value": "value1"},
       45,
       true,
@@ -1535,7 +1536,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeUnion = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value": 23},
       {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
       {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
@@ -1567,7 +1568,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeUnfixed = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value": 23},
       {"key":[1, "bax"], "value": {"foo":4, "bar":{}}},
       {"key":[null, "bax", 4], "value": {"foo":4.4, "bar":{"a": false}}},
@@ -1597,7 +1598,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeObject = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value": 23},
       {"key":[1, "bax"], "value": 24},
       {"key":[2], "value": "foo"},
@@ -1624,7 +1625,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeObjectEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       [],
       1,
       {},
@@ -1648,7 +1649,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeArrayEmpty = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       [],
       1,
       {},
@@ -1672,7 +1673,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeObjectUnfixed = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       [],
       1,
       {},
@@ -1696,7 +1697,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeArrayUnfixed = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       [],
       1,
       {},
@@ -1720,7 +1721,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testIsTypeTrivial = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[2,1,1],"value":[]},
       {"key":[2,2,2],"value":{"dx":[8.342062585288287E+307]}}]
     """)
@@ -1827,7 +1828,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testTypedAtSliceBoundary = {
-    val JArray(data) = JParser.parse("""[
+    val JArray(data) = JParser.parseUnsafe("""[
         { "value":{ "n":{ } }, "key":[1,1,1] },
         { "value":{ "lvf":2123699568254154891, "vbeu":false, "dAc":4611686018427387903 }, "key":[1,1,3] },
         { "value":{ "lvf":1, "vbeu":true, "dAc":0 }, "key":[2,1,1] },
@@ -1847,7 +1848,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
   
   def testTypedHeterogeneous = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1], "value":"value1"},
       {"key":[2], "value":23}
     ]""")
@@ -1860,7 +1861,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       Typed(Leaf(Source), jtpe)
     })
     
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       {"key":[1], "value":"value1"},
       {"key":[2]}
     ]""")
@@ -1869,7 +1870,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testTypedObject = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       {"key":[1, 3], "value": {"foo": 23}},
       {"key":[2, 4], "value": {}}
     ]""")
@@ -1882,7 +1883,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JObjectFixedT(Map("foo" -> JNumberT)), "key" -> JArrayUnfixedT)))
     })
 
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       {"key":[1, 3], "value": {"foo": 23}},
       {"key":[2, 4]}
     ]""")
@@ -1923,7 +1924,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testTypedArray = {
-    val JArray(data) = JParser.parse("""[
+    val JArray(data) = JParser.parseUnsafe("""[
       {"key": [1, 2], "value": [2, true] },
       {"key": [3, 4], "value": {} }
     ]""")
@@ -1935,7 +1936,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JArrayFixedT(Map(0 -> JNumberT, 1 -> JBooleanT)), "key" -> JArrayUnfixedT)))
     })
 
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       {"key": [1, 2], "value": [2, true] },
       {"key": [3, 4] }
     ]""")
@@ -1944,7 +1945,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   } 
 
   def testTypedArray2 = {
-    val JArray(data) = JParser.parse("""[
+    val JArray(data) = JParser.parseUnsafe("""[
       {"key": [1], "value": [2, true] }
     ]""")
 
@@ -2015,7 +2016,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
   
   def testTypedNumber = {
-    val JArray(data) = JParser.parse("""[
+    val JArray(data) = JParser.parseUnsafe("""[
       {"key": [1, 2], "value": 23 },
       {"key": [3, 4], "value": "foo" }
     ]""")
@@ -2028,7 +2029,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JNumberT, "key" -> JArrayUnfixedT)))
     })
 
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       {"key": [1, 2], "value": 23 },
       {"key": [3, 4] }
     ]""")
@@ -2055,7 +2056,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
   }
 
   def testTypedEmpty = {
-    val JArray(data) = JParser.parse("""[
+    val JArray(data) = JParser.parseUnsafe("""[
       {"key":[1], "value":{"foo":[]}}
     ]""")
     val sample = SampleData(data.toStream)
@@ -2066,7 +2067,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
         JObjectFixedT(Map("value" -> JArrayFixedT(Map()), "key" -> JArrayUnfixedT)))
     })
 
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       {"key":[1] }
     ]""")
 

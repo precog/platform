@@ -1,7 +1,8 @@
 package com.precog.yggdrasil
-package actor 
+package actor
 
 import com.precog.common._
+import com.precog.common.ingest._
 import com.precog.common.json._
 
 import akka.actor.{Actor,ActorRef,Props,Scheduler}
@@ -24,6 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scalaz._
 import scalaz.syntax.bind._
+import scalaz.syntax.semigroup._
+import scalaz.std.map._
+import scalaz.std.vector._
 
 //////////////
 // MESSAGES //
@@ -34,9 +38,9 @@ case class GetMessages(sendTo: ActorRef)
 sealed trait ShardIngestAction
 sealed trait IngestResult extends ShardIngestAction
 case class IngestErrors(errors: Seq[String]) extends IngestResult
-case class IngestData(messages: Seq[IngestMessage]) extends IngestResult
+case class IngestData(messages: Seq[EventMessage]) extends IngestResult
 
-case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAction
+case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestAction
 
 ////////////
 // ACTORS //
@@ -46,19 +50,17 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
  * The purpose of the ingest supervisor is to coordinate multiple sources of data from which data
  * may be ingested. At present, there are two such sources: the inbound kafka queue, represented
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
- * this actor. 
+ * this actor.
  */
-class IngestSupervisor( ingestActor: Option[ActorRef], 
-                        metadataActor: ActorRef,
+class IngestSupervisor( ingestActor: Option[ActorRef],
                         projectionsActor: ActorRef,
                         scheduler: Scheduler,
-                        metadataTimeout: Timeout,
                         idleDelay: Duration,
                         shutdownCheck: Duration) extends Actor {
 
   protected lazy val logger = LoggerFactory.getLogger("com.precog.yggdrasil.actor.IngestSupervisor")
 
-  private val routingTable = new SingleColumnProjectionRoutingTable
+  private val routingTable = new SinglePathProjectionRoutingTable
 
   private var initiated = 0
   private var processed = 0
@@ -85,24 +87,23 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
       logger.debug("Ingest supervisor status")
       sender ! status
 
-    case IngestErrors(messages) => 
+    case IngestErrors(messages) =>
       errors += 1
       messages.foreach(logger.error(_))
 
-    case IngestData(messages)   => 
+    case IngestData(messages)   =>
       processed += 1
       if (messages.nonEmpty) {
         logger.info("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
-        scheduleIngestRequest(Duration.Zero)
       }
 
     case DirectIngestData(d) =>
       logger.info("Processing direct ingest of " + d.size + " messages")
-      processMessages(d, sender) 
+      processMessages(d, sender)
   }
 
-  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) :: 
+  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) ::
                                                                  JField("processed", JNum(processed)) :: Nil)) :: Nil)
 
   /**
@@ -110,44 +111,14 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
    * with ProjectionInsertsExpected to set the count, then sending either InsertMetadata or
    * InsertNoMetadata messages after processing each message.
    */
-  def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+  //TODO: This needs review; not sure why only archive paths are being considered.
+  def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
     logger.debug("Beginning processing of %d messages".format(messages.size))
-    implicit val to = metadataTimeout
-    implicit val executor = context.dispatcher
-    
-    val archivePaths = messages.collect { case ArchiveMessage(_, Archive(path, _)) => path } 
+    //implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
 
-    if (archivePaths.nonEmpty) {
-      logger.debug("Processing archive paths: " + archivePaths)
-    } else {
-      logger.debug("No archive paths")
-    }
-
-    Future.sequence {
-      archivePaths map { path =>
-        (metadataActor ? FindDescriptors(path, CPath.Identity)).mapTo[Set[ProjectionDescriptor]]
-      }
-    } onSuccess {
-      case descMaps : Seq[Set[ProjectionDescriptor]] => 
-        val projectionMap: Map[Path, Seq[ProjectionDescriptor]] = (for {
-          descMap <- descMaps
-          desc    <- descMap
-          column  <- desc.columns
-        } yield (column.path, desc)).groupBy(_._1).mapValues(_.map(_._2))
-
-        projectionMap.foreach { case (p,d) => logger.debug("Archiving %d projections on path %s".format(d.size, p)) }
-      
-        val updates = routingTable.batchMessages(messages, projectionMap)
-
-        logger.debug("Sending " + updates.size + " update message(s)")
-        batchCoordinator ! ProjectionUpdatesExpected(updates.size)
-        for (update <- updates) projectionsActor.tell(update, batchCoordinator)
-    }
-  }
-
-  private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
-    initiated += 1
-    scheduler.scheduleOnce(delay, actor, GetMessages(self))
+    val updates = routingTable.batchMessages(messages)
+    logger.debug("Sending " + updates.size + " update message(s)")
+    batchCoordinator ! ProjectionUpdatesExpected(updates.size)
+    for (update <- updates) projectionsActor.tell(update, batchCoordinator)
   }
 }
-
