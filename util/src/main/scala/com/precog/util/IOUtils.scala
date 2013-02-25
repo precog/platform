@@ -69,7 +69,7 @@ object IOUtils {
    * if the file was completely written, false otherwise
    */
   def safeWriteToFile(s: String, f: File): IO[Boolean] = {
-    val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
+    val tmpFile = new File(f.getParentFile, f.getName + "-" + System.nanoTime + ".tmp")
 
     writeToFile(s, tmpFile) flatMap {
       _ => IO(tmpFile.renameTo(f)) // TODO: This is only atomic on POSIX systems
