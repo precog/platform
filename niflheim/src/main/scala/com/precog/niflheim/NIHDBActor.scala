@@ -114,8 +114,6 @@ class NIHDB(val baseDir: File, chef: ActorRef,
   def count(paths0: Option[Set[CPath]]): Future[Long] =
     getSnapshot().map(_.count(paths0))
 
-  // def reduce[A](from: Option[Long], cols: Option[Set[(CPath, CType)]])(reduction: Reduction[A]): Future[Option[A]]
-
   def close(): Future[PrecogUnit] =
     gracefulStop(actor, timeout.duration)(actorSystem).map { _ => PrecogUnit }
 }
