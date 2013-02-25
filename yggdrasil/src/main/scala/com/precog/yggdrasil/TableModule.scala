@@ -36,12 +36,14 @@ case class ExactSize(minSize: Long) extends TableSize {
     case ExactSize(n) => ExactSize(minSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, minSize + n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
   
   def *(other: TableSize) = other match {
     case ExactSize(n) => ExactSize(minSize * n)
     case EstimateSize(n1, n2) => EstimateSize(minSize * n1, minSize * n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
 }
 
@@ -50,12 +52,14 @@ case class EstimateSize(minSize: Long, maxSize: Long) extends TableSize {
     case ExactSize(n) => EstimateSize(minSize + n, maxSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, maxSize + n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
   
   def *(other: TableSize) = other match {
     case ExactSize(n) => EstimateSize(minSize * n, maxSize * n)
     case EstimateSize(n1, n2) => EstimateSize(minSize * n1, maxSize * n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
 }
 
@@ -63,6 +67,12 @@ case object UnknownSize extends TableSize {
   val maxSize = Long.MaxValue
   def +(other: TableSize) = UnknownSize
   def *(other: TableSize) = UnknownSize
+}
+
+case object InfiniteSize extends TableSize {
+  val maxSize = Long.MaxValue
+  def +(other: TableSize) = InfiniteSize
+  def *(other: TableSize) = InfiniteSize
 }
 
 object TableModule {
@@ -180,6 +190,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def distinct(spec: TransSpec1): Table
 
     def concat(t2: Table): Table
+
+    def zip(t2: Table): M[Table]
 
     def toArray[A](implicit tpe: CValueType[A]): Table
 
