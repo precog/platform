@@ -584,7 +584,18 @@ trait ColumnarTableModule[M[+_]]
     }
     
     def force: M[Table] = {
-      this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending) //, unique = true)
+      def loop(slices: StreamT[M, Slice], acc: List[Slice], size: Long): M[(List[Slice], Long)] = slices.uncons flatMap {
+        case Some((slice, tail)) if slice.size > 0 =>
+          loop(tail, slice.materialized :: acc, size + slice.size)
+        case Some((_, tail)) =>
+          loop(tail, acc, size)
+        case None =>
+          M.point((acc.reverse, size))
+      }
+      val former = new (Id.Id ~> M) { def apply[A](a: Id.Id[A]): M[A] = M.point(a) }
+      loop(slices, Nil, 0L).map { case (stream, size) =>
+        Table(StreamT.fromIterable(stream).trans(former), ExactSize(size))
+      }
     }
     
     def paged(limit: Int): Table = {
