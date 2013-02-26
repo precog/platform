@@ -117,7 +117,7 @@ trait LinearRegressionLibModule[M[+_]]
 
         def append(t1: StdErrorAcc, t2: => StdErrorAcc) = {
           def isEmpty(matrix: Matrix) = {
-            //todo why must I do this!?
+            // there has to be a better way...
             matrix.getArray.length == 1 && matrix.getArray.head.length == 0
           }
 
@@ -271,7 +271,7 @@ trait LinearRegressionLibModule[M[+_]]
 
         val varianceEst = errors.rss / (coeffs.count - colDim)
         
-        val inverse = errors.product.inverse()         //todo put a try-catch here?
+        val inverse = errors.product.inverse()
 
         val stdErrors = (0 until colDim) map { case i => math.sqrt(varianceEst * inverse.get(i, i)) }
 
@@ -330,7 +330,7 @@ trait LinearRegressionLibModule[M[+_]]
               val arrayTable = table.canonicalize(sliceSize).toArray[Double].normalize
 
               val coeffs0 = arrayTable.reduce(coefficientReducer)
-              val errors0 = coeffs0 flatMap { acc => arrayTable.reduce(stdErrorReducer(acc)) }  //todo only need acc.beta?
+              val errors0 = coeffs0 flatMap { acc => arrayTable.reduce(stdErrorReducer(acc)) }
 
               for {
                 coeffs <- coeffs0
