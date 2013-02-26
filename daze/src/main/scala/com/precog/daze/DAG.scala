@@ -1101,7 +1101,7 @@ trait DAG extends Instructions {
       
       lazy val sorting = joinSort match {
         case tbl: TableSort => tbl
-        case CrossLeftSort => left.sorting
+        case CrossLeftSort => left.sorting // This isn't correct.
         case CrossRightSort => right.sorting
       }
       
@@ -1219,7 +1219,7 @@ trait DAG extends Instructions {
     
     case object IdentitySort extends TableSort
     case class ValueSort(id: Int) extends TableSort
-    case object NullSort extends TableSort
+    // case object NullSort extends TableSort -- Not USED!
     
     case object CrossLeftSort extends JoinSort
     case object CrossRightSort extends JoinSort
