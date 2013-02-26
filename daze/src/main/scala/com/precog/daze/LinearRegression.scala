@@ -45,14 +45,12 @@ trait LinearRegressionLibModule[M[+_]]
     extends ColumnarTableLibModule[M]
     with ReductionLibModule[M]
     with EvaluatorMethodsModule[M]
-    with PredictionLibModule[M]
-    with ModelSummaryModule[M] {
+    with PredictionLibModule[M] {
 
   trait LinearRegressionLib 
       extends ColumnarTableLib
       with RegressionSupport
       with PredictionSupport
-      with ModelSummarySupport
       with ReductionLib
       with EvaluatorMethods {
 
@@ -322,7 +320,10 @@ trait LinearRegressionLibModule[M[+_]]
           } yield {
             tbls zip jtypes
           }
-      
+
+          // important note: regression will explode if there are more than 1000 columns due to rank-deficient matrix
+          // this could be remedied in the future by smarter choice of `sliceSize`
+          // though do we really want to allow people to run regression on >1000 columns?
           val sliceSize = 1000
           val tableReducer: (Table, JType) => M[Table] = {
             (table, jtype) => {
