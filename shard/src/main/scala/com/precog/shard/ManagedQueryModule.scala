@@ -197,7 +197,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
           abort()
         } else if (hasExpired) {
           logger.debug("Expired job %s, stopping poll".format(jobId))
-          abort()
+          stop()
         } else {
           logger.debug("Non-Terminal state for " + jobId)
           // We only update cancelled if we have not yet cancelled.
