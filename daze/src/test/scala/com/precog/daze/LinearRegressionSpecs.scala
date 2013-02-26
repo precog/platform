@@ -156,11 +156,11 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
 
           val SArray(arr) = elems("Model1")
 
-          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match {
+          val (SDecimal(theta1), SDecimal(error1)) = ((arr(0): @unchecked): @unchecked) match {
             case SArray(Vector(SObject(obj))) => returnValues(obj)
           }
 
-          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match {
+          val (SDecimal(theta0), SDecimal(error0)) = ((arr(1): @unchecked): @unchecked) match {
             case SObject(obj) => returnValues(obj)
           }
               
@@ -215,25 +215,25 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
 
           val SArray(arr) = elems("Model1")
 
-          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match { case SObject(map) =>
-            map("bar") match { case SObject(obj) =>
+          val (SDecimal(theta1), SDecimal(error1)) = (arr(0): @unchecked) match { case SObject(map) =>
+            (map("bar"): @unchecked) match { case SObject(obj) =>
               returnValues(obj)
             }
           }
 
-          val (SDecimal(theta2), SDecimal(error2)) = arr(0) match { case SObject(map) =>
-            map("baz") match { case SObject(obj) =>
+          val (SDecimal(theta2), SDecimal(error2)) = (arr(0): @unchecked) match { case SObject(map) =>
+            (map("baz"): @unchecked) match { case SObject(obj) =>
               returnValues(obj)
             }
           }
 
-          val (SDecimal(theta3), SDecimal(error3)) = arr(0) match { case SObject(map) =>
-            map("foo") match { case SObject(obj) =>
+          val (SDecimal(theta3), SDecimal(error3)) = (arr(0): @unchecked) match { case SObject(map) =>
+            (map("foo"): @unchecked) match { case SObject(obj) =>
               returnValues(obj)
             }
           }
 
-          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match { case SObject(obj) =>
+          val (SDecimal(theta0), SDecimal(error0)) = (arr(1): @unchecked) match { case SObject(obj) =>
             returnValues(obj)
           }
 
@@ -312,21 +312,21 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
 
           val SArray(arr) = elems(model)
 
-          val (SDecimal(theta1), SDecimal(error1)) = arr(0) match { case SObject(map) => 
-            map("bar") match { case SObject(map) => 
-              map("baz") match { case SArray(Vector(SObject(obj))) =>
+          val (SDecimal(theta1), SDecimal(error1)) = (arr(0): @unchecked) match { case SObject(map) => 
+            (map("bar"): @unchecked) match { case SObject(map) => 
+              (map("baz"): @unchecked) match { case SArray(Vector(SObject(obj))) =>
                 returnValues(obj)
               }
             }
           }
 
-          val (SDecimal(theta2), SDecimal(error2)) = arr(0) match { case SObject(map) =>
-            map("foo") match { case SObject(obj) =>
+          val (SDecimal(theta2), SDecimal(error2)) = (arr(0): @unchecked) match { case SObject(map) =>
+            (map("foo"): @unchecked) match { case SObject(obj) =>
               returnValues(obj)
             }
           }
 
-          val (SDecimal(theta0), SDecimal(error0)) = arr(1) match {
+          val (SDecimal(theta0), SDecimal(error0)) = (arr(1): @unchecked) match {
             case SObject(obj) =>
               returnValues(obj)
           }
