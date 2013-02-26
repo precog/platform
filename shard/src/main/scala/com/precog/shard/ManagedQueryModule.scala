@@ -28,6 +28,8 @@ import com.precog.daze.QueryLogger
 import blueeyes.util.Clock
 import blueeyes.json._
 
+import com.weiglewilczek.slf4s.Logging
+
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.joda.time.DateTime
@@ -73,7 +75,7 @@ trait ManagedQueryModuleConfig {
  * returned, it just won't actually have a job associated with it and, thus,
  * cannot be cancelled (though timeouts still work fine).
  */
-trait ManagedQueryModule extends YggConfigComponent {
+trait ManagedQueryModule extends YggConfigComponent with Logging {
   import scalaz.syntax.monad._
   import JobQueryState._
 
@@ -83,6 +85,8 @@ trait ManagedQueryModule extends YggConfigComponent {
     def jobId: Option[JobId]
     def Q: JobQueryStateMonad
   }
+
+  def defaultTimeout: Duration
 
   /**
    * A mix-in for `QueryLogger`s that forcefully aborts a shard query on fatal
@@ -111,20 +115,25 @@ trait ManagedQueryModule extends YggConfigComponent {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, data: Option[JValue], expires: Option[DateTime => DateTime])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
-    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now()))
+  def createJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
+    val start = System.currentTimeMillis
+    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).map {
+      j => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start)); j
+    }
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }
       queryStateManager = job map { job =>
-        val mgr = JobQueryStateManager(job.id, expires map (_(yggConfig.clock.now())))
+        val mgr = JobQueryStateManager(job.id, yggConfig.clock.now() plus timeout.getOrElse(defaultTimeout).toMillis)
         mgr.start()
         mgr
-      } getOrElse FakeJobQueryStateManager(expires map (_(yggConfig.clock.now())))
-    } yield (new ShardQueryMonad {
-      val jobId = job map (_.id)
-      val Q: JobQueryStateMonad = queryStateManager
-      val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
-    })
+      } getOrElse FakeJobQueryStateManager(yggConfig.clock.now() plus timeout.getOrElse(defaultTimeout).toMillis)
+    } yield {
+      new ShardQueryMonad {
+        val jobId = job map (_.id)
+        val Q: JobQueryStateMonad = queryStateManager
+        val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
+      }
+    }
   }
 
   /**
@@ -167,25 +176,30 @@ trait ManagedQueryModule extends YggConfigComponent {
   }
 
   // This can be used when the Job service is down.
-  private final case class FakeJobQueryStateManager(expires: Option[DateTime]) extends JobQueryStateMonad {
+  private final case class FakeJobQueryStateManager(expiresAt: DateTime) extends JobQueryStateMonad {
     private val cancelled: AtomicBoolean = new AtomicBoolean()
     def abort(): Boolean = { cancelled.set(true); true }
     def isCancelled() = cancelled.get()
-    def hasExpired() = expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
+    def hasExpired() = yggConfig.clock.now() isAfter expiresAt
   }
 
-  private final case class JobQueryStateManager(jobId: JobId, expires: Option[DateTime]) extends JobQueryStateMonad {
+  private final case class JobQueryStateManager(jobId: JobId, expiresAt: DateTime) extends JobQueryStateMonad with Logging {
     import JobQueryState._
 
     private val cancelled: AtomicBoolean = new AtomicBoolean()
 
-    private def poll() {
+    private def poll() = synchronized {
       import JobState._
 
       jobManager.findJob(jobId) map { job =>
         if (job map (_.state.isTerminal) getOrElse true) {
+          logger.debug("Terminal state for " + jobId)
+          abort()
+        } else if (hasExpired) {
+          logger.debug("Expired job %s, stopping poll".format(jobId))
           abort()
         } else {
+          logger.debug("Non-Terminal state for " + jobId)
           // We only update cancelled if we have not yet cancelled.
           cancelled.compareAndSet(false, job map {
             case Job(_, _, _, _, _, Cancelled(_, _, _)) => true
@@ -195,14 +209,14 @@ trait ManagedQueryModule extends YggConfigComponent {
       }
     }
 
-    def abort(): Boolean = {
+    def abort(): Boolean = synchronized {
       cancelled.set(true)
       stop()
       true
     }
 
     def hasExpired(): Boolean = {
-      expires map (_.compareTo(yggConfig.clock.now()) < 0) getOrElse false
+      yggConfig.clock.now() isAfter expiresAt
     }
 
     def isCancelled(): Boolean = cancelled.get()
@@ -218,7 +232,10 @@ trait ManagedQueryModule extends YggConfigComponent {
     }
 
     def stop(): Unit = synchronized {
-      poller map (_.cancel())
+      logger.debug("Stopping scheduled poll for " + jobId)
+      poller foreach {
+        c => c.cancel(); logger.debug("Cancelled %s: %s".format(jobId, c.isCancelled))
+      }
       poller = None
     }
   }

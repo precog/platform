@@ -29,6 +29,7 @@ import blueeyes.json._
 
 import akka.actor.ActorSystem
 import akka.dispatch.{Future, ExecutionContext}
+import akka.util.Duration
 
 import java.nio.CharBuffer
 
@@ -51,7 +52,7 @@ case class QueryOptions(
   page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
-  timeout: Option[Long] = None,
+  timeout: Option[Duration] = None,
   output: QueryOutput = JsonOutput
 )
 

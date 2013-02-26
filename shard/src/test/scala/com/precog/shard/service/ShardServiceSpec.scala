@@ -31,6 +31,7 @@ import com.precog.common.jobs._
 import com.precog.muspelheim._
 
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
@@ -78,8 +79,8 @@ trait TestShardService extends
   BlueEyesServiceSpecification with
   ShardService with
   AkkaDefaults { self =>
-  
-  val config = """ 
+
+  val config = """
     security {
       test = true
       mongo {
@@ -104,10 +105,10 @@ trait TestShardService extends
   private val clock = Clock.System
 
   val rootAPIKey = apiKeyManager.rootAPIKey.copoint
-  
+
   val testPath = Path("/test")
   val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey).copoint
-  
+
   val testPermissions = Set[Permission](
     ReadPermission(testPath, Set("test")),
     ReducePermission(testPath, Set("test")),
@@ -117,7 +118,7 @@ trait TestShardService extends
 
   val expiredPath = Path("expired")
 
-  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey => 
+  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey =>
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, testPermissions, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
 
@@ -127,6 +128,7 @@ trait TestShardService extends
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
       override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)
+      val defaultTimeout = Duration(90, TimeUnit.SECONDS)
 
       override val jobManager = self.jobManager
 
@@ -145,13 +147,13 @@ trait TestShardService extends
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
      def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
-       req map { 
+       req map {
          case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
          case Right(stream) => Right(stream.map(utf8.encode))
        }
 
      def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
-       fres map { 
+       fres map {
          _ map {
            case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
            case Right(stream) => Right(stream.map(utf8.decode))
@@ -302,7 +304,7 @@ class ShardServiceSpec extends TestShardService {
       }
     }
   }
-  
+
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
@@ -310,7 +312,7 @@ class ShardServiceSpec extends TestShardService {
   def structure(apiKey: Option[String] = Some(testAPIKey), path: String = "/test", cpath: CPath = CPath.Identity): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).query("type", "structure").query("property", cpath.toString).get(path)
   }
- 
+
   "Shard browse service" should {
     "handle browse for API key accessible path" in {
       val obj = JObject(Map("foo" -> JArray(JString("foo")::JString("bar")::Nil)))
@@ -330,7 +332,7 @@ class ShardServiceSpec extends TestShardService {
     }
     "return error response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
-        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(JArray(JString(err) :: Nil))), _) => 
+        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(JArray(JString(err) :: Nil))), _) =>
           err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
       }
     }
@@ -341,10 +343,10 @@ trait TestPlatform extends ManagedPlatform { self =>
   import scalaz.syntax.monad._
   import scalaz.syntax.traverse._
 
-  def actorSystem: ActorSystem  
+  def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   val to = Duration(3, "seconds")
-  
+
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
@@ -353,7 +355,7 @@ trait TestPlatform extends ManagedPlatform { self =>
     val buffer = CharBuffer.allocate(str.length)
     buffer.put(str)
     buffer.flip()
-    
+
     StreamT.fromStream(Stream(buffer).point[M])
   }
 
@@ -393,7 +395,7 @@ trait TestPlatform extends ManagedPlatform { self =>
         success(JArray(List(JString("foo"), JString("bar"))))
       }
     }
-    
+
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = Future {
       success(
         JObject(

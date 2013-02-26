@@ -31,6 +31,7 @@ import com.precog.daze._
 import com.precog.shard.service._
 
 import akka.dispatch.{Future, ExecutionContext, Promise}
+import akka.util.Duration
 
 import blueeyes.util.Clock
 import blueeyes.json._
@@ -91,8 +92,6 @@ trait ShardService extends
     Logging {
 
   import ShardStateOptions.DisableAsyncQueries
-
-  implicit val timeout = akka.util.Timeout(120000) //for now
 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]

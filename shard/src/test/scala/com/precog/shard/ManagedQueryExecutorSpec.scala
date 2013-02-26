@@ -29,6 +29,7 @@ import com.precog.muspelheim._
 
 import java.nio.CharBuffer
 
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
@@ -59,12 +60,13 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(15, "seconds"))
   }
+  val defaultTimeout = Duration(90, TimeUnit.SECONDS)
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
-    val timeout = ticksToTimeout map (clock.duration * _)
+    val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     for {
       executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
       result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
