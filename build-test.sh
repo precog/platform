@@ -37,7 +37,7 @@ FAILEDTARGETS=""
 
 function run_sbt() {
     echo "SBT Run: $@"
-    sbt -mem 2048 $OPTIMIZE -J-Dsbt.log.noformat=true $@
+    sbt -mem 2048 -J-Xss2m $OPTIMIZE -J-Dsbt.log.noformat=true $@
     if [[ $? != 0 ]]; then
         SUCCESS=1
         for TARGET in $@; do
