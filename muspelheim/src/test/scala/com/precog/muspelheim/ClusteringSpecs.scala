@@ -95,6 +95,30 @@ trait ClusteringSpecs extends EvalStackSpecs {
       }
     }
 
+    def testJoinCluster(input: String, input2: String) = {
+      val results = evalE(input)
+      val resultsCount = evalE(input2)
+
+      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+
+      results must haveSize(count)
+      results must not beEmpty
+
+      val validClusters = (1 to 4).map("Cluster" + _).toSet
+
+      results must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          elems.keys must contain("cluster")
+          elems("cluster") must beLike {
+            case SObject(obj) =>
+              obj.keys mustEqual Set("Model1")
+              obj("Model1") must beLike {
+                case SString(clusterId) => validClusters must contain(clusterId)
+              }
+          }
+      }
+    }
+
     "join cluster information to original data" in {
       val input = """
         medals := //summer_games/london_medals
@@ -118,27 +142,34 @@ trait ClusteringSpecs extends EvalStackSpecs {
         count({ height: h, weight: w })
       """
 
-      val results = evalE(input)
-      val resultsCount = evalE(input2)
+      testJoinCluster(input, input2)
+    }
 
-      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+    "join cluster information to original data when clustering is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
 
-      results must haveSize(count)
-      results must not beEmpty
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
 
-      val validClusters = (1 to 4).map("Cluster" + _).toSet
+        clustering := new std::stats::kMedians({ HeightIncm: h, Weight: w }, 3)
 
-      results must haveAllElementsLike {
-        case (ids, SObject(elems)) =>
-          elems.keys must contain("cluster")
-          elems("cluster") must beLike {
-            case SObject(obj) =>
-              obj.keys mustEqual Set("Model1")
-              obj("Model1") must beLike {
-                case SString(clusterId) => validClusters must contain(clusterId)
-              }
-          }
-      }
+        medals ~ clustering
+        assignments := std::stats::assignClusters(medals, clustering)
+
+        medals with { cluster: assignments }
+      """.stripMargin
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        count({ height: h, weight: w })
+      """
+
+      testJoinCluster(input, input2)
     }
 
     "make a histogram of clusters" in {
