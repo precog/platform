@@ -1,6 +1,5 @@
 package com.precog.accounts
 
-import com.precog.auth.MongoAPIKeyManager
 import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.common.security.service._
@@ -12,7 +11,7 @@ import blueeyes.persistence.mongo._
 import akka.dispatch.Future
 import akka.util.Timeout
 
-import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.ZkClient 
 import org.streum.configrity.Configuration
 
 import scalaz._
@@ -25,7 +24,7 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable) = {
     val mongo = RealMongo(config.detach("mongo"))
-
+    
     val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
     val database = config[String]("mongo.database", "accounts_v1")
 
@@ -44,9 +43,8 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
     (accountManager, Stoppable.fromFuture(accountManager.close()))
   }
 
-  def APIKeyFinder(config: Configuration) = MongoAPIKeyManager(config)
-
-//  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config).map(_.withM[Future]) valueOr { errs =>
-//    sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
-//  }
+  def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config).map(_.withM[Future]) valueOr { errs =>
+    sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
+  }
 }
+
