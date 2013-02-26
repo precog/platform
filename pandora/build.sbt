@@ -97,6 +97,17 @@ javaOptions in Test <<= extractData map { (target: String) =>
 
 console in Compile <<= (console in Compile) dependsOn extractData
 
+// The following is required because scct:test is ScctTest, not Test
+testOptions in ScctTest <<= testOptions dependsOn extractData
+
+parallelExecution in ScctTest := false
+
+fork in ScctTest := true // required to avoid sigsegv with sbt 0.12
+
+javaOptions in ScctTest <<= extractData map { (target: String) =>
+  Seq("-Xmx2G", "-XX:MaxPermSize=512m", "-Dprecog.storage.root=" + target)
+} // required if using fork in Test
+
 initialCommands in console := """
   | import com.codecommit.gll.LineStream
   | 
