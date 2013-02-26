@@ -87,7 +87,13 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
 
 testOptions in Test <<= testOptions dependsOn extractData
 
-parallelExecution in Test := true
+parallelExecution in Test := false
+
+fork in Test := true // required to avoid sigsegv with sbt 0.12
+
+javaOptions in Test <<= extractData map { (target: String) =>
+  Seq("-Xmx2G", "-XX:MaxPermSize=512m", "-Dprecog.storage.root=" + target)
+} // required if using fork in Test
 
 console in Compile <<= (console in Compile) dependsOn extractData
 
