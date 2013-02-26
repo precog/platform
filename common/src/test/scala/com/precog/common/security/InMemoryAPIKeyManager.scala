@@ -30,7 +30,7 @@ import scalaz.std.option._
 import scalaz.syntax.monad._
 
 class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManager[M] {
-  val (rootAPIKeyRecord, grants, apiKeys) = {
+  val (rootAPIKeyRecord, grants, apiKeys) = { 
     def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
 
     val rootAPIKey = APIKeyManager.newAPIKey()
@@ -41,9 +41,9 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
       Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
       None
     )
-
+    
     val rootAPIKeyRecord = APIKeyRecord(rootAPIKey, some("root-apiKey"), some("The root API key"), rootAPIKey, Set(rootGrantId), true)
-
+      
     (rootAPIKeyRecord, mutable.Map(rootGrantId -> rootGrant), mutable.Map(rootAPIKey -> rootAPIKeyRecord))
   }
 
