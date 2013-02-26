@@ -186,9 +186,10 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
   private final case class JobQueryStateManager(jobId: JobId, expiresAt: DateTime) extends JobQueryStateMonad with Logging {
     import JobQueryState._
 
-    private val cancelled: AtomicBoolean = new AtomicBoolean()
+    private[this] val cancelled: AtomicBoolean = new AtomicBoolean()
+    private[this] val lock = new AnyRef
 
-    private def poll() = synchronized {
+    private def poll() = lock.synchronized {
       import JobState._
 
       jobManager.findJob(jobId) map { job =>
@@ -209,7 +210,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
       }
     }
 
-    def abort(): Boolean = synchronized {
+    def abort(): Boolean = lock.synchronized {
       cancelled.set(true)
       stop()
       true
@@ -223,7 +224,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
 
     private var poller: Option[Cancellable] = None
 
-    def start(): Unit = synchronized {
+    def start(): Unit = lock.synchronized {
       if (poller.isEmpty) {
         poller = Some(jobActorSystem.scheduler.schedule(yggConfig.jobPollFrequency, yggConfig.jobPollFrequency) {
           poll()
@@ -231,7 +232,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
       }
     }
 
-    def stop(): Unit = synchronized {
+    def stop(): Unit = lock.synchronized {
       logger.debug("Stopping scheduled poll for " + jobId)
       poller foreach {
         c => c.cancel(); logger.debug("Cancelled %s: %s".format(jobId, c.isCancelled))
