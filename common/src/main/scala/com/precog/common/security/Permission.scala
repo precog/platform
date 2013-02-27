@@ -41,13 +41,20 @@ sealed trait Permission {
   def implies(other: Permission): Boolean
   
   protected def pathImplies(other: Permission): Boolean = (this, other) match {
-    case (Permission(p1, o1), Permission(p2, o2)) if p1.isEqualOrParent(p2) && !o2.isEmpty && o2.subsetOf(o1) => true
-    case (Permission(p1, o1), Permission(p2, _))  if p1.isEqualOrParent(p2) && o1.isEmpty => true
-    case _ => false
+    case (Permission(p1, o1), Permission(p2, o2)) => 
+      // semantics:
+      // for the set of owner ids of this permission 
+      // -- if empty, this implies "as anyone"
+      // -- if nonempty, this implies "as these individuals" 
+      // for the set of owner ids of the other
+      // -- if empty, this implies "as someone" - therefore, o1 may be empty (implying any) or nonempty 
+      //    (in which case, the action must be taken as one of those)
+      // -- if nonempty, this implies "as this specific" - therefore, o1 must be empty or contain this id
+      p1.isEqualOrParent(p2) && (o1.isEmpty || o2.isEmpty || (o2.nonEmpty && o2.subsetOf(o1)))
   }
 }
 
-case class ReadPermission  (path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
+case class ReadPermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
   def implies(other: Permission): Boolean = other match {
     case _ : ReadPermission | _ : ReducePermission => pathImplies(other)
     case _ => false
