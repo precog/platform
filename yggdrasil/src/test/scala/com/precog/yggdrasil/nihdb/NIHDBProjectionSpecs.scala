@@ -53,6 +53,8 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
+  val maxDuration = Duration(60, "seconds")
+
   trait TempContext extends After {
     val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
     var projection = newProjection(workDir)
@@ -73,7 +75,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
     "Properly initialize and close" in new TempContext {
       val results = projection.getBlockAfter(None, None)
 
-      results must whenDelivered(beNone)
+      results must awaited(maxDuration) { beNone } 
     }
 
     "Insert and retrieve values below the cook threshold" in new TempContext {
@@ -89,7 +91,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           result <- projection.getBlockAfter(None, None)
         } yield result
 
-      results must whenDelivered (beLike {
+      results must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
@@ -105,23 +107,22 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
         IngestRecord(EventId.fromLong(i), JNum(i))
       }, "fake")
 
-      println("Raw log = " + fromFuture(projection.status).rawSize)
-
       val result = for {
         _ <- projection.close()
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
         status <- projection.status
-        _ = println("Raw log = " + status.rawSize)
         r <- projection.getBlockAfter(None, None)
       } yield r
 
-      result must whenDelivered (beLike {
-        case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 0L
-          max mustEqual 0L
-          data.size mustEqual 3
-          data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
-      })
+      result must awaited(maxDuration) {
+        beLike {
+          case Some(BlockProjectionData(min, max, data)) =>
+            min mustEqual 0L
+            max mustEqual 0L
+            data.size mustEqual 3
+            data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
+        }
+      }
     }
 
     "Properly filter on constrainted columns" in todo
@@ -146,7 +147,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
       status.pending mustEqual 0
       status.rawSize mustEqual 751
 
-      projection.getBlockAfter(None, None) must whenDelivered (beLike {
+      projection.getBlockAfter(None, None) must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
@@ -154,7 +155,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           data.toJsonElements.map(_("value")) must containAllOf(expected.take(1200)).only.inOrder
       })
 
-      projection.getBlockAfter(Some(0), None) must whenDelivered (beLike {
+      projection.getBlockAfter(Some(0), None) must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 1L
           max mustEqual 1L

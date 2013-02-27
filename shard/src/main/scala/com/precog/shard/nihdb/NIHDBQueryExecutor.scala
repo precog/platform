@@ -116,6 +116,8 @@ trait NIHDBQueryExecutorComponent  {
 
       val clock = blueeyes.util.Clock.System
 
+      val defaultTimeout = yggConfig.maxEvalDuration
+
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 
       private val threadPooling = new PerAccountThreadPooling(extAccountFinder)

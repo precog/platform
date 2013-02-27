@@ -49,9 +49,12 @@ object DesktopShardServer
     val accountFinder = new StaticAccountFinder("desktop")
     val jobManager = new InMemoryJobManager
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
-    val stoppable = Stoppable.Noop
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable)
+    val stoppable = Stoppable.fromFuture {
+      platform.shutdown
+    }
+
+    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")

@@ -106,7 +106,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def coerceToDouble(ctx: EvaluationContext): F1
 
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
-      if (optimize) funcs.map(Endo[DepGraph]).suml.run else identity
+      if (optimize) funcs.reverse.map(Endo[DepGraph]).suml.run else identity
 
     // Have to be idempotent on subgraphs
     def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
@@ -118,7 +118,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
       stagedRewriteDAG(optimize, ctx, Set.empty) andThen
       (orderCrosses _) andThen
-      composeOptimizations(optimize, List(
+      composeOptimizations(optimize, List[DepGraph => DepGraph](
         // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
         //predicatePullups(_, ctx),
         inferTypes(JType.JUnfixedT),
@@ -134,7 +134,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      */
     def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): N[Table] = {
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
-  
+
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
 
       def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
@@ -273,6 +273,30 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           mkTransSpecWithState[TSM, PendingTable](to, None, ctx, get0, set0, init0)
         
         def evalNotTransSpecable(graph: DepGraph): StateT[N, EvaluatorState, PendingTable] = graph match {
+          case dag.Observe(data, samples) =>
+            for {
+              pendingTableData <- prepareEval(data, splits)
+              pendingTableSamples <- prepareEval(samples, splits)
+
+              tableData = pendingTableData.table
+              tableSamples = pendingTableSamples.table
+
+              result <- {
+                //idea: make `samples` table an infinite sample table with replacement
+                //then don't need to kick out non-infinite sample sets in the compiler
+                //also can make solution more general by accepting discrete random variable
+                val keySpec = trans.WrapObject(trans.DerefObjectStatic(TransSpec1.Id, paths.Key), paths.Key.name)
+                val valueSpec = trans.WrapObject(trans.DerefObjectStatic(TransSpec1.Id, paths.Value), paths.Value.name)
+                
+                val keyTable = tableData.transform(keySpec).canonicalize(maxSliceSize)
+                val valueTable = tableSamples.transform(valueSpec).canonicalize(maxSliceSize)
+
+                transState liftM mn(keyTable.zip(valueTable) flatMap { _.sort(keySpec, SortAscending) })
+              }
+            } yield {
+              PendingTable(result, graph, TransSpec1.Id)
+            }
+
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
             // TODO binary typing
 
@@ -583,7 +607,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               
               truthiness <- transState liftM mn(predTable.reduce(Forall reducer ctx)(Forall.monoid))
             
-              assertion = if (truthiness getOrElse false) N.point(()) else report.fatal(graph.loc, "Assertion failed")
+              assertion = if (truthiness getOrElse false) {
+                N.point(())
+              } else {
+                report.error(graph.loc, "Assertion failed")
+                // FIXME!!!! Also, flatMap.
+                // report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
+              }
               _ <- transState liftM assertion
               
               result = childPending.table transform liftToValues(childPending.trans)
@@ -912,6 +942,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case dag.Split(specs, child) => queue2 enqueue child enqueue listParents(specs)
             
             case dag.Assert(pred, child) => queue2 enqueue pred enqueue child
+            
+            case dag.Observe(data, samples) => queue2 enqueue data enqueue samples
             
             case dag.IUI(_, left, right) => queue2 enqueue left enqueue right
             case dag.Diff(left, right) => queue2 enqueue left enqueue right

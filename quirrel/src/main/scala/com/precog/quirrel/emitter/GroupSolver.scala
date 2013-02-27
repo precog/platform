@@ -38,11 +38,36 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   import buckets._
   
   override def inferBuckets(tree: Expr): Set[Error] = {
+    def loopSpec(dispatches: Set[Dispatch])(spec: BucketSpec): Set[Error] = spec match {
+      case UnionBucketSpec(left, right) =>
+        loopSpec(dispatches)(left) ++ loopSpec(dispatches)(right)
+      
+      case IntersectBucketSpec(left, right) =>
+        loopSpec(dispatches)(left) ++ loopSpec(dispatches)(right)
+      
+      case Group(origin, target, forest, _) => {
+        val originErrors = origin map loop(dispatches) getOrElse Set()
+        val targetErrors = loop(dispatches)(target)
+        val forestErrors = loopSpec(dispatches)(forest)
+        
+        originErrors ++ targetErrors ++ forestErrors
+      }
+      
+      case UnfixedSolution(_, solution, _) => loop(dispatches)(solution)
+      
+      case FixedSolution(_, solution, expr, _) =>
+        loop(dispatches)(solution) ++ loop(dispatches)(expr)
+      
+      case Extra(expr, _) => loop(dispatches)(expr)
+    }
+    
     def loop(dispatches: Set[Dispatch])(tree: Expr): Set[Error] = tree match {
       case Let(_, _, _, _, right) => loop(dispatches)(right)
       
       case expr @ Solve(_, constraints, child) => {
-        val constrLoopErrors = constraints map loop(dispatches) reduce { _ ++ _ }
+        // this can populate buckets with more dispatches than emitter will
+        // have.  that's ok though, because we *add* the correct dispatch set
+        // below when we use loopSpec
         val childErrors = loop(dispatches)(child)
         
         val sigma: Map[Formal, Expr] = dispatches flatMap { dispatch =>
@@ -65,7 +90,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           case _ => true
         }
         
-        val (constrSpecM, constrErrors) = mergeSpecs(filtered map { solveConstraint(expr, _, sigma) })
+        val (constrSpecM, constrErrors) = mergeSpecs(filtered map { solveConstraint(expr, _, sigma, Nil) })
         
         val mergedM = for (forestSpec <- forestSpecM; constrSpec <- constrSpecM)
           yield IntersectBucketSpec(forestSpec, constrSpec)
@@ -82,9 +107,11 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
             expr.vars map UnableToSolveTicVariable map { Error(expr, _) }
         }
         
-        specM foreach { spec =>
+        val specErrors = specM map { spec =>
           expr buckets_+= (dispatches -> spec)
-        }
+          
+          loopSpec(dispatches)(spec)
+        } getOrElse Set()
         
         val forestErrors2 = if (finalErrors.isEmpty) {
           forestErrors filter {
@@ -94,11 +121,14 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           forestErrors
         }
         
-        constrLoopErrors ++ childErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
+        childErrors ++ specErrors ++ forestErrors2 ++ constrErrors ++ finalErrors
       }
       
       case Assert(_, pred, child) =>
         loop(dispatches)(pred) ++ loop(dispatches)(child)
+      
+      case Observe(_, data, samples) =>
+        loop(dispatches)(data) ++ loop(dispatches)(samples)
       
       case New(_, child) => loop(dispatches)(child)
       
@@ -148,7 +178,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           // 1. make coffee
           // 2. attempt to solve where.right
           
-          val (groupM, errors) = solveGroupCondition(solve, where.right, false, sigma)
+          val (groupM, errors) = solveGroupCondition(solve, where.right, false, sigma, dtrace)
           
           groupM map { group =>
             val commonalityM = findCommonality(solve, group.exprs + where.left, sigma)
@@ -178,8 +208,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case _ => expr
   }
   
-  private def solveConstraint(b: Solve, constraint: Expr, sigma: Map[Formal, Expr]): (Option[BucketSpec], Set[Error]) = {
-    val (result, errors) = solveGroupCondition(b, constraint, true, sigma)
+  private def solveConstraint(b: Solve, constraint: Expr, sigma: Map[Formal, Expr], dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = {
+    val (result, errors) = solveGroupCondition(b, constraint, true, sigma, dtrace)
     
     val orderedSigma = orderTopologically(sigma)
     val commonality = result map listSolutionExprs flatMap { findCommonality(b, _, sigma) }
@@ -228,10 +258,10 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     bfs(leaves).reverse
   }
   
-  private def solveGroupCondition(b: Solve, expr: Expr, free: Boolean, sigma: Map[Formal, Expr]): (Option[BucketSpec], Set[Error]) = expr match {
+  private def solveGroupCondition(b: Solve, expr: Expr, free: Boolean, sigma: Map[Formal, Expr], dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = expr match {
     case And(_, left, right) => {
-      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free, sigma)
-      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free, sigma)
+      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free, sigma, dtrace)
+      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free, sigma, dtrace)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield IntersectBucketSpec(ls, rs)
@@ -240,8 +270,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
     
     case Or(_, left, right) => {
-      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free, sigma)
-      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free, sigma)
+      val (leftSpec, leftErrors) = solveGroupCondition(b, left, free, sigma, dtrace)
+      val (rightSpec, rightErrors) = solveGroupCondition(b, right, free, sigma, dtrace)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield UnionBucketSpec(ls, rs)
@@ -257,12 +287,21 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         (None, Set(Error(expr, InseparablePairedTicVariables(ticVars))))
       } else {
         val tv = vars.head._2
-        val result = solveRelation(expr, sigma)(pred(b, tv, free, sigma))
+        val resultM = solveRelation(expr, sigma)(pred(b, tv, free, sigma))
         
-        if (result.isDefined)
-          (result map { UnfixedSolution(tv, _) }, Set())
-        else
-          (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
+        resultM map { result =>
+          val innerVars = listTicVars(Some(b), result, sigma)
+          
+          if (innerVars.isEmpty) {
+            (Some(UnfixedSolution(tv, result, dtrace)), Set[Error]())
+          } else {
+            val errors = innerVars map {
+              case (_, id) => Error(expr, ExtraVarsInGroupConstraint(id))
+            }
+            
+            (None, errors)
+          }
+        } getOrElse (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
       }
     }
     
@@ -277,7 +316,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         val result = solveComplement(expr, sigma)(pred(b, tv, free, sigma))
         
         if (result.isDefined)
-          (result map { UnfixedSolution(tv, _) }, Set())
+          (result map { UnfixedSolution(tv, _, dtrace) }, Set())
         else
           (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
       }
@@ -286,11 +325,11 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case expr @ Dispatch(_, id, actuals) => {
       expr.binding match {
         case LetBinding(let) =>
-          solveGroupCondition(b, let.left, free, enterLet(sigma, let, actuals))
+          solveGroupCondition(b, let.left, free, enterLet(sigma, let, actuals), expr :: dtrace)
         
         case FormalBinding(let) => {
           val actualM = sigma get ((id, let))
-          val resultM = actualM map { solveGroupCondition(b, _, free, sigma) }
+          val resultM = actualM map { solveGroupCondition(b, _, free, sigma, dtrace) }
           resultM getOrElse sys.error("uh...?")
         }
       }
@@ -300,7 +339,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       (None, Set(Error(expr, ConstraintsWithinInnerSolve)))
     
     case _ if listTicVars(Some(b), expr, sigma).isEmpty => 
-      (Some(Extra(expr)), Set())
+      (Some(Extra(expr, dtrace)), Set())
     
     case _ => (None, listTicVars(Some(b), expr, sigma) map { case (_, id) => id } map UnableToSolveTicVariable map { Error(expr, _) })
   }
@@ -520,6 +559,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Assert(_, pred, child) => listTicVars(b, pred, sigma) ++ listTicVars(b, child, sigma)
     
+    case Observe(_, data, samples) => listTicVars(b, data, sigma) ++ listTicVars(b, samples, sigma)
+    
     case New(_, child) => listTicVars(b, child, sigma)
     
     case Relate(_, from, to, in) => listTicVars(b, from, sigma) ++ listTicVars(b, to, sigma) ++ listTicVars(b, in, sigma)
@@ -560,18 +601,18 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case UnionBucketSpec(left, right) => listSolvedVars(left) ++ listSolvedVars(right)
     case IntersectBucketSpec(left, right) => listSolvedVars(left) ++ listSolvedVars(right)
     case Group(_, _, forest, _) => listSolvedVars(forest)
-    case UnfixedSolution(id, _) => Set(id)
-    case FixedSolution(id, _, _) => Set(id)
-    case Extra(_) => Set()
+    case UnfixedSolution(id, _, _) => Set(id)
+    case FixedSolution(id, _, _, _) => Set(id)
+    case Extra(_, _) => Set()
   }
 
   private def listSolutionExprs(spec: BucketSpec): Set[Expr] = spec match {
     case UnionBucketSpec(left, right) => listSolutionExprs(left) ++ listSolutionExprs(right)
     case IntersectBucketSpec(left, right) => listSolutionExprs(left) ++ listSolutionExprs(right)
     case Group(_, _, forest, _) => listSolutionExprs(forest)
-    case UnfixedSolution(_, expr) => Set(expr)
-    case FixedSolution(_, solution, _) => Set(solution)
-    case Extra(expr) => Set(expr)
+    case UnfixedSolution(_, expr, _) => Set(expr)
+    case FixedSolution(_, solution, _, _) => Set(solution)
+    case Extra(expr, _) => Set(expr)
   }
   
   private def findCommonality(solve: Solve, nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
@@ -634,6 +675,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case Assert(_, pred, child) => (Set(pred, child), sigma)
     
+    case Observe(_, data, samples) => (Set(data, samples), sigma)
+    
     case New(_, child) => (Set(child), sigma)
     
     case Relate(_, _, _, in) => (Set(in), sigma)
@@ -668,26 +711,26 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Group(origin, target, forest, btrace) =>
         Group(origin, target, forest.derive(id, expr), btrace)
       
-      case UnfixedSolution(`id`, solution) =>
-        FixedSolution(id, solution, expr)
+      case UnfixedSolution(`id`, solution, dtrace) =>
+        FixedSolution(id, solution, expr, dtrace)
       
-      case s @ UnfixedSolution(_, _) => s
+      case s @ UnfixedSolution(_, _, _) => s
       
-      case f @ FixedSolution(id2, _, _) => {
+      case f @ FixedSolution(id2, _, _, _) => {
         assert(id != id2)
         f
       }
       
-      case e @ Extra(_) => e
+      case e @ Extra(_, _) => e
     }
     
     final def exprs: Set[Expr] = this match {
       case UnionBucketSpec(left, right) => left.exprs ++ right.exprs
       case IntersectBucketSpec(left, right) => left.exprs ++ right.exprs
       case Group(_, target, forest, _) => forest.exprs + target
-      case UnfixedSolution(_, solution) => Set(solution)
-      case FixedSolution(_, solution, expr) => Set(solution, expr)
-      case Extra(expr) => Set(expr)
+      case UnfixedSolution(_, solution, _) => Set(solution)
+      case FixedSolution(_, solution, expr, _) => Set(solution, expr)
+      case Extra(expr, _) => Set(expr)
     }
   }
   
@@ -697,9 +740,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     
     case class Group(origin: Option[Where], target: Expr, forest: BucketSpec, btrace: List[Dispatch]) extends BucketSpec
     
-    case class UnfixedSolution(id: TicId, solution: Expr) extends BucketSpec
-    case class FixedSolution(id: TicId, solution: Expr, expr: Expr) extends BucketSpec
+    case class UnfixedSolution(id: TicId, solution: Expr, btrace: List[Dispatch]) extends BucketSpec
+    case class FixedSolution(id: TicId, solution: Expr, expr: Expr, btrace: List[Dispatch]) extends BucketSpec
     
-    case class Extra(expr: Expr) extends BucketSpec
+    case class Extra(expr: Expr, btrace: List[Dispatch]) extends BucketSpec
   }
 }

@@ -36,6 +36,9 @@ trait Tracer extends parser.AST with typer.Binder {
     case Assert(_, pred, child) =>
       Tree.node((sigma, expr), buildTrace(sigma)(pred) #:: buildTrace(sigma)(child) #:: SNil)
     
+    case Observe(_, data, samples) =>
+      Tree.node((sigma, expr), buildTrace(sigma)(data) #:: buildTrace(sigma)(samples) #:: SNil)
+    
     case New(_, child) =>
       Tree.node((sigma, expr), buildTrace(sigma)(child) #:: SNil)
     
@@ -76,7 +79,7 @@ trait Tracer extends parser.AST with typer.Binder {
   def buildBacktrace(trace: Tree[(Map[Formal, Expr], Expr)])(target: Expr): Set[List[(Map[Formal, Expr], Expr)]] = {
     def loop(stack: List[(Map[Formal, Expr], Expr)])(trace: Tree[(Map[Formal, Expr], Expr)]): Set[List[(Map[Formal, Expr], Expr)]] = {
       val Tree.Node(pair @ (_, expr), children) = trace
-      
+
       if (expr == target)
         Set(stack)
       else

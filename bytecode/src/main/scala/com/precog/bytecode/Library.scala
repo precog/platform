@@ -36,6 +36,7 @@ trait FunctionLike {
 
 trait Morphism1Like extends FunctionLike {
   val tpe: UnaryOperationType
+  val isInfinite: Boolean = false
   val retainIds: Boolean = false
 }
 

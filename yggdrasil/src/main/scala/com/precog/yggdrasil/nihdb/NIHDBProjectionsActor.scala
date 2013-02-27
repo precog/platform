@@ -47,7 +47,6 @@ import org.joda.time.DateTime
 import scalaz._
 import scalaz.effect.IO
 import scalaz.std.list._
-import scalaz.syntax.traverse._
 
 import java.io.{File, FileFilter, IOException}
 
@@ -57,7 +56,7 @@ case class FindProjection(path: Path)
 
 case class AccessProjection(path: Path, apiKey: APIKey)
 
-case class FindChildren(path: Path)
+case class FindChildren(path: Path, apiKey: APIKey)
 
 case class FindStructure(path: Path)
 
@@ -155,21 +154,35 @@ class NIHDBProjectionsActor(
     not(or(nameFileFilter(cookedSubdir), nameFileFilter(rawSubdir)))
   }
 
-  def findChildren(path: Path): Future[Set[Path]] = Future {
-    val start = descriptorDir(baseDir, path)
-
+  def findChildren(path: Path, apiKey: APIKey): Future[Set[Path]] = {
+    implicit val ctx = context.dispatcher
     def descendantHasProjection(dir: File): Boolean = {
-      if (!NIHDBActor.hasProjection(dir)) {
-        Option(dir.listFiles(pathFileFilter)).map(_.filter (_.isDirectory) exists descendantHasProjection).getOrElse(false)
-      } else true
+      NIHDBActor.hasProjection(dir) ||
+      (Option(dir.listFiles(pathFileFilter)) exists { _.filter(_.isDirectory) exists descendantHasProjection })
     }
 
-    Option(start.listFiles(pathFileFilter)).map { _.toSet.filter(descendantHasProjection).map {
-      d => NIHDBActor.unescapePath(path / Path(d.getName))
-    }}.getOrElse(Set.empty)
-  }(context.dispatcher)
+    for {
+      subdirs <- Future {
+        val start = descriptorDir(baseDir, path)
+        Option(start.listFiles(pathFileFilter)).toSet.flatMap((_:Array[File]).toSet)
+      }
+      authorizedPaths <- Future sequence {
+        subdirs collect { 
+          case d if descendantHasProjection(d) => 
+            val path0 = NIHDBActor.unescapePath(path / Path(d.getName))
+            accessControl.hasCapability(apiKey, Set(ReducePermission(path0, Set())), Some(new DateTime)) map { 
+              case true => Some(path0)
+              case false => None
+            }
+        }
+      }
+    } yield {
+      authorizedPaths.flatten
+    }
+  }
 
   override def postStop() = {
+    import scalaz.syntax.traverse._
     logger.info("Initiating shutdown of %d projections".format(projections.size))
     Await.result(projections.values.toList.map (_.close).sequence, storageTimeout.duration)
     logger.info("Projection shutdown complete")
@@ -212,8 +225,8 @@ class NIHDBProjectionsActor(
     case FindProjection(path) =>
       sender ! projections.get(path)
 
-    case FindChildren(path) =>
-      findChildren(path) pipeTo sender
+    case FindChildren(path, apiKey) =>
+      findChildren(path, apiKey) pipeTo sender
 
     case AccessProjection(path, apiKey) =>
       logger.debug("Accessing projection at " + path + " => " + findBaseDir(path))

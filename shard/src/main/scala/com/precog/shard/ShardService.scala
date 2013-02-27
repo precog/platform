@@ -31,6 +31,7 @@ import com.precog.daze._
 import com.precog.shard.service._
 
 import akka.dispatch.{Future, ExecutionContext, Promise}
+import akka.util.{Duration, Timeout}
 
 import blueeyes.util.Clock
 import blueeyes.json._
@@ -60,6 +61,12 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.std.function._
 
+sealed trait ShardStateOptions
+object ShardStateOptions {
+  case object NoOptions extends ShardStateOptions
+  case object DisableAsyncQueries extends ShardStateOptions
+}
+
 sealed trait ShardState {
   def platform: Platform[Future, StreamT[Future, CharBuffer]]
   def apiKeyFinder: APIKeyFinder[Future]
@@ -71,6 +78,7 @@ case class ManagedQueryShardState(
   apiKeyFinder: APIKeyFinder[Future],
   jobManager: JobManager[Future],
   clock: Clock,
+  options: ShardStateOptions = ShardStateOptions.NoOptions,
   stoppable: Stoppable) extends ShardState
 
 case class BasicShardState(
@@ -83,11 +91,12 @@ trait ShardService extends
     ShardServiceCombinators with
     Logging {
 
-  implicit val timeout = akka.util.Timeout(120000) //for now
+  import ShardStateOptions.DisableAsyncQueries
 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
+  val timeout = Timeout(120000)
   /**
    * This provides the configuration for the service and expects a `ShardState`
    * in return. The exact `ShardState` can be either a `BasicShardState` or a
@@ -118,16 +127,16 @@ trait ShardService extends
   }
 
   private def asyncQueryService(state: ShardState) = state match {
-    case BasicShardState(_, _, _) =>
+    case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, DisableAsyncQueries, _) =>
       new QueryServiceNotAvailable
-    case ManagedQueryShardState(platform, _, _, _, _) =>
+    case ManagedQueryShardState(platform, _, _, _, _, _) =>
       new AsyncQueryServiceHandler(platform.asynchronous)
   }
 
   private def syncQueryService(state: ShardState) = state match {
     case BasicShardState(platform, _, _) =>
       new BasicQueryServiceHandler(platform)
-    case ManagedQueryShardState(platform, _, jobManager, _, _) =>
+    case ManagedQueryShardState(platform, _, jobManager, _, _, _) =>
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
@@ -139,22 +148,26 @@ trait ShardService extends
   }
 
   private def asyncHandler(state: ShardState) = {
-    //val queryHandler: HttpService[Future[JValue], Future[HttpResponse[QueryResult]]] = {
-    val queryHandler = jsonAPIKey(state.apiKeyFinder) {
-      path("/analytics/queries") {
-        shardService[({ type λ[+α] = (APIKey => α) })#λ] {
-          asyncQuery(post(asyncQueryService(state)))
+    val queryHandler =
+      path("/analytics") {
+        jsonAPIKey(state.apiKeyFinder) {
+          path("/queries") {
+            shardService[({ type λ[+α] = (APIKey => α) })#λ] {
+              asyncQuery(post(asyncQueryService(state)))
+            }
+          }
         }
       }
-    }
 
     state match {
-      case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _) =>
-        jsonAPIKey(apiKeyFinder) {
-          path("/analytics/queries/") {
-            path("'jobId") {
-              get(new AsyncQueryResultServiceHandler(jobManager)) ~
-              delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
+      case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _, _) =>
+        path("/analytics") {
+          jsonAPIKey(apiKeyFinder) {
+            path("/queries") {
+              path("/'jobId") {
+                get(new AsyncQueryResultServiceHandler(jobManager)) ~
+                delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
+              }
             }
           }
         } ~ queryHandler
@@ -175,7 +188,7 @@ trait ShardService extends
               }
             } ~
             options {
-              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
+              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse
             }
           }
         } ~
@@ -186,7 +199,7 @@ trait ShardService extends
             }
           } ~
           options {
-            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
         }
       }

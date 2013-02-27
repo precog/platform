@@ -81,12 +81,16 @@ object ProvenanceComputationSpecs extends Specification
           foo(a) := %s(a) 
           foo(clicks.a)""".format(f.fqn))
 
-        if (f.retainIds)
+        if (f.retainIds) {
           tree.provenance mustEqual StaticProvenance("/clicks")
-        else
+          tree.errors must beEmpty
+        } else if (f.namespace == Vector("std", "random")) {
+          tree.provenance mustEqual InfiniteProvenance
+          tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
+        } else {
           tree.provenance mustEqual ValueProvenance
-
-        tree.errors must beEmpty
+          tree.errors must beEmpty
+        }
       }
     } 
     "compute result provenance correctly in a morph2" in {
@@ -590,11 +594,16 @@ object ProvenanceComputationSpecs extends Specification
     "identify morph1 dispatch according to its child" in {
       forall(libMorphism1) { f =>
         val tree = compileSingle("%s(//foo)".format(f.fqn))
-        if (f.retainIds)
+        if (f.retainIds) {
           tree.provenance mustEqual StaticProvenance("/foo")
-        else 
+          tree.errors must beEmpty
+        } else if (f.namespace == Vector("std", "random")) {
+          tree.provenance mustEqual InfiniteProvenance
+          tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
+        } else { 
           tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
+          tree.errors must beEmpty
+        }
       }
     }
     "identify morph2 dispatch according to its children given unrelated sets" in {
@@ -1146,6 +1155,9 @@ object ProvenanceComputationSpecs extends Specification
             if (f.retainIds) {
               tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
               tree.errors must beEmpty
+            } else if (f.namespace == Vector("std", "random")) {
+              tree.provenance mustEqual NullProvenance 
+              tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
             } else {
               tree.provenance mustEqual NullProvenance
               tree.errors mustEqual Set(ProductProvenanceDifferentLength)

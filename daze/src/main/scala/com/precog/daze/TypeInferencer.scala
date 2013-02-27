@@ -107,6 +107,8 @@ trait TypeInferencer extends DAG {
     
           case Assert(pred, child) => inner(jtpe, inner(jtpe, typing, pred), child)
           
+          case Observe(data, samples) => inner(jtpe, inner(jtpe, typing, data), samples)
+          
           case IUI(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
   
           case Diff(left, right) => inner(jtpe, inner(jtpe, typing, left), right)

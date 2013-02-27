@@ -125,9 +125,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
       val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
-      val expires = opts.timeout map { to => { (time: DateTime) => time.plus(to) } }
 
-      createJob(apiKey, Some(userQuery.serialize), expires)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+      createJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
         import JobQueryState._
 
         val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {

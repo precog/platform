@@ -71,12 +71,12 @@ trait PlatformConfig extends BaseConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig
 
-trait Platform extends muspelheim.ParseEvalStack[Future] 
+trait Platform extends muspelheim.ParseEvalStack[Future]
     with IdSourceScannerModule
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
-    with StandaloneActorProjectionSystem 
-    with LongIdMemoryDatasetConsumer[Future] 
+    with StandaloneActorProjectionSystem
+    with LongIdMemoryDatasetConsumer[Future]
     with PrettyPrinter { self =>
 
   type YggConfig = PlatformConfig
@@ -110,7 +110,7 @@ object SBTConsole {
       val maxEvalDuration = storageTimeout.duration
       val clock = blueeyes.util.Clock.System
       val ingestConfig = None
-      
+
       val maxSliceSize = 20000
       val cookThreshold = maxSliceSize
       val smallSliceSize = 8
@@ -127,7 +127,7 @@ object SBTConsole {
 
     val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
 
-    def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = 
+    def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) with IdSourceScannerModule {
         type YggConfig = PlatformConfig
         val yggConfig = console.yggConfig
@@ -141,25 +141,25 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      consumeEval("dummyAPIKey", dag, Path.Root) 
+      consumeEval("dummyAPIKey", dag, Path.Root)
     }
-    
+
     def produceDAG(str: String) = {
       val forest = compile(str)
       val validForest = forest filter { _.errors.isEmpty }
-      
+
       if (validForest.isEmpty) {
         val strs = forest map { tree =>
           tree.errors map showError mkString ("Set(\"", "\", \"", "\")")
         }
-        
+
         sys.error(strs mkString " | ")
       }
-      
+
       if (validForest.size > 1) {
         sys.error("ambiguous parse (good luck!)")
       }
-      
+
       val tree = validForest.head
       val Right(dag) = decorate(emit(tree))
       dag
@@ -171,9 +171,9 @@ object SBTConsole {
     }
 
     def startup() {
-      // start storage shard 
+      // start storage shard
     }
-    
+
     def shutdown() {
       // stop storage shard
       Await.result(gracefulStop(projectionsActor, yggConfig.storageTimeout.duration), yggConfig.storageTimeout.duration)

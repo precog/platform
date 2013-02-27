@@ -24,6 +24,9 @@ import blueeyes.json._
 import blueeyes.core.http.MimeType
 
 import com.precog.common.security._
+import com.precog.common.cache._
+
+import akka.util.Duration
 
 import java.util.UUID
 
@@ -31,26 +34,40 @@ import org.joda.time.DateTime
 
 import scala.collection.mutable
 
+import org.streum.configrity.Configuration
+
 import scalaz._
 
+private[jobs] case class JobData(job: Job, channels: Map[String, List[Message]], status: Option[Status])
 
-final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
-    extends JobManager[M] with JobStateManager[M] with JobResultManager[M] {
+final class InMemoryJobManager[M[+_]](implicit val M: Monad[M]) extends BaseInMemoryJobManager[M] {
+  private[jobs] val jobs: mutable.Map[JobId, JobData] =
+    new mutable.HashMap[JobId, JobData] with mutable.SynchronizedMap[JobId, JobData]
+}
+
+final class ExpiringJobManager[M[+_]](timeout: Duration)(implicit val M: Monad[M]) extends BaseInMemoryJobManager[M] {
+  private[jobs] val jobs: mutable.Map[JobId, JobData] = Cache.simple(Cache.ExpireAfterAccess(timeout))
+}
+
+object ExpiringJobManager {
+  def apply[M[+_]: Monad](config: Configuration): ExpiringJobManager[M] = {
+    val timeout = Duration(config[Int]("service.timeout", 900), "seconds")
+    new ExpiringJobManager[M](timeout)
+  }
+}
+
+trait BaseInMemoryJobManager[M[+_]] extends JobManager[M]
+    with JobStateManager[M] with JobResultManager[M] {
+
   import scalaz.syntax.monad._
   import JobState._
 
+  implicit def M: Monad[M]
+
+  @volatile
+  private[jobs] val jobs: mutable.Map[JobId, JobData]
+
   val fs = new InMemoryFileStorage[M]
-
-  val jobs: mutable.Map[JobId, Job] = new mutable.HashMap[JobId, Job] with mutable.SynchronizedMap[JobId, Job]
-
-  val channels: mutable.Map[(JobId, String), List[Message]] = new mutable.HashMap[(JobId, String), List[Message]] with mutable.SynchronizedMap[(JobId, String), List[Message]]
-
-  val statuses: mutable.Map[JobId, List[Status]] = new mutable.HashMap[JobId, List[Status]] with mutable.SynchronizedMap[JobId, List[Status]]
-
-  val status: mutable.Map[JobId, Status] = new mutable.HashMap[JobId, Status] with mutable.SynchronizedMap[JobId, Status]
-
-  val result: mutable.Map[JobId, (List[MimeType], StreamT[M, Array[Byte]])] =
-    new mutable.HashMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])] with mutable.SynchronizedMap[JobId, (List[MimeType], StreamT[M, Array[Byte]])]
 
   private def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
@@ -58,19 +75,18 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
     M.point {
       val state = started map (Started(_, NotStarted)) getOrElse NotStarted
       val job = Job(newJobId, auth, name, jobType, data, state)
-      jobs(job.id) = job
-      statuses(job.id) = Nil
+      jobs(job.id) = JobData(job, Map.empty, None)
       job
     }
   }
 
-  def findJob(id: JobId): M[Option[Job]] = M.point { jobs get id }
+  def findJob(id: JobId): M[Option[Job]] = M.point { jobs get id map (_.job) }
 
   def listJobs(apiKey: APIKey): M[Seq[Job]] = M.point {
-    jobs.values.toList filter (_.apiKey == apiKey)
+    jobs.values.toList map (_.job) filter (_.apiKey == apiKey)
   }
 
-  def updateStatus(jobId: JobId, prevStatus: Option[StatusId], 
+  def updateStatus(jobId: JobId, prev: Option[StatusId], 
       msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): M[Either[String, Status]] = {
 
     val jval = JObject(
@@ -80,72 +96,75 @@ final class InMemoryJobManager[M[+_]](implicit val M: Monad[M])
       (extra map (JField("info", _) :: Nil) getOrElse Nil)
     )
 
-    status get jobId match {
-      case Some(curStatus) if curStatus.id == prevStatus.getOrElse(curStatus.id) =>
-        for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
-          val Some(s) = Status.fromMessage(m)
-          status.put(jobId, s)
-          Right(s)
-        }
+    synchronized {
+      jobs get jobId map {
+        case JobData(_, _, Some(cur)) if cur.id == prev.getOrElse(cur.id) =>
+          for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
+            val Some(s) = Status.fromMessage(m)
+            jobs(jobId) = jobs(jobId).copy(status = Some(s))
+            Right(s)
+          }
 
-      case Some(_) =>
-        M.point(Left("Current status did not match expected status."))
+        case JobData(_, _, Some(_)) =>
+          M.point(Left("Current status did not match expected status."))
 
-      case None if prevStatus.isDefined =>
-        M.point(Left("Job has not yet started, yet a status was expected."))
+        case JobData(_, _, None) if prev.isDefined =>
+          M.point(Left("Job has not yet started, yet a status was expected."))
 
-      case None =>
-        for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
-          val Some(s) = Status.fromMessage(m)
-          status.put(jobId, s)
-          Right(s)
-        }
+        case JobData(_, _, None) =>
+          for (m <- addMessage(jobId, JobManager.channels.Status, jval)) yield {
+            val Some(s) = Status.fromMessage(m)
+            jobs(jobId) = jobs(jobId).copy(status = Some(s))
+            Right(s)
+          }
+      } getOrElse {
+        M.point(Left("No job with ID " + jobId))
+      }
     }
   }
 
   def getStatus(jobId: JobId): M[Option[Status]] = M.point {
-    status get jobId match {
-      case Some(status) => Some(status)
-      case _ => None
-    }
+    jobs get jobId flatMap (_.status)
   }
 
   def listChannels(jobId: JobId): M[Seq[String]] = M.point {
-    channels.keys.toList collect {
-      case (`jobId`, channel) => channel
-    }
+    jobs get jobId map (_.channels.keys.toList) getOrElse Nil
   }
 
   def addMessage(jobId: JobId, channel: String, value: JValue): M[Message] = {
     M.point {
-      val posts = channels get (jobId, channel) getOrElse Nil
-      val message = Message(jobId, posts.size, channel, value)
-
-      channels((jobId, channel)) = message :: posts
-      message
+      synchronized {
+        val data = jobs(jobId)
+        val posts = data.channels.getOrElse(channel, Nil)
+        val message = Message(jobId, posts.size, channel, value)
+        jobs(jobId) = data.copy(channels = data.channels + (channel -> (message :: posts)))
+        message
+      }
     }
   }
 
   def listMessages(jobId: JobId, channel: String, since: Option[MessageId]): M[Seq[Message]] = {
     M.point {
-      val posts = channels get ((jobId, channel)) getOrElse Nil
+      val posts = jobs(jobId).channels.getOrElse(channel, Nil)
       since map { mId => posts.takeWhile(_.id != mId).reverse } getOrElse posts.reverse
     }
   }
 
   protected def transition(id: JobId)(t: JobState => Either[String, JobState]): M[Either[String, Job]] = {
     M.point {
-      jobs get id map { job =>
-        t(job.state) match {
-          case Right(newState) =>
-            val newJob = job.copy(state = newState)
-            jobs(id) = newJob
-            Right(newJob)
+      synchronized {
+        jobs get id map { case data @ JobData(job, _, _) =>
+          t(job.state) match {
+            case Right(newState) =>
+              val newJob = job.copy(state = newState)
+              jobs(id) = data.copy(job = newJob)
+              Right(newJob)
 
-          case Left(error) =>
-            Left(error)
-        }
-      } getOrElse Left("Cannot find job with ID '%s'." format id)
+            case Left(error) =>
+              Left(error)
+          }
+        } getOrElse Left("Cannot find job with ID '%s'." format id)
+      }
     }
   }
 }
