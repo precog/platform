@@ -324,10 +324,8 @@ trait ColumnarTableModule[M[+_]]
       
       case class IndexedSource(groupId: GroupId, index: TableIndex, keySchema: KeySchema) 
       
-      //grouping.sorted flatMap { g =>
-      val g = grouping
       (for {
-        source <- g.sources
+        source <- grouping.sources
         groupKeyProjections <- mkProjections(source.groupKeySpec)
         disjunctGroupKeyTransSpecs = groupKeyProjections.map { case (key, spec) => spec }
       } yield {
@@ -414,10 +412,8 @@ trait ColumnarTableModule[M[+_]]
               (indexedSource.index, projectedKeyIndices, groupKey)
             }).toList
 
-            // TODO: filter empty slices earlier maybe?
-            val t = TableIndex.joinSubTables(subTableProjections).normalize
+            val t = TableIndex.joinSubTables(subTableProjections) // TODO: normalize necessary?
             t.sort(DerefObjectStatic(Leaf(Source), CPathField("key")))
-            //M.point(t)
           }
 
           nt(body(groupKeyTable, map))
@@ -426,8 +422,10 @@ trait ColumnarTableModule[M[+_]]
         // TODO: this can probably be done as one step, but for now
         // it's probably fine.
         val tables: StreamT[M, Table] = StreamT.unfoldM(groupKeys.toList) {
-          case k :: ks => evaluateGroupKey(k).map(t => Some((t, ks)))
-          case Nil => M.point(None)
+          case k :: ks =>
+            evaluateGroupKey(k).map(t => Some((t, ks)))
+          case Nil =>
+            M.point(None)
         }
 
         val slices: StreamT[M, Slice] = tables.flatMap(_.slices)

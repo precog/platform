@@ -586,10 +586,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
                 val back = fullEval(rewritten, splits2, s :: splits.keys.toList)
                 val start = System.nanoTime
-                back.eval(state) map { x =>
-                  x
-                  //: N[Table]
-                }
+                back.eval(state)
               })
             } yield {
               result.transform(idSpec)

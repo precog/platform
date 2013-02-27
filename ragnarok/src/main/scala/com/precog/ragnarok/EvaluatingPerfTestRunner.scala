@@ -20,8 +20,9 @@
 package com.precog
 package ragnarok
 
-import common.Path
-import common.security._
+import com.precog.common.Path
+import com.precog.common.security._
+import com.precog.util._
 
 import daze.{ EvaluatorModule, EvaluationContext }
 
@@ -76,7 +77,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
 
   def eval(query: String): M[Result] = try {
-    val forest = compile(query)
+    val forest = Timing.time("Compiling query")(compile(query))
     val valid = forest filter { _.errors.isEmpty }
 
     if (valid.isEmpty) {
@@ -87,14 +88,16 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
     
     val tree = valid.head
 
-    decorate(emit(tree)) match {
+    val instructions = Timing.time("Emitting instructions")(emit(tree))
+    val decorated = Timing.time("Decorating tree")(decorate(instructions))
+    decorated match {
       case Left(stackError) =>
         sys.error("Failed to construct DAG.")
 
       case Right(dag) =>
         for {
           table <- Evaluator(M).eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
-          size <- countStream(table.renderJson(','))
+          size <- Timing.timeM("Counting stream")(countStream(table.renderJson(',')))
         } yield size
     }
   } catch {
