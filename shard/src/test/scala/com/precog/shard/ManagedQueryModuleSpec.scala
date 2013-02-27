@@ -9,6 +9,7 @@ import com.precog.muspelheim._
 
 import java.nio.CharBuffer
 
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic._
 
 import akka.actor._
@@ -53,6 +54,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     def copoint[A](m: Future[A]) = Await.result(m, Duration(30, "seconds"))
   }
 
+  val defaultTimeout = Duration(90, TimeUnit.SECONDS)
+
   lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   def apiKey = "O.o"
 
@@ -77,7 +80,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   // Performs an incredibly intense compuation that requires numTicks ticks.
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
-    val timeout = ticksToTimeout map (clock.duration * _)
+    val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val result = for {
       executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
       result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) mapValue {
@@ -239,11 +242,8 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
         val numTicks = query.toInt
-        val expiration = opts.timeout map { to =>
-          { (time: DateTime) => time.plus(to) }
-        }
 
-        WriterT(createJob(apiKey, Some(userQuery.serialize), expiration) map { implicit M0 =>
+        WriterT(createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
           val ticks = new AtomicInteger()
           val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
             case i if i < numTicks =>
