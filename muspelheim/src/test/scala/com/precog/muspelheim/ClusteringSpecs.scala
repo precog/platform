@@ -104,7 +104,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveSize(count)
       results must not beEmpty
 
-      val validClusters = (1 to 4).map("Cluster" + _).toSet
+      val validClusters = (1 to 3).map("Cluster" + _).toSet
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
@@ -170,6 +170,59 @@ trait ClusteringSpecs extends EvalStackSpecs {
       """
 
       testJoinCluster(input, input2)
+    }
+
+    "join cluster information to clustering when clustering is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        clustering := new std::stats::kMedians({ HeightIncm: h, Weight: w }, 3)
+
+        medals ~ clustering
+        assignments := std::stats::assignClusters(medals, clustering)
+
+        clustering with { cluster: assignments }
+      """.stripMargin
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+        w := medals.Weight where std::type::isNumber(medals.Weight)
+
+        count({ height: h, weight: w })
+      """
+
+      val results = evalE(input)
+      val resultsCount = evalE(input2)
+
+      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+
+      results must haveSize(count)
+      results must not beEmpty
+
+      val validClusters = (1 to 3).map("Cluster" + _).toSet
+
+      results must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          elems.keys mustEqual Set("cluster", "Model1")
+
+          elems("Model1") must beLike {
+            case SObject(obj) =>
+              obj.keys mustEqual(validClusters)
+          }
+
+          elems("cluster") must beLike {
+            case SObject(obj) =>
+              obj.keys mustEqual Set("Model1")
+              obj("Model1") must beLike {
+                case SString(clusterId) => validClusters must contain(clusterId)
+              }
+          }
+      }
     }
 
     "make a histogram of clusters" in {

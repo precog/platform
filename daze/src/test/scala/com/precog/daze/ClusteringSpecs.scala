@@ -311,7 +311,11 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
   "assign clusters" should {
     "assign correctly with a single schema" in {
-      val GeneratedPointSet(points, centers) = genPoints(3000, 4, 8)
+      val size = 3000
+      val dimension = 4
+      val k = 8
+
+      val GeneratedPointSet(points, centers) = genPoints(size, dimension, k)
 
       val clusters = makeClusters(centers)
       
@@ -323,10 +327,14 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
           val input2 = createDAG(pointsDataSet, modelDataSet)
           val result = testEval(input2)
 
+          result must haveSize(size)
+
           result must haveAllElementsLike { case (ids, SObject(obj)) =>
             ids.length mustEqual 2
             obj.keySet mustEqual Set("point", "Model1")
+
             val point = obj("point")
+
             obj("Model1") must beLike { case SString(clusterId) =>
               clusterId must_== assignments(point.toRValue)
             }
@@ -339,37 +347,51 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
       val dimensionA = 4
       val dimensionB = 12
       val k = 15
+      val size = 5000
 
-      val GeneratedPointSet(pointsA, centersA) = genPoints(5000, dimensionA, k)
-      val GeneratedPointSet(pointsB, centersB) = genPoints(5000, dimensionB, k)
+      val GeneratedPointSet(pointsA, centersA) = genPoints(size, dimensionA, k)
+      val GeneratedPointSet(pointsB, centersB) = genPoints(size, dimensionB, k)
 
       val points = Random.shuffle(pointsA.toList ++ pointsB.toList).toArray
 
       val clustersA = makeClusters(centersA)
       val clustersB = makeClusters(centersB)
 
-      val model1 = RObject(Map("Model1" -> clustersA, "Model2" -> clustersB))
+      val models = RObject(Map("Model1" -> clustersA, "Model2" -> clustersB))
 
-      val assignmentsA = assign(pointsA, centersA)
+      val assignmentsA = assign(pointsA ++ pointsB, centersA)
       val assignmentsB = assign(pointsB, centersB)
 
-      writeRValuesToDataset(List(model1)) { modelDataSet =>
+      writeRValuesToDataset(List(models)) { modelDataSet =>
         writePointsToDataset(points) { pointsDataSet =>
-          val input2 = createDAG(pointsDataSet, modelDataSet)
-          val result = testEval(input2)
+          val input = createDAG(pointsDataSet, modelDataSet)
+          val result = testEval(input)
+
+          result must haveSize(points.size)
 
           result must haveAllElementsLike { case (ids, SObject(obj)) =>
             ids.length mustEqual 2
 
             (obj.keySet mustEqual Set("point", "Model1")) or 
-              (obj.keySet mustEqual Set("point", "Model2"))
+              (obj.keySet mustEqual Set("point", "Model1", "Model2"))
 
             val point = obj("point")
+
+            point must beLike { case SArray(arr) =>
+              (arr must haveSize(dimensionA)) or
+                (arr must haveSize(dimensionB))
+            }
+
             obj("Model1") must beLike { case SString(clusterId) =>
               clusterId must_== assignmentsA(point.toRValue)
             }
-            obj("Model2") must beLike { case SString(clusterId) =>
-              clusterId must_== assignmentsB(point.toRValue)
+
+            if (obj.contains("Model2")) {
+              obj("Model2") must beLike { case SString(clusterId) =>
+                clusterId must_== assignmentsB(point.toRValue)
+              }
+            } else {
+              ok
             }
           }
         }
@@ -379,8 +401,9 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
     "assign correctly with two overlapping schemata" in {
       val dimension = 6
       val k = 20
+      val size = 5000
 
-      val GeneratedPointSet(points0, centers) = genPoints(5000, dimension, k)
+      val GeneratedPointSet(points0, centers) = genPoints(size, dimension, k)
 
       val points = points0.zipWithIndex map {
         case (p, i) if i % 3 == 2 => p ++ Array.fill(3)(Random.nextDouble)
@@ -391,12 +414,14 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
       val model1 = RObject(Map("Model1" -> clusters))
 
-      val assignments = assign(points0, centers)
+      val assignments = assign(points, centers)
 
       writeRValuesToDataset(List(model1)) { modelDataSet =>
         writePointsToDataset(points) { pointsDataSet =>
           val input2 = createDAG(pointsDataSet, modelDataSet)
           val result = testEval(input2)
+
+          result must haveSize(size)
 
           result must haveAllElementsLike { case (ids, SObject(obj)) =>
             ids.length mustEqual 2
