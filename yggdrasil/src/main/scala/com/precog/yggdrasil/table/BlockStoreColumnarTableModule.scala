@@ -884,12 +884,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = {
-      //val start = System.nanoTime
       for {
         tables <- groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique)
         //_ = System.err.println("Sorted in %d ns" format (System.nanoTime - start))
       } yield (tables.headOption getOrElse Table.empty)
-      // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
     }
 
     /**

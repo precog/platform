@@ -412,8 +412,7 @@ trait ColumnarTableModule[M[+_]]
               (indexedSource.index, projectedKeyIndices, groupKey)
             }).toList
 
-            val t = TableIndex.joinSubTables(subTableProjections) // TODO: normalize necessary?
-            t.sort(DerefObjectStatic(Leaf(Source), CPathField("key")))
+            M.point(TableIndex.joinSubTables(subTableProjections)) // TODO: normalize necessary?
           }
 
           nt(body(groupKeyTable, map))
