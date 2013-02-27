@@ -29,21 +29,30 @@ import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.Extractor.Invalid
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 
-sealed trait Permission {
+sealed trait Permission extends Logging {
   def path: Path
   def ownerAccountIds: Set[AccountId]
-  
+
   def implies(other: Permission): Boolean
-  
-  protected def pathImplies(other: Permission): Boolean = (this, other) match {
-    case (Permission(p1, o1), Permission(p2, o2)) if p1.isEqualOrParent(p2) && !o2.isEmpty && o2.subsetOf(o1) => true
-    case (Permission(p1, o1), Permission(p2, _))  if p1.isEqualOrParent(p2) && o1.isEmpty => true
-    case _ => false
+
+  /* Important note here: the Empty set on the "other" side actually means Set(*), which is why
+   * the !02.isEmpty part of the first case prevents that from matching. Essentially, only a
+   * permission that itself has Set() can imply a perm of Set().
+   */
+  protected def pathImplies(other: Permission): Boolean = {
+    logger.trace("Checking path impliciation of this (%s) against that (%s)".format(this, other))
+    (this, other) match {
+      case (Permission(p1, o1), Permission(p2, o2)) if p1.isEqualOrParent(p2) && !o2.isEmpty && o2.subsetOf(o1) => true
+      case (Permission(p1, o1), Permission(p2, _))  if p1.isEqualOrParent(p2) && o1.isEmpty => true
+      case _ => false
+    }
   }
 }
 
@@ -77,23 +86,23 @@ case class DeletePermission(path: Path, ownerAccountIds: Set[AccountId]) extends
 
 object Permission {
   def accessType(p: Permission) = p match {
-    case _ : ReadPermission =>   "read"  
-    case _ : ReducePermission => "reduce"  
-    case _ : WritePermission =>  "write"  
-    case _ : DeletePermission => "delete"  
+    case _ : ReadPermission =>   "read"
+    case _ : ReducePermission => "reduce"
+    case _ : WritePermission =>  "write"
+    case _ : DeletePermission => "delete"
   }
-  
+
   implicit object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] {
     override def validated(label: JValue) =
       label.validated[String].flatMap {
-        case "read" =>   Success(ReadPermission.apply) 
-        case "reduce" => Success(ReducePermission.apply) 
+        case "read" =>   Success(ReadPermission.apply)
+        case "reduce" => Success(ReducePermission.apply)
         case "write" =>  Success(WritePermission.apply)
-        case "delete" => Success(DeletePermission.apply) 
+        case "delete" => Success(DeletePermission.apply)
         case t =>        Failure(Invalid("Unknown permission type: " + t))
       }
   }
-  
+
   val decomposerV1Base: Decomposer[Permission] = new Decomposer[Permission] {
     override def decompose(p: Permission): JValue = {
       JObject(List(
@@ -104,20 +113,20 @@ object Permission {
     }
   }
 
-  val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {    
+  val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {
     override def validated(obj: JValue) = {
-      val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType") 
-      val pathV = obj.validated[Path]("path") 
+      val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType")
+      val pathV = obj.validated[Path]("path")
       val ownerV = (obj \? "ownerAccountIds") map { _.validated[Set[AccountId]] } getOrElse { Success(Set.empty[AccountId]) }
 
-      Apply[({ type l[a] = Validation[Error, a] })#l].apply3(accessTypeV, pathV, ownerV) { (c, p, o) => 
-        c(p, o) 
+      Apply[({ type l[a] = Validation[Error, a] })#l].apply3(accessTypeV, pathV, ownerV) { (c, p, o) =>
+        c(p, o)
       }
     }
   }
 
-  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0")) 
+  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0"))
   implicit val extractor = Serialization.versioned(extractorV1Base, Some("1.0")) <+> extractorV1Base
-  
+
   def unapply(perm: Permission): Option[(Path, Set[AccountId])] = Some((perm.path, perm.ownerAccountIds))
 }
