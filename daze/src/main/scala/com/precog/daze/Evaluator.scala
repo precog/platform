@@ -294,7 +294,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 transState liftM mn(keyTable.zip(valueTable) flatMap { _.sort(keySpec, SortAscending) })
               }
             } yield {
-              PendingTable(result, graph, TransSpec1.Id)
+              PendingTable(result, UnorderedTable, graph, TransSpec1.Id) // TODO: is this sorted?
             }
 
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
