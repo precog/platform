@@ -41,8 +41,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
   "API key finders" should {
     "create and find API keys" in {
       withAPIKeyFinder(emptyAPIKeyManager) { keyFinder =>
-        val v1.APIKeyDetails(apiKey0, _, _, _) = keyFinder.newAPIKey("Anything works.", Path("/some-path")).copoint
-        val Some(v1.APIKeyDetails(apiKey1, _, _, _)) = keyFinder.findAPIKey(apiKey0).copoint
+        val v1.APIKeyDetails(apiKey0, _, _, _, _) = keyFinder.newAPIKey("Anything works.", Path("/some-path")).copoint
+        val Some(v1.APIKeyDetails(apiKey1, _, _, _, _)) = keyFinder.findAPIKey(apiKey0, None).copoint
         apiKey0 must_== apiKey1
       }
     }
@@ -53,7 +53,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
         key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
       } yield (key0.apiKey -> mgr)).copoint
       withAPIKeyFinder(mgr) { keyFinder =>
-        keyFinder.findAPIKey(key).copoint map (_.apiKey) must_== Some(key)
+        keyFinder.findAPIKey(key, None).copoint map (_.apiKey) must_== Some(key)
       }
     }
 
@@ -137,6 +137,34 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
         keyFinder.addGrant(key0, key1, grantId).copoint must beTrue
         keyFinder.hasCapability(key1, permissions, Some(beforeExpiration)).copoint must beTrue
         keyFinder.hasCapability(key1, permissions, Some(afterExpiration)).copoint must beFalse
+      }
+    }
+
+    "return issuer details when a proper root key is passed to findAPiKey" in {
+      val (rootKey, key0, key1, mgr) = (for {
+        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        rootKey <- mgr.rootAPIKey
+        key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
+        key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
+      } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
+
+      withAPIKeyFinder(mgr) { keyFinder =>
+        keyFinder.findAPIKey(key0, Some(rootKey)).copoint flatMap (_.issuer) mustEqual Some(rootKey)
+        keyFinder.findAPIKey(key1, Some(rootKey)).copoint flatMap (_.issuer) mustEqual Some(key0)
+      }
+    }
+
+    "hide issuer details when a root key is not passed to findAPIKey" in {
+      val (rootKey, key0, key1, mgr) = (for {
+        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        rootKey <- mgr.rootAPIKey
+        key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
+        key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
+      } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
+
+      withAPIKeyFinder(mgr) { keyFinder =>
+        keyFinder.findAPIKey(key0, None).copoint flatMap (_.issuer) mustEqual None
+        keyFinder.findAPIKey(key1, None).copoint flatMap (_.issuer) mustEqual None
       }
     }
   }

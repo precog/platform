@@ -35,17 +35,17 @@ class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extend
     ReadPermission(Path("/"), Set.empty[AccountId]),
     DeletePermission(Path("/"), Set.empty[AccountId])
   )
-  
+
   val rootGrant = v1.GrantDetails(java.util.UUID.randomUUID.toString, None, None, permissions, None)
-  val rootAPIKeyRecord = v1.APIKeyDetails(apiKey, Some("Static api key"), None, Set(rootGrant))
+  val rootAPIKeyRecord = v1.APIKeyDetails(apiKey, Some("Static api key"), None, Set(rootGrant), None)
 
   val rootGrantId = M.point(rootGrant.grantId)
   val rootAPIKey = M.point(rootAPIKeyRecord.apiKey)
-  
-  def findAPIKey(apiKey: APIKey) = M.point(if (apiKey == apiKey) Some(rootAPIKeyRecord) else None)
+
+  def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]) = M.point(if (apiKey == apiKey) Some(rootAPIKeyRecord) else None)
   def findGrant(grantId: GrantId) = M.point(if (rootGrant.grantId == grantId) Some(rootGrant) else None)
 
-  def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = findAPIKey(fromRoot) map { _.toSet }
+  def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = findAPIKey(fromRoot, None) map { _.toSet }
 
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = {
     throw new UnsupportedOperationException("API key management unavailable for standalone system.")

@@ -25,6 +25,7 @@ import com.precog.common.security._
 import com.precog.common.accounts._
 
 import org.specs2.mutable._
+import org.specs2.specification.{Fragments, Step}
 import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
@@ -72,7 +73,7 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
     def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(5, "seconds"))
   }
 
-  val config = """ 
+  val config = """
     security {
       test = true
       mongo {
@@ -80,23 +81,37 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
         servers = [localhost]
         database = test
       }
-    }   
+    }
+
+    accounts {
+      rootAccountId = 0000000001
+    }
   """
 
   override val configuration = "services { accounts { v1 { " + config + " } } }"
 
-  def AccountManager(config: Configuration) = (new InMemoryAccountManager()(M), Stoppable.Noop)
-  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(new InMemoryAPIKeyManager())
+  val accountManager = new InMemoryAccountManager()(M)
+  def AccountManager(config: Configuration) = (accountManager, Stoppable.Noop)
+  val apiKeyManager = new InMemoryAPIKeyManager()(M)
+  def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(apiKeyManager)
+  def RootKey(config: Configuration) = M.copoint(apiKeyManager.rootAPIKey)
 
   val clock = Clock.System
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(0, Duration(1, "second"))
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+
+  val rootUser = "root@precog.com"
+  val rootPass = "root"
+
+  override def map(fs: => Fragments) = Step {
+    accountManager.setAccount("0000000001", rootUser, rootPass, new DateTime, AccountPlan.Root, None)
+  } ^ super.map(fs)
 }
 
 class AccountServiceSpec extends TestAccountService with Tags {
-  lazy val accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/")
+  def accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/")
 
   def auth(user: String, pass: String): HttpHeader = {
     val raw = (user + ":" + pass).getBytes("utf-8")
@@ -104,7 +119,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
     HttpHeaders.Authorization("Basic " + encoded)
   }
 
-  def listAccounts(request: JValue) = 
+  def listAccounts(request: JValue) =
     accounts.query("", "").post("")(request)
 
   def createAccount(email: String, password: String) = {
@@ -112,10 +127,13 @@ class AccountServiceSpec extends TestAccountService with Tags {
     accounts.post("")(request)
   }
 
-  def getAccount(accountId: String, user: String, pass: String) = 
+  def getAccount(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).get(accountId)
 
-  def deleteAccount(accountId: String, user: String, pass: String) = 
+  def getAccountByAPIKey(apiKey: APIKey, user: String, pass: String) =
+    accounts.header(auth(user, pass)).query("apiKey", apiKey).get("")
+
+  def deleteAccount(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).delete(accountId)
 
   def changePassword(accountId: String, user: String, oldPass: String, newPass: String) = {
@@ -123,18 +141,18 @@ class AccountServiceSpec extends TestAccountService with Tags {
     accounts.header(auth(user, oldPass)).put(accountId + "/password")(request)
   }
 
-  def addGrantToAccount(accountId: String,request: JValue) = 
+  def addGrantToAccount(accountId: String,request: JValue) =
     accounts.query("accountId",accountId).post(accountId + "/grants/")(request)
 
-  def getAccountPlan(accountId: String, user: String, pass: String) = 
+  def getAccountPlan(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).get(accountId + "/plan")
-  
+
   def putAccountPlan(accountId: String, user: String, pass: String, planType: String) = {
     val request: JValue = JObject(JField("type", JString(planType)) :: Nil)
     accounts.header(auth(user, pass)).put(accountId + "/plan")(request)
   }
-  
-  def removeAccountPlan(accountId: String, user: String, pass: String) = 
+
+  def removeAccountPlan(accountId: String, user: String, pass: String) =
     accounts.header(auth(user, pass)).delete(accountId + "/plan")
 
   def createAccountAndGetId(email: String, pass: String): Future[String] = {
@@ -249,6 +267,23 @@ class AccountServiceSpec extends TestAccountService with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
           jv \ "type" must_== JString("Free")
       }
+    }
+
+    "locate account by api key (account api key or subordinates)" in {
+      val user = "test0009@email.com"
+      val pass = "12345"
+
+      val accountId = createAccountAndGetId(user, pass).copoint
+
+      val JString(apiKey) = getAccount(accountId, user, pass).map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => jvalue \ "apiKey"
+      }.copoint
+
+      val subkey = apiKeyManager.newAPIKey(Some("subkey"), None, apiKey, Set.empty).copoint
+
+      getAccountByAPIKey(subkey.apiKey, rootUser, rootPass).map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => jvalue \ "accountId"
+      }.copoint mustEqual JString(accountId)
     }
   }
 }
