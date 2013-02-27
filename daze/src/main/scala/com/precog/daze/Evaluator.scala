@@ -438,7 +438,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               pendingTable <- prepareEval(parent, splits)
               back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
               tableOrder = if (mor.retainIds) {
-                  // FIXME: Are we guarantee to be sorted by IDs coming into a Morph1?
                   KeyOrderedTable
                 } else {
                   UnorderedTable
@@ -779,7 +778,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 pending <- prepareEval(parent, splits)
                 table = pending.table.transform(liftToValues(pending.trans))
                 
-                _ = System.err.println("Sorting in ReSortBy")
                 result <- transState liftM mn(table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending))
               } yield {
                 PendingTable(result, UnorderedTable, graph, TransSpec1.Id)
