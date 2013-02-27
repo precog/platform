@@ -1,2 +1,2 @@
-{ "Model1": [{"foo":3.0, "bar": 2.0}, 5], "Model2": [{"foo":3.0}, 5] }
-{ "Model3": [{"bar":2.5}, 2] }
+{ "Model1": [{"foo":{"coefficient":3.0, "standard error": 0.12}, "bar":{"coefficient":2.0, "standard error": 0.352}}, {"coefficient":5, "standard error":0.9}], "Model2": [{"foo":{"coefficient":3.0, "standard error": 0.44}}, {"coefficient":5, "standard error": 0.583}] }
+{ "Model3": [{"bar":{"coefficient": 2.5, "standard error": 0.02}}, {"coefficient":2, "standard error": 1.4}] }

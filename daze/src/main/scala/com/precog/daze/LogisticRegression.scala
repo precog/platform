@@ -219,7 +219,11 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
             val spec = TransSpec.concatChildren(tree)
 
-            val theta = Table.fromRValues(Stream(RArray(finalTheta.map(CNum(_)).toList)))
+            val res = finalTheta map { v =>
+              RObject(Map("coefficient" -> CNum(v)))
+            }
+
+            val theta = Table.fromRValues(Stream(RArray(res.toList)))
 
             val result = theta.transform(spec)
 
@@ -282,7 +286,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
     }
 
     object LogisticPrediction extends Morphism2(Stats2Namespace, "predictLogistic") with PredictionBase {
-      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
       override val retainIds = true
 
