@@ -16,6 +16,8 @@ import com.precog.util.BitSetUtil.Implicits._
 import scala.{ specialized => spec }
 import scala.annotation.tailrec
 
+import spire.math.Order
+
 import scalaz.Semigroup
 import scalaz.std.option._
 import scalaz.syntax.apply._
@@ -36,6 +38,7 @@ sealed trait Column {
     BitSetUtil.filteredRange(from, to)(isDefinedAt)
 
   def rowEq(row1: Int, row2: Int): Boolean
+  def rowCompare(row1: Int, row2: Int): Int
 }
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
@@ -57,6 +60,10 @@ trait HomogeneousArrayColumn[@spec(Boolean, Long, Double) A] extends Column with
       i += 1
     }
     true
+  }
+
+  def rowCompare(row1: Int, row2: Int): Int = {
+    sys.error("...")
   }
 
   val tpe: CArrayType[A]
@@ -133,6 +140,8 @@ object HomogeneousArrayColumn {
 trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    java.lang.Boolean.compare(apply(row1), apply(row2))
 
   override val tpe = CBoolean
   override def jValue(row: Int) = JBool(this(row))
@@ -158,6 +167,8 @@ object BoolColumn {
 trait LongColumn extends Column with (Int => Long) {
   def apply(row: Int): Long
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    java.lang.Long.compare(apply(row1), apply(row2))
 
   override val tpe = CLong
   override def jValue(row: Int) = JNum(this(row))
@@ -169,6 +180,8 @@ trait LongColumn extends Column with (Int => Long) {
 trait DoubleColumn extends Column with (Int => Double) {
   def apply(row: Int): Double
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    java.lang.Double.compare(apply(row1), apply(row2))
 
   override val tpe = CDouble
   override def jValue(row: Int) = JNum(this(row))
@@ -180,6 +193,8 @@ trait DoubleColumn extends Column with (Int => Double) {
 trait NumColumn extends Column with (Int => BigDecimal) {
   def apply(row: Int): BigDecimal
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    apply(row1) compare apply(row2)
 
   override val tpe = CNum
   override def jValue(row: Int) = JNum(this(row))
@@ -191,6 +206,8 @@ trait NumColumn extends Column with (Int => BigDecimal) {
 trait StrColumn extends Column with (Int => String) {
   def apply(row: Int): String
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    apply(row1) compareTo apply(row2)
 
   override val tpe = CString
   override def jValue(row: Int) = JString(this(row))
@@ -202,6 +219,8 @@ trait StrColumn extends Column with (Int => String) {
 trait DateColumn extends Column with (Int => DateTime) {
   def apply(row: Int): DateTime
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int =
+    apply(row1) compareTo apply(row2)
 
   override val tpe = CDate
   override def jValue(row: Int) = JString(this(row).toString)
@@ -213,6 +232,7 @@ trait DateColumn extends Column with (Int => DateTime) {
 trait PeriodColumn extends Column with (Int => Period) {
   def apply(row: Int): Period
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
+  def rowCompare(row1: Int, row2: Int): Int = sys.error("Cannot compare periods.")
 
   override val tpe = CPeriod
   override def jValue(row: Int) = JString(this(row).toString)
@@ -223,6 +243,7 @@ trait PeriodColumn extends Column with (Int => Period) {
 
 trait EmptyArrayColumn extends Column {
   def rowEq(row1: Int, row2: Int): Boolean = true
+  def rowCompare(row1: Int, row2: Int): Int = 0
   override val tpe = CEmptyArray
   override def jValue(row: Int) = JArray(Nil)
   override def cValue(row: Int) = CEmptyArray
@@ -235,6 +256,7 @@ object EmptyArrayColumn {
 
 trait EmptyObjectColumn extends Column {
   def rowEq(row1: Int, row2: Int): Boolean = true
+  def rowCompare(row1: Int, row2: Int): Int = 0
   override val tpe = CEmptyObject
   override def jValue(row: Int) = JObject(Nil)
   override def cValue(row: Int) = CEmptyObject
@@ -248,6 +270,7 @@ object EmptyObjectColumn {
 
 trait NullColumn extends Column {
   def rowEq(row1: Int, row2: Int): Boolean = true
+  def rowCompare(row1: Int, row2: Int): Int = 0
   override val tpe = CNull
   override def jValue(row: Int) = JNull
   override def cValue(row: Int) = CNull
@@ -263,6 +286,7 @@ object NullColumn {
 object UndefinedColumn {
   def apply(col: Column) = new Column {
     def rowEq(row1: Int, row2: Int): Boolean = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+    def rowCompare(row1: Int, row2: Int): Int = sys.error("Cannot compare undefined values.")
     def isDefinedAt(row: Int) = false
     val tpe = col.tpe
     def jValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
@@ -272,6 +296,7 @@ object UndefinedColumn {
 
   val raw = new Column {
     def rowEq(row1: Int, row2: Int): Boolean = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+    def rowCompare(row1: Int, row2: Int): Int = sys.error("Cannot compare undefined values.")
     def isDefinedAt(row: Int) = false
     val tpe = CUndefined
     def jValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
@@ -296,6 +321,10 @@ case class MmixPrng(_seed: Long) {
 }
 
 object Column {
+  def rowOrder(col: Column): Order[Int] = new Order[Int] {
+    def compare(i: Int, j: Int): Int = col.rowCompare(i, j)
+    def eqv(i: Int, j: Int): Boolean = col.rowEq(i, j)
+  }
   @inline def const(cv: CValue): Column = cv match {
     case CBoolean(v)  => const(v)
     case CLong(v)     => const(v)

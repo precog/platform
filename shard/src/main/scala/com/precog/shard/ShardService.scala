@@ -12,6 +12,7 @@ import com.precog.daze._
 import com.precog.shard.service._
 
 import akka.dispatch.{Future, ExecutionContext, Promise}
+import akka.util.{Duration, Timeout}
 
 import blueeyes.util.Clock
 import blueeyes.json._
@@ -73,11 +74,10 @@ trait ShardService extends
 
   import ShardStateOptions.DisableAsyncQueries
 
-  implicit val timeout = akka.util.Timeout(120000) //for now
-
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
+  val timeout = Timeout(120000)
   /**
    * This provides the configuration for the service and expects a `ShardState`
    * in return. The exact `ShardState` can be either a `BasicShardState` or a
@@ -129,7 +129,7 @@ trait ShardService extends
   }
 
   private def asyncHandler(state: ShardState) = {
-    val queryHandler = 
+    val queryHandler =
       path("/analytics") {
         jsonAPIKey(state.apiKeyFinder) {
           path("/queries") {
@@ -150,7 +150,7 @@ trait ShardService extends
                 delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
               }
             }
-          } 
+          }
         } ~ queryHandler
 
       case _ =>
@@ -169,7 +169,7 @@ trait ShardService extends
               }
             } ~
             options {
-              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse 
+              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse
             }
           }
         } ~
@@ -180,7 +180,7 @@ trait ShardService extends
             }
           } ~
           options {
-            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse 
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
         }
       }
