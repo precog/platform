@@ -18,7 +18,7 @@
  *
  */
 package com.precog.common
-package security 
+package security
 package service
 
 import com.precog.common.services.ServiceHandlerUtil._
@@ -55,7 +55,7 @@ trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
   def jsonAPIKey[A, B](apiKeyFinder: APIKeyFinder[Future])(
       service: HttpService[A, APIKey => Future[HttpResponse[B]]])(implicit
       inj: JValue => B, M: Monad[Future]): HttpService[A, Future[HttpResponse[B]]] = {
-    jsonAPIKey(k => apiKeyFinder.findAPIKey(k).map(_.map(_.apiKey)))(service)
+    jsonAPIKey(k => apiKeyFinder.findAPIKey(k, None).map(_.map(_.apiKey)))(service)
   }
 
   def jsonAPIKey[A, B](keyFinder: APIKey => Future[Option[APIKey]])(
@@ -81,7 +81,7 @@ extends DelegatingService[A, Validation[String, APIKey] => Future[B], A, APIKey 
       DescriptionMetadata("A valid Precog API key is required for the use of this service.")))
 }
 
-class APIKeyRequiredService[A, B](keyFinder: APIKey => Future[Option[APIKey]], val delegate: HttpService[A, Validation[String, APIKey] => Future[B]]) 
+class APIKeyRequiredService[A, B](keyFinder: APIKey => Future[Option[APIKey]], val delegate: HttpService[A, Validation[String, APIKey] => Future[B]])
 extends DelegatingService[A, Future[B], A, Validation[String, APIKey] => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     logger.info("Received request " + request)
