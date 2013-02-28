@@ -641,15 +641,62 @@ trait Slice { source =>
     }
   }
 
-  def order: spire.math.Order[Int] = {
-    if (columns.size == 1) {
-      val col = columns.head._2
-      Column.rowOrder(col)
-    } else {
-      val cols = columns groupBy (_._1.selector) lazyMapValues (_.values.toSet)
-      val paths = cols.keys.toList
-      val traversal = CPathTraversal(paths)
-      traversal.rowOrder(paths, cols)
+  def order: spire.math.Order[Int] = if (columns.size == 1) {
+    val col = columns.head._2
+    Column.rowOrder(col)
+  } else {
+
+    // The 2 cases are handled differently. In the first case, we don't have
+    // any pesky homogeneous arrays and only 1 column per path. In this case,
+    // we don't need to use the CPathTraversal machinery.
+
+    type GroupedCols = Either[Map[CPath, Column], Map[CPath, Set[Column]]]
+
+    val grouped = columns.foldLeft(Left(Map.empty): GroupedCols) {
+      case (Left(acc), (ColumnRef(path, CArrayType(_)), col)) =>
+        val acc0 = acc.map { case (k, v) => (k, Set(v)) }
+        Right(acc0 + (path -> Set(col)))
+
+      case (Left(acc), (ColumnRef(path, _), col)) =>
+        acc get path map { col0 =>
+          val acc0 = acc.map { case (k, v) => (k, Set(v)) }
+          Right(acc0 + (path -> Set(col0, col)))
+        } getOrElse Left(acc + (path -> col))
+
+      case (Right(acc), (ColumnRef(path, _), col)) =>
+        Right(acc + (path -> (acc.getOrElse(path, Set.empty[Column]) + col)))
+    }
+
+    grouped match {
+      case Left(cols0) =>
+        val cols = cols0.toList.sortBy(_._1).map(_._2).toArray
+        new spire.math.Order[Int] {
+          def compare(i: Int, j: Int): Int = {
+            var k = 0
+            while (k < cols.length) {
+              val cmp = cols(k).rowCompare(i, j)
+              if (cmp != 0)
+                return cmp
+              k += 1
+            }
+            0
+          }
+
+          def eqv(i: Int, j: Int): Boolean = {
+            var k = 0
+            while (k < cols.length) {
+              if (!cols(k).rowEq(i, j))
+                return false
+              k += 1
+            }
+            true
+          }
+        }
+
+      case Right(cols) =>
+        val paths = cols.keys.toList
+        val traversal = CPathTraversal(paths)
+        traversal.rowOrder(paths, cols)
     }
   }
 
