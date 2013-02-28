@@ -29,11 +29,12 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monad._
+import Permission._
 
 class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging { self =>
   private val permissions = Set[Permission](
-    ReadPermission(Path("/"), Set.empty[AccountId]),
-    DeletePermission(Path("/"), Set.empty[AccountId])
+    ReadPermission(Path("/"), WrittenByAny),
+    DeletePermission(Path("/"), WrittenByAny)
   )
 
   val rootGrant = v1.GrantDetails(java.util.UUID.randomUUID.toString, None, None, permissions, None)

@@ -35,98 +35,147 @@ import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
+import Permission._
 
 sealed trait Permission extends Logging {
   def path: Path
-  def ownerAccountIds: Set[AccountId]
-  
+
   def implies(other: Permission): Boolean
-  
-  protected def pathImplies(other: Permission): Boolean = (this, other) match {
-    case (Permission(p1, o1), Permission(p2, o2)) => 
-      // semantics:
-      // for the set of owner ids of this permission 
-      // -- if empty, this implies "as anyone"
-      // -- if nonempty, this implies "as these individuals" 
-      // for the set of owner ids of the other
-      // -- if empty, this implies "as someone" - therefore, o1 may be empty (implying any) or nonempty 
-      //    (in which case, the action must be taken as one of those)
-      // -- if nonempty, this implies "as this specific" - therefore, o1 must be empty or contain this id
-      p1.isEqualOrParent(p2) && (o1.isEmpty || o2.isEmpty || (o2.nonEmpty && o2.subsetOf(o1)))
-  }
 }
 
-case class ReadPermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
+sealed trait WrittenByPermission extends Permission {
+  def writtenBy: WrittenBy
+}
+
+object WrittenByPermission {
+  def unapply(perm: WrittenByPermission): Option[(Path, WrittenBy)] = Some((perm.path, perm.writtenBy))
+}
+
+case class WritePermission(path: Path, writeAs: WriteAs) extends Permission {
   def implies(other: Permission): Boolean = other match {
-    case _ : ReadPermission | _ : ReducePermission => pathImplies(other)
+    case WritePermission(p0, w0) => path.isEqualOrParent(p0) && (writeAs == WriteAsAny || writeAs == w0)
     case _ => false
   }
 }
 
-case class ReducePermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
+case class ReadPermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
-    case _ : ReducePermission => pathImplies(other)
+    case p : ReadPermission => WrittenBy.implies(this, p)
+    case p : ReducePermission => WrittenBy.implies(this, p)
     case _ => false
   }
 }
 
-case class WritePermission (path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
+case class ReducePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
-    case _ : WritePermission => pathImplies(other)
+    case p : ReducePermission => WrittenBy.implies(this, p)
     case _ => false
   }
 }
 
-case class DeletePermission(path: Path, ownerAccountIds: Set[AccountId]) extends Permission {
+
+case class DeletePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
-    case _ : DeletePermission => pathImplies(other)
+    case p : DeletePermission => WrittenBy.implies(this, p)
     case _ => false
   }
 }
 
 object Permission {
-  def accessType(p: Permission) = p match {
-    case _ : ReadPermission =>   "read"  
-    case _ : ReducePermission => "reduce"  
-    case _ : WritePermission =>  "write"  
-    case _ : DeletePermission => "delete"  
+  sealed trait WriteAs {
+    def accountIds: Set[AccountId]
   }
-  
+  case object WriteAsAny extends WriteAs {
+    def accountIds = Set()
+  }
+  case class WriteAsAll private[Permission] (accountIds: Set[AccountId]) extends WriteAs
+
+  object WriteAs {
+    def all(accountIds: NonEmptyList[AccountId]): WriteAs = WriteAsAll(accountIds.list.toSet)
+    val any: WriteAs = WriteAsAny
+
+    private[Permission] def apply(accountIds: Set[AccountId]): WriteAs = if (accountIds.isEmpty) WriteAsAny else WriteAsAll(accountIds)
+
+    def apply(accountId: AccountId): WriteAs = apply(Set(accountId))
+  }
+
+  sealed trait WrittenBy {
+    def accountIds: Set[AccountId]
+  }
+  case object WrittenByAny extends WrittenBy {
+    def accountIds = Set()
+  }
+  case class WrittenByOneOf private[Permission] (accountIds: Set[AccountId]) extends WrittenBy
+
+  object WrittenBy {
+    def oneOf(accountIds: NonEmptyList[AccountId]): WrittenBy = WrittenByOneOf(accountIds.list.toSet)
+    val any: WrittenBy = WrittenByAny
+
+    private[Permission] def apply(accountIds: Set[AccountId]): WrittenBy = if (accountIds.isEmpty) WrittenByAny else WrittenByOneOf(accountIds)
+
+    def apply(authorities: Authorities): WrittenBy = apply(authorities.ownerAccountIds)
+
+    def apply(accountId: AccountId): WrittenBy = apply(Set(accountId))
+
+    def implies(permission: WrittenByPermission, candidate: WrittenByPermission): Boolean = {
+      permission.path.isEqualOrParent(candidate.path) &&
+      (permission.writtenBy match {
+        case WrittenByAny => true
+        case WrittenByOneOf(accountIds) => candidate.writtenBy match {
+          case WrittenByAny => false
+          case WrittenByOneOf(cids) => cids.intersect(accountIds).nonEmpty
+        }
+      })
+    }
+  }
+
+  def accessType(p: Permission) = p match {
+    case _ : ReadPermission =>   "read"
+    case _ : ReducePermission => "reduce"
+    case _ : WritePermission =>  "write"
+    case _ : DeletePermission => "delete"
+  }
+
+  def ownerAccountIds(p: Permission) = p match {
+    case WritePermission(_, writeAs) => writeAs.accountIds
+    case ReadPermission(_, writtenBy) => writtenBy.accountIds
+    case ReducePermission(_, writtenBy) => writtenBy.accountIds
+    case DeletePermission(_, writtenBy) => writtenBy.accountIds
+  }
+
   implicit object accessTypeExtractor extends Extractor[(Path, Set[AccountId]) => Permission] {
     override def validated(label: JValue) =
       label.validated[String].flatMap {
-        case "read" =>   Success(ReadPermission.apply) 
-        case "reduce" => Success(ReducePermission.apply) 
-        case "write" =>  Success(WritePermission.apply)
-        case "delete" => Success(DeletePermission.apply) 
+        case "write" =>  Success((p: Path, ids: Set[AccountId]) => WritePermission(p, WriteAs(ids)))
+        case "read" =>   Success((p: Path, ids: Set[AccountId]) => ReadPermission(p, WrittenBy(ids)))
+        case "reduce" => Success((p: Path, ids: Set[AccountId]) => ReducePermission(p, WrittenBy(ids)))
+        case "delete" => Success((p: Path, ids: Set[AccountId]) => DeletePermission(p, WrittenBy(ids)))
         case t =>        Failure(Invalid("Unknown permission type: " + t))
       }
   }
-  
+
   val decomposerV1Base: Decomposer[Permission] = new Decomposer[Permission] {
     override def decompose(p: Permission): JValue = {
-      JObject(List(
-        some(jfield("accessType", accessType(p))),
-        some(jfield("path", p.path)),
-        p.ownerAccountIds.headOption.map(_ => jfield("ownerAccountIds", p.ownerAccountIds))
-      ).flatten)
+      JObject(
+        "accessType" -> accessType(p).serialize,
+        "path" -> p.path.serialize,
+        "ownerAccountIds" -> ownerAccountIds(p).serialize
+      )
     }
   }
 
-  val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {    
+  val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {
     override def validated(obj: JValue) = {
-      val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType") 
-      val pathV = obj.validated[Path]("path") 
+      val accessTypeV = obj.validated[(Path, Set[AccountId]) => Permission]("accessType")
+      val pathV = obj.validated[Path]("path")
       val ownerV = (obj \? "ownerAccountIds") map { _.validated[Set[AccountId]] } getOrElse { Success(Set.empty[AccountId]) }
 
-      Apply[({ type l[a] = Validation[Error, a] })#l].apply3(accessTypeV, pathV, ownerV) { (c, p, o) => 
-        c(p, o) 
+      Apply[({ type l[a] = Validation[Error, a] })#l].apply3(accessTypeV, pathV, ownerV) { (c, p, o) =>
+        c(p, o)
       }
     }
   }
 
-  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0")) 
+  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0"))
   implicit val extractor = Serialization.versioned(extractorV1Base, Some("1.0")) <+> extractorV1Base
-  
-  def unapply(perm: Permission): Option[(Path, Set[AccountId])] = Some((perm.path, perm.ownerAccountIds))
 }

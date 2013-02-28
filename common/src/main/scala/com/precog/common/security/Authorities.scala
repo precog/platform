@@ -31,29 +31,17 @@ import scalaz._
 
 import scala.annotation.tailrec
 
-case class Authorities(ownerAccountIds: Set[AccountId]) {
-  @tailrec
-  final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
-    if(i < l.length) {
-      hashSeq(l, hash * 31 + l(i).hashCode, i+1)
-    } else {
-      hash
-    }     
-  }    
-
-  lazy val hash = {
-    if(ownerAccountIds.size == 0) 1 
-    else if(ownerAccountIds.size == 1) ownerAccountIds.head.hashCode 
-    else hashSeq(ownerAccountIds.toSeq, 1) 
-  }
-
-  override def hashCode(): Int = hash
-
-  def expand(ownerAccountId: AccountId) = 
+case class Authorities private (ownerAccountIds: Set[AccountId]) {
+  def expand(ownerAccountId: AccountId) =
     this.copy(ownerAccountIds = this.ownerAccountIds + ownerAccountId)
 }
 
 object Authorities {
+  def apply(accountIds: NonEmptyList[AccountId]): Authorities = apply(accountIds.list.toSet)
+
+  def apply(firstAccountId: AccountId, others: AccountId*): Authorities =
+    apply(others.toSet + firstAccountId)
+
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
     override def decompose(authorities: Authorities): JValue = {
       JObject(JField("uids", JArray(authorities.ownerAccountIds.map(JString(_)).toList)) :: Nil)
@@ -65,12 +53,9 @@ object Authorities {
       (obj \ "uids").validated[Set[String]].map(Authorities(_))
   }
 
-  implicit object AuthoritiesMonoid extends Monoid[Authorities] {
+  implicit object AuthoritiesSemigroup extends Semigroup[Authorities] {
     def append(a: Authorities, b: => Authorities): Authorities = {
       Authorities(a.ownerAccountIds ++ b.ownerAccountIds)
     }
-    def zero: Authorities = Authorities.Empty
   }
-
-  val Empty = Authorities(Set())
 }

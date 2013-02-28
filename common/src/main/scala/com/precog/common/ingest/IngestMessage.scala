@@ -21,7 +21,7 @@ package com.precog.common
 package ingest
 
 import accounts.AccountId
-import security.APIKey
+import security._
 import jobs.JobId
 import json._
 
@@ -48,7 +48,7 @@ sealed trait EventMessage {
 }
 
 object EventMessage {
-  type EventMessageExtraction = \/[(APIKey, AccountId => EventMessage), EventMessage]
+  type EventMessageExtraction = \/[(APIKey, Authorities => EventMessage), EventMessage]
 
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
@@ -88,7 +88,7 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, data: Seq[IngestRecord], jobId: Option[JobId]) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId]) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
 }
 
@@ -114,10 +114,10 @@ object IngestMessage {
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.ownerAccountId.map { ownerAccountId =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, ownerAccountId, eventRecords, ingest.jobId))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, Authorities(NonEmptyList(ownerAccountId)), eventRecords, ingest.jobId))
           }.getOrElse {
-            \/.left((ingest.apiKey, (account: AccountId) =>
-              IngestMessage(ingest.apiKey, ingest.path, account, eventRecords, ingest.jobId))
+            \/.left((ingest.apiKey, (authorities: Authorities) =>
+              IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId))
             )
           }
         }

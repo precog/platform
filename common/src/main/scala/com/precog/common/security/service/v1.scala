@@ -37,6 +37,7 @@ import blueeyes.json.serialization.Extractor._
 import org.joda.time.DateTime
 
 import shapeless._
+import scalaz.{NonEmptyList => NEL}
 
 object v1 {
   case class GrantDetails(grantId: GrantId, name: Option[String], description: Option[String], permissions: Set[Permission], expirationDate: Option[DateTime])
@@ -74,9 +75,10 @@ object v1 {
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewGrantRequest](schemaV1)
 
     def newGrant(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
+      import Permission._
       // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
-      val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
-      val writePerms = Set(WritePermission, DeletePermission).map(_(path, Set()) : Permission)
+      val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path.Root, WrittenBy.oneOf(NEL(accountId))) : Permission)
+      val writePerms = Set(WritePermission(path, WriteAsAny), DeletePermission(path, WrittenByAny))
       NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
     }
   }

@@ -291,7 +291,7 @@ object Console extends App {
 
         val accountFinder = None
 
-        val accessControl = new UnrestrictedAccessControl[Future]()
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 

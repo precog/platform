@@ -32,6 +32,8 @@ import scalaz.syntax.monad._
 import scalaz.syntax.copointed._
 
 trait APIKeyFinderSpec[M[+_]] extends Specification {
+  import Permission._
+
   implicit def M: Monad[M] with Copointed[M]
 
   def withAPIKeyFinder[A](mgr: APIKeyManager[M])(f: APIKeyFinder[M] => A): A
@@ -63,7 +65,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
         val path = Path("/user1/")
         val key = keyFinder.newAPIKey(accountId, path, None, None).copoint
         val permissions: Set[Permission] =
-          Set(ReadPermission, ReducePermission, WritePermission, DeletePermission) map (_(path, Set(accountId)))
+          Set(ReadPermission, ReducePermission, DeletePermission).map(_(path, WrittenBy(accountId))) ++
+            Set(WritePermission(path, WriteAs(accountId)))
 
         keyFinder.hasCapability(key.apiKey, permissions, None).copoint must beTrue
       }
@@ -72,8 +75,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
     "grant full permissions to another user" in {
       val path = Path("/user1/")
       val permissions: Set[Permission] =
-        (Set(ReadPermission, ReducePermission) map (_(path, Set("user1")))) ++
-        (Set(WritePermission, DeletePermission) map (_(path, Set.empty)))
+        Set(ReadPermission, ReducePermission).map (_(path, WrittenBy("user1"))) ++
+          Set(WritePermission(path, WriteAsAny)) ++
+          Set(DeletePermission(path, WrittenByAny))
 
       val (key0, key1, grantId, mgr) = (for {
         mgr <- M.point(new InMemoryAPIKeyManager[M])
@@ -119,8 +123,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
     "return false when capabilities expire" in {
       val path = Path("/user1/")
       val permissions: Set[Permission] =
-        (Set(ReadPermission, ReducePermission) map (_(path, Set("user1")))) ++
-        (Set(WritePermission, DeletePermission) map (_(path, Set.empty)))
+        Set(ReadPermission, ReducePermission).map (_(path, WrittenBy("user1"))) ++
+          Set(WritePermission(path, WriteAsAny)) ++
+          Set(DeletePermission(path, WrittenByAny))
 
       val expiration = new DateTime(100)
       val beforeExpiration = new DateTime(50)

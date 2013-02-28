@@ -33,24 +33,24 @@ import Gen._
 import Arbitrary.arbitrary
 
 trait ArbitraryEventMessage extends ArbitraryJValue {
-  def genContentJValue: Gen[JValue] = 
+  def genContentJValue: Gen[JValue] =
     frequency(
-      (1, genSimple), 
-      (1, wrap(choose(0, 5) flatMap genArray)), 
+      (1, genSimple),
+      (1, wrap(choose(0, 5) flatMap genArray)),
       (1, wrap(choose(0, 5) flatMap genObject))
     )
-  
-  def genPath: Gen[Path] = Gen.resize(10, Gen.containerOf[List, String](alphaStr)) map { elements => 
+
+  def genPath: Gen[Path] = Gen.resize(10, Gen.containerOf[List, String](alphaStr)) map { elements =>
     Path(elements.filter(_.length > 0))
   }
 
-  def genEventId: Gen[EventId] = 
+  def genEventId: Gen[EventId] =
     for {
       producerId <- choose(0,1000000)
       sequenceId <- choose(0, 1000000)
     } yield EventId(producerId, sequenceId)
 
-  def genRandomIngest: Gen[Ingest] = 
+  def genRandomIngest: Gen[Ingest] =
     for {
       apiKey <- alphaStr
       path <- genPath
@@ -58,56 +58,56 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
       content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*)) if !content.isEmpty
       jobId <- oneOf(identifier.map(Option.apply), None)
     } yield Ingest(apiKey, path, Some(ownerAccountId), content, jobId)
-  
-  def genRandomArchive: Gen[Archive] = 
+
+  def genRandomArchive: Gen[Archive] =
     for {
       apiKey <- alphaStr
       path <- genPath
       jobId <- oneOf(identifier.map(Option.apply), None)
     } yield Archive(apiKey, path, jobId)
 
-  def genRandomIngestMessage: Gen[IngestMessage] = 
+  def genRandomIngestMessage: Gen[IngestMessage] =
     for {
       ingest <- genRandomIngest
       eventIds <- containerOfN[List, EventId](ingest.data.size, genEventId).map(l => Vector(l: _*))
     } yield {
       //TODO: Replace with IngestMessage.fromIngest when it's usable
       val data = (eventIds zip ingest.data) map { Function.tupled(IngestRecord.apply) }
-      IngestMessage(ingest.apiKey, ingest.path, ingest.ownerAccountId.get, data, ingest.jobId)
+      IngestMessage(ingest.apiKey, ingest.path, Authorities(ingest.ownerAccountId.get), data, ingest.jobId)
     }
-  
-  def genRandomArchiveMessage: Gen[ArchiveMessage] = 
+
+  def genRandomArchiveMessage: Gen[ArchiveMessage] =
     for {
       eventId <- genEventId
       archive <- genRandomArchive
     } yield ArchiveMessage(eventId, archive)
-  
-  def genRandomEventMessage: Gen[EventMessage] = 
+
+  def genRandomEventMessage: Gen[EventMessage] =
     frequency(
-      (1, genRandomArchiveMessage), 
+      (1, genRandomArchiveMessage),
       (10, genRandomIngestMessage)
     )
 }
 
 trait RealisticEventMessage extends ArbitraryEventMessage {
-  val ingestAPIKey: APIKey 
-  val ingestOwnerAccountId: Option[AccountId] 
-  
+  val ingestAPIKey: APIKey
+  val ingestOwnerAccountId: Option[AccountId]
+
   lazy val producers = 4
-  
+
   lazy val eventIds: Map[Int, AtomicInteger] = 0.until(producers).map(_ -> new AtomicInteger).toMap
-  
+
   lazy val paths = buildBoundedPaths(3)
   lazy val jpaths = buildBoundedJPaths(3)
-  
+
   def buildBoundedPaths(depth: Int): List[String] = {
     buildChildPaths(List.empty, depth).map("/" + _.reverse.mkString("/"))
   }
-  
+
   def buildBoundedJPaths(depth: Int): List[JPath] = {
     buildChildPaths(List.empty, depth).map(_.reverse.mkString(".")).filter(_.length > 0).map(JPath(_))
   }
-  
+
   def buildChildPaths(parent: List[String], depth: Int): List[List[String]] = {
     if (depth == 0) {
       List(parent)
@@ -119,7 +119,7 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
 
   def genStablePaths: Gen[Seq[String]] = lzy(paths)
   def genStableJPaths: Gen[Seq[JPath]] = lzy(jpaths)
-  
+
   def genStablePath: Gen[String] = oneOf(paths)
   def genStableJPath: Gen[JPath] = oneOf(jpaths)
 
@@ -127,21 +127,21 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
     paths  <- containerOfN[Set, JPath](10, genStableJPath)
     values <- containerOfN[Set, JValue](10, genSimpleNotNull)
   } yield {
-    (paths zip values).foldLeft[JValue](JObject(Nil)) { 
+    (paths zip values).foldLeft[JValue](JObject(Nil)) {
       case (obj, (path, value)) => obj.set(path, value)
     }
   }
-    
+
   def genIngest: Gen[Ingest] = for {
     path <- genStablePath
     ingestData <- containerOf[List, JValue](genIngestData).map(l => Vector(l: _*))
   } yield Ingest(ingestAPIKey, Path(path), ingestOwnerAccountId, ingestData, None)
-  
+
   def genIngestMessage: Gen[IngestMessage] = for {
     producerId <- choose(0, producers-1)
     ingest <- genIngest
   } yield {
     val records = ingest.data map { jv => IngestRecord(EventId(producerId, eventIds(producerId).getAndIncrement), jv) }
-    IngestMessage(ingest.apiKey, ingest.path, ingest.ownerAccountId.get, records, ingest.jobId) 
+    IngestMessage(ingest.apiKey, ingest.path, Authorities(ingest.ownerAccountId.get), records, ingest.jobId)
   }
 }

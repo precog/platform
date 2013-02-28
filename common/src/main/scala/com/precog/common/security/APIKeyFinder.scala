@@ -37,16 +37,23 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
 
+  def listPermissions(apiKey: APIKey, pathPrefix: Path)(implicit M: Functor[M]): M[Set[Permission]] = findAPIKey(apiKey, None) map { details =>
+    details.toSet.flatMap(_.grants).flatMap(_.permissions) filter { perm => pathPrefix isEqualOrParent perm.path }
+  }
+
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
 
   def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean]
 
-  def withM[N[+_]](implicit t: M ~> N) = new APIKeyFinder[N] {
+  def withM[N[+_]](implicit t: M ~> N, M: Functor[M]) = new APIKeyFinder[N] {
     def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]) =
       t(self.findAPIKey(apiKey, rootKey))
 
     def findAllAPIKeys(fromRoot: APIKey) =
       t(self.findAllAPIKeys(fromRoot))
+
+    def listPermissions(apiKey: APIKey, pathPrefix: Path)(implicit N: Monad[N]) =
+      t(self.listPermissions(apiKey, pathPrefix))
 
     def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) =
       t(self.newAPIKey(accountId, path, keyName, keyDesc))

@@ -109,11 +109,12 @@ trait TestShardService extends
   val testPath = Path("/test")
   val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey).copoint
 
+  import Permission._
   val testPermissions = Set[Permission](
-    ReadPermission(testPath, Set("test")),
-    ReducePermission(testPath, Set("test")),
-    WritePermission(testPath, Set()),
-    DeletePermission(testPath, Set())
+    ReadPermission(testPath, WrittenBy("test")),
+    ReducePermission(testPath, WrittenBy("test")),
+    WritePermission(testPath, WriteAsAny),
+    DeletePermission(testPath, WrittenByAny)
   )
 
   val expiredPath = Path("expired")

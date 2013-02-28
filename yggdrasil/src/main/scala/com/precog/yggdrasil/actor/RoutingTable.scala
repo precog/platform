@@ -27,6 +27,7 @@ import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.json._
+import com.precog.common.security._
 import com.precog.yggdrasil.nihdb._
 
 import blueeyes.json._
@@ -44,22 +45,22 @@ trait RoutingTable extends Logging {
     val updates = ArrayBuffer.empty[ProjectionUpdate]
 
     // map used to aggregate IngestMessages by (Path, AccountId)
-    val recordsByPath = mutable.Map.empty[(Path, AccountId), ArrayBuffer[IngestRecord]]
+    val recordsByPath = mutable.Map.empty[(Path, Authorities), ArrayBuffer[IngestRecord]]
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case IngestMessage(key, path, owner, data, jobid) =>
-        val buf = recordsByPath.getOrElseUpdate((path, owner), ArrayBuffer.empty[IngestRecord])
+      case IngestMessage(key, path, writeAs, data, jobid) =>
+        val buf = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[IngestRecord])
         buf ++= data
 
       case msg: ArchiveMessage =>
-        updates += ProjectionArchive(msg.archive.path, msg.eventId)
+        updates += ProjectionArchive(msg.archive.path, msg.archive.apiKey, msg.eventId)
     }
 
     // combine ingest messages by (path, owner), add to updates, then return
     recordsByPath.foreach {
-      case ((path, owner), values) =>
-        updates += ProjectionInsert(path, values, owner)
+      case ((path, writeAs), values) =>
+        updates += ProjectionInsert(path, values, writeAs)
     }
 
     logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))

@@ -63,7 +63,7 @@ import org.slf4j.LoggerFactory
 
 import org.specs2.mutable._
 import org.specs2.specification.Fragments
-  
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.monad._
@@ -114,7 +114,7 @@ object NIHDBPlatformActor extends Logging {
           def copoint[A](f: Future[A]) = Await.result(f, storageTimeout.duration)
         }
 
-        val accessControl = new UnrestrictedAccessControl[Future]
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
@@ -136,7 +136,7 @@ object NIHDBPlatformActor extends Logging {
 
   def checkUnused = users.synchronized {
     if (users.get == 0) {
-      state.foreach { 
+      state.foreach {
         case SystemState(projectionsActor, actorSystem) =>
           logger.info("Culling unused projections actor")
           Await.result(gracefulStop(projectionsActor, Duration(5, "minutes"))(actorSystem), Duration(3, "minutes"))
@@ -147,13 +147,13 @@ object NIHDBPlatformActor extends Logging {
   }
 }
 
-trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future] 
+trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
     with LongIdMemoryDatasetConsumer[Future]
-    with NIHDBColumnarTableModule 
+    with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource { self =>
-      
+
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-      
+
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
@@ -174,7 +174,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val accountFinder = None
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
@@ -201,7 +201,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   object Table extends TableCompanion
 
   def startup() { }
-  
+
   def shutdown() {
     NIHDBPlatformActor.release
   }

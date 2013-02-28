@@ -415,8 +415,9 @@ class IngestServiceHandler(
 
       accountFinder.resolveForWrite(request.parameters.get('ownerAccountId), apiKey) flatMap {
         case Some(ownerAccountId) =>
+          import Permission._
           logger.debug("Resolved owner account ID for write: " + ownerAccountId)
-          accessControl.hasCapability(apiKey, Set(WritePermission(path, Set(ownerAccountId))), None) flatMap {
+          accessControl.hasCapability(apiKey, Set(WritePermission(path, WriteAs(ownerAccountId))), None) flatMap {
             case true =>
               logger.debug("Write permission granted for " + ownerAccountId + " to " + path)
               request.content map { content =>

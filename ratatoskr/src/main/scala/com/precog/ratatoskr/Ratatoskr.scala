@@ -562,9 +562,9 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = new UnrestrictedAccessControl[Future]
+      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), apiKeyFinder)))
     }
 
     import shardModule._
@@ -579,7 +579,7 @@ object ImportTools extends Command with Logging {
         val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
 
         ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
-          val update = ProjectionInsert(Path(db), records, config.accountId)
+          val update = ProjectionInsert(Path(db), records, Authorities(config.accountId))
 
           logger.info(records.size + " events to be inserted")
           Await.result(projectionsActor ? update, Duration(300, "seconds"))

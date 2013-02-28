@@ -54,7 +54,7 @@ import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
@@ -401,7 +401,7 @@ abstract class KafkaShardIngestActor(shardId: String,
             val updatedMessages: List[(Long, EventMessage)] = messageSet.flatMap {
               case (offset, \/-(message)) => Some((offset, message))
               case (offset, -\/((apiKey, genMessage))) => apiKeyMap.get(apiKey) match {
-                case Some(account) => Some((offset, genMessage(account)))
+                case Some(account) => Some((offset, genMessage(Authorities(NEL(account)))))
                 case None =>
                   logger.warn("Discarding event with apiKey %s because we could not determine the account".format(apiKey))
                   None

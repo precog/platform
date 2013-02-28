@@ -24,6 +24,7 @@ import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
+import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
 import blueeyes.bkka._
@@ -161,7 +162,7 @@ final class KafkaRelayAgent(
         accountFinder.resolveForWrite(ownerAccountId, apiKey) map {
           case Some(accountId) =>
             val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            IngestMessage(apiKey, path, accountId, ingestRecords, jobId)
+            IngestMessage(apiKey, path, Authorities(accountId), ingestRecords, jobId)
 
           case None =>
             // cannot relay event without a resolved owner account ID; fail loudly.

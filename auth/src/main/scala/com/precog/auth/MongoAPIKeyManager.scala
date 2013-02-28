@@ -87,16 +87,20 @@ object MongoAPIKeyManager extends Logging {
   }
 
   def createRootAPIKey(db: Database, keyCollection: String, grantCollection: String)(implicit timeout: Timeout): Future[APIKeyRecord] = {
-    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
-
+    import Permission._
     logger.info("Creating new root key")
     // Set up a new root API Key
     val rootAPIKeyId = APIKeyManager.newAPIKey()
     val rootGrantId = APIKeyManager.newGrantId()
+    val rootPermissions = Set[Permission](
+      WritePermission(Path.Root, WriteAsAny),
+      ReadPermission(Path.Root, WrittenByAny),
+      DeletePermission(Path.Root, WrittenByAny)
+    )
 
     val rootGrant = Grant(
       rootGrantId, Some("root-grant"), Some("The root grant"), rootAPIKeyId, Set(),
-      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      rootPermissions,
       None
     )
   

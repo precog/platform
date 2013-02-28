@@ -43,14 +43,15 @@ class ArchiveServiceHandler[A](accessControl: AccessControl[Future], eventStore:
 extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => {
     Success { (apiKey: APIKey, path: Path) =>
-      accessControl.hasCapability(apiKey, Set(DeletePermission(path, Set())), None) flatMap { 
+      import Permission._
+      accessControl.hasCapability(apiKey, Set(DeletePermission(path, WrittenByAny)), None) flatMap {
         case true =>
           val archiveInstance = Archive(apiKey, path, None)
           logger.trace("Archiving path: " + archiveInstance)
           eventStore.save(archiveInstance, archiveTimeout) map {
             _ => HttpResponse[JValue](OK)
           }
-        
+
         case false =>
           M.point(HttpResponse[JValue](Unauthorized, content=Some(JString("Your API key does not have permissions to archive this path."))))
       }
