@@ -234,7 +234,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         
         val startTime = System.nanoTime
         
-        def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[(Table, TableOrder)]] =
+        def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
           for (state <- monadState.gets(identity)) yield state.assume.get(graph)
         
         def memoized(graph: DepGraph, f: DepGraph => StateT[N, EvaluatorState, PendingTable]) = {
@@ -242,16 +242,16 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case graph: StagingPoint => {
               for {
                 pending <- f(graph)
-                _ <- monadState.modify { state => state.copy(assume = state.assume + (graph -> (pending.table, pending.order))) }
+                _ <- monadState.modify { state => state.copy(assume = state.assume + (graph -> pending.table)) }
               } yield pending
             }
             
             case _ => f(graph)
           }
   
-          assumptionCheck(graph) flatMap { assumedResult: Option[(Table, TableOrder)] =>
-            val liftedAssumption = assumedResult map { case (table, order) =>
-              monadState point PendingTable(table, order, graph, TransSpec1.Id)
+          assumptionCheck(graph) flatMap { assumedResult: Option[Table] =>
+            val liftedAssumption = assumedResult map { case table =>
+              monadState point PendingTable(table, graph, TransSpec1.Id)
             }
             
             liftedAssumption getOrElse memoizedResult
@@ -262,7 +262,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         
         def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
           for {
-            _ <- monadState.modify { state => state.copy(assume = state.assume + (tg._2 -> (pt.table, pt.order))) }
+            _ <- monadState.modify { state => state.copy(assume = state.assume + (tg._2 -> pt.table)) }
           } yield pt.copy(trans = tg._1, graph = tg._2)
 
         def init0(tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
@@ -294,7 +294,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 transState liftM mn(keyTable.zip(valueTable) flatMap { _.sort(keySpec, SortAscending) })
               }
             } yield {
-              PendingTable(result, UnorderedTable, graph, TransSpec1.Id) // TODO: is this sorted?
+              PendingTable(result, graph, TransSpec1.Id) // TODO: is this sorted?
             }
 
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
@@ -311,18 +311,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                   val prefixLength = sharedPrefixLength(left, right)
 
                   val identities = left.identities.length + right.identities.length - prefixLength
-                  val (tableOrder, key) = joinSort match {
-                    case IdentitySort =>
-                      val key0 = buildJoinKeySpec(prefixLength)
-                      if (identities == prefixLength) {
-                        (KeyOrderedTable, key0)
-                      } else {
-                        (UnorderedTable, key0)
-                      }
-
-                    case ValueSort(id) =>
-                      (UnorderedTable, trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)))
-
+                  val key = joinSort match {
+                    case IdentitySort => buildJoinKeySpec(prefixLength)
+                    case ValueSort(id) => trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
                     case _ => sys.error("unreachable code")
                   }
 
@@ -332,10 +323,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                   val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
                   val result = join(leftResult, rightResult)(key, spec)
 
-                  PendingTable(result, tableOrder, graph, TransSpec1.Id)
+                  PendingTable(result, graph, TransSpec1.Id)
 
                 case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-                  PendingTable(Table.empty, TrivialOrderedTable, graph, TransSpec1.Id)
+                  PendingTable(Table.empty, graph, TransSpec1.Id)
               }
             }
           
@@ -349,19 +340,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               val prefixLength = sharedPrefixLength(target, boolean)
               
-              val (tableOrder, key) = joinSort match {
-                case IdentitySort =>
-                  val identities = target.identities.length + boolean.identities.length - 2 * prefixLength
-                  val key0 = buildJoinKeySpec(prefixLength)
-                  if (identities == prefixLength) {
-                    (KeyOrderedTable, key0)
-                  } else {
-                    (UnorderedTable, key0) // TODO: Worth it to have PartialKeyOrder?
-                  }
-                
-                case ValueSort(id) =>
-                  (UnorderedTable, trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)))
-                
+              val key = joinSort match {
+                case IdentitySort => buildJoinKeySpec(prefixLength)
+                case ValueSort(id) => trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
                 case _ => sys.error("unreachable code")
               }
               
@@ -374,7 +355,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
               val result = join(targetResult, booleanResult)(key, spec)
 
-              PendingTable(result, tableOrder, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
           
           case s: SplitParam => 
@@ -383,7 +364,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           // not using extractors due to bug
           case s: SplitGroup => 
             val f = splits(s.parent)
-            transState liftM f(s.id) map { PendingTable(_, KeyOrderedTable, graph, TransSpec1.Id) }
+            transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           
           case Const(value) =>
             val table = value match {
@@ -410,10 +391,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             val spec = buildConstantWrapSpec(Leaf(Source))
-            monadState point PendingTable(table.transform(spec), TrivialOrderedTable, graph, TransSpec1.Id)
+            monadState point PendingTable(table.transform(spec), graph, TransSpec1.Id)
 
           case Undefined() =>
-            monadState point PendingTable(Table.empty, TrivialOrderedTable, graph, TransSpec1.Id)
+            monadState point PendingTable(Table.empty, graph, TransSpec1.Id)
           
           // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
           case dag.New(parent) => 
@@ -422,7 +403,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
               
               tableM2 = pendingTable.table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
-            } yield PendingTable(tableM2, KeyOrderedTable, graph, TransSpec1.Id)
+            } yield PendingTable(tableM2, graph, TransSpec1.Id)
         
           case dag.LoadLocal(parent, jtpe) => 
             for {
@@ -431,18 +412,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               f1 = concatString(ctx).applyl(CString(prefixStr.replaceAll("/$", "")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
               back <- transState liftM mn(pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe))
-            } yield PendingTable(back, KeyOrderedTable, graph, TransSpec1.Id)
+            } yield PendingTable(back, graph, TransSpec1.Id)
           
           case dag.Morph1(mor, parent) => 
             for {
               pendingTable <- prepareEval(parent, splits)
               back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
-              tableOrder = if (mor.retainIds) {
-                  KeyOrderedTable
-                } else {
-                  UnorderedTable
-                }
-            } yield PendingTable(back, tableOrder, graph, TransSpec1.Id)
+            } yield PendingTable(back, graph, TransSpec1.Id)
         
           case dag.Morph2(mor, left, right) => 
             lazy val spec = trans.InnerArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
@@ -491,7 +467,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               (transformed, morph1) = transformedAndMorph1
 
               back <- transState liftM mn(morph1(transformed, ctx))
-            } yield PendingTable(back, KeyOrderedTable, graph, TransSpec1.Id) //TODO: is this right???
+            } yield PendingTable(back, graph, TransSpec1.Id)
         
           case dag.Distinct(parent) =>
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
@@ -506,7 +482,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               distinct = sorted.distinct(valueSpec)
               result = distinct.transform(idSpec)
             } yield {
-              PendingTable(result, KeyOrderedTable, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
 
           /**
@@ -548,12 +524,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               _ <- monadState.modify { state =>
                 state.copy(
-                  assume = state.assume + (m -> (wrapped, TrivialOrderedTable)), //TODO: is this right?
+                  assume = state.assume + (m -> wrapped), //TODO: is this right?
                   reductions = state.reductions + (m -> rvalue)
                 )
               }
             } yield {
-              PendingTable(wrapped, TrivialOrderedTable, graph, TransSpec1.Id)
+              PendingTable(wrapped, graph, TransSpec1.Id)
             }
 
           case r @ dag.Reduce(red, parent) => 
@@ -562,7 +538,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               liftedTrans = liftToValues(pendingTable.trans)
               result <- transState liftM mn(red(pendingTable.table.transform(DerefObjectStatic(liftedTrans, paths.Value)), ctx))
               wrapped = result transform buildConstantWrapSpec(Leaf(Source))
-            } yield PendingTable(wrapped, TrivialOrderedTable, graph, TransSpec1.Id)
+            } yield PendingTable(wrapped, graph, TransSpec1.Id)
           
           case s @ dag.Split(spec, child) => 
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
@@ -591,7 +567,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               result.transform(idSpec)
             }
 
-            table map { PendingTable(_, KeyOrderedTable, graph, TransSpec1.Id) }
+            table map { PendingTable(_, graph, TransSpec1.Id) }
           
           case dag.Assert(pred, child) => 
             for {
@@ -613,7 +589,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               _ <- transState liftM assertion
               
               result = childPending.table transform liftToValues(childPending.trans)
-            } yield PendingTable(result, childPending.order, graph, TransSpec1.Id)
+            } yield PendingTable(result, graph, TransSpec1.Id)
           
           case IUI(union, left, right) => 
             for {
@@ -637,7 +613,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.DeleteKeyValue, TransSpec1.DeleteKeyValue, TransSpec2.LeftId)
               }
             } yield {
-              PendingTable(result, KeyOrderedTable, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
         
           // TODO unify with IUI
@@ -660,7 +636,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               result = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(TransSpec1.Id, TransSpec1.DeleteKeyValue, TransSpec2.DeleteKeyValueLeft)
             } yield {
-              PendingTable(result, KeyOrderedTable, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
     
           case j @ Join(op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => 
@@ -681,8 +657,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 rightResult.paged(maxSliceSize).compact(valueSpec).cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op, ctx))))
               }
             } yield {
-              val tableOrder = pendingTableLeft.order cross pendingTableRight.order
-              PendingTable(result, tableOrder, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
           
           case f @ dag.Filter(joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => 
@@ -709,13 +684,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 booleanResult.paged(maxSliceSize).compact(valueSpec).cross(targetResult)(spec)
               }
             } yield {
-              PendingTable(result, pendingTableTarget.order, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
           
           case Sort(parent, indexes) => 
             val identityOrder = Vector(0 until indexes.length: _*)
             prepareEval(parent, splits) flatMap { pending =>
-              if (indexes == identityOrder && (pending.order == KeyOrderedTable || parent.sorting == IdentitySort)) {
+              if (indexes == identityOrder && parent.sorting == IdentitySort) {
                 transState liftM N.point(pending)
               } else {
                 val fullOrder = indexes ++ ((0 until parent.identities.length) filterNot (indexes contains))
@@ -730,7 +705,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                     case _ => sorted
                   }
                 } yield {
-                  PendingTable(sortedResult, KeyOrderedTable, graph, TransSpec1.Id)
+                  PendingTable(sortedResult, graph, TransSpec1.Id)
                 }
               }
             }
@@ -765,7 +740,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                   sorted.transform(spec)
                 }
               } yield {
-                PendingTable(result, UnorderedTable, graph, TransSpec1.Id)
+                PendingTable(result, graph, TransSpec1.Id)
               }
             }
          
@@ -780,7 +755,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 
                 result <- transState liftM mn(table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending))
               } yield {
-                PendingTable(result, UnorderedTable, graph, TransSpec1.Id)
+                PendingTable(result, graph, TransSpec1.Id)
               }
             }
           
@@ -791,7 +766,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               result <- transState liftM mn(table.force)
             } yield {
-              PendingTable(result, pending.order, graph, TransSpec1.Id)
+              PendingTable(result, graph, TransSpec1.Id)
             }
         }
         
@@ -1139,33 +1114,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     
     private def zip[A](table1: StateT[N, EvaluatorState, A], table2: StateT[N, EvaluatorState, A]): StateT[N, EvaluatorState, (A, A)] =
       monadState.apply2(table1, table2) { (_, _) }
-    
-    private sealed trait TableOrder {
-      // Table crosses do NOT preserve ordering.
-      def cross(that: TableOrder): TableOrder = (this, that) match {
-        case (TrivialOrderedTable, order) => order
-        case (order, TrivialOrderedTable) => order
-        case (_, _) => UnorderedTable
-      }
-    }
-
-    private case object UnorderedTable extends TableOrder
-    private case object KeyOrderedTable extends TableOrder
-    private case object TrivialOrderedTable extends TableOrder
 
     private case class EvaluatorState(
-      assume: Map[DepGraph, (Table, TableOrder)] = Map.empty,
+      assume: Map[DepGraph, Table] = Map.empty,
       reductions: Map[DepGraph, Option[RValue]] = Map.empty,
       extraCount: Int = 0
     )
 
-    private case class PendingTable(table: Table, order: TableOrder, graph: DepGraph, trans: TransSpec1) {
-      private val keySpec = DerefObjectStatic(Leaf(Source), paths.Key)
-
-      def keyOrderedTable: M[Table] = order match {
-        case KeyOrderedTable | TrivialOrderedTable => M.point(table)
-        case _ => table.sort(keySpec, SortAscending)
-      }
-    }
+    private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
   }
 }
