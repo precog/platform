@@ -886,7 +886,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = {
       for {
         tables <- groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique)
-        //_ = System.err.println("Sorted in %d ns" format (System.nanoTime - start))
       } yield (tables.headOption getOrElse Table.empty)
     }
 
