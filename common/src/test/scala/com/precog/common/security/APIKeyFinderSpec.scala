@@ -149,8 +149,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
-        keyFinder.findAPIKey(key0, Some(rootKey)).copoint flatMap (_.issuer) mustEqual Some(rootKey)
-        keyFinder.findAPIKey(key1, Some(rootKey)).copoint flatMap (_.issuer) mustEqual Some(key0)
+        keyFinder.findAPIKey(key0, Some(rootKey)).copoint.get.issuerChain mustEqual List(rootKey)
+        keyFinder.findAPIKey(key1, Some(rootKey)).copoint.get.issuerChain mustEqual List(key0, rootKey)
       }
     }
 
@@ -163,8 +163,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
-        keyFinder.findAPIKey(key0, None).copoint flatMap (_.issuer) mustEqual None
-        keyFinder.findAPIKey(key1, None).copoint flatMap (_.issuer) mustEqual None
+        keyFinder.findAPIKey(key0, None).copoint.get.issuerChain mustEqual Nil
+        keyFinder.findAPIKey(key1, None).copoint.get.issuerChain mustEqual Nil
       }
     }
   }

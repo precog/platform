@@ -37,7 +37,7 @@ class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extend
   )
 
   val rootGrant = v1.GrantDetails(java.util.UUID.randomUUID.toString, None, None, permissions, None)
-  val rootAPIKeyRecord = v1.APIKeyDetails(apiKey, Some("Static api key"), None, Set(rootGrant), None)
+  val rootAPIKeyRecord = v1.APIKeyDetails(apiKey, Some("Static api key"), None, Set(rootGrant), Nil)
 
   val rootGrantId = M.point(rootGrant.grantId)
   val rootAPIKey = M.point(rootAPIKeyRecord.apiKey)

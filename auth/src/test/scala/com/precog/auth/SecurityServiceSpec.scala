@@ -221,7 +221,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
                 details.name must_== user5.name
                 details.description must_== user5.description
                 details.grants.map(_.grantId) must_== user5.grants
-                details.issuer must beEmpty
+                details.issuerChain must beEmpty
             }
         }
       }
@@ -236,7 +236,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
                 details.name must_== user5.name
                 details.description must_== user5.description
                 details.grants.map(_.grantId) must_== user5.grants
-                details.issuer mustEqual Some(user1.apiKey)
+                details.issuerChain mustEqual List(user1.apiKey, rootAPIKey)
             }
         }
       }

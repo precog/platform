@@ -48,11 +48,11 @@ object v1 {
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[GrantDetails](schema)
   }
 
-  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails], issuer: Option[APIKey])
+  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails], issuerChain: List[APIKey])
   object APIKeyDetails {
     implicit val apiKeyDetailsIso = Iso.hlist(APIKeyDetails.apply _, APIKeyDetails.unapply _)
 
-    val schema = "apiKey" :: "name" :: "description" :: "grants" :: "issuer" :: HNil
+    val schema = "apiKey" :: "name" :: "description" :: "grants" :: "issuerChain" :: HNil
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[APIKeyDetails](schema)
   }

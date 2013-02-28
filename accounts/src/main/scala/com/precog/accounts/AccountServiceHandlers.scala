@@ -115,31 +115,44 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
 
         logger.debug("Looking up account ids with account: "+auth.accountId+" for API key: "+keyToFind)
 
-        def lookup(key: APIKey): Future[Option[AccountId]] =
-          accountManager.findAccountByAPIKey(key).flatMap {
+        def followIssuers(currentKey: APIKey, remaining: List[APIKey]): Future[Option[AccountId]] = {
+          logger.debug("Finding account for %s with remaining %s".format(currentKey, remaining))
+          accountManager.findAccountByAPIKey(currentKey).flatMap {
             case Some(accountId) =>
               logger.debug("Found account for API key: "+keyToFind+" = "+accountId)
               Promise.successful(Some(accountId))
 
+            case None if remaining.nonEmpty =>
+              followIssuers(remaining.head, remaining.tail)
+
             case None =>
-              // No account found, so we should check the parent apiKey
-              apiKeyFinder.findAPIKey(key, Some(rootAPIKey)).flatMap {
-                case Some(APIKeyDetails(_, _, _, _, None)) =>
-                  // Root apikey, so we can't search any further
-                  logger.warn("Exhausted parent chain trying to find account for " + keyToFind)
-                  Promise.successful(None)
+              logger.warn("Exhausted parent chain trying to find account for " + keyToFind)
+              Promise.successful(None)
+            }
+        }
 
-                case Some(APIKeyDetails(_, _, _, _, Some(issuer))) =>
-                  logger.debug("No account found for %s, trying issuer %s".format(key, issuer))
-                  lookup(issuer)
+        accountManager.findAccountByAPIKey(keyToFind).flatMap {
+          case Some(accountId) =>
+            logger.debug("Found account for API key: "+keyToFind+" = "+accountId)
+            Promise.successful(Some(accountId))
 
-                case None =>
-                  logger.warn("Issuer key " + key + " not found!")
-                  Promise.successful(None)
-              }
-          }
+          case None =>
+            // No account found, so we need to look up the issuer chain
+            apiKeyFinder.findAPIKey(keyToFind, Some(rootAPIKey)).flatMap {
+              case Some(APIKeyDetails(_, _, _, _, Nil)) =>
+                // We must be looking at the root key
+                logger.warn("Empty parent chain trying to find account for " + keyToFind)
+                Promise.successful(None)
 
-        lookup(keyToFind).map { accountId =>
+              case Some(APIKeyDetails(_, _, _, _, issuers)) =>
+                logger.debug("No account found for %s, trying issuers %s".format(keyToFind, issuers))
+                followIssuers(issuers.head, issuers.tail)
+
+              case None =>
+                logger.warn("API key not found trying to find account for %s!".format(keyToFind))
+                Promise.successful(None)
+            }
+        }.map { accountId =>
           HttpResponse[JValue](OK, content = accountId.map(id => WrappedAccountId(id).serialize))
         }
       }
