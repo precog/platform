@@ -17,28 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.jprofiler
+package com.precog
+package ragnarok
+package test
 
-import com.precog.ragnarok._
-
-class Suite(name: String)(qs: List[String]) extends PerfTestSuite {
-  override def suiteName = name
-  qs.foreach(q => query(q))
-}
-
-object Run {
-  def main(args: Array[String]): Unit = {
-    val cwd = new java.io.File(".").getCanonicalFile
-    val db = cwd.getName match {
-      case "jprofiler" => "jprofiler.db"
-      case _ => "jprofiler/jprofiler.db"
-    }
-
-    val args2 = args.toList ++ List("--root-dir", db)
-    val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
-
-    val queries = List(
-      """
+object SnapTestSuite extends PerfTestSuite {
+  query(
+    """
 import std::stats::*
 import std::time::*
 --agents := //8504352d-b063-400b-a10b-d6c637539469/status
@@ -70,22 +55,5 @@ results := solve 'agent
   data: result.first}
 
 results where results.end > lowerBound
-      """
-    )
-
-    config.rootDir match {
-      case Some(d) if d.exists =>
-        println("starting benchmark")
-        new Suite("jprofiling")(queries).run(config)
-        println("finishing benchmark")
-
-      case Some(d) =>
-        println("ERROR: --root-dir %s not found!" format d)
-        println("did you forget to run 'extract-data'?")
-
-      case None =>
-        println("ERROR: --root-dir is missing somehow")
-        println("default should have been %s" format db)
-    }
-  }
+    """)
 }

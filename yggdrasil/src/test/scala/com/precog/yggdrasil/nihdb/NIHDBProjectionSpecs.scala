@@ -35,13 +35,14 @@ import blueeyes.json._
 
 import org.specs2.mutable.{After, Specification}
 import org.specs2.specification.{Fragments, Step}
+import org.specs2.ScalaCheck
 
 import scalaz.effect.IO
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
-
-class NIHDBProjectionSpecs extends Specification with FutureMatchers {
+class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
   val chef = actorSystem.actorOf(Props(new Chef(
@@ -55,8 +56,21 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
   val maxDuration = Duration(60, "seconds")
 
+  implicit val params = set(minTestsOk -> 10)
+
+  val baseDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+
+  val dirSeq = new AtomicInteger
+
+  assert(baseDir.isDirectory && baseDir.canWrite)
+
   trait TempContext extends After {
-    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+    val workDir = new File(baseDir, "nihdbspec%03d".format(dirSeq.getAndIncrement))
+
+    if (!workDir.mkdirs) {
+      throw new Exception("Failed to create work directory! " + workDir)
+    }
+
     var projection = newProjection(workDir)
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
@@ -72,13 +86,19 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
   }
 
   "NIHDBProjections" should {
-    "Properly initialize and close" in new TempContext {
+    "Properly initialize and close" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val results = projection.getBlockAfter(None, None)
 
-      results must awaited(maxDuration) { beNone } 
+      results must awaited(maxDuration) { beNone }
     }
 
-    "Insert and retrieve values below the cook threshold" in new TempContext {
+    "Insert and retrieve values below the cook threshold" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val toInsert = (0L to 2L).toSeq.map { i =>
@@ -100,7 +120,10 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
       })
     }
 
-    "Insert, close and re-read values below the cook threshold" in new TempContext {
+    "Insert, close and re-read values below the cook threshold" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       projection.insert((0L to 2L).toSeq.map { i =>
@@ -127,7 +150,10 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
     "Properly filter on constrainted columns" in todo
 
-    "Properly convert raw blocks to cooked" in new TempContext {
+    "Properly convert raw blocks to cooked" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
       (0L to 1950L).map {
@@ -163,6 +189,7 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           data.toJsonElements.map(_("value")) must containAllOf(expected.drop(1200)).only.inOrder
       })
     }
+
   }
 
   def shutdown = actorSystem.shutdown()

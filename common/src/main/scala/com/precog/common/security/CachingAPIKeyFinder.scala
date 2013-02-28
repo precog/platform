@@ -49,8 +49,8 @@ class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPI
 
   private val apiKeyCache = Cache.simple[APIKey, v1.APIKeyDetails](settings.apiKeyCacheSettings: _*)
 
-  def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
-    case None => delegate.findAPIKey(tid).map { _.map { _ tap add } }
+  def findAPIKey(tid: APIKey, rootKey: Option[APIKey]) = apiKeyCache.get(tid) match {
+    case None => delegate.findAPIKey(tid, rootKey).map { _.map { _ tap add } }
     case t    => M.point(t)
   }
 

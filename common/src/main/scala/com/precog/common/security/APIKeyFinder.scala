@@ -33,7 +33,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
-  def findAPIKey(apiKey: APIKey): M[Option[v1.APIKeyDetails]]
+  def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]): M[Option[v1.APIKeyDetails]]
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
 
@@ -42,8 +42,8 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean]
 
   def withM[N[+_]](implicit t: M ~> N) = new APIKeyFinder[N] {
-    def findAPIKey(apiKey: APIKey) =
-      t(self.findAPIKey(apiKey))
+    def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]) =
+      t(self.findAPIKey(apiKey, rootKey))
 
     def findAllAPIKeys(fromRoot: APIKey) =
       t(self.findAllAPIKeys(fromRoot))
@@ -59,25 +59,32 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   }
 }
 
-class DirectAPIKeyFinder[M[+_]](val underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] {
+class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging {
   val grantDetails: Grant => v1.GrantDetails = {
     case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp)
   }
 
-  val recordDetails: PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = {
-    case APIKeyRecord(apiKey, name, description, _, grantIds, false) =>
-      grantIds.map(underlying.findGrant).sequence map { grants =>
-        v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails)
+  def recordDetails(rootKey: Option[APIKey]): PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = {
+    case APIKeyRecord(apiKey, name, description, issuer, grantIds, false) =>
+      underlying.findAPIKeyAncestry(apiKey).flatMap { ancestors =>
+        val ancestorKeys = ancestors.drop(1).map(_.apiKey) // The first element of ancestors is the key itself, so we drop it
+        grantIds.map(underlying.findGrant).sequence map { grants =>
+          val divulgedIssuers = rootKey.map { rk => ancestorKeys.reverse.dropWhile(_ != rk).reverse }.getOrElse(Nil)
+          logger.debug("Divulging issuers %s based on root key %s and ancestors %s".format(divulgedIssuers, rootKey, ancestorKeys))
+          v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails, divulgedIssuers)
+        }
       }
   }
+
+  val recordDetails: PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = recordDetails(None)
 
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = {
     underlying.hasCapability(apiKey, perms, at)
   }
 
-  def findAPIKey(apiKey: APIKey) = {
+  def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]) = {
     underlying.findAPIKey(apiKey) flatMap {
-      _ collect recordDetails sequence
+      _.collect(recordDetails(rootKey)).sequence
     }
   }
 

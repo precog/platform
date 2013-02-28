@@ -101,7 +101,8 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
   implicit def M: Monad[Future]
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)
-  def APIKeyFinder(config: Configuration): (APIKeyManager[Future], Stoppable)
+  def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
+  def RootKey(config: Configuration): APIKey
 
   def clock: Clock
 
@@ -114,13 +115,12 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           Future {
             logger.debug("Building account service state...")
             val (accountManager, stoppable) = AccountManager(config)
-            //val apiKeyFinder = APIKeyFinder(config.detach("security"))
-            val (apiKeyManager, stoppable2) = APIKeyFinder(config.detach("security"))
-            val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
+            val apiKeyFinder = APIKeyFinder(config.detach("security"))
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
-            val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId)
+            val rootAPIKey = RootKey(config.detach("security"))
+            val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId, rootAPIKey)
 
-            State(handlers, stoppable.append(stoppable2))
+            State(handlers, stoppable)
           }
         } ->
         request { case State(handlers, _) =>

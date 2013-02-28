@@ -43,6 +43,24 @@ import com.weiglewilczek.slf4s.Logging
 
 // TODO: does not deal well with tables too big to fit in memory
 
+object IndicesHelper {
+  def assertSorted(buf: ArrayIntList): Unit = {
+    val len = buf.size
+    if (len == 0) return ()
+    var last = buf.get(0)
+    var i = 1
+    while (i < len) {
+      val z = buf.get(i)
+      if (last > z) sys.error("buffer is out-of-order: %s" format buf)
+      if (last == z) sys.error("buffer has duplicates: %s" format buf)
+      last = z
+      i += 1
+    }
+  }
+}
+
+import IndicesHelper._
+
 trait IndicesModule[M[+_]]
     extends Logging
     with TransSpecModule
@@ -159,7 +177,6 @@ trait IndicesModule[M[+_]]
           (ns2, jvs2)
       }
 
-      //val params: List[(Seq[Int], Seq[RValue])] = tpls.map(t => (t._2, t._3))
       val sll: List[List[SliceIndex]] = tpls.map(_._1.indices)
       val orderedIndices: List[List[SliceIndex]] = sll.transpose
 
@@ -195,7 +212,7 @@ trait IndicesModule[M[+_]]
    */
   class SliceIndex(
     private[table] val vals: mutable.Map[Int, mutable.Set[RValue]],
-    private[table] val dict: mutable.Map[(Int, RValue), mutable.Set[Int]],
+    private[table] val dict: mutable.Map[(Int, RValue), ArrayIntList],
     private[table] val keyset: mutable.Set[Seq[RValue]],
     private[table] val valueSlice: Slice
   ) { self =>
@@ -221,15 +238,40 @@ trait IndicesModule[M[+_]]
     def getSubTable(keyIds: Seq[Int], keyValues: Seq[RValue]): Table =
       buildSubTable(getRowsForKeys(keyIds, keyValues))
 
+    private def intersectBuffers(as: ArrayIntList, bs: ArrayIntList): ArrayIntList = {
+      //assertSorted(as)
+      //assertSorted(bs)
+      var i = 0
+      var j = 0
+      val alen = as.size
+      val blen = bs.size
+      val out = new ArrayIntList(alen min blen)
+      while (i < alen && j < blen) {
+        val a = as.get(i)
+        val b = bs.get(j)
+        if (a < b) {
+          i += 1
+        } else if (a > b) {
+          j += 1
+        } else {
+          out.add(a)
+          i += 1
+          j += 1
+        }
+      }
+      out
+    }
+
+    private val emptyBuffer = new ArrayIntList(0)
+
     /**
      * Returns the rows specified by the given group key values.
      */
-    private[table] def getRowsForKeys(keyIds: Seq[Int], keyValues: Seq[RValue]): mutable.Set[Int] = {
-      val emptySet = mutable.Set.empty[Int]
-      var rows: mutable.Set[Int] = dict.getOrElse((keyIds(0), keyValues(0)), emptySet)
+    private[table] def getRowsForKeys(keyIds: Seq[Int], keyValues: Seq[RValue]): ArrayIntList = {
+      var rows: ArrayIntList = dict.getOrElse((keyIds(0), keyValues(0)), emptyBuffer)
       var i: Int = 1
       while (i < keyIds.length && !rows.isEmpty) {
-        rows = rows & dict.getOrElse((keyIds(i), keyValues(i)), emptySet)
+        rows = intersectBuffers(rows, dict.getOrElse((keyIds(i), keyValues(i)), emptyBuffer))
         i += 1
       }
       rows
@@ -238,7 +280,7 @@ trait IndicesModule[M[+_]]
     /**
      * Given a set of rows, builds the appropriate subslice.
      */
-    private[table] def buildSubTable(rows: GenSet[Int]): Table = {
+    private[table] def buildSubTable(rows: ArrayIntList): Table = {
       val slices = buildSubSlice(rows) :: StreamT.empty[M, Slice]
       Table(slices, ExactSize(rows.size))
     }
@@ -252,14 +294,11 @@ trait IndicesModule[M[+_]]
     /**
      * Given a set of rows, builds the appropriate slice.
      */
-    private[table] def buildSubSlice(rows: GenSet[Int]): Slice =
-      if (rows.isEmpty) {
+    private[table] def buildSubSlice(rows: ArrayIntList): Slice =
+      if (rows.isEmpty)
         emptySlice
-      } else {
-        val arr = new ArrayIntList(rows.size)
-        rows.foreach(arr.add)
-        valueSlice.remap(arr)
-      }
+      else
+        valueSlice.remap(rows)
   }
 
   object SliceIndex {
@@ -269,7 +308,7 @@ trait IndicesModule[M[+_]]
      */
     def empty = new SliceIndex(
       mutable.Map.empty[Int, mutable.Set[RValue]],
-      mutable.Map.empty[(Int, RValue), mutable.Set[Int]],
+      mutable.Map.empty[(Int, RValue), ArrayIntList],
       mutable.Set.empty[Seq[RValue]],
       new Slice {
         def size = 0
@@ -309,7 +348,7 @@ trait IndicesModule[M[+_]]
       val numKeys = sts.length
       val n = slice.size
       val vals = mutable.Map.empty[Int, mutable.Set[RValue]]
-      val dict = mutable.Map.empty[(Int, RValue), mutable.Set[Int]]
+      val dict = mutable.Map.empty[(Int, RValue), ArrayIntList]
       val keyset = mutable.Set.empty[Seq[RValue]]
 
       val keys = readKeys(slice, sts)
@@ -340,10 +379,13 @@ trait IndicesModule[M[+_]]
             vals.get(k).map { jvs =>
               jvs.add(jv)
               val key = (k, jv)
-              if (dict.contains(key))
+              if (dict.contains(key)) {
                 dict(key).add(i)
-              else
-                dict(key) = mutable.Set(i)
+              } else {
+                val as = new ArrayIntList(0)
+                as.add(i)
+                dict(key) = as
+              }
             }
             k += 1
           }
@@ -388,6 +430,40 @@ trait IndicesModule[M[+_]]
       keys
     }
 
+    private def unionBuffers(as: ArrayIntList, bs: ArrayIntList): ArrayIntList = {
+      //assertSorted(as)
+      //assertSorted(bs)
+      var i = 0
+      var j = 0
+      val alen = as.size
+      val blen = bs.size
+      val out = new ArrayIntList(alen max blen)
+      while (i < alen && j < blen) {
+        val a = as.get(i)
+        val b = bs.get(j)
+        if (a < b) {
+          out.add(a)
+          i += 1
+        } else if (a > b) {
+          out.add(b)
+          j += 1
+        } else {
+          out.add(a)
+          i += 1
+          j += 1
+        }
+      }
+      while (i < alen) {
+        out.add(as.get(i))
+        i += 1
+      }
+      while (j < blen) {
+        out.add(bs.get(j))
+        j += 1
+      }
+      out
+    }
+
     /**
      * For a list of slice indices, return a slice containing all the
      * rows for which any of the indices matches.
@@ -401,9 +477,10 @@ trait IndicesModule[M[+_]]
         case Nil =>
           sys.error("empty slice") // FIXME
         case (index, (ids, vals)) :: tail =>
-          val rows = index.getRowsForKeys(ids, vals).clone
+          
+          var rows = index.getRowsForKeys(ids, vals)
           tail.foreach { case (index, (ids, vals)) =>
-              rows ++= index.getRowsForKeys(ids, vals)
+            rows = unionBuffers(rows, index.getRowsForKeys(ids, vals))
           }
           index.buildSubSlice(rows)
       }
