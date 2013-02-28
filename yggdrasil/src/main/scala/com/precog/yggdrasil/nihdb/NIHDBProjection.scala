@@ -105,5 +105,10 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
 
-  def close() = db.close()
+  def close() = {
+    logger.debug("Waiting %s for projection close on %s".format(actorTimeout, baseDir))
+    db.close().onComplete { _ =>
+      logger.debug("Projection closed in " + baseDir)
+    }
+  }
 }
