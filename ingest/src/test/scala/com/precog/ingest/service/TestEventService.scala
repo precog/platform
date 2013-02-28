@@ -45,6 +45,8 @@ trait TestEventService extends
   EventService with
   AkkaDefaults {
 
+  import Permission._
+
   val config = """
     security {
       test = true
@@ -80,10 +82,10 @@ trait TestEventService extends
 
 
   val accessTest = Set[Permission](
-    ReadPermission(testAccount.rootPath, Set("test")),
-    ReducePermission(testAccount.rootPath, Set("test")),
-    WritePermission(testAccount.rootPath, Set()),
-    DeletePermission(testAccount.rootPath, Set())
+    ReadPermission(testAccount.rootPath, WrittenBy("test")),
+    ReducePermission(testAccount.rootPath, WrittenBy("test")),
+    WritePermission(testAccount.rootPath, WriteAsAny),
+    DeletePermission(testAccount.rootPath, WrittenByAny)
   )
 
   val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {

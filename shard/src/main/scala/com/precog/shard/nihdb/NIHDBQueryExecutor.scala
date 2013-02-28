@@ -74,7 +74,7 @@ trait NIHDBQueryExecutorConfig
 trait NIHDBQueryExecutorComponent  {
   import blueeyes.json.serialization.Extractor
 
-  def platformFactory(config0: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
+  def platformFactory(config0: Configuration, extApiKeyFinder: APIKeyFinder[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
     new ManagedPlatform
         with ShardQueryExecutorPlatform[Future]
         with NIHDBColumnarTableModule
@@ -114,7 +114,7 @@ trait NIHDBQueryExecutorComponent  {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = extAccessControl
+      val accessControl = extApiKeyFinder
       val storageTimeout = yggConfig.storageTimeout
       val jobManager = extJobManager
       val metadataClient = new StorageMetadataClient[Future](this)
