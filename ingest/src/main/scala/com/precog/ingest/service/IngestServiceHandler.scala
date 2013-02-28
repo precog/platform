@@ -68,16 +68,16 @@ import scalaz.syntax.std.boolean._
 import scala.annotation.tailrec
 
 class IngestServiceHandler(
-    accountFinder: AccountFinder[Future], 
-    accessControl: AccessControl[Future], 
-    jobManager: JobManager[Response], 
-    clock: Clock, 
-    eventStore: EventStore[Future], 
-    ingestTimeout: Timeout, 
+    accountFinder: AccountFinder[Future],
+    accessControl: AccessControl[Future],
+    jobManager: JobManager[Response],
+    clock: Clock,
+    eventStore: EventStore[Future],
+    ingestTimeout: Timeout,
     batchSize: Int)(implicit M: Monad[Future], executor: ExecutionContext)
-    extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] 
+    extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
     with Logging {
-      
+
   sealed trait ParseDirective {
     def toMap: Map[String, String] // escape hatch for interacting with other systems
   }
@@ -90,10 +90,10 @@ class IngestServiceHandler(
 
 
   sealed trait IngestResult
-  case class AsyncSuccess(contentLength: Long) extends IngestResult 
-  case class BatchSyncResult(total: Int, ingested: Int, errors: Vector[(Int, String)]) extends IngestResult 
-  case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult 
-  case class NotIngested(reason: String) extends IngestResult 
+  case class AsyncSuccess(contentLength: Long) extends IngestResult
+  case class BatchSyncResult(total: Int, ingested: Int, errors: Vector[(Int, String)]) extends IngestResult
+  case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult
+  case class NotIngested(reason: String) extends IngestResult
 
   private val excessiveFieldsError = "Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience."
 
@@ -105,7 +105,7 @@ class IngestServiceHandler(
     @tailrec final def readBatch(reader: BufferedReader, batch: Vector[Validation[Throwable, JValue]]): Vector[Validation[Throwable, JValue]] = {
       val line = reader.readLine()
 
-      if (line == null || batch.size >= batchSize) batch 
+      if (line == null || batch.size >= batchSize) batch
       else if (line.trim.isEmpty) readBatch(reader, batch)
       else readBatch(reader, batch :+ JParser.parseFromString(line))
     }
@@ -119,11 +119,11 @@ class IngestServiceHandler(
             M.point(BatchSyncResult(total, ingested, errors))
           } else {
             val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {
-              case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 => 
+              case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 =>
                 (i + 1, values :+ value, errors)
-              case ((i, values, errors), Success(value)) => 
+              case ((i, values, errors), Success(value)) =>
                 (i + 1, values, errors :+ (i, Extractor.Invalid(excessiveFieldsError)))
-              case ((i, values, errors), Failure(error)) => 
+              case ((i, values, errors), Failure(error)) =>
                 (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
             }
 
@@ -148,7 +148,7 @@ class IngestServiceHandler(
         for ((file, size) <- writeToFile(data)) yield {
           ingestSync(new FileInputStream(file).getChannel(), jobId)
           AsyncSuccess(size)
-        } 
+        }
       }
     }
   }
@@ -167,11 +167,11 @@ class IngestServiceHandler(
         } toValidationNEL
       }
 
-      val delimiter = charOrError(parseDirectives collectFirst { case CSVDelimiter(str) => str }, ',') 
-      val quote     = charOrError(parseDirectives collectFirst { case CSVQuote(str) => str }, '"') 
-      val escape    = charOrError(parseDirectives collectFirst { case CSVEscape(str) => str }, '\\') 
+      val delimiter = charOrError(parseDirectives collectFirst { case CSVDelimiter(str) => str }, ',')
+      val quote     = charOrError(parseDirectives collectFirst { case CSVQuote(str) => str }, '"')
+      val escape    = charOrError(parseDirectives collectFirst { case CSVEscape(str) => str }, '\\')
 
-      (delimiter |@| quote |@| escape) { (delimiter, quote, escape) => 
+      (delimiter |@| quote |@| escape) { (delimiter, quote, escape) =>
         (reader: java.io.Reader) => new CSVReader(reader, delimiter, quote, escape)
       }
     }
@@ -197,7 +197,7 @@ class IngestServiceHandler(
               }
             }
 
-            ingest(apiKey, path, accountId, jvals, Some(jobId)) flatMap { _ => 
+            ingest(apiKey, path, accountId, jvals, Some(jobId)) flatMap { _ =>
               readBatches(paths, reader, total + batch.length, ingested + batch.length, errors)
             }
           }
@@ -219,7 +219,7 @@ class IngestServiceHandler(
           // must not return until everything is persisted to kafka central
           val pipe = Pipe.open()
           val channel = pipe.sink()
-          val writeFuture = writeChunkStream(channel, data) 
+          val writeFuture = writeChunkStream(channel, data)
           val readFuture = ingestSync(f(new BufferedReader(Channels.newReader(pipe.source(), "UTF-8"))), jobId)
           M.apply2(writeFuture, readFuture) { (written, result) => result }
         } else {
@@ -231,7 +231,7 @@ class IngestServiceHandler(
           }
         }
       } valueOr { errors =>
-        M.point(NotIngested(errors.list.mkString("; ")))      
+        M.point(NotIngested(errors.list.mkString("; ")))
       }
     }
   }
@@ -255,7 +255,7 @@ class IngestServiceHandler(
 
   class JsonBatchIngestSelector(apiKey: APIKey, path: Path, accountId: AccountId) extends BatchIngestSelector {
     def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
-      val (AsyncParse(errors, values), parser) = JParser.parseAsync(ByteBuffer.wrap(partialData)) 
+      val (AsyncParse(errors, values), parser) = JParser.parseAsync(ByteBuffer.wrap(partialData))
       (errors.isEmpty && !values.isEmpty) option { new JSONBatchIngest(apiKey, path, accountId) }
     }
   }
@@ -274,12 +274,12 @@ class IngestServiceHandler(
 
   final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {
     stream.uncons flatMap {
-      case Some((buf, tail)) => 
+      case Some((buf, tail)) =>
         ensureByteBufferSanity(buf)
         val written0 = chan.write(buf)
         writeChannel(chan, tail, written + written0)
 
-      case None => 
+      case None =>
         M.point { chan.close(); written }
     }
   }
@@ -304,14 +304,14 @@ class IngestServiceHandler(
   }
 
   def getParseDirectives(request: HttpRequest[_]): Set[ParseDirective] = {
-    val mimeDirective = 
+    val mimeDirective =
       for {
-        header <- request.headers.header[`Content-Type`] 
+        header <- request.headers.header[`Content-Type`]
         mimeType <- header.mimeTypes.headOption
       } yield MimeDirective(mimeType)
 
     val delimiter = request.parameters get 'delimiter map { CSVDelimiter(_) }
-    val quote = request.parameters get 'quote map { CSVQuote(_) } 
+    val quote = request.parameters get 'quote map { CSVQuote(_) }
     val escape = request.parameters get 'escape map { CSVEscape(_) }
 
     mimeDirective.toSet ++ delimiter ++ quote ++ escape
@@ -319,7 +319,7 @@ class IngestServiceHandler(
 
   @tailrec final def selectBatchIngest(from: List[BatchIngestSelector], partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
     from match {
-      case hd :: tl => 
+      case hd :: tl =>
         hd.select(partialData, parseDirectives) match { // not using map so as to get tailrec
           case None => selectBatchIngest(tl, partialData, parseDirectives)
           case some => some
@@ -340,15 +340,15 @@ class IngestServiceHandler(
     val selectors = batchSelectors(apiKey, path, accountId)
 
     val futureBatchIngest = data match {
-      case Left(buf) => 
+      case Left(buf) =>
         M.point(selectBatchIngest(selectors, array(buf), parseDirectives))
 
-      case Right(stream) => 
-        stream.uncons map { 
+      case Right(stream) =>
+        stream.uncons map {
           _ flatMap { case (buf, _) => selectBatchIngest(selectors, array(buf), parseDirectives) }
         }
-    } 
-    
+    }
+
     futureBatchIngest flatMap {
       case Some(batchIngest) => batchIngest(data, parseDirectives, batchJob, sync)
       case None => M.point(NotIngested("Could not successfully determine a data type for your batch ingest. Please consider setting the Content-Type header."))
@@ -391,10 +391,14 @@ class IngestServiceHandler(
             ingest(apiKey, path, accountId, jvalues, None) map { _ => StreamingSyncResult(jvalues.length, None) }
           }
         } valueOr { error =>
+          val message = error match {
+            case e: IndexOutOfBoundsException => "Input exhausted during parse"
+            case o => Option(o.getMessage).getOrElse(o.getClass.toString)
+          }
           logger.warn("Ingest for %s with key %s at %s failed!".format(accountId, apiKey, path.toString), error)
-          Promise successful NotIngested(error.getMessage) 
+          Promise successful NotIngested(message)
         }
-                
+
       case Right(stream) =>
         val pipe = Pipe.open()
         val channel = pipe.sink()
@@ -407,27 +411,27 @@ class IngestServiceHandler(
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
     logger.debug("Got request in ingest handler: " + request)
     Success { (apiKey: APIKey, path: Path) => {
-      def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id } 
+      def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(clock.now())) map { _.id }
 
       accountFinder.resolveForWrite(request.parameters.get('ownerAccountId), apiKey) flatMap {
         case Some(ownerAccountId) =>
           logger.debug("Resolved owner account ID for write: " + ownerAccountId)
           accessControl.hasCapability(apiKey, Set(WritePermission(path, Set(ownerAccountId))), None) flatMap {
-            case true => 
+            case true =>
               logger.debug("Write permission granted for " + ownerAccountId + " to " + path)
               request.content map { content =>
                 import MimeTypes._
                 import Validation._
 
                 val parseDirectives = getParseDirectives(request)
-                val batchMode = request.parameters.get('mode) exists (_ equalsIgnoreCase "batch") 
+                val batchMode = request.parameters.get('mode) exists (_ equalsIgnoreCase "batch")
                 // assign new job ID for batch-mode queries only
                 for {
                   batchJob <- batchMode.option(createJob.run).sequence
-                  ingestResult <- (batchJob map { 
+                  ingestResult <- (batchJob map {
                                     _ map { jobId =>
                                       val sync = request.parameters.get('receipt) match {
-                                        case Some(v) => v equalsIgnoreCase "true" 
+                                        case Some(v) => v equalsIgnoreCase "true"
                                         case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
                                       }
 
@@ -438,12 +442,16 @@ class IngestServiceHandler(
                                   }).sequence
                 } yield {
                   ingestResult.fold(
-                    { message => HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
+                    { message =>
+                      logger.warn("Internal error during ingest: " + message)
+                      HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
                     {
                       case NotIngested(reason) =>
+                        logger.warn("Ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason))
                         HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
 
                       case AsyncSuccess(contentLength) =>
+                        logger.info("Async ingest succeeded to %s with %s, length %d".format(path, apiKey, contentLength))
                         HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
 
                       case BatchSyncResult(total, ingested, errors) =>
@@ -456,6 +464,8 @@ class IngestServiceHandler(
                           JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*))
                         )
 
+                        logger.info("Batch sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
+
                         if (ingested == 0 && total > 0) {
                           HttpResponse[JValue](BadRequest, content = Some(responseContent))
                         } else {
@@ -465,6 +475,7 @@ class IngestServiceHandler(
                       case StreamingSyncResult(ingested, error) =>
                         val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
                         val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
+                        logger.info("Streaming sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
                         HttpResponse(responseCode, content = Some(responseContent))
                     }
                   )
@@ -488,7 +499,7 @@ class IngestServiceHandler(
 
   val metadata = Some(DescriptionMetadata(
     """
-      This service can be used to store an data point with or without an associated timestamp. 
+      This service can be used to store an data point with or without an associated timestamp.
       Timestamps are not added by default.
     """
   ))

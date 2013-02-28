@@ -55,12 +55,12 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
 case class EventServiceDeps[M[+_]](
-    apiKeyFinder: APIKeyFinder[M], 
-    accountFinder: AccountFinder[M], 
-    eventStore: EventStore[M], 
+    apiKeyFinder: APIKeyFinder[M],
+    accountFinder: AccountFinder[M],
+    eventStore: EventStore[M],
     jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
 
-trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators { 
+trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators {
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -91,22 +91,22 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
             jsonp {
               (jsonAPIKey(state.accessControl) {
                 dataPath("/fs") {
-                  post(state.ingestHandler) ~ 
+                  post(state.ingestHandler) ~
                   delete(state.archiveHandler)
                 } ~ //legacy handler
                 path("/(?<sync>a?sync)") {
                   dataPath("/fs") {
-                    post(state.ingestHandler) ~ 
+                    post(state.ingestHandler) ~
                     delete(state.archiveHandler)
-                  } 
+                  }
                 }
-              }) map { 
+              }) map {
                 _ map { _ map jvalueToChunk }
               }
             }
           }
         } ->
-        stop { state => 
+        stop { state =>
           state.stop
         }
       }
