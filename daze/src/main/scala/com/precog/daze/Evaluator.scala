@@ -117,7 +117,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
-
+      
       def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => 
           for {
@@ -299,7 +299,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                   }
 
                   val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op, ctx))
-
+                  
                   val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
                   val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
                   val result = join(leftResult, rightResult)(key, spec)
