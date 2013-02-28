@@ -669,12 +669,15 @@ trait Slice { source =>
 
     grouped match {
       case Left(cols0) =>
-        val cols = cols0.toList.sortBy(_._1).map(_._2).toArray
+        val cols = cols0.toList.sortBy(_._1).map { case (_, col) =>
+          Column.rowOrder(col)
+        }.toArray
+
         new spire.math.Order[Int] {
           def compare(i: Int, j: Int): Int = {
             var k = 0
             while (k < cols.length) {
-              val cmp = cols(k).rowCompare(i, j)
+              val cmp = cols(k).compare(i, j)
               if (cmp != 0)
                 return cmp
               k += 1
@@ -685,7 +688,7 @@ trait Slice { source =>
           def eqv(i: Int, j: Int): Boolean = {
             var k = 0
             while (k < cols.length) {
-              if (!cols(k).rowEq(i, j))
+              if (!cols(k).eqv(i, j))
                 return false
               k += 1
             }
