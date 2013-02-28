@@ -100,17 +100,19 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
               } 
               
               val identitiesResult: Map[ColumnRef, Column] = {
-                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
-                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => 
-                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), CLong), Column.const(id))
-                } toMap
-
                 val featureCols = cols collect { 
                   case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) => 
-                    val path = Seq(TableModule.paths.Key, CPathIndex(idx + modelIds.size))
+                    val path = Seq(TableModule.paths.Key, CPathIndex(idx))
                     (ColumnRef(CPath(path: _*), ctype), col)
                   case c @ (ColumnRef(CPath(TableModule.paths.Key), _), _) => c
                 }
+
+                val shift = featureCols.size
+                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
+
+                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => 
+                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx + shift)), CLong), Column.const(id))
+                } toMap
 
                 modelCols ++ featureCols
               }
