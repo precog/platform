@@ -469,7 +469,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             case MoreLeft(span, leq, ridx, req) =>
               def next(lbs: JDBMState, rbs: JDBMState): M[(JDBMState, JDBMState)] = ltail.uncons flatMap {
                 case Some((lhead0, ltail0)) =>
-                  //println("Continuing on left; not emitting right.")
+                  ///println("Continuing on left; not emitting right.")
                   val nextState = (span: @unchecked) match {
                     case NoSpan => FindEqualAdvancingLeft(ridx, rkey)
                     case LeftSpan => state match {
@@ -883,8 +883,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
      * 
      * @see com.precog.yggdrasil.TableModule#sort(TransSpec1, DesiredSortOrder, Boolean)
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique).map {
-      _.headOption getOrElse Table.empty // If we start with an empty table, we always end with an empty table (but then we know that we have zero size)
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = {
+      for {
+        tables <- groupByN(Seq(sortKey), Leaf(Source), sortOrder, unique)
+      } yield (tables.headOption getOrElse Table.empty)
     }
 
     /**
