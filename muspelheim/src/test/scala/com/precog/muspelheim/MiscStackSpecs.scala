@@ -854,7 +854,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         }
       }
     }
-
+    
     "union two wheres of the same dynamic provenance" >> {
       val input = """
       | clicks := //clicks
@@ -2390,6 +2390,19 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       eval(input) must not(throwA[Throwable])
+    }
+    
+    "produce something other than the empty set for join of conditional results" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | predicted := clicks with { female : 0 }
+        | observed := clicks with { female : if clicks = null then 1 else 0 }
+        | 
+        | [predicted, observed]
+        | """.stripMargin
+      
+      eval(input) must not(beEmpty)
     }
   }
 }

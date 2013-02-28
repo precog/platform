@@ -87,7 +87,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
 
 testOptions in Test <<= testOptions dependsOn extractData
 
-parallelExecution in Test := true
+parallelExecution in Test := false
 
 console in Compile <<= (console in Compile) dependsOn extractData
 

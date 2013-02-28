@@ -68,13 +68,23 @@ trait RegressionTestSupport[M[+_]] {
   def madMedian(values: List[Double]): (Double, Double) = {
     val constant = 0.6745
 
-    val sorted = values.sorted
-    val length = sorted.length
-    val median = sorted(length / 2)
+    def computeMedian(values: List[Double]) = {
+      val length = values.length
+      val sorted = values.sorted
+
+      if (length % 2 == 0) {
+        val idx1 = (length / 2) - 1
+        val idx2 = (length / 2)
+        (sorted(idx1) + sorted(idx2)) / 2
+      } else {
+        sorted(length / 2)
+      }
+    }
+
+    val median = computeMedian(values) 
 
     val diffs = values map { v => math.abs(v - median) }
-    val sortedDiffs = diffs.sorted
-    val mad = sortedDiffs(length / 2) / constant
+    val mad = computeMedian(diffs) / constant
 
     (mad, median) 
   }

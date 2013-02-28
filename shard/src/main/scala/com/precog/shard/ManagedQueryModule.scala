@@ -117,8 +117,8 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    */
   def createJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
     val start = System.currentTimeMillis
-    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).map {
-      j => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start)); j
+    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).onComplete {
+      _ => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start))
     }
     for {
       job <- futureJob map { job => Some(job) } recover { case _ => None }

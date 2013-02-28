@@ -41,8 +41,19 @@ import scalaz.std.stream._
 import scalaz.std.set._
 import scalaz.syntax.traverse._
 
-trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] with PredictionLibModule[M] {
-  trait LinearRegressionLib extends ColumnarTableLib with RegressionSupport with PredictionSupport with EvaluatorMethods {
+trait LinearRegressionLibModule[M[+_]] 
+    extends ColumnarTableLibModule[M]
+    with ReductionLibModule[M]
+    with EvaluatorMethodsModule[M]
+    with PredictionLibModule[M] {
+
+  trait LinearRegressionLib 
+      extends ColumnarTableLib
+      with RegressionSupport
+      with PredictionSupport
+      with ReductionLib
+      with EvaluatorMethods {
+
     import trans._
 
     override def _libMorphism2 = super._libMorphism2 ++ Set(MultiLinearRegression, LinearPrediction)
@@ -53,7 +64,10 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
       lazy val alignment = MorphismAlignment.Match(M.point(morph1))
 
       type Beta = Array[Double]
-      type Result = Beta
+
+      case class CoeffAcc(beta: Beta, count: Long)
+
+      case class StdErrorAcc(rss: Double, product: Matrix)
 
       /**
        * http://adrem.ua.ac.be/sites/adrem.ua.ac.be/files/StreamFitter.pdf
@@ -68,11 +82,17 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
        * or something related, be an optional parameter in the regression model.
        */
 
+
+      /**
+       * The following code will necessary when we have online models and users want to weight
+       * the most recent data with a higher (or lower) weight than the data already seen.
+       * But since we don't have this capability yet, all data is weighted equally.
+
       val alpha = 0.5
 
-      implicit def monoid = new Monoid[Result] {
+      implicit def monoid = new Monoid[CoeffAcc] {
         def zero = Array.empty[Double]
-        def append(r1: Result, r2: => Result) = {
+        def append(r1: CoeffAcc, r2: => CoeffAcc) = {
           lazy val newr1 = r1 map { _ * alpha }
           lazy val newr2 = r2 map { _ * (1.0 - alpha) }
 
@@ -81,10 +101,47 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
           else arraySum(newr1, newr2)
         }
       }
+      */
 
-      implicit def resultMonoid = new Monoid[Option[Array[Result]]] {
+      implicit def coeffMonoid = new Monoid[CoeffAcc] {
+        def zero = CoeffAcc(Array.empty[Double], 0)
+        def append(r1: CoeffAcc, r2: => CoeffAcc) = {
+          if (r1.beta isEmpty) r2
+          else if (r2.beta isEmpty) r1
+          else CoeffAcc(arraySum(r1.beta, r2.beta), r1.count + r2.count)
+        }
+      }
+
+      implicit def stdErrorMonoid = new Monoid[StdErrorAcc] {
+        def zero = StdErrorAcc(0, new Matrix(Array(Array.empty[Double])))
+
+        def append(t1: StdErrorAcc, t2: => StdErrorAcc) = {
+          def isEmpty(matrix: Matrix) = {
+            // there has to be a better way...
+            matrix.getArray.length == 1 && matrix.getArray.head.length == 0
+          }
+
+          val matrixSum = {
+            if (isEmpty(t1.product)) {
+              t2.product
+            } else if (isEmpty(t2.product)) {
+              t1.product
+            } else { 
+              assert(
+                t1.product.getColumnDimension == t2.product.getColumnDimension &&
+                t1.product.getRowDimension == t2.product.getRowDimension) 
+
+              t1.product plus t2.product
+            }
+          }
+
+          StdErrorAcc(t1.rss + t2.rss, matrixSum)
+        }
+      }
+
+      implicit def betaMonoid = new Monoid[Option[Array[Beta]]] {
         def zero = None
-        def append(t1: Option[Array[Result]], t2: => Option[Array[Result]]) = {
+        def append(t1: Option[Array[Beta]], t2: => Option[Array[Beta]]) = {
           t1 match {
             case None => t2
             case Some(c1) => t2 match {
@@ -95,9 +152,17 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
         }
       }
 
-      def reducer: Reducer[Result] = new Reducer[Result] {
-        def reduce(schema: CSchema, range: Range): Result = {
+      def coefficientReducer: Reducer[CoeffAcc] = new Reducer[CoeffAcc] {
+        def reduce(schema: CSchema, range: Range): CoeffAcc = {
           val features = schema.columns(JArrayHomogeneousT(JNumberT))
+
+          val count = {
+            var countAcc = 0L
+            RangeUtil.loop(range) { i =>
+              if (Column.isDefinedAt(features.toArray, i)) countAcc += 1L
+            }
+            countAcc
+          }
 
           val values: Set[Option[Array[Array[Double]]]] = features map {
             case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
@@ -110,7 +175,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
 
           val arrays = {
             if (values.isEmpty) None
-            else values.suml(resultMonoid)
+            else values.suml(betaMonoid)
           }
 
           val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
@@ -137,18 +202,89 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
             (inverse).times(y.transpose)
           }
 
-          matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
+          val res = matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
+
+          // We weight the results to handle slices of different sizes.
+          // Even though we canonicalize the slices, the last slice may be smaller 
+          // than all the others.
+          val weightedRes = res map { _ * count }
+          
+          CoeffAcc(weightedRes, count)
         }
       }
 
-      def extract(res: Result, jtype: JType): Table = {
+      def stdErrorReducer(acc: CoeffAcc): Reducer[StdErrorAcc] = new Reducer[StdErrorAcc] {
+        def reduce(schema: CSchema, range: Range): StdErrorAcc = {
+          val features = schema.columns(JArrayHomogeneousT(JNumberT))
+
+          val values: Set[Option[Array[Array[Double]]]] = features map {
+            case c: HomogeneousArrayColumn[_] if c.tpe.manifest.erasure == classOf[Array[Double]] =>
+              val mapped = range.toArray filter { r => c.isDefinedAt(r) } map { i => c.asInstanceOf[HomogeneousArrayColumn[Double]](i) }
+              Some(mapped)
+            case other => 
+              logger.warn("Features were not correctly put into a homogeneous array of doubles; returning empty.")
+              None
+          }
+
+          val arrays = {
+            if (values.isEmpty) None
+            else values.suml(betaMonoid)
+          }
+
+          val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
+          val y0 = arrays map { _ map { _.last } }
+
+          val matrixX = xs map { case arr => new Matrix(arr) }
+          val matrixProduct = matrixX map { matrix => matrix.transpose() times matrix } getOrElse { stdErrorMonoid.zero.product }
+
+          val actualY0 = y0 map { arr => (new Matrix(Array(arr))).transpose() }
+          val weightedBeta = acc.beta map { _ / acc.count }
+          val predictedY0 = matrixX map { _.times((new Matrix(Array(weightedBeta))).transpose()) }
+
+          val rssOpt = for {
+            actualY <- actualY0
+            predictedY <- predictedY0
+          } yield {
+            val difference = actualY.minus(predictedY)
+            val prod = difference.transpose() times difference
+
+            assert(prod.getRowDimension == 1 && prod.getColumnDimension == 1)
+            prod.getArray.head.head
+          }
+
+          val rss = rssOpt getOrElse { stdErrorMonoid.zero.rss }
+
+          StdErrorAcc(rss, matrixProduct)
+        }
+      }
+
+      def extract(coeffs: CoeffAcc, errors: StdErrorAcc, jtype: JType): Table = {
         val cpaths = Schema.cpath(jtype)
 
-        val tree = CPath.makeTree(cpaths, Range(1, res.length).toSeq :+ 0)
+        val tree = CPath.makeTree(cpaths, Range(1, coeffs.beta.length).toSeq :+ 0)
 
         val spec = TransSpec.concatChildren(tree)
-  
-        val theta = Table.fromRValues(Stream(RArray(res.map(CNum(_)).toList)))
+
+        val weightedBeta = coeffs.beta map { _ / coeffs.count }
+
+        val colDim = errors.product.getColumnDimension
+
+        val varianceEst = errors.rss / (coeffs.count - colDim)
+        
+        val inverse = errors.product.inverse()
+
+        val stdErrors = (0 until colDim) map { case i => math.sqrt(varianceEst * inverse.get(i, i)) }
+
+        assert(weightedBeta.length == stdErrors.length)
+
+        val resultCoeffs = weightedBeta.map(CNum(_))
+        val resultErrors = stdErrors.map(CNum(_))
+
+        val arr = resultCoeffs.zip(resultErrors) map { case (beta, error) =>
+          RObject(Map("coefficient" -> beta, "standard error" -> error))
+        }
+
+        val theta = Table.fromRValues(Stream(RArray(arr.toList)))
 
         val result = theta.transform(spec)
 
@@ -184,13 +320,26 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
           } yield {
             tbls zip jtypes
           }
-      
+
           // important note: regression will explode if there are more than 1000 columns due to rank-deficient matrix
           // this could be remedied in the future by smarter choice of `sliceSize`
           // though do we really want to allow people to run regression on >1000 columns?
           val sliceSize = 1000
-          val tableReducer: (Table, JType) => M[Table] =
-            (table, jtype) => table.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducer).map(res => extract(res, jtype))
+          val tableReducer: (Table, JType) => M[Table] = {
+            (table, jtype) => {
+              val arrayTable = table.canonicalize(sliceSize).toArray[Double].normalize
+
+              val coeffs0 = arrayTable.reduce(coefficientReducer)
+              val errors0 = coeffs0 flatMap { acc => arrayTable.reduce(stdErrorReducer(acc)) }
+
+              for {
+                coeffs <- coeffs0
+                errors <- errors0
+              } yield {
+                extract(coeffs, errors, jtype)
+              }
+            }
+          }
 
           val reducedTables: M[Seq[Table]] = tablesWithType flatMap { 
             _.map { case (table, jtype) => tableReducer(table, jtype) }.toStream.sequence map(_.toSeq)
@@ -213,7 +362,7 @@ trait LinearRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with Ev
     }
 
     object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with PredictionBase {
-      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
       override val retainIds = true
 
