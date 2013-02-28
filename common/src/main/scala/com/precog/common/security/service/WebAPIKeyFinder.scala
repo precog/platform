@@ -84,8 +84,9 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
 
   def rootAPIKey: APIKey
 
-  def findAPIKey(apiKey: APIKey): Response[Option[v1.APIKeyDetails]] = {
-    withJsonClient { client =>
+  def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]): Response[Option[v1.APIKeyDetails]] = {
+    withJsonClient { client0 =>
+      val client = rootKey.map(client0.query("authkey", _)).getOrElse(client0)
       eitherT(client.get[JValue]("apikeys/" + apiKey) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_: Extractor.Error).message) <-: jvalue.validated[v1.APIKeyDetails] :-> { details => Some(details) }).disjunction

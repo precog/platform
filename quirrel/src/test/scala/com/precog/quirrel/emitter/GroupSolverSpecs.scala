@@ -1106,5 +1106,20 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must beEmpty
     }
+    
+    "not explode more differently" in {
+      val input = """
+        | createModel(data) :=  
+        |   cumProb := solve 'rank = data
+        |     42
+        | 
+        |   solve 'rank = cumProb
+        |     42
+        | 
+        | createModel(42)
+        | """.stripMargin
+      
+      compileSingle(input) must not(throwA[Throwable])
+    }
   }
 }

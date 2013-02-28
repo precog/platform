@@ -677,7 +677,7 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
     }
 
     object AssignClusters extends Morphism2(Vector("std", "stats"), "assignClusters") with AssignClusterBase {
-      val tpe = BinaryOperationType(JObjectUnfixedT, JType.JUniverseT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
       override val retainIds = true
 

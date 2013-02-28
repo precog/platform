@@ -117,8 +117,8 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   object ReadAPIKeyDetailsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success {
       // since having an api key means you can see the details, we don't check perms.
-      request.parameters.get('apikey) map { apiKey =>
-        findAPIKey(apiKey) map { k =>
+      request.parameters.get('apikey).map { apiKey =>
+        apiKeyFinder.findAPIKey(apiKey, request.parameters.get('authkey)).map { k =>
           if (k.isDefined) ok(k) else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
@@ -146,8 +146,8 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
   object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success {
       request.parameters.get('apikey) map { apiKey =>
-        findAPIKey(apiKey) map {
-          case Some(v1.APIKeyDetails(_, _, _, grantDetails)) => ok(Some(grantDetails))
+        findAPIKey(apiKey, None) map {
+          case Some(v1.APIKeyDetails(_, _, _, grantDetails, _)) => ok(Some(grantDetails))
           case None => notFound("The specified API key does not exist")
         }
       } getOrElse {

@@ -428,7 +428,7 @@ trait DAG extends Instructions {
     }
     case class Specs(specs: Vector[dag.IdentitySpec]) extends Identities {
       override def length = specs.length
-      override def distinct = Specs(specs.distinct)
+      override def distinct = Specs(specs map { _.canonicalize } distinct)
       override def fold[A](identities: Vector[dag.IdentitySpec] => A, b: A) = identities(specs)
     }
     case object Undefined extends Identities {
@@ -1256,11 +1256,38 @@ trait DAG extends Instructions {
     case class Extra(expr: DepGraph) extends BucketSpec
     
     
-    sealed trait IdentitySpec
+    sealed trait IdentitySpec {
+      def canonicalize: IdentitySpec = this
+    }
 
     case class LoadIds(path: String) extends IdentitySpec
     case class SynthIds(id: Int) extends IdentitySpec
-    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec
+    
+    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec {
+      override def canonicalize = {
+        val left2 = left.canonicalize
+        val right2 = right.canonicalize
+        val this2 = CoproductIds(left2, right2)
+        
+        val pos = this2.possibilities
+        
+        pos reduceOption CoproductIds orElse pos.headOption getOrElse this2
+      }
+      
+      private def possibilities: Set[IdentitySpec] = {
+        val leftPos = left match {
+          case left: CoproductIds => left.possibilities
+          case _ => Set(left)
+        }
+        
+        val rightPos = right match {
+          case right: CoproductIds => right.possibilities
+          case _ => Set(right)
+        }
+        
+        leftPos ++ rightPos
+      }
+    }
 
     
     sealed trait JoinSort

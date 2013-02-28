@@ -48,6 +48,15 @@ class InMemoryAccountManager[M[+_]](implicit val M: Monad[M]) extends AccountMan
     }
   }
 
+  def setAccount(accountId: AccountId, email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId]) = {
+    newAccount(email, password, creationDate, plan, parentId)((_,_) => M.point(java.util.UUID.randomUUID().toString.toLowerCase)).map {
+      account => {
+        accounts -= account.accountId
+        accounts += (accountId -> account.copy(accountId = accountId))
+      }
+    }
+  }
+
   def findAccountByAPIKey(apiKey: APIKey) : M[Option[AccountId]] = {
     accounts.values.find(_.apiKey == apiKey).map(_.accountId).point[M]
   }
