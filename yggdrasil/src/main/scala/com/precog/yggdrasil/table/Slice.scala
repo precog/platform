@@ -780,22 +780,6 @@ trait Slice { source =>
     }
   }
 
-  def append(other: Slice): Slice = {
-    new Slice {
-      val size = source.size + other.size
-      val columns = other.columns.foldLeft(source.columns) {
-        case (acc, (ref, col)) =>
-          val appendedCol = acc.get(ref) flatMap { sc =>
-            cf.util.Concat(source.size)(sc, col)
-          } getOrElse {
-            (col |> cf.util.Shift(source.size)).get
-          }
-
-          acc + (ref -> appendedCol)
-      }
-    }
-  }
-
   def zip(other: Slice): Slice = {
     new Slice {
       val size = source.size min other.size
