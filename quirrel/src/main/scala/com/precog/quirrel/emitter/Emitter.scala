@@ -391,7 +391,7 @@ trait Emitter extends AST
         case expr @ ast.Solve(loc, _, body) =>
           val spec = expr.buckets(dispatches)
         
-          val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =
+          val btraces: Map[Expr, List[List[(Map[Formal, Expr], Expr)]]] =
             spec.exprs.map({ expr =>
               val btrace = buildBacktrace(trace)(expr)
               (expr -> btrace)
@@ -399,13 +399,13 @@ trait Emitter extends AST
           
           val contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]] = btraces map {
             case (key, pairPaths) => {
-              val paths: Set[List[Expr]] = pairPaths map { pairs => pairs map { _._2 } }
+              val paths: List[List[Expr]] = pairPaths map { pairs => pairs map { _._2 } }
               
               val innerDispatches = paths filter { _ contains expr } map { btrace =>
                 btrace takeWhile (expr !=) collect {
                   case d: ast.Dispatch if d.binding.isInstanceOf[LetBinding] => d
                 }
-              }
+              } toSet
               
               key -> innerDispatches
             }
