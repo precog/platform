@@ -354,6 +354,22 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
           }
 
         case InnerObjectConcat(objects @ _*) =>
+          /**
+           * This test is for special casing object concats when we know we
+           * won't have any unions, or funky behaviour arising from empty
+           * objects.
+           */
+          def isDisjoint(s1: Slice, s2: Slice): Boolean = {
+            def containsEmptyObject(slice: Slice): Boolean =
+              slice.columns.exists(_._1.ctype == CEmptyObject)
+
+            if (containsEmptyObject(s1) || containsEmptyObject(s2))
+              return false
+
+            val keys = s1.columns.map(_._1.selector).toSet
+            !s2.columns.map(_._1.selector).exists(keys)
+          }
+
           if (objects.size == 1) {
             val typed = Typed(objects.head, JObjectUnfixedT)
             composeSliceTransform2(typed) 
@@ -366,6 +382,8 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                   val columns: Map[ColumnRef, Column] = {
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
+                    } else if (isDisjoint(sl, sr)) {
+                      sl.columns ++ sr.columns
                     } else {
                       val (leftObjectBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterObjects, filterEmptyObjects)
                       val (rightObjectBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterObjects, filterEmptyObjects)
