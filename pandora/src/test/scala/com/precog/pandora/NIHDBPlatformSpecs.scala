@@ -105,7 +105,7 @@ object NIHDBPlatformActor extends Logging {
     users.getAndIncrement
 
     if (state.isEmpty) {
-      logger.info("Allocating new projections actor")
+      logger.info("Allocating new projections actor in " + this.hashCode)
       state = {
         val actorSystem = ActorSystem("NIHDBPlatformActor")
         val storageTimeout = Timeout(300 * 1000)
@@ -131,10 +131,11 @@ object NIHDBPlatformActor extends Logging {
     users.getAndDecrement
 
     // Allow for a grace period
-    state.foreach { case SystemState(_, as) => as.scheduler.scheduleOnce(Duration(60, "seconds")) { checkUnused }}
+    state.foreach { case SystemState(_, as) => as.scheduler.scheduleOnce(Duration(5, "seconds")) { checkUnused }}
   }
 
   def checkUnused = users.synchronized {
+    logger.debug("Checking for unused projectionsActor. Count = " + users.get)
     if (users.get == 0) {
       state.foreach {
         case SystemState(projectionsActor, actorSystem) =>
