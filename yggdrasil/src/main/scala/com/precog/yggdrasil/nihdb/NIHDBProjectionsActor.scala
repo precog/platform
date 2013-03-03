@@ -126,7 +126,7 @@ class NIHDBProjectionsActor(
 
   def descriptorDir(baseDir: File, path: Path, authorities: Authorities): File = {
     //The projections are stored in the perAuthoritySubdir, relative to the path dir, in a folder based on their authority's hash
-    new File(projectionsDir(baseDir, path), "__%010d".format(authorities.hashCode))
+    new File(projectionsDir(baseDir, path), authorities.sha1)
   }
 
   // Must return a directory

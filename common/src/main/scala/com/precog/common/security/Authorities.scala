@@ -19,6 +19,9 @@
  */
 package com.precog.common.security
 
+import com.google.common.base.Charsets
+import com.google.common.hash.Hashing
+
 import com.precog.common.accounts.AccountId
 
 import blueeyes.json._
@@ -34,6 +37,8 @@ import scala.annotation.tailrec
 case class Authorities private (ownerAccountIds: Set[AccountId]) {
   def expand(ownerAccountId: AccountId) =
     this.copy(ownerAccountIds = this.ownerAccountIds + ownerAccountId)
+
+  def sha1 = Hashing.sha1().hashString(ownerAccountIds.toList.sorted.toString, Charsets.UTF_8).toString
 }
 
 object Authorities {
