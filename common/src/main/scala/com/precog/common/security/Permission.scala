@@ -29,12 +29,14 @@ import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.Extractor.Invalid
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 
-sealed trait Permission {
+sealed trait Permission extends Logging {
   def path: Path
   def ownerAccountIds: Set[AccountId]
   

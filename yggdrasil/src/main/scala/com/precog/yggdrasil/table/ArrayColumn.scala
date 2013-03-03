@@ -82,7 +82,7 @@ object ArrayBoolColumn {
     new ArrayBoolColumn(new BitSet, new BitSet)
 }
 
-class ArrayLongColumn(val defined: BitSet, values: Array[Long]) extends ArrayColumn[Long] with LongColumn {
+class ArrayLongColumn(val defined: BitSet, val values: Array[Long]) extends ArrayColumn[Long] with LongColumn {
   def apply(row: Int) = values(row)
 
   def update(row: Int, value: Long) = {

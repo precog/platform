@@ -323,7 +323,7 @@ trait ColumnarTableModule[M[+_]]
         toVector(dnf(spec)).map(sources(_).map { s => (s.key, s.spec) })
       
       case class IndexedSource(groupId: GroupId, index: TableIndex, keySchema: KeySchema) 
-        
+      
       (for {
         source <- grouping.sources
         groupKeyProjections <- mkProjections(source.groupKeySpec)
@@ -412,9 +412,7 @@ trait ColumnarTableModule[M[+_]]
               (indexedSource.index, projectedKeyIndices, groupKey)
             }).toList
 
-            // TODO: filter empty slices earlier maybe?
-            val t = TableIndex.joinSubTables(subTableProjections).normalize
-            t.sort(DerefObjectStatic(Leaf(Source), CPathField("key")))
+            M.point(TableIndex.joinSubTables(subTableProjections).normalize) // TODO: normalize necessary?
           }
 
           nt(body(groupKeyTable, map))
@@ -423,8 +421,10 @@ trait ColumnarTableModule[M[+_]]
         // TODO: this can probably be done as one step, but for now
         // it's probably fine.
         val tables: StreamT[M, Table] = StreamT.unfoldM(groupKeys.toList) {
-          case k :: ks => evaluateGroupKey(k).map(t => Some((t, ks)))
-          case Nil => M.point(None)
+          case k :: ks =>
+            evaluateGroupKey(k).map(t => Some((t, ks)))
+          case Nil =>
+            M.point(None)
         }
 
         val slices: StreamT[M, Slice] = tables.flatMap(_.slices)
@@ -590,7 +590,20 @@ trait ColumnarTableModule[M[+_]]
       Table(Table.transformStream(composeSliceTransform(spec), slices), this.size)
     }
     
-    def force: M[Table] = this.sort(Scan(Leaf(Source), freshIdScanner), SortAscending) //, unique = true)
+    def force: M[Table] = {
+      def loop(slices: StreamT[M, Slice], acc: List[Slice], size: Long): M[(List[Slice], Long)] = slices.uncons flatMap {
+        case Some((slice, tail)) if slice.size > 0 =>
+          loop(tail, slice.materialized :: acc, size + slice.size)
+        case Some((_, tail)) =>
+          loop(tail, acc, size)
+        case None =>
+          M.point((acc.reverse, size))
+      }
+      val former = new (Id.Id ~> M) { def apply[A](a: Id.Id[A]): M[A] = M.point(a) }
+      loop(slices, Nil, 0L).map { case (stream, size) =>
+        Table(StreamT.fromIterable(stream).trans(former), ExactSize(size))
+      }
+    }
     
     def paged(limit: Int): Table = {
       val slices2 = slices flatMap { slice =>

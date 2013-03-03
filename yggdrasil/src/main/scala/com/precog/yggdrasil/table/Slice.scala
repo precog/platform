@@ -642,10 +642,15 @@ trait Slice { source =>
   }
 
   def order: spire.math.Order[Int] = {
-    val cols = columns groupBy (_._1.selector) lazyMapValues (_.values.toSet)
-    val paths = cols.keys.toList
-    val traversal = CPathTraversal(paths)
-    traversal.rowOrder(paths, cols)
+    if (columns.size == 1) {
+      val col = columns.head._2
+      Column.rowOrder(col)
+    } else {
+      val cols = columns groupBy (_._1.selector) lazyMapValues (_.values.toSet)
+      val paths = cols.keys.toList
+      val traversal = CPathTraversal(paths)
+      traversal.rowOrder(paths, cols)
+    }
   }
 
   def sortWith(keySlice: Slice, sortOrder: DesiredSortOrder = SortAscending): (Slice, Slice) = {
