@@ -273,7 +273,11 @@ class NIHDBProjectionsActor(
   }
 
   private def openProjections(path: Path): Option[IO[List[NIHDBProjection]]] = {
-    projections.get(path).map { existing => IO(existing.values.toList) } orElse {
+    projections.get(path).map { existing =>
+      logger.debug("Found cached projection for " + path)
+      IO(existing.values.toList)
+    } orElse {
+      logger.debug("Opening new projection for " + path)
       findDescriptorDirs(path).map { projDirs =>
         projDirs.toList.map { bd =>
           NIHDB.open(chef, bd, cookThreshold, storageTimeout)(context.system).map { dbov =>
@@ -281,6 +285,8 @@ class NIHDBProjectionsActor(
               dbv.map { case (authorities, db) =>
                 val proj = new NIHDBActorProjection(db)(context.dispatcher)
                 projections += (path -> (projections.getOrElse(path, Map()) + (authorities -> proj)))
+
+                logger.debug("Cache for %s updated to %s".format(path, projections.get(path)))
 
                 proj
               } valueOr { error =>
@@ -298,13 +304,17 @@ class NIHDBProjectionsActor(
       case Some(inputs) =>
         inputs.toNel.map { ps =>
           if (ps.size == 1) {
+            logger.debug("Aggregate on %s with key %s returns a single projection".format(path, apiKey))
             Promise.successful(ps.head)(context.dispatcher)
           } else {
+            logger.debug("Aggregate on %s with key %s returns an aggregate projection".format(path, apiKey))
             ps.map(_.getSnapshot).sequence.map { snaps => new NIHDBAggregateProjection(snaps) }
           }
         }.sequence
 
-      case None => Promise.successful(None)(context.dispatcher)
+      case None =>
+        logger.debug("No projections found for " + path)
+        Promise.successful(None)(context.dispatcher)
     }
   }
 
@@ -321,6 +331,7 @@ class NIHDBProjectionsActor(
             Promise.successful(None)(context.dispatcher)
 
           case Some(foundProjections) =>
+            logger.debug("Checking found projections at " + path + " for access")
             foundProjections.map { proj =>
               apiKey.map { key =>
                 proj.authorities.flatMap { authorities =>

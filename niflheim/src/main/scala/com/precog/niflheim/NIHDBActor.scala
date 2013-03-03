@@ -217,6 +217,8 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
   logger.debug("Opening log in " + baseDir)
   private[this] val txLog = new CookStateLog(baseDir)
 
+  logger.debug("Current raw block id = " + txLog.currentBlockId)
+
   private[this] var blockState: BlockState = {
     // We'll need to update our current thresholds based on what we read out of any raw logs we open
     var thresholds = currentState.producerThresholds
@@ -251,11 +253,15 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
     BlockState(cooked, pendingCooks, currentLog)
   }
 
+  logger.debug("Initial block state = " + blockState)
+
   private[this] var currentBlocks: SortedMap[Long, StorageReader] = computeBlockMap(blockState)
 
   // Re-fire any restored pending cooks
   blockState.pending.foreach {
-    case (id, reader) => chef ! Prepare(id, cookSequence.getAndIncrement, cookedDir, reader)
+    case (id, reader) =>
+      logger.debug("Restarting pending cook on block %s:%d".format(baseDir, id))
+      chef ! Prepare(id, cookSequence.getAndIncrement, cookedDir, reader)
   }
 
   def getSnapshot(): NIHDBSnapshot = NIHDBSnapshot(currentBlocks)
@@ -318,6 +324,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
         currentState = currentState.copy(producerThresholds = updatedThresholds(currentState.producerThresholds, Seq(eventId)))
 
         if (blockState.rawLog.length >= cookThreshold) {
+          logger.debug("Starting cook after threshold exceeded")
           blockState.rawLog.close
           val toCook = blockState.rawLog
           val newRaw = RawHandler.empty(toCook.id + 1, rawFileFor(toCook.id + 1))
