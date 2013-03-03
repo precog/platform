@@ -309,11 +309,12 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
         cookedMap = currentState.cookedMap + (id -> file.getName)
       )
 
-      ProjectionState.toFile(currentState, descriptorFile)
+      logger.debug("Cook complete on %d".format(id))
+
+      ProjectionState.toFile(currentState, descriptorFile).unsafePerformIO
       txLog.completeCook(id)
 
     case Insert(eventId, values) =>
-      // FIXME: Deal with AUTHORITIES
       val pid = EventId.producerId(eventId)
       val sid = EventId.sequenceId(eventId)
       if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
@@ -373,7 +374,7 @@ object ProjectionState {
     }
   }
 
-  def toFile(state: ProjectionState, output: File) = {
+  def toFile(state: ProjectionState, output: File): IO[Boolean] = {
     IOUtils.safeWriteToFile(state.serialize.renderCompact, output)
   }
 }
