@@ -34,6 +34,7 @@ import akka.pattern.gracefulStop
 import akka.util.{Duration, Timeout}
 
 import blueeyes.bkka._
+import blueeyes.util.Clock
 
 import com.codecommit.gll.LineStream
 
@@ -103,7 +104,7 @@ object SBTConsole {
 
     val storageTimeout = yggConfig.storageTimeout
 
-    val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future]
+    val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future](Clock.System)
     val accessControl = new DirectAPIKeyFinder(rawAPIKeyFinder)
 
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint

@@ -4,8 +4,9 @@ package security
 import com.precog.common.accounts._
 import com.precog.common.security.service._
 
-import org.specs2.mutable.Specification
+import blueeyes.util.Clock
 
+import org.specs2.mutable.Specification
 import org.joda.time.DateTime
 
 import scalaz._
@@ -19,7 +20,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
   def withAPIKeyFinder[A](mgr: APIKeyManager[M])(f: APIKeyFinder[M] => A): A
 
-  private def emptyAPIKeyManager = new InMemoryAPIKeyManager[M]()
+  private def emptyAPIKeyManager = new InMemoryAPIKeyManager[M](Clock.System)
 
   "API key finders" should {
     "create and find API keys" in {
@@ -32,7 +33,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "find existing API key" in {
       val (key, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
       } yield (key0.apiKey -> mgr)).copoint
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -45,9 +46,11 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
         val accountId = "user1"
         val path = Path("/user1/")
         val key = keyFinder.newAPIKey(accountId, path, None, None).copoint
-        val permissions: Set[Permission] =
-          Set(ReadPermission, ReducePermission, DeletePermission).map(_(path, WrittenBy(accountId))) ++
-            Set(WritePermission(path, WriteAs(accountId)))
+        val permissions: Set[Permission] = Set(
+          ReadPermission(path, WrittenByAccount(accountId)), 
+          DeletePermission(path, WrittenByAccount(accountId)), 
+          WritePermission(path, WriteAs(accountId))
+        )
 
         keyFinder.hasCapability(key.apiKey, permissions, None).copoint must beTrue
       }
@@ -55,13 +58,14 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "grant full permissions to another user" in {
       val path = Path("/user1/")
-      val permissions: Set[Permission] =
-        Set(ReadPermission, ReducePermission).map (_(path, WrittenBy("user1"))) ++
-          Set(WritePermission(path, WriteAsAny)) ++
-          Set(DeletePermission(path, WrittenByAny))
+      val permissions: Set[Permission] = Set(
+        ReadPermission(path, WrittenByAccount("user1")),
+        WritePermission(path, WriteAsAny),
+        DeletePermission(path, WrittenByAny)
+      )
 
       val (key0, key1, grantId, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         key0 <- mgr.newStandardAPIKeyRecord("user1", path, None, None)
         key1 <- mgr.newStandardAPIKeyRecord("user2", Path("/user2/"), None, None)
         grant <- mgr.newAccountGrant("user1", None, None, key0.apiKey, Set.empty, None)
@@ -75,7 +79,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "find all child API Keys" in {
       val (parent, keys, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
         key1 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
         key2 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
@@ -89,7 +93,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "not return grand-child API keys or self API key when finding children" in {
       val (parent, child, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
         key1 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
         key2 <- mgr.newAPIKey(None, None, key1.apiKey, Set.empty)
@@ -103,17 +107,18 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "return false when capabilities expire" in {
       val path = Path("/user1/")
-      val permissions: Set[Permission] =
-        Set(ReadPermission, ReducePermission).map (_(path, WrittenBy("user1"))) ++
-          Set(WritePermission(path, WriteAsAny)) ++
-          Set(DeletePermission(path, WrittenByAny))
+      val permissions: Set[Permission] = Set(
+        ReadPermission(path, WrittenByAccount("user1")),
+        WritePermission(path, WriteAsAny),
+        DeletePermission(path, WrittenByAny)
+      )
 
       val expiration = new DateTime(100)
       val beforeExpiration = new DateTime(50)
       val afterExpiration = new DateTime(150)
 
       val (key0, key1, grantId, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         key0 <- mgr.newStandardAPIKeyRecord("user1", path, None, None)
         key1 <- mgr.newStandardAPIKeyRecord("user2", Path("/user2/"), None, None)
         grant <- mgr.newAccountGrant("user1", None, None, key0.apiKey, Set.empty, Some(expiration))
@@ -128,7 +133,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "return issuer details when a proper root key is passed to findAPiKey" in {
       val (rootKey, key0, key1, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         rootKey <- mgr.rootAPIKey
         key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
         key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
@@ -142,7 +147,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
     "hide issuer details when a root key is not passed to findAPIKey" in {
       val (rootKey, key0, key1, mgr) = (for {
-        mgr <- M.point(new InMemoryAPIKeyManager[M])
+        mgr <- M.point(emptyAPIKeyManager)
         rootKey <- mgr.rootAPIKey
         key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
         key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)

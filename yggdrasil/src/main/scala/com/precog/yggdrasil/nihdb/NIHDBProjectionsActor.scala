@@ -29,6 +29,7 @@ import scalaz._
 import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.std.option._
+import scalaz.std.set._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
 import scalaz.syntax.traverse._
@@ -158,8 +159,16 @@ class NIHDBProjectionsActor(
   }
 
   def archiveByAPIKey(path: Path, apiKey: APIKey): Future[PrecogUnit] = {
-    def deleteOk(apiKey: APIKey, authorities: Authorities): Future[Boolean] =
-      apiKeyFinder.hasCapability(apiKey, Set(DeletePermission(path, Permission.WrittenBy(authorities))), Some(new DateTime))
+    import Permission._
+
+    def deleteOk(apiKey: APIKey, authorities: Authorities): Future[Boolean] = {
+      authorities.accountIds.map({ accountId =>
+        // TODO: need a Clock in here
+        apiKeyFinder.hasCapability(apiKey, Set(DeletePermission(path, WrittenByAccount(accountId))), Some(new DateTime))
+      }).sequence.map({
+        _.exists(_ == true)
+      })
+    }
 
     // First, we need to figure out which projections are actually
     // being archived based on the authorities and perms of the api key
@@ -221,7 +230,7 @@ class NIHDBProjectionsActor(
   def findChildren(path: Path, apiKey: APIKey): Future[Set[Path]] = {
     implicit val ctx = context.dispatcher
     for {
-      permissions <- apiKeyFinder.listPermissions(apiKey, path)
+      permissions <- APIKeyFinder.listPermissions(apiKeyFinder, apiKey, path)
     } yield {
       val writtenBy = permissions collect {
         case perm @ WrittenByPermission(p0, _) if p0.isEqualOrParent(path) => perm
@@ -316,15 +325,13 @@ class NIHDBProjectionsActor(
             foundProjections.map { proj =>
               apiKey.map { key =>
                 proj.authorities.flatMap { authorities =>
-                  authorities.ownerAccountIds.toList.toNel map { ids =>
-                    apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenBy.oneOf(ids))), Some(new DateTime)) map { canAccess =>
-                      logger.debug("Access for projection at " + path + " = " + canAccess)
-                      canAccess.option(proj)
-                    }
-                  } getOrElse {
-                    logger.error("Projection " + proj + " at path " + path + " has empty set of authorities.")
-                    Promise.successful(None)(context.dispatcher)
-                  }
+                  // must have at a minimum a reduce permission from each authority
+                  // TODO: get a Clock in here
+                  authorities.accountIds.map({ id =>
+                    apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
+                  }).sequence.map({
+                    _.forall(_ == true).option(proj)
+                  })
                 }
               }.getOrElse {
                 Promise.successful(Some(proj))(context.dispatcher)

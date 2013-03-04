@@ -67,7 +67,7 @@ trait TestEventService extends
     def copoint[A](m: Future[A]) = Await.result(m, to)
   }
 
-  private val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   protected val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   protected val testAccount = TestAccounts.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {
@@ -82,8 +82,7 @@ trait TestEventService extends
 
 
   val accessTest = Set[Permission](
-    ReadPermission(testAccount.rootPath, WrittenBy("test")),
-    ReducePermission(testAccount.rootPath, WrittenBy("test")),
+    ReadPermission(Path.Root, WrittenByAccount("test")),
     WritePermission(testAccount.rootPath, WriteAsAny),
     DeletePermission(testAccount.rootPath, WrittenByAny)
   )
