@@ -20,7 +20,7 @@
 package com.precog.quirrel
 package parser
 
-import com.codecommit.gll.LineStream
+import com.codecommit.gll._
 
 import scala.collection.mutable
 import scala.util.matching.Regex
@@ -36,13 +36,15 @@ import scalaz.std.vector._
 trait QuirrelCache extends AST { parser: Parser =>
   import ast._
 
-  type CacheKey = String
-
   sealed abstract class Rule(val re: Regex)
   case class Keep(tpe: String, r: Regex) extends Rule(r)
   case class Ignore(r: Regex) extends Rule(r)
 
+  case class Slot(lineNum: Int, colNum: Int, width: Int)
   case class Binding(tpe: String, name: String, value: String, pos: Int)
+
+  type CacheKey = String
+  type CacheValue = (Expr, Map[String, Slot])
 
   object CacheKey {
     val spaceRe = """[ \n\r]+""".r
@@ -111,7 +113,7 @@ trait QuirrelCache extends AST { parser: Parser =>
       (output.toString, bindings)
     }
 
-    def fromExpr(original: String, expr: Expr): String = {
+    def fromExpr(original: String, expr: Expr): (CacheKey, Map[String, Slot]) = {
       def loop(expr: Expr): List[Literal] = expr match {
         case b: BoolLit => b :: Nil
         case n: NumLit => n :: Nil
@@ -137,7 +139,7 @@ trait QuirrelCache extends AST { parser: Parser =>
       }
       val lens = buildLineLengths()
 
-      def parseOriginal(lit: Literal, i: Int): (String, Int) = {
+      def parseLiteral(lit: Literal, i: Int): (String, Int) = {
         val s = original.substring(i)
         lit match {
           case _: BoolLit =>
@@ -146,21 +148,7 @@ trait QuirrelCache extends AST { parser: Parser =>
             }
           case _: NumLit =>
             parser.numLiteralRegex.findPrefixOf(s).map(x => ("n", x.length)).getOrElse {
-              //sys.error("error recovering number literal from %s (%s at %s)" format (s, original, i))
-              val msg = """
-lens = %s
-
-
-original = %s
-
-
-expr = %s
-
-
-i = %s
-s = %s
-""" format (lens.toList, original, expr, i, s)
-              sys.error(msg)
+              sys.error("error recovering number literal from %s (%s at %s)" format (s, original, i))
             }
           case _: StrLit =>
             parser.pathLiteralRegex.findPrefixOf(s).map(x => ("p", x.length)).orElse {
@@ -171,6 +159,7 @@ s = %s
         }
       }
 
+      val slots = mutable.Map.empty[String, Slot]
       val sb = new StringBuilder(original.length)
       var counter = 1
       var last = 0
@@ -180,24 +169,21 @@ s = %s
           lastLoc = lit.loc
 
           val i = lens(lit.loc.lineNum - 1) + (lit.loc.colNum - 1)
-          val s = try {
-            original.substring(last, i)
-          } catch {
-            case e: Exception =>
-              sys.error("for %s (lens=%s)... original.substring(%s, %s) blew up; original.length=%s" format (lit, lens(lit.loc.lineNum - 1), last, i, original.length))
-          }
+          val s = original.substring(last, i)
           sb.append(s)
 
-          val (prefix, originalLength) = parseOriginal(lit, i)
-          sb.append("$" + prefix + counter.toString)
+          val (prefix, width) = parseLiteral(lit, i)
+          val name = "$" + prefix + counter.toString
+          sb.append(name)
+          slots(name) = Slot(lit.loc.lineNum, lit.loc.colNum, width)
 
-          last = i + originalLength
+          last = i + width
           counter += 1
         }
       }
       sb.append(original.substring(last))
 
-      sb.toString
+      (sb.toString, slots.toMap)
     }
   }
 
@@ -214,18 +200,49 @@ s = %s
     sorted.map(_._2).zipWithIndex.toMap
   }
 
-  def resolveBindings(expr: Expr, bindings: IndexedSeq[Binding]): Option[Expr] = {
+  def resolveBindings(expr: Expr, bindings: IndexedSeq[Binding],
+      slots: Map[String, Slot]): Option[Expr] = {
     val index = buildBindingIndex(expr)
     val sortedBindings = bindings.zipWithIndex.map { case (b, i) =>
       (b, index(i))
     }.sortBy(_._2).map(_._1).toList
 
-    replaceLiteralsS(expr, sortedBindings)
+    replaceLiteralsS(expr, sortedBindings, locUpdates(bindings, slots))
+  }
+
+  def locUpdates(bindings: IndexedSeq[Binding], slots: Map[String, Slot]): LineStream => LineStream = {
+    val widths: Map[String, Int] = bindings.map { b =>
+      (b.name, b.value.length)
+    }.toMap
+
+    val deltas: Map[Int, List[(Int, Int)]] = slots.toList.map {
+      case (name, Slot(lineNum, colNum, oldWidth)) =>
+        val width = widths(name)
+        val delta = oldWidth - width
+        lineNum -> (colNum, delta)
+      }.groupBy(_._1).map { case (lineNum, ds) =>
+        (lineNum, ds.map(_._2).sortBy(_._1))
+      }
+
+    { (loc: LineStream) =>
+      val colNum = deltas get loc.lineNum map { ds =>
+        ds.takeWhile(_._1 < loc.colNum).map(_._2).sum
+      } map (_ + loc.colNum) getOrElse loc.colNum
+
+      loc match {
+        case ln: LazyLineCons =>
+          new LazyLineCons(ln.head, ln.tail, ln.line, ln.lineNum, colNum)
+        case ln: StrictLineCons =>
+          new StrictLineCons(ln.head, ln.tail, ln.line, ln.lineNum, colNum)
+        case LineNil =>
+          LineNil
+      }
+    }
   }
 
   type BindingS[+A] = StateT[Option, List[Binding], A]
 
-  def replaceLiteralsS(expr0: Expr, bindings: List[Binding]): Option[Expr] = {
+  def replaceLiteralsS(expr0: Expr, bindings: List[Binding], updateLoc: LineStream => LineStream): Option[Expr] = {
     implicit val stateM = StateT.stateTMonadState[List[Binding], Option]
     import stateM._
 
@@ -238,168 +255,168 @@ s = %s
 
     def repl(expr: Expr): BindingS[Expr] = expr match {
       case lit @ BoolLit(loc, _) =>
-        pop map { b => BoolLit(loc, b.value == "true") }
+        pop map { b => BoolLit(updateLoc(loc), b.value == "true") }
 
       case lit @ NumLit(loc, _) =>
-        pop map { b => NumLit(loc, b.value) }
+        pop map { b => NumLit(updateLoc(loc), b.value) }
 
       case lit @ StrLit(loc, _) =>
-        pop map { b => StrLit(loc, b.value) }
+        pop map { b => StrLit(updateLoc(loc), b.value) }
 
       case Let(loc, name, params, lchild0, rchild0) =>
         for (lchild <- repl(lchild0); rchild <- repl(rchild0))
-          yield Let(loc, name, params, lchild, rchild)
+          yield Let(updateLoc(loc), name, params, lchild, rchild)
 
       case Solve(loc, constraints0, child0) =>
         for {
           child <- repl(child0)
           constraints <- (constraints0 map repl).sequence
-        } yield Solve(loc, constraints, child)
+        } yield Solve(updateLoc(loc), constraints, child)
 
       case Import(loc, spec, child) =>
-        repl(child) map (Import(loc, spec, _))
+        repl(child) map (Import(updateLoc(loc), spec, _))
 
       case Assert(loc, pred0, child0) =>
         for (pred <- repl(pred0); child <- repl(child0))
-          yield Assert(loc, pred, child)
+          yield Assert(updateLoc(loc), pred, child)
 
       case Observe(loc, data0, samples0) =>
         for (data <- repl(data0); samples <- repl(data0))
-          yield Observe(loc, data, samples)
+          yield Observe(updateLoc(loc), data, samples)
 
       case New(loc, child0) =>
-        repl(child0) map (New(loc, _))
+        repl(child0) map (New(updateLoc(loc), _))
 
       case Relate(loc, from0, to0, in0) =>
         for {
           in <- repl(in0)
           to <- repl(to0)
           from <- repl(from0)
-        } yield Relate(loc, from, to, in)
+        } yield Relate(updateLoc(loc), from, to, in)
 
       case TicVar(loc, name) =>
-        TicVar(loc, name).point[BindingS]
+        TicVar(updateLoc(loc), name).point[BindingS]
 
       case UndefinedLit(loc) =>
-        UndefinedLit(loc).point[BindingS]
+        UndefinedLit(updateLoc(loc)).point[BindingS]
 
       case NullLit(loc) =>
-        NullLit(loc).point[BindingS]
+        NullLit(updateLoc(loc)).point[BindingS]
 
       case ObjectDef(loc, props0) =>
         for {
           props <- (props0 map { case (prop, expr) =>
               repl(expr) map (prop -> _)
             }: Vector[BindingS[(String, Expr)]]).sequence
-        } yield ObjectDef(loc, props)
+        } yield ObjectDef(updateLoc(loc), props)
 
       case ArrayDef(loc, values0) =>
-        (values0 map repl).sequence map (ArrayDef(loc, _))
+        (values0 map repl).sequence map (ArrayDef(updateLoc(loc), _))
 
       case Descent(loc, child0, property) =>
-        repl(child0) map (Descent(loc, _, property))
+        repl(child0) map (Descent(updateLoc(loc), _, property))
 
       case MetaDescent(loc, child0, property) =>
-        repl(child0) map (MetaDescent(loc, _, property))
+        repl(child0) map (MetaDescent(updateLoc(loc), _, property))
 
       case Deref(loc, lchild0, rchild0) =>
         for (lchild <- repl(lchild0); rchild <- repl(rchild0))
-          yield Deref(loc, lchild, rchild)
+          yield Deref(updateLoc(loc), lchild, rchild)
 
       case Dispatch(loc, name, actuals) =>
-        (actuals map repl).sequence map (Dispatch(loc, name, _))
+        (actuals map repl).sequence map (Dispatch(updateLoc(loc), name, _))
 
       case Cond(loc, pred0, left0, right0) =>
         for {
           pred <- repl(pred0)
           left <- repl(left0)
           right <- repl(right0)
-        } yield Cond(loc, pred, left, right)
+        } yield Cond(updateLoc(loc), pred, left, right)
 
       case Where(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Where(loc, left, right)
+          yield Where(updateLoc(loc), left, right)
 
       case With(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield With(loc, left, right)
+          yield With(updateLoc(loc), left, right)
 
       case Union(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Union(loc, left, right)
+          yield Union(updateLoc(loc), left, right)
 
       case Intersect(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Intersect(loc, left, right)
+          yield Intersect(updateLoc(loc), left, right)
 
       case Difference(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Difference(loc, left, right)
+          yield Difference(updateLoc(loc), left, right)
 
       case Add(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Add(loc, left, right)
+          yield Add(updateLoc(loc), left, right)
 
       case Sub(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Sub(loc, left, right)
+          yield Sub(updateLoc(loc), left, right)
 
       case Mul(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Mul(loc, left, right)
+          yield Mul(updateLoc(loc), left, right)
 
       case Div(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Div(loc, left, right)
+          yield Div(updateLoc(loc), left, right)
 
       case Mod(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Mod(loc, left, right)
+          yield Mod(updateLoc(loc), left, right)
 
       case Pow(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Pow(loc, left, right)
+          yield Pow(updateLoc(loc), left, right)
 
       case Lt(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Lt(loc, left, right)
+          yield Lt(updateLoc(loc), left, right)
 
       case LtEq(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield LtEq(loc, left, right)
+          yield LtEq(updateLoc(loc), left, right)
 
       case Gt(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Gt(loc, left, right)
+          yield Gt(updateLoc(loc), left, right)
 
       case GtEq(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield GtEq(loc, left, right)
+          yield GtEq(updateLoc(loc), left, right)
 
       case Eq(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Eq(loc, left, right)
+          yield Eq(updateLoc(loc), left, right)
 
       case NotEq(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield NotEq(loc, left, right)
+          yield NotEq(updateLoc(loc), left, right)
 
       case And(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield And(loc, left, right)
+          yield And(updateLoc(loc), left, right)
 
       case Or(loc, left0, right0) =>
         for (left <- repl(left0); right <- repl(right0))
-          yield Or(loc, left, right)
+          yield Or(updateLoc(loc), left, right)
 
       case Comp(loc, expr) =>
-        repl(expr) map (Comp(loc, _))
+        repl(expr) map (Comp(updateLoc(loc), _))
 
       case Neg(loc, expr) =>
-        repl(expr) map (Neg(loc, _))
+        repl(expr) map (Neg(updateLoc(loc), _))
 
       case Paren(loc, expr) =>
-        repl(expr) map (Paren(loc, _))
+        repl(expr) map (Paren(updateLoc(loc), _))
     }
 
     val result = for {
@@ -413,13 +430,13 @@ s = %s
   }
 
   class Cache {
-    private val cache: mutable.Map[String, Expr] = mutable.Map.empty
+    private val cache: mutable.Map[CacheKey, CacheValue] = mutable.Map.empty
 
     def getOrElseUpdate(query: LineStream)(f: LineStream => Set[Expr]): Set[Expr] = {
       val s = query.toString
       val (key, bindings) = CacheKey.fromString(s)
-      cache.get(key).flatMap { expr =>
-        resolveBindings(expr, bindings) map { root =>
+      cache.get(key).flatMap { case (expr, slots) =>
+        resolveBindings(expr, bindings, slots) map { root =>
           bindRoot(root, root)
           root
         }
@@ -429,9 +446,9 @@ s = %s
         val exprs = f(query)
         if (exprs.size == 1) {
           val value = exprs.head
-          val key2 = CacheKey.fromExpr(s, value)
+          val (key2, slots) = CacheKey.fromExpr(s, value)
           // TODO: need to store loc or line info?
-          cache(key2) = value
+          cache(key2) = (value, slots)
         }
         exprs
       }
