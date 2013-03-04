@@ -31,14 +31,15 @@ import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
 
 import scalaz._
+import scalaz.syntax.std.boolean._
 
 import scala.annotation.tailrec
 
-case class Authorities private (ownerAccountIds: Set[AccountId]) {
+case class Authorities private (accountIds: Set[AccountId]) {
   def expand(ownerAccountId: AccountId) =
-    this.copy(ownerAccountIds = this.ownerAccountIds + ownerAccountId)
+    this.copy(accountIds = this.accountIds + ownerAccountId)
 
-  def sha1 = Hashing.sha1().hashString(ownerAccountIds.toList.sorted.toString, Charsets.UTF_8).toString
+  def sha1 = Hashing.sha1().hashString(accountIds.toList.sorted.toString, Charsets.UTF_8).toString
 }
 
 object Authorities {
@@ -47,9 +48,11 @@ object Authorities {
   def apply(firstAccountId: AccountId, others: AccountId*): Authorities =
     apply(others.toSet + firstAccountId)
 
+  def ifPresent(accountIds: Set[AccountId]): Option[Authorities] = accountIds.nonEmpty.option(apply(accountIds))
+
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
     override def decompose(authorities: Authorities): JValue = {
-      JObject(JField("uids", JArray(authorities.ownerAccountIds.map(JString(_)).toList)) :: Nil)
+      JObject(JField("uids", JArray(authorities.accountIds.map(JString(_)).toList)) :: Nil)
     }
   }
 
@@ -60,7 +63,7 @@ object Authorities {
 
   implicit object AuthoritiesSemigroup extends Semigroup[Authorities] {
     def append(a: Authorities, b: => Authorities): Authorities = {
-      Authorities(a.ownerAccountIds ++ b.ownerAccountIds)
+      Authorities(a.accountIds ++ b.accountIds)
     }
   }
 }

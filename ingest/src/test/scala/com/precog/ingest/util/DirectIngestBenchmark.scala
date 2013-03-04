@@ -33,6 +33,8 @@ import com.precog.ingest.service._
 import java.util.Properties
 import java.io.{File, FileReader}
 
+import org.joda.time.Instant
+
 import _root_.kafka._
 import _root_.kafka.api._
 import _root_.kafka.consumer._
@@ -87,7 +89,7 @@ object DirectKafkaProducer extends App {
   val topic = "direct_test_topic"
 
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
-  val msg = IngestMessage("test", Path("/test/"), Authorities("test"), Vector(IngestRecord(EventId(0, 0), sample.next._1)), None)
+  val msg = IngestMessage("test", Path("/test/"), Authorities("test"), Vector(IngestRecord(EventId(0, 0), sample.next._1)), None, new Instant())
 
   val total = 1000000
   val start = System.nanoTime

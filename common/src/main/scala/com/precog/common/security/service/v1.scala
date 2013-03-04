@@ -32,19 +32,26 @@ import blueeyes.json._
 import blueeyes.json.serialization.{ Extractor, Decomposer, IsoSerialization }
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.serialization.JodaSerializationImplicits.InstantDecomposer
+import blueeyes.json.serialization.JodaSerializationImplicits.InstantExtractor
 import blueeyes.json.serialization.Extractor._
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import shapeless._
 import scalaz.{NonEmptyList => NEL}
 
 object v1 {
-  case class GrantDetails(grantId: GrantId, name: Option[String], description: Option[String], permissions: Set[Permission], expirationDate: Option[DateTime])
+  case class GrantDetails(grantId: GrantId, name: Option[String], description: Option[String], permissions: Set[Permission], createdAt: Instant, expirationDate: Option[DateTime]) {
+    def isValidAt(timestamp: Instant) = {
+      createdAt.isBefore(timestamp) && expirationDate.forall(_.isAfter(timestamp))
+    }
+  }
   object GrantDetails {
     implicit val grantDetailsIso = Iso.hlist(GrantDetails.apply _, GrantDetails.unapply _)
 
-    val schema = "grantId" :: "name" :: "description" :: "permissions" :: "expirationDate" :: HNil
+    val schema = "grantId" :: "name" :: "description" :: "permissions" :: "createdAt" :: "expirationDate" :: HNil
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[GrantDetails](schema)
   }
@@ -77,7 +84,7 @@ object v1 {
     def newGrant(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
       import Permission._
       // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
-      val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path.Root, WrittenBy.oneOf(NEL(accountId))) : Permission)
+      val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path.Root, WrittenByAccount(accountId)) : Permission)
       val writePerms = Set(WritePermission(path, WriteAsAny), DeletePermission(path, WrittenByAny))
       NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
     }

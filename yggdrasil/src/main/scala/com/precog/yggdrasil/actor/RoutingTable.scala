@@ -49,12 +49,12 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case IngestMessage(key, path, writeAs, data, jobid) =>
+      case IngestMessage(key, path, writeAs, data, jobid, timestamp) =>
         val buf = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[IngestRecord])
         buf ++= data
 
-      case msg: ArchiveMessage =>
-        updates += ProjectionArchive(msg.archive.path, msg.archive.apiKey, msg.eventId)
+      case ArchiveMessage(key, path, jobid, eventId, timestamp) =>
+        updates += ProjectionArchive(path, key, eventId)
     }
 
     // combine ingest messages by (path, owner), add to updates, then return

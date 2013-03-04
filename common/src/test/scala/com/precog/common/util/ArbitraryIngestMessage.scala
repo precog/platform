@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import blueeyes.json._
 
+import org.joda.time.Instant
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
@@ -57,30 +58,30 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
       ownerAccountId <- alphaStr
       content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*)) if !content.isEmpty
       jobId <- oneOf(identifier.map(Option.apply), None)
-    } yield Ingest(apiKey, path, Some(ownerAccountId), content, jobId)
+    } yield Ingest(apiKey, path, Some(Authorities(ownerAccountId)), content, jobId, new Instant())
 
   def genRandomArchive: Gen[Archive] =
     for {
       apiKey <- alphaStr
       path <- genPath
       jobId <- oneOf(identifier.map(Option.apply), None)
-    } yield Archive(apiKey, path, jobId)
+    } yield Archive(apiKey, path, jobId, new Instant())
 
   def genRandomIngestMessage: Gen[IngestMessage] =
     for {
-      ingest <- genRandomIngest
+      ingest <- genRandomIngest if ingest.writeAs.isDefined
       eventIds <- containerOfN[List, EventId](ingest.data.size, genEventId).map(l => Vector(l: _*))
     } yield {
       //TODO: Replace with IngestMessage.fromIngest when it's usable
       val data = (eventIds zip ingest.data) map { Function.tupled(IngestRecord.apply) }
-      IngestMessage(ingest.apiKey, ingest.path, Authorities(ingest.ownerAccountId.get), data, ingest.jobId)
+      IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, data, ingest.jobId, new Instant())
     }
 
   def genRandomArchiveMessage: Gen[ArchiveMessage] =
     for {
       eventId <- genEventId
       archive <- genRandomArchive
-    } yield ArchiveMessage(eventId, archive)
+    } yield ArchiveMessage(archive.apiKey, archive.path, archive.jobId, eventId, archive.timestamp)
 
   def genRandomEventMessage: Gen[EventMessage] =
     frequency(
@@ -91,7 +92,7 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
 
 trait RealisticEventMessage extends ArbitraryEventMessage {
   val ingestAPIKey: APIKey
-  val ingestOwnerAccountId: Option[AccountId]
+  val ingestOwnerAccountId: Authorities
 
   lazy val producers = 4
 
@@ -135,13 +136,13 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
   def genIngest: Gen[Ingest] = for {
     path <- genStablePath
     ingestData <- containerOf[List, JValue](genIngestData).map(l => Vector(l: _*))
-  } yield Ingest(ingestAPIKey, Path(path), ingestOwnerAccountId, ingestData, None)
+  } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant())
 
   def genIngestMessage: Gen[IngestMessage] = for {
     producerId <- choose(0, producers-1)
     ingest <- genIngest
   } yield {
     val records = ingest.data map { jv => IngestRecord(EventId(producerId, eventIds(producerId).getAndIncrement), jv) }
-    IngestMessage(ingest.apiKey, ingest.path, Authorities(ingest.ownerAccountId.get), records, ingest.jobId)
+    IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, records, ingest.jobId, ingest.timestamp)
   }
 }

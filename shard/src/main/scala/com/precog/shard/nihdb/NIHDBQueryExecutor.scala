@@ -54,6 +54,7 @@ import akka.util.{Duration, Timeout}
 import akka.util.duration._
 
 import org.slf4j.{LoggerFactory, MDC}
+import org.joda.time.Instant
 
 import java.io.File
 import java.nio.CharBuffer
@@ -109,6 +110,7 @@ trait NIHDBQueryExecutorComponent  {
 
         val clock = blueeyes.util.Clock.System
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
+        val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
 
         //TODO: Get a producer ID
         val idSource = new FreshAtomicIdSource
@@ -139,9 +141,10 @@ trait NIHDBQueryExecutorComponent  {
       val metadataClient = new StorageMetadataClient[Future](this)
 
       val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, accessControl)))
+      val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
 
       val shardActors @ ShardActors(ingestSupervisor, _) =
-        initShardActors(extAccountFinder, projectionsActor)
+        initShardActors(permissionsFinder, projectionsActor)
 
       trait TableCompanion extends NIHDBColumnarTableCompanion //{
 //        import scalaz.std.anyVal._

@@ -22,6 +22,7 @@ package kafka
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.security._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.util._
@@ -46,7 +47,7 @@ import scalaz.{ NonEmptyList => NEL }
 import scalaz.syntax.std.option._
 
 object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
+  def apply(config: Configuration, permissionsFinder: PermissionsFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
     val localConfig = config.detach("local")
     val centralConfig = config.detach("central")
 
@@ -57,7 +58,7 @@ object KafkaEventStore {
 
       val eventIdSeq = new SystemEventIdSequence(agent, coordination)
       val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
-      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, centralConfig)
+      val (_, raStop) = KafkaRelayAgent(permissionsFinder, eventIdSeq, localConfig, centralConfig)
 
       (eventStore, esStop.parent(raStop))
     }

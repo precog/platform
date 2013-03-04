@@ -36,6 +36,7 @@ import blueeyes.util.Clock
 
 import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future }
+import org.joda.time.Instant
 
 import org.streum.configrity.Configuration
 
@@ -53,12 +54,14 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val (eventStore0, stoppable) = KafkaEventStore(config.detach("eventStore"), accountFinder0) valueOr { errs =>
-      sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
-    }
-
     val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
+    }
+
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
+
+    val (eventStore0, stoppable) = KafkaEventStore(config.detach("eventStore"), permissionsFinder) valueOr { errs =>
+      sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
     }
 
     val deps = EventServiceDeps[Future]( 

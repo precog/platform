@@ -99,7 +99,7 @@ trait TestShardService extends
     def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
   }
 
-  private val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
@@ -111,8 +111,7 @@ trait TestShardService extends
 
   import Permission._
   val testPermissions = Set[Permission](
-    ReadPermission(testPath, WrittenBy("test")),
-    ReducePermission(testPath, WrittenBy("test")),
+    ReadPermission(Path.Root, WrittenByAccount("test")),
     WritePermission(testPath, WriteAsAny),
     DeletePermission(testPath, WrittenByAny)
   )

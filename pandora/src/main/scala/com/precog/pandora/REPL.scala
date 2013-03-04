@@ -39,6 +39,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
+import com.precog.util.FilesystemFileOps
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -56,7 +57,7 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-import com.precog.util.FilesystemFileOps
+import blueeyes.util.Clock
 
 import java.io.{File, PrintStream}
 
@@ -291,7 +292,7 @@ object Console extends App {
 
         val accountFinder = None
 
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 

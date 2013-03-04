@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common.{ CheckpointCoordination, YggCheckpoint, Path }
-import com.precog.common.accounts.AccountFinder
+import com.precog.common.security.PermissionsFinder
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
@@ -83,9 +83,9 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]): Option[ActorRef]
 
-  def initShardActors(accountFinder: AccountFinder[Future], projectionsActor: ActorRef): ShardActors = {
+  def initShardActors(permissionsFinder: PermissionsFinder[Future], projectionsActor: ActorRef): ShardActors = {
     //FIXME: move outside
     val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
@@ -102,7 +102,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
     val initialCheckpoint = loadCheckpoint()
 
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, checkpointCoordination, accountFinder)) yield init
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, checkpointCoordination, permissionsFinder)) yield init
 
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(

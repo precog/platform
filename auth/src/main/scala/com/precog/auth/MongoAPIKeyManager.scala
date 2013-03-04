@@ -24,6 +24,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import akka.util.Timeout
 import akka.dispatch.{ ExecutionContext, Future, Promise }
@@ -34,6 +35,7 @@ import blueeyes.persistence.mongo._
 import blueeyes.persistence.mongo.dsl._
 import blueeyes.json.serialization.Extractor
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.util.Clock
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -101,6 +103,7 @@ object MongoAPIKeyManager extends Logging {
     val rootGrant = Grant(
       rootGrantId, Some("root-grant"), Some("The root grant"), rootAPIKeyId, Set(),
       rootPermissions,
+      new Instant(0L),
       None
     )
   
@@ -125,7 +128,7 @@ object MongoAPIKeyManager extends Logging {
   }
 }
 
-class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults)(implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
+class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKeyManagerSettings = MongoAPIKeyManagerSettings.defaults, clock: Clock = Clock.System)(implicit val executor: ExecutionContext) extends APIKeyManager[Future] with Logging {
   implicit val M = new FutureMonad(executor)
 
   private implicit val impTimeout = settings.timeout
@@ -146,7 +149,7 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
-    val ng = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, expiration)
+    val ng = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, clock.instant(), expiration)
     logger.debug("Adding grant: " + ng)
     database(insert(ng.serialize.asInstanceOf[JObject]).into(settings.grants)) map {
       _ => logger.debug("Add complete for " + ng); ng

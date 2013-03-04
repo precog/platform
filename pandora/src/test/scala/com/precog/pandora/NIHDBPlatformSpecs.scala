@@ -114,7 +114,7 @@ object NIHDBPlatformActor extends Logging {
           def copoint[A](f: Future[A]) = Await.result(f, storageTimeout.duration)
         }
 
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 

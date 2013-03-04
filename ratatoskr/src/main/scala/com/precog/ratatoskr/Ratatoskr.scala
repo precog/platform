@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+import blueeyes.util.Clock
 
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
@@ -278,7 +279,7 @@ object KafkaTools extends Command {
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.buffer) match {
-        case Success(Ingest(apiKey, path, ownerAccountId, data, _)) =>
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
 
@@ -291,7 +292,7 @@ object KafkaTools extends Command {
   case object CentralFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventMessageEncoding.read(msg.message.buffer) match {
-        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _))) =>
+        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _, _))) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
 
@@ -562,7 +563,7 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
+      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
 
       val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), apiKeyFinder)))
     }

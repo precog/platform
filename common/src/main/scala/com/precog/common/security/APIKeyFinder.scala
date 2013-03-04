@@ -22,38 +22,36 @@ package security
 
 import service.v1
 import accounts.AccountId
+import accounts.AccountFinder
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import scalaz._
-import scalaz.std.option._
+import scalaz.\/._
+import scalaz.std.option.optionInstance
 import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
+import scalaz.syntax.bitraverse._
+import scalaz.syntax.std.option._
 
 trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]): M[Option[v1.APIKeyDetails]]
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
 
-  def listPermissions(apiKey: APIKey, pathPrefix: Path)(implicit M: Functor[M]): M[Set[Permission]] = findAPIKey(apiKey, None) map { details =>
-    details.toSet.flatMap(_.grants).flatMap(_.permissions) filter { perm => pathPrefix isEqualOrParent perm.path }
-  }
-
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
 
   def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean]
 
-  def withM[N[+_]](implicit t: M ~> N, M: Functor[M]) = new APIKeyFinder[N] {
+  def withM[N[+_]](implicit t: M ~> N) = new APIKeyFinder[N] {
     def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]) =
       t(self.findAPIKey(apiKey, rootKey))
 
     def findAllAPIKeys(fromRoot: APIKey) =
       t(self.findAllAPIKeys(fromRoot))
-
-    def listPermissions(apiKey: APIKey, pathPrefix: Path)(implicit N: Monad[N]) =
-      t(self.listPermissions(apiKey, pathPrefix))
 
     def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) =
       t(self.newAPIKey(accountId, path, keyName, keyDesc))
@@ -66,9 +64,17 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   }
 }
 
+object APIKeyFinder {
+  def listPermissions[M[+_]](apiKeyFinder: APIKeyFinder[M], apiKey: APIKey, pathPrefix: Path)(implicit M: Functor[M]): M[Set[Permission]] = {
+    apiKeyFinder.findAPIKey(apiKey, None) map { details =>
+      details.toSet.flatMap(_.grants).flatMap(_.permissions) filter { perm => pathPrefix isEqualOrParent perm.path }
+    }
+  }
+}
+
 class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging {
   val grantDetails: Grant => v1.GrantDetails = {
-    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp)
+    case Grant(gid, gname, gdesc, _, _, perms, createdAt, exp) => v1.GrantDetails(gid, gname, gdesc, perms, createdAt, exp)
   }
 
   def recordDetails(rootKey: Option[APIKey]): PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = {

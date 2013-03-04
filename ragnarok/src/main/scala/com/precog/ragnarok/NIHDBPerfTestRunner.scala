@@ -81,7 +81,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   trait TableCompanion extends NIHDBColumnarTableCompanion
   object Table extends TableCompanion
 
-  val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future])
+  val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
 
   val storageTimeout = Timeout(testTimeout)
 

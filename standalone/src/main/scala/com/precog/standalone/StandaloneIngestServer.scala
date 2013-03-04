@@ -47,13 +47,15 @@ object StandaloneIngestServer
   val clock = Clock.System
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
+    val apiKeyFinder0 = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
     val accountFinder0 = new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
-    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, clock.instant())
+    val (eventStore0, stoppable) = KafkaEventStore(config, permissionsFinder) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 
     val deps = EventServiceDeps[Future]( 
-      apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey")),
+      apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
       jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ]()
