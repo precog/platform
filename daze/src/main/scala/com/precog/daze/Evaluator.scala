@@ -787,7 +787,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       def fullEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
         
-        type EvaluatorStateT[A] = StateT[N, EvaluatorState, A]
+        type EvaluatorStateT[+A] = StateT[N, EvaluatorState, A]
         
         val splitNodes = splits.keys.toSet
         
@@ -883,7 +883,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         case dag.UnfixedSolution(_, solution) => Set(solution)
         case dag.Extra(expr) => Set(expr)
       }
-      
       if (queue.isEmpty) {
         acc
       } else {

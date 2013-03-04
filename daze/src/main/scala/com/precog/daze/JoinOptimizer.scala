@@ -23,6 +23,7 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
+import com.precog.util.Timing
 import com.precog.common._
 
 trait JoinOptimizer extends DAGTransform {

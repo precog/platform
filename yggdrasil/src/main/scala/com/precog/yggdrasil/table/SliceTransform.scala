@@ -375,7 +375,10 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             composeSliceTransform2(typed) 
           } else {
             objects map composeSliceTransform2 reduceLeft { (l0, r0) =>
-              l0.zip(r0) { (sl, sr) =>
+              l0.zip(r0) { (sl0, sr0) =>
+                val sl = sl0.typed(JObjectUnfixedT) // Help out the special cases.
+                val sr = sr0.typed(JObjectUnfixedT)
+
                 new Slice {
                   val size = sl.size
 
@@ -383,6 +386,9 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
                     } else if (isDisjoint(sl, sr)) {
+                      // If we know sl & sr are disjoint, which is often the
+                      // case for queries where objects are constructed
+                      // manually, then we can do a lot less work.
                       sl.columns ++ sr.columns
                     } else {
                       val (leftObjectBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterObjects, filterEmptyObjects)
