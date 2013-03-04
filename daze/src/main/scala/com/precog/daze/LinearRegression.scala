@@ -67,7 +67,9 @@ trait LinearRegressionLibModule[M[+_]]
 
       case class CoeffAcc(beta: Beta, count: Long)
 
-      case class StdErrorAcc(rss: Double, product: Matrix)
+      // `rss`: Residual Sum of Squares
+      // `tss`: Total Sum of Squares
+      case class StdErrorAcc(rss: Double, tss: Double, product: Matrix)
 
       /**
        * http://adrem.ua.ac.be/sites/adrem.ua.ac.be/files/StreamFitter.pdf
@@ -113,7 +115,7 @@ trait LinearRegressionLibModule[M[+_]]
       }
 
       implicit def stdErrorMonoid = new Monoid[StdErrorAcc] {
-        def zero = StdErrorAcc(0, new Matrix(Array(Array.empty[Double])))
+        def zero = StdErrorAcc(0, 0, new Matrix(Array(Array.empty[Double])))
 
         def append(t1: StdErrorAcc, t2: => StdErrorAcc) = {
           def isEmpty(matrix: Matrix) = {
@@ -135,7 +137,7 @@ trait LinearRegressionLibModule[M[+_]]
             }
           }
 
-          StdErrorAcc(t1.rss + t2.rss, matrixSum)
+          StdErrorAcc(t1.rss + t2.rss, t1.tss + t2.tss, matrixSum)
         }
       }
 
@@ -254,7 +256,11 @@ trait LinearRegressionLibModule[M[+_]]
 
           val rss = rssOpt getOrElse { stdErrorMonoid.zero.rss }
 
-          StdErrorAcc(rss, matrixProduct)
+          val yMean = y0.flatten.sum / y0.flatten.size
+
+          val tss = y0.flatten map { y => math.pow(y - yMean, 2d) } sum
+
+          StdErrorAcc(rss, tss, matrixProduct)
         }
       }
 
@@ -281,12 +287,20 @@ trait LinearRegressionLibModule[M[+_]]
         val resultErrors = stdErrors.map(CNum(_))
 
         val arr = resultCoeffs.zip(resultErrors) map { case (beta, error) =>
-          RObject(Map("coefficient" -> beta, "standard error" -> error))
+          RObject(Map("Estimate" -> beta, "StandardError" -> error))
         }
 
         val theta = Table.fromRValues(Stream(RArray(arr.toList)))
 
-        val result = theta.transform(spec)
+        val thetaInSchema = theta.transform(spec)
+
+        val coeffsTable = thetaInSchema.transform(trans.WrapObject(Leaf(Source), "Coefficients"))
+
+        val rSquared = 1 - (errors.rss / errors.tss)
+        val rSquaredTable0 = Table.fromRValues(Stream(CNum(rSquared)))
+        val rSquaredTable = rSquaredTable0.transform(trans.WrapObject(Leaf(Source), "RSquared"))
+
+        val result = coeffsTable.cross(rSquaredTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
 
         val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
         val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
@@ -302,7 +316,7 @@ trait LinearRegressionLibModule[M[+_]]
           val ySpec = trans.Map1(ySpec0, cf.util.CoerceToDouble)
           val xsSpec = trans.DeepMap1(xsSpec0, cf.util.CoerceToDouble)
 
-          // `arraySpec` generates the schema in which the final results of the regression are returned
+          // `arraySpec` generates the schema in which the Coefficients will be returned
           val arraySpec = InnerArrayConcat(trans.WrapArray(xsSpec), trans.WrapArray(ySpec))
           val table = table0.transform(arraySpec)
 
@@ -356,7 +370,9 @@ trait LinearRegressionLibModule[M[+_]]
             DerefObjectStatic(Leaf(SourceLeft), paths.Value),
             DerefObjectStatic(Leaf(SourceRight), paths.Value))
 
-          objectTables map { _.reduceOption { (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec)) } getOrElse Table.empty }
+          objectTables map { _.reduceOption {
+            (tl, tr) => tl.cross(tr)(buildConstantWrapSpec(spec))
+          } getOrElse Table.empty }
         }
       }
     }
@@ -370,7 +386,9 @@ trait LinearRegressionLibModule[M[+_]]
 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
-        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, scala.Predef.identity[Double])) }
+        t2.transform(spec).reduce(reducer) map { models =>
+          (t1.transform(spec), morph1Apply(models, scala.Predef.identity[Double]))
+        }
       }
     }
   }

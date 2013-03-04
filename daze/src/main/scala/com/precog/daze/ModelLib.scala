@@ -43,7 +43,8 @@ trait ModelLibModule[M[+_]] {
         private val kPath = CPath(TableModule.paths.Key)
         private val vPath = CPath(TableModule.paths.Value)
 
-        private val coeff = "coefficient"
+        private val coefficients = "Coefficients"
+        private val estimate = "Estimate"
 
         def reduce(schema: CSchema, range: Range): Models = {
           val rowIdentities: Int => Seq[Option[Long]] = {
@@ -64,8 +65,8 @@ trait ModelLibModule[M[+_]] {
           val rowModels: Int => Set[Model] = {
             val features: Map[String, Set[(String, CPath, CType)]] = {
               schema.columnRefs.collect { 
-                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(0), rest @ _*), ctype)
-                  if rest.last == CPathField(`coeff`) => 
+                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathField(`coefficients`), CPathIndex(0), rest @ _*), ctype)
+                  if rest.last == CPathField(`estimate`) => 
                     (modelName, path, ctype) 
               } groupBy { _._1 }
             }
@@ -88,7 +89,7 @@ trait ModelLibModule[M[+_]] {
 
             val constant: Map[String, (String, CPath, CType)] = {
               schema.columnRefs.collect { 
-                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(1), CPathField(`coeff`), rest @ _*), ctype) => 
+                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathField(`coefficients`), CPathIndex(1), CPathField(`estimate`)), ctype) => 
                   (modelName, path, ctype) 
               } groupBy { _._1 } lazyMapValues { case set => 
                 assert(set.size == 1)
@@ -127,8 +128,8 @@ trait ModelLibModule[M[+_]] {
             }
 
             (i: Int) => joined collect { case (field, (values, constant)) if constant.isDefinedAt(i) => 
-              val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(_), CPathIndex(0), rest @ _*), col)
-                if col.isDefinedAt(i) && rest.last == CPathField(`coeff`) =>
+              val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(_), CPathField(`coefficients`), CPathIndex(0), rest @ _*), col)
+                if col.isDefinedAt(i) && rest.last == CPathField(`estimate`) =>
                   val paths = TableModule.paths.Value +: rest.take(rest.length - 1)
                   (CPath(paths: _*), col.apply(i))
               }

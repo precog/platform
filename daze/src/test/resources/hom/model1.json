@@ -1,2 +1,2 @@
-{ "Model1": [{"foo":{"coefficient":3.0, "standard error": 0.12}, "bar":{"coefficient":2.0, "standard error": 0.352}}, {"coefficient":5, "standard error":0.9}], "Model2": [{"foo":{"coefficient":3.0, "standard error": 0.44}}, {"coefficient":5, "standard error": 0.583}] }
-{ "Model3": [{"bar":{"coefficient": 2.5, "standard error": 0.02}}, {"coefficient":2, "standard error": 1.4}] }
+{ "Model1": {"Coefficients": [{"foo":{"Estimate":3.0, "StandardError": 0.12}, "bar":{"Estimate":2.0, "StandardError": 0.352}}, {"Estimate":5, "StandardError":0.9}], "RSquared": 0.833}, "Model2": {"Coefficients": [{"foo":{"Estimate":3.0, "StandardError": 0.44}}, {"Estimate":5, "StandardError": 0.583}], "RSquared": 0.921}}
+{ "Model3": {"Coefficients": [{"bar":{"Estimate": 2.5, "StandardError": 0.02}}, {"Estimate":2, "StandardError": 1.4}], "RSquared": 0.473} }

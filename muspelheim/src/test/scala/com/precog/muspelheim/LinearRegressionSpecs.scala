@@ -40,26 +40,31 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1")
 
-          val SArray(arr) = elems("Model1")
+          val SObject(fields) = elems("Model1")
+
+          val SArray(arr) = fields("Coefficients")
+          val rSquared = fields("RSquared")
 
           arr(0) must beLike { case SObject(obj) => 
             obj.keys mustEqual Set("height")
 
             obj("height") must beLike {
               case SObject(height) => 
-                height.keys mustEqual Set("coefficient", "standard error")
+                height.keys mustEqual Set("Estimate", "StandardError")
 
-                height("coefficient") must beLike { case SDecimal(d) => ok }
-                height("standard error") must beLike { case SDecimal(d) => ok }
+                height("Estimate") must beLike { case SDecimal(d) => ok }
+                height("StandardError") must beLike { case SDecimal(d) => ok }
             }
           }
 
           arr(1) must beLike { case SObject(obj) =>
-            obj.keys mustEqual Set("coefficient", "standard error")
+            obj.keys mustEqual Set("Estimate", "StandardError")
 
-            obj("coefficient") must beLike { case SDecimal(d) => ok }
-            obj("standard error") must beLike { case SDecimal(d) => ok }
+            obj("Estimate") must beLike { case SDecimal(d) => ok }
+            obj("StandardError") must beLike { case SDecimal(d) => ok }
           }
+
+          rSquared must beLike { case SDecimal(_) => ok }
       }
     }
 
