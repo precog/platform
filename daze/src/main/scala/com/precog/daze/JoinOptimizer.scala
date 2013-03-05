@@ -27,7 +27,7 @@ import com.precog.common._
 
 trait JoinOptimizer extends DAGTransform {
   import dag._
-  import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject, WrapArray }
+  import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
   def optimizeJoins(graph: DepGraph, splits: Set[dag.Split], idGen: IdGen = IdGen): DepGraph = {
     
