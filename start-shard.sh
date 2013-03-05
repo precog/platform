@@ -108,9 +108,12 @@ JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
 SHARD_ASSEMBLY="$BASEDIR"/shard/target/shard-assembly-$VERSION.jar
 RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
-GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+#GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+GC_OPTS=""
 
 JAVA="java $GC_OPTS"
+
+SHARD_OPTS=""
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
@@ -516,7 +519,7 @@ $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.loggi
 INGESTPID=$!
 
 echo "Starting shard service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
+$JAVA $REBEL_OPTS $SHARD_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
