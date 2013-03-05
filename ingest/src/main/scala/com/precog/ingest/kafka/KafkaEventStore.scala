@@ -46,10 +46,11 @@ import scalaz.{ NonEmptyList => NEL }
 import scalaz.syntax.std.option._
 
 object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
+  def   apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
     val localConfig = config.detach("local")
     val centralConfig = config.detach("central")
-
+    println("Central config %s".format(centralConfig.toString()))
+    println("centralConfig.get[String](\"zk.connect\")=%s".format(centralConfig.get[String]("zk.connect")))
     centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
       val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
       val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
