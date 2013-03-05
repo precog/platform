@@ -1,0 +1,70 @@
+#!/usr/bin/python
+
+import os, sys, subprocess
+
+fake = False
+
+def call(args):
+    if fake:
+        print args
+    else:
+        return subprocess.call(args)
+
+class Service(object):
+    @classmethod
+    def frompath(self, path):
+        for line in open(path, 'r'):
+            toks = line.split()
+            if not toks: continue
+            elif toks[0] == 'id': account = toks[1]
+            elif toks[0] == 'token': token = toks[1]
+            elif toks[0] == 'ingest': ingest = toks[1]
+            elif toks[0] == 'shard': shard = toks[1]
+        return Service(ingest, shard, account, token)
+
+    def __init__(self, ingestport, shardport, account, apikey):
+        self.ingestport = ingestport
+        self.shardport = shardport
+        self.account = account
+        self.apikey = apikey
+
+    def ingest(self, fspath, qpath):
+        assert(os.path.exists(fspath))
+        assert(not qpath.startswith('/'))
+        url = "http://localhost:%s/sync/fs/%s/%s?apiKey=%s" % (self.ingestport, self.account, qpath, self.apikey)
+        mime = 'Content-Type: application/json'
+        #args = ['curl', '-v', '-H', mime, '--data-bin', "@" + fspath, url]
+        args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
+        call(args)
+    
+    def query(self, query):
+        url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.account)
+        #args = ['curl', '-v', '-s', '-G',
+        args = ['curl', '-s', '-G',
+                '--data-urlencode', "q=" + query,
+                '--data-urlencode', 'apiKey=' + self.apikey, url]
+        call(args)
+        print ""
+
+def usage():
+    prog = sys.argv[0]
+    print "usage: %s -i FSPATH QPATH   # ingest data" % prog
+    print "       %s -e QUERY          # run query" % prog
+    print "       %s -e                # run query from stdin" % prog
+    sys.exit(0)
+
+if __name__ == "__main__":
+    service = Service.frompath("shard.out")
+    args = sys.argv[1:]
+    if not args:
+        usage()
+    elif args[0] == '-i':
+        service.ingest(args[1], args[2])
+    elif args[0] == '-e':
+        if not args[1:]:
+            q = sys.stdin.read()
+        else:
+            q = args[1]
+        service.query(q)
+    else:
+        usage()
