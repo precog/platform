@@ -20,13 +20,16 @@
 #!/bin/bash
 
 # Parse opts to determine settings
-while getopts ":d:lbZYR" opt; do
+while getopts ":d:lbZYRL:" opt; do
     case $opt in
         d)
             WORKDIR=$(cd $OPTARG; pwd)
             ;;
         l)
             DONTCLEAN=1
+            ;;
+        L)
+            LABCOAT_PORT=$OPTARG
             ;;
         b)
             BUILDMISSING=1
@@ -45,8 +48,9 @@ while getopts ":d:lbZYR" opt; do
             exit ${PIPESTATUS[0]}
             ;;
         \?)
-            echo "Usage: `basename $0` [-l] [-d <work directory>]"
+            echo "Usage: `basename $0` [-blRZ] [-d <work directory>] [-L <port>]"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
+            echo "  -L: Use the provided port for labcoat"
             echo "  -d: Use the provided workdir"
             echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
             echo "  -Y: Run ingest consistency check"
@@ -97,7 +101,7 @@ echo "Using base: $BASEDIR"
 
 VERSION=`git describe`
 DESKTOP_ASSEMBLY="$BASEDIR"/desktop/target/desktop-assembly-$VERSION.jar
-YGGDRASIL_ASSEMBLY="$BASEDIR"/yggdrasil/target/yggdrasil-assembly-$VERSION.jar
+RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
 
@@ -105,7 +109,7 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
-for ASM in "$DESKTOP_ASSEMBLY" "$YGGDRASIL_ASSEMBLY"; do
+for ASM in "$DESKTOP_ASSEMBLY" "$RATATOSKR_ASSEMBLY"; do
     if [ ! -f "$ASM" ]; then
         if [ -n "$BUILDMISSING" ]; then
             # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
@@ -126,7 +130,7 @@ done
 
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
-    echo "Up-to-date desktop and yggdrasil assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
+    echo "Up-to-date desktop and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
     done
@@ -313,36 +317,29 @@ echo "Kafka Local = $KFLOCALPID on port=$KAFKA_LOCAL_PORT"
 # low-risk
 SHARD_PORT=$(random_port "Shard")
 
-# Set up ingest and shard service configs
-sed -e "s#/var/log#$WORKDIR/logs#; s#/accounts/v1/#/#; s/port = 30060/port = $SHARD_PORT/" < "$BASEDIR"/desktop/configs/test/ingest-v1.conf > "$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
+if [ -z "$LABCOAT_PORT" ]; then
+    LABCOAT_PORT=$(random_port "Labcoat")
+fi
 
-#sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#;  s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/ ; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/; s/port = 9082/port = $KAFKA_LOCAL_PORT/; s/port = 9092/port = $KAFKA_GLOBAL_PORT/" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
-sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/= 9092/= $KAFKA_GLOBAL_PORT/; s/= 9082/= $KAFKA_LOCAL_PORT/; s/localhost:2181/localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/= 9092/= $KAFKA_GLOBAL_PORT/; s/= 9082/= $KAFKA_LOCAL_PORT/; s/localhost:2181/localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
 cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$BASEDIR"/desktop/yggdrasil-assembly-old.jar zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-desktop/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
+    $JAVA $REBEL_OPTS -jar $RATATOSKR_ASSEMBLY zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-desktop/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
     touch "$WORKDIR"/initial_checkpoint.json
 fi
 
-#echo "Starting ingest service"
-#$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -classpath "$DESKTOP_ASSEMBLY" com.precog.standalone.StandaloneIngestServer --configFile "$WORKDIR"/configs/ingest-v1.conf &> $WORKDIR/logs/ingest-v1.stdout &
-#INGESTPID=$!
-
-echo "Starting shard service"
-$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -classpath "$DESKTOP_ASSEMBLY" com.precog.shard.desktop.DesktopIngestShardServer --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
+echo "Starting desktop service"
+$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.DesktopIngestShardServer --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
 SHARDPID=$!
-INGESTPID=$SHARDPID
 
 # Let the ingest/shard services startup in parallel
-wait_until_port_open $INGEST_PORT
 wait_until_port_open $SHARD_PORT
 
 cat > $WORKDIR/ports.txt <<EOF
@@ -350,6 +347,7 @@ KAFKA_LOCAL_PORT=$KAFKA_LOCAL_PORT
 KAFKA_GLOBAL_PORT=$KAFKA_GLOBAL_PORT
 ZOOKEEPER_PORT=$ZOOKEEPER_PORT
 SHARD_PORT=$SHARD_PORT
+LABCOAT_PORT=$LABCOAT_PORT
 EOF
 
 echo "Startup complete, running in $WORKDIR"
@@ -361,6 +359,7 @@ KAFKA_LOCAL_PORT:  $KAFKA_LOCAL_PORT
 KAFKA_GLOBAL_PORT: $KAFKA_GLOBAL_PORT
 ZOOKEEPER_PORT:    $ZOOKEEPER_PORT
 SHARD_PORT:        $SHARD_PORT
+LABCOAT_PORT:      $LABCOAT_PORT
 EOF
 echo "============================================================"
 

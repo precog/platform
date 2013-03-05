@@ -37,23 +37,24 @@ import com.precog.ingest.kafka._
 
 import org.streum.configrity.Configuration
 
-object StandaloneIngestServer
-    extends BlueEyesServer
-    with EventService
-    with AkkaDefaults {
+object StandaloneIngestServer extends StandaloneIngestServer with AkkaDefaults {
   val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
-
   val clock = Clock.System
+ }
 
-  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
-    val accountFinder0 = new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
+trait StandaloneIngestServer
+    extends BlueEyesServer
+    with EventService {
+  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
+    val apiKey = config[String]("security.masterAccount.apiKey")
+    val accountFinder0 = new StaticAccountFinder(apiKey, config[String]("security.masterAccount.accountId"))
     val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 
-    val deps = EventServiceDeps[Future]( 
-      apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey")),
+    val deps = EventServiceDeps[Future](
+      apiKeyFinder = new StaticAPIKeyFinder[Future](apiKey),
       accountFinder = accountFinder0,
       eventStore = eventStore0,
       jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ]()

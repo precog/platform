@@ -66,7 +66,7 @@ object KafkaRelayAgent extends Logging {
     val consumerPort = localConfig[String]("broker.port", "9082").toInt
     val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
 
-    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
+    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic)
     val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
 
     new Thread(relayAgent).start()
@@ -77,8 +77,8 @@ object KafkaRelayAgent extends Logging {
   * augment them with record identities, then send them with the specified producer. */
 final class KafkaRelayAgent(
     accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence,
-    consumer: SimpleConsumer, localTopic: String, 
-    producer: Producer[String, EventMessage], centralTopic: String, 
+    consumer: SimpleConsumer, localTopic: String,
+    producer: Producer[String, EventMessage], centralTopic: String,
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
@@ -138,12 +138,12 @@ final class KafkaRelayAgent(
   }
 
   private def forwardAll(messages: List[MessageAndOffset]) = {
-    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg => 
-      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) } 
+    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg =>
+      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) }
     }
 
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
-      Future.sequence(messageFutures) map { messages => 
+      Future.sequence(messageFutures) map { messages =>
         producer.send(new ProducerData[String, EventMessage](centralTopic, messages))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
@@ -167,11 +167,10 @@ final class KafkaRelayAgent(
             // cannot relay event without a resolved owner account ID; fail loudly.
             // this will abort the future, ensuring that state doesn't get corrupted
             sys.error("Unable to establish owner account ID for ingest " + event)
-        } 
+        }
 
       case archive @ Archive(_, _, _) =>
         Promise.successful(ArchiveMessage(eventIdSeq.next(offset), archive))
     }
   }
 }
-

@@ -22,7 +22,7 @@ package com.precog.shard
 import com.precog.util.PrecogUnit
 import com.precog.muspelheim._
 
-import com.precog.common.Path
+import com.precog.common.{OptionHeaders, Path}
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobManager
@@ -112,12 +112,7 @@ trait ShardService extends
 
   val utf8 = Charset.forName("UTF-8")
 
-  def optionsResponse = M.point(
-    HttpResponse[ByteChunk](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
-      "Access-Control-Allow-Origin" -> "*",
-      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-  )
+  def optionsResponse = OptionHeaders.apply[ByteChunk, Future](M)
 
   private val queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {

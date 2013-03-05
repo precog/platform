@@ -48,7 +48,7 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
-  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
+  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
     val accountFinder0 = WebAccountFinder(config.detach("accounts")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }

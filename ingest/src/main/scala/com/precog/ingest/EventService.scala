@@ -20,6 +20,7 @@
 package com.precog.ingest
 
 import service._
+import com.precog.common.OptionHeaders
 import com.precog.common.accounts._
 import com.precog.common.client._
 import com.precog.common.jobs._
@@ -65,15 +66,9 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
-  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
+  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)
 
-  //TODO: COPY & PASTE from ShardService !!!!!!!
-  def optionsResponse = M.point(
-    HttpResponse[ByteChunk](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
-      "Access-Control-Allow-Origin" -> "*",
-      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
-      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
-  )
+  def eventOptionsResponse = OptionHeaders.apply[JValue, Future](M)
 
   val eventService = this.service("ingest", "1.0") {
     requestLogging {
@@ -82,7 +77,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           Future {
             import context._
 
-            val (deps, stoppable) = configure(config)
+            val (deps, stoppable) = configureEventService(config)
 
             val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
             val ingestBatchSize = config[Int]("ingest.batch_size", 500)
@@ -97,7 +92,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         } ->
         request { (state: EventServiceState) =>
           decompress {
-            jsonp[ByteChunk] {
+            jsonp {
               (jsonAPIKey(state.accessControl) {
                 dataPath("/fs") {
                   post(state.ingestHandler) ~
@@ -114,11 +109,13 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
                     post(state.ingestHandler) ~
                     delete(state.archiveHandler) ~
                     options {
-                      (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
+                      (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => eventOptionsResponse
                     }
                   }
                 }
-              })
+              }) map {
+                _ map { _ map jvalueToChunk }
+              }
             }
           }
         } ->
