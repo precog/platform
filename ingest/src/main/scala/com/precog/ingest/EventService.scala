@@ -19,7 +19,7 @@ import blueeyes.core.http._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
 import blueeyes.util.Clock
-
+import blueeyes.json.JValue
 import DefaultBijections._
 import MimeTypes._
 import ByteChunk._
@@ -32,6 +32,7 @@ import scalaz._
 import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
+import com.precog.common.Path
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
@@ -46,6 +47,14 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   implicit def M: Monad[Future]
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
+
+  //TODO: COPY & PASTE from ShardService !!!!!!!
+  def optionsResponse = M.point(
+    HttpResponse[ByteChunk](headers = HttpHeaders(Seq("Allow" -> "GET,POST,OPTIONS",
+      "Access-Control-Allow-Origin" -> "*",
+      "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS, DELETE",
+      "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, X-File-Name, X-File-Size, X-File-Type, X-Precog-Path, X-Precog-Service, X-Precog-Token, X-Precog-Uuid, Accept")))
+  )
 
   val eventService = this.service("ingest", "1.0") {
     requestLogging {
@@ -69,7 +78,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         } ->
         request { (state: EventServiceState) =>
           decompress {
-            jsonp {
+            jsonp[ByteChunk] {
               (jsonAPIKey(state.accessControl) {
                 dataPath("/fs") {
                   post(state.ingestHandler) ~
@@ -80,10 +89,17 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
                     post(state.ingestHandler) ~
                     delete(state.archiveHandler)
                   }
+                } ~ //for legacy labcoat compatibility
+                path("/ingest/(?<sync>a?sync)") {
+                  dataPath("/fs") {
+                    post(state.ingestHandler) ~
+                    delete(state.archiveHandler) ~
+                    options {
+                      (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
+                    }
+                  }
                 }
-              }) map {
-                _ map { _ map jvalueToChunk }
-              }
+              })
             }
           }
         } ->
