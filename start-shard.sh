@@ -556,6 +556,13 @@ SHARD_PORT:        $SHARD_PORT
 EOF
 echo "============================================================"
 
+cat > shard.out <<EOF
+id $ACCOUNTID
+token $ACCOUNTTOKEN
+ingest $INGEST_PORT
+shard $SHARD_PORT
+EOF
+
 function query() {
     curl -s -G \
       --data-urlencode "q=$1" \
