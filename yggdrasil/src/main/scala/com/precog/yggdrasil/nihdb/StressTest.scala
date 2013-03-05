@@ -20,6 +20,8 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import scala.annotation.tailrec
 
 import com.precog.common.accounts._
@@ -41,6 +43,7 @@ import scalaz.effect.IO
 
 import java.io._
 import java.nio.ByteBuffer
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class StressTest {
   val actorSystem = ActorSystem("NIHDBActorSystem")
@@ -54,7 +57,9 @@ class StressTest {
 
   val chef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-  def newNihProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
+  val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  def newNihProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"), txLogScheduler)
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 

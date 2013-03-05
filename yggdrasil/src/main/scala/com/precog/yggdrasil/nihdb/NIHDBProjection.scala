@@ -45,6 +45,7 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 
 import java.io.{File, FileNotFoundException, IOException}
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
@@ -59,14 +60,14 @@ object NIHDBProjection {
   *
   * @param cookThreshold The threshold, in rows, of raw data for cooking a raw store file
   */
-class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThreshold: Int, actorSystem: ActorSystem, actorTimeout: Timeout)
+class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThreshold: Int, actorSystem: ActorSystem, actorTimeout: Timeout, txLogScheduler: ScheduledExecutorService)
     extends Logging { projection =>
   private[this] val projectionId = NIHDBProjection.projectionIdGen.getAndIncrement
 
   private implicit val asyncContext: ExecutionContext = actorSystem.dispatcher
   implicit val M = new FutureMonad(asyncContext)
 
-  private val db = new NIHDB(baseDir, chef, cookThreshold, actorTimeout)(actorSystem)
+  private val db = new NIHDB(baseDir, chef, cookThreshold, actorTimeout, txLogScheduler)(actorSystem)
 
   def authorities = db.authorities
 
@@ -86,7 +87,7 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
   def insert(v : Seq[IngestRecord], ownerAccountId: AccountId): Future[PrecogUnit] = {
     // TODO: Check # of identities.
     v.groupBy(_.eventId.producerId).map {
-      case (p, events) => 
+      case (p, events) =>
         val maxSeq = events.map(_.eventId.sequenceId).max
         db.insert(EventId(p, maxSeq).uid, events.map(_.value), ownerAccountId)
     }.toList.sequence map { _ => PrecogUnit }

@@ -20,6 +20,8 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.cache.Cache
@@ -49,6 +51,7 @@ import scalaz.effect.IO
 import scalaz.std.list._
 
 import java.io.{File, FileFilter, IOException}
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 import scala.collection.mutable
 
@@ -77,12 +80,15 @@ class NIHDBProjectionsActor(
     chef: ActorRef,
     cookThreshold: Int,
     storageTimeout: Timeout,
-    accessControl: AccessControl[Future]
+    accessControl: AccessControl[Future],
+    txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
     ) extends Actor with Logging {
 
   override def preStart() = {
     logger.debug("Starting projections actor with base = " + baseDir)
   }
+
+  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
   private final val disallowedPathComponents = Set(".", "..")
 
@@ -198,7 +204,7 @@ class NIHDBProjectionsActor(
     // GET THE AUTHORITIES!
     projections.get(path).map(IO(_)).getOrElse {
       ensureBaseDir(path).map { bd =>
-        (new NIHDBProjection(bd, path, chef, cookThreshold, context.system, storageTimeout)).tap { proj =>
+        (new NIHDBProjection(bd, path, chef, cookThreshold, context.system, storageTimeout, txLogScheduler)).tap { proj =>
           projections += (path -> proj)
         }
       }

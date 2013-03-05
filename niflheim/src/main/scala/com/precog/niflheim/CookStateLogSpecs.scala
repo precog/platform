@@ -21,9 +21,13 @@ package com.precog.niflheim
 
 import com.precog.util.IOUtils
 
+import java.util.concurrent.ScheduledThreadPoolExecutor
+
 import org.specs2.mutable.{After, Specification}
 
 class CookStateLogSpecs extends Specification {
+  val txLogScheduler = new ScheduledThreadPoolExecutor(5)
+
   trait LogState extends After {
     val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
 
@@ -34,16 +38,16 @@ class CookStateLogSpecs extends Specification {
 
   "CookStateLog" should {
     "Properly initialize" in new LogState {
-      val txLog = new CookStateLog(workDir)
+      val txLog = new CookStateLog(workDir, txLogScheduler)
 
       txLog.currentBlockId mustEqual 0l
       txLog.pendingCookIds must beEmpty
     }
 
     "Lock its directory during operation" in new LogState {
-      val txLog = new CookStateLog(workDir)
+      val txLog = new CookStateLog(workDir, txLogScheduler)
 
-      (new CookStateLog(workDir)) must throwAn[Exception]
+      (new CookStateLog(workDir, txLogScheduler)) must throwAn[Exception]
     }
   }
 }

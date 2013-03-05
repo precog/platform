@@ -20,6 +20,8 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import com.precog.common.ingest._
 import com.precog.niflheim._
 import com.precog.yggdrasil.table._
@@ -41,6 +43,7 @@ import scalaz.effect.IO
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
@@ -50,7 +53,9 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
     VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))
   ))
 
-  def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
+  val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"), txLogScheduler)
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
