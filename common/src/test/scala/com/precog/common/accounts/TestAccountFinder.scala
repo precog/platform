@@ -12,6 +12,8 @@ extends AccountFinder[M] {
   def findAccountByAPIKey(apiKey: APIKey) : M[Option[AccountId]] = M.point(accountIds.get(apiKey))
 
   def findAccountById(accountId: AccountId): M[Option[Account]] = M.point(accounts.get(accountId))
+
+  def findAccountDetailsById(accountId: AccountId): M[Option[AccountDetails]] = M.point(accounts.get(accountId).map(AccountDetails.from(_)))
 }
 
 object TestAccounts {
@@ -25,7 +27,7 @@ object TestAccounts {
     } yield {
       val salt = Account.randomSalt()
       Account(
-        accountId, email, 
+        accountId, email,
         Account.saltAndHashSHA256(password, salt), salt,
         creationDate,
         apiKey, path, plan)
