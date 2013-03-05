@@ -251,65 +251,66 @@ function on_exit() {
 trap on_exit EXIT
 
 # Get zookeeper up and running first
-pushd $ZKBASE > /dev/null
-tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
-    echo "Failed to unpack zookeeper" >&2
-    exit 3
-}
-popd > /dev/null
+#pushd $ZKBASE > /dev/null
+#tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
+#    echo "Failed to unpack zookeeper" >&2
+#    exit 3
+#}
+#popd > /dev/null
+#
 
 # Copy in a simple config
 ZOOKEEPER_PORT=$(random_port "Zookeeper")
-echo "# the directory where the snapshot is stored." >> $ZKBASE/conf/zoo.cfg
-echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
-echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
-echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
+#echo "# the directory where the snapshot is stored." >> $ZKBASE/conf/zoo.cfg
+#echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
+#echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
+#echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
+#
+## Set up logging for zookeeper
+#cat > $ZKBASE/bin/log4j.properties <<EOF
+#log4j.rootLogger=INFO, file
+#log4j.appender.file=org.apache.log4j.RollingFileAppender
+#log4j.appender.file.File=$WORKDIR/logs/zookeeper.log
+#log4j.appender.file.MaxFileSize=1MB
+#log4j.appender.file.MaxBackupIndex=1
+#log4j.appender.file.layout=org.apache.log4j.PatternLayout
+#log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
+#EOF
 
-# Set up logging for zookeeper
-cat > $ZKBASE/bin/log4j.properties <<EOF
-log4j.rootLogger=INFO, file
-log4j.appender.file=org.apache.log4j.RollingFileAppender
-log4j.appender.file.File=$WORKDIR/logs/zookeeper.log
-log4j.appender.file.MaxFileSize=1MB
-log4j.appender.file.MaxBackupIndex=1
-log4j.appender.file.layout=org.apache.log4j.PatternLayout
-log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
-EOF
+## Start it up!
+#echo "Starting zookeeper on port $ZOOKEEPER_PORT"
+#cd $ZKBASE/bin
+#./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
+#
+#wait_until_port_open $ZOOKEEPER_PORT
+#
+## Now, start global and local kafkas
+#cd "$WORKDIR"
+#unzip "$ARTIFACTDIR"/kafka* > /dev/null || {
+#    echo "Failed to unpack kafka" >&2
+#    exit 3
+#}
 
-# Start it up!
-echo "Starting zookeeper on port $ZOOKEEPER_PORT"
-cd $ZKBASE/bin
-./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
-
-wait_until_port_open $ZOOKEEPER_PORT
-
-# Now, start global and local kafkas
-cd "$WORKDIR"
-unzip "$ARTIFACTDIR"/kafka* > /dev/null || {
-    echo "Failed to unpack kafka" >&2
-    exit 3
-}
-
-# Transform the provided config into global and local configs, and start services
-cd "$WORKDIR"/kafka/config
-chmod +x $KFBASE/bin/kafka-server-start.sh
-
-KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
-sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
-KFGLOBALPID=$!
-
-wait_until_port_open $KAFKA_GLOBAL_PORT
-
-KAFKA_LOCAL_PORT=$(random_port "Kafka local")
-sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
-$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
-KFLOCALPID=$!
-
-wait_until_port_open $KAFKA_LOCAL_PORT
-
-echo "Kafka Global = $KFGLOBALPID on port=$KAFKA_GLOBAL_PORT"
-echo "Kafka Local = $KFLOCALPID on port=$KAFKA_LOCAL_PORT"
+## Transform the provided config into global and local configs, and start services
+#cd "$WORKDIR"/kafka/config
+#chmod +x $KFBASE/bin/kafka-server-start.sh
+#
+#KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
+#sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
+#$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
+#KFGLOBALPID=$!
+#
+#wait_until_port_open $KAFKA_GLOBAL_PORT
+#
+#KAFKA_LOCAL_PORT=$(random_port "Kafka local")
+#sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
+#$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
+#KFLOCALPID=$!
+#
+#wait_until_port_open $KAFKA_LOCAL_PORT
+#
+#echo "Kafka Global = $KFGLOBALPID on port=$KAFKA_GLOBAL_PORT"
+#echo "Kafka Local = $KFLOCALPID on port=$KAFKA_LOCAL_PORT"
 
 # FIXME: There's a potential for collisions here because we're
 # assigning before actually starting services, but proper ordering
@@ -321,7 +322,7 @@ if [ -z "$LABCOAT_PORT" ]; then
     LABCOAT_PORT=$(random_port "Labcoat")
 fi
 
-sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/= 9092/= $KAFKA_GLOBAL_PORT/; s/= 9082/= $KAFKA_LOCAL_PORT/; s/localhost:2181/localhost:$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9092/$KAFKA_GLOBAL_PORT/; s/9082/$KAFKA_LOCAL_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka/local#$KFLOCALDATA#; s#/var/kafka/central#$KFGLOBALDATA#; s#/var/zookeeper#$ZKDATA#" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
 cd "$BASEDIR"
