@@ -242,7 +242,7 @@ trait Solver extends parser.AST with typer.Binder {
     }
     
     // big assumption here!!!!  we're assuming that these phases only require locally-synthetic attributes
-    result foreach runPhasesInSequence
+    result foreach { e => bindRoot(e, e) }
     
     result
   }

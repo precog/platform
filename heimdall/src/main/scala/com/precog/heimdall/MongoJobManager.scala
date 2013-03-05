@@ -77,7 +77,7 @@ object MongoJobManagerSettings {
 
 final class MongoJobManager(database: Database, settings: MongoJobManagerSettings, fs0: FileStorage[Future])
     (implicit executionContext: ExecutionContext)
-    extends JobManager[Future] with JobStateManager[Future] with JobResultManager[Future] {
+    extends JobManager[Future] with JobStateManager[Future] with JobResultManager[Future] with Logging {
 
   import JobManager._
   import JobState._
@@ -89,10 +89,12 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
   def createJob(apiKey: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): Future[Job] = {
+    val start = System.currentTimeMillis
     val id = newJobId()
     val state = started map (Started(_, NotStarted)) getOrElse NotStarted
     val job = Job(id, apiKey, name, jobType, data, state)
     database(insert(job.serialize.asInstanceOf[JObject]).into(settings.jobs)) map { _ =>
+      logger.trace("Job created in %d ms".format(System.currentTimeMillis - start))
       job
     }
   }

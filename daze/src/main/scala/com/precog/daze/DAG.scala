@@ -33,6 +33,7 @@ import scala.collection.mutable
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.Free.Trampoline
 import scalaz.std.either._
+import scalaz.std.function._
 import scalaz.std.option._
 import scalaz.std.list._
 import scalaz.syntax.monad._
@@ -55,7 +56,7 @@ trait DAG extends Instructions {
     
     def loop(loc: Line, roots: List[Either[BucketSpec, DepGraph]], splits: List[OpenSplit], stream: Vector[Instruction]): Trampoline[Either[StackError, DepGraph]] = {
       @inline def continue(f: List[Either[BucketSpec, DepGraph]] => Either[StackError, List[Either[BucketSpec, DepGraph]]]): Trampoline[Either[StackError, DepGraph]] = {
-        M.sequence(f(roots).right map { roots2 => loop(loc, roots2, splits, stream.tail) }).map(_.joinRight)
+        Free.suspend(M.sequence(f(roots).right map { roots2 => loop(loc, roots2, splits, stream.tail) }).map(_.joinRight))
       }
 
       def processJoinInstr(instr: JoinInstr) = {
@@ -76,6 +77,13 @@ trait DAG extends Instructions {
         }
         
         val eitherRootsAbom = Some(instr) collect {
+          case instr @ instructions.Observe => 
+            continue {
+              case Right(samples) :: Right(data) :: tl => Right(Right(Observe(data, samples)(loc)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          
           case instr @ instructions.Assert => 
             continue {
               case Right(child) :: Right(pred) :: tl => Right(Right(Assert(pred, child)(loc)) :: tl)
@@ -420,7 +428,7 @@ trait DAG extends Instructions {
     }
     case class Specs(specs: Vector[dag.IdentitySpec]) extends Identities {
       override def length = specs.length
-      override def distinct = Specs(specs.distinct)
+      override def distinct = Specs(specs map { _.canonicalize } distinct)
       override def fold[A](identities: Vector[dag.IdentitySpec] => A, b: A) = identities(specs)
     }
     case object Undefined extends Identities {
@@ -494,6 +502,8 @@ trait DAG extends Instructions {
           }
             
           case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
+
+          case graph @ dag.Observe(data, samples) => dag.Observe(memoized(splits)(data), memoized(splits)(samples))(graph.loc)
 
           case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(graph.loc)
 
@@ -681,6 +691,12 @@ trait DAG extends Instructions {
                       newChild <- memoized(child)
                     } yield dag.Assert(newPred, newChild)(graph.loc)
                   
+                  case graph @ dag.Observe(data, samples) => 
+                    for {
+                      newData <- memoized(data)
+                      newSamples <- memoized(samples)
+                    } yield dag.Observe(newData, newSamples)(graph.loc)
+                  
                   case graph @ dag.IUI(union, left, right) =>
                     for {
                       newLeft <- memoized(left)
@@ -848,6 +864,10 @@ trait DAG extends Instructions {
         case dag.Assert(pred, child) =>
           val acc2 = foldDown0(pred, acc |+| f(pred))
           foldDown0(child, acc2 |+| f(child))
+
+        case dag.Observe(data, samples) =>
+          val acc2 = foldDown0(data, acc |+| f(data))
+          foldDown0(samples, acc2 |+| f(samples))
 
         case dag.IUI(_, left, right) =>
           val acc2 = foldDown0(left, acc |+| f(left))
@@ -1086,6 +1106,16 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = pred.containsSplitArg || child.containsSplitArg
     }
     
+    case class Observe(data: DepGraph, samples: DepGraph)(val loc: Line) extends DepGraph {
+      lazy val identities = data.identities
+      
+      val sorting = data.sorting
+      
+      lazy val isSingleton = data.isSingleton
+      
+      lazy val containsSplitArg = data.containsSplitArg || samples.containsSplitArg
+    }
+    
     case class IUI(union: Boolean, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = (left.identities, right.identities) match {
         case (Identities.Specs(a), Identities.Specs(b)) => Identities.Specs((a, b).zipped map CoproductIds)
@@ -1120,7 +1150,7 @@ trait DAG extends Instructions {
       
       lazy val sorting = joinSort match {
         case tbl: TableSort => tbl
-        case CrossLeftSort => left.sorting
+        case CrossLeftSort => left.sorting // This isn't correct.
         case CrossRightSort => right.sorting
       }
       
@@ -1226,11 +1256,38 @@ trait DAG extends Instructions {
     case class Extra(expr: DepGraph) extends BucketSpec
     
     
-    sealed trait IdentitySpec
+    sealed trait IdentitySpec {
+      def canonicalize: IdentitySpec = this
+    }
 
     case class LoadIds(path: String) extends IdentitySpec
     case class SynthIds(id: Int) extends IdentitySpec
-    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec
+    
+    case class CoproductIds(left: IdentitySpec, right: IdentitySpec) extends IdentitySpec {
+      override def canonicalize = {
+        val left2 = left.canonicalize
+        val right2 = right.canonicalize
+        val this2 = CoproductIds(left2, right2)
+        
+        val pos = this2.possibilities
+        
+        pos reduceOption CoproductIds orElse pos.headOption getOrElse this2
+      }
+      
+      private def possibilities: Set[IdentitySpec] = {
+        val leftPos = left match {
+          case left: CoproductIds => left.possibilities
+          case _ => Set(left)
+        }
+        
+        val rightPos = right match {
+          case right: CoproductIds => right.possibilities
+          case _ => Set(right)
+        }
+        
+        leftPos ++ rightPos
+      }
+    }
 
     
     sealed trait JoinSort
@@ -1238,7 +1295,7 @@ trait DAG extends Instructions {
     
     case object IdentitySort extends TableSort
     case class ValueSort(id: Int) extends TableSort
-    case object NullSort extends TableSort
+    // case object NullSort extends TableSort -- Not USED!
     
     case object CrossLeftSort extends JoinSort
     case object CrossRightSort extends JoinSort

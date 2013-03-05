@@ -53,7 +53,7 @@ trait ShardConfig extends BaseConfig {
   def shardId: String
   def logPrefix: String
 
-  def ingestConfig: Option[IngestConfig]  
+  def ingestConfig: Option[IngestConfig]
 
   def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
   def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
@@ -66,16 +66,16 @@ trait ShardConfig extends BaseConfig {
 case class ShardActors(ingestSystem: ActorRef, stoppable: Stoppable)
 
 object ShardActors extends Logging {
-  def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = { 
+  def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = {
     for {
       _ <- Future(logger.debug(config.logPrefix + " Stopping " + name + " actor within " + config.stopTimeout.duration))
       b <- gracefulStop(actor, config.stopTimeout.duration)
     } yield {
-      logger.debug(config.logPrefix + " Stop call for " + name + " actor returned " + b)  
-    }   
-  } recover { 
-    case e => logger.error("Error stopping " + name + " actor", e)  
-  }   
+      logger.debug(config.logPrefix + " Stop call for " + name + " actor returned " + b)
+    }
+  } recover {
+    case e => logger.error("Error stopping " + name + " actor", e)
+  }
 }
 
 trait ShardSystemActorModule extends YggConfigComponent with Logging {
@@ -107,7 +107,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
     logger.debug("Initializing ingest system")
     val ingestSystem = ingestActorSystem.actorOf(Props(
       new IngestSupervisor(ingestActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
-      ), 
+      ),
       "ingestRouter"
     )
 
@@ -118,7 +118,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
         _ <- ingestActor map { actorStop(yggConfig, _, "ingestActor")(ingestActorSystem, ingestActorSystem.dispatcher) } getOrElse { Future(())(ingestActorSystem.dispatcher) }
         _ <- actorStop(yggConfig, ingestSystem, "ingestSupervisor")(ingestActorSystem, ingestActorSystem.dispatcher)
       } yield {
-        ingestActorSystem.shutdown() 
+        ingestActorSystem.shutdown()
         logger.info("Shard system stopped.")
       }
     })

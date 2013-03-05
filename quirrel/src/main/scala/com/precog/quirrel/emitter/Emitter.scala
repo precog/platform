@@ -275,17 +275,7 @@ trait Emitter extends AST
       
       case buckets.Group(origin, target, forest, dtrace) => {
         nextId { id =>
-          val candidates: Set[List[ast.Dispatch]] = contextualDispatches(target)
-          
-          val dtracePrefix = dtrace.reverse
-          
-          val context = if (!(candidates forall { _.isEmpty })) {
-            candidates map { _.reverse } find { c =>
-              (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
-            } get
-          } else {
-            Nil
-          }
+          val context = generateContext(target, contextualDispatches, dtrace)
           
           emitBucketSpec(solve, forest, contextualDispatches, dispatches) >>
             prepareContext(context, dispatches) { dispatches => emitExpr(target, dispatches) } >>
@@ -294,9 +284,11 @@ trait Emitter extends AST
         }
       }
       
-      case buckets.UnfixedSolution(name, solution) => {
+      case buckets.UnfixedSolution(name, solution, dtrace) => {
+        val context = generateContext(solution, contextualDispatches, dtrace)
+        
         def state(id: Int) = {
-          emitExpr(solution, dispatches) >>
+          prepareContext(context, dispatches) { dispatches => emitExpr(solution, dispatches) } >>
             labelTicVar(solve, name)(emitInstr(PushKey(id))) >>
             emitInstr(KeyPart(id))
         }
@@ -317,11 +309,30 @@ trait Emitter extends AST
         }
       }
       
-      case buckets.FixedSolution(_, solution, expr) =>
-        emitMap(solution, expr, Eq, dispatches) >> emitInstr(Extra)
+      case buckets.FixedSolution(_, solution, expr, dtrace) => {
+        val context = generateContext(solution, contextualDispatches, dtrace)
+        
+        prepareContext(context, dispatches) { dispatches => emitMap(solution, expr, Eq, dispatches) } >> emitInstr(Extra)
+      }
       
-      case buckets.Extra(expr) =>
-        emitExpr(expr, dispatches) >> emitInstr(Extra)
+      case buckets.Extra(expr, dtrace) => {
+        val context = generateContext(expr, contextualDispatches, dtrace)
+        
+        prepareContext(context, dispatches) { dispatches => emitExpr(expr, dispatches) } >> emitInstr(Extra)
+      }
+    }
+    
+    def generateContext(target: Expr, contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]], dtrace: List[ast.Dispatch]) = {
+      val candidates: Set[List[ast.Dispatch]] = contextualDispatches(target)
+      val dtracePrefix = dtrace.reverse
+      
+      if (!(candidates forall { _.isEmpty })) {
+        candidates map { _.reverse } find { c =>
+          (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
+        } get
+      } else {
+        Nil
+      }
     }
     
     def prepareContext(context: List[ast.Dispatch], dispatches: Set[ast.Dispatch])(f: Set[ast.Dispatch] => EmitterState): EmitterState = context match {
@@ -377,10 +388,10 @@ trait Emitter extends AST
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right, dispatches)
 
-        case expr @ ast.Solve(loc, _, body) => 
+        case expr @ ast.Solve(loc, _, body) =>
           val spec = expr.buckets(dispatches)
         
-          val btraces: Map[Expr, Set[List[(Map[Formal, Expr], Expr)]]] =
+          val btraces: Map[Expr, List[List[(Map[Formal, Expr], Expr)]]] =
             spec.exprs.map({ expr =>
               val btrace = buildBacktrace(trace)(expr)
               (expr -> btrace)
@@ -388,13 +399,13 @@ trait Emitter extends AST
           
           val contextualDispatches: Map[Expr, Set[List[ast.Dispatch]]] = btraces map {
             case (key, pairPaths) => {
-              val paths: Set[List[Expr]] = pairPaths map { pairs => pairs map { _._2 } }
+              val paths: List[List[Expr]] = pairPaths map { pairs => pairs map { _._2 } }
               
               val innerDispatches = paths filter { _ contains expr } map { btrace =>
                 btrace takeWhile (expr !=) collect {
                   case d: ast.Dispatch if d.binding.isInstanceOf[LetBinding] => d
                 }
-              }
+              } toSet
               
               key -> innerDispatches
             }
@@ -410,6 +421,9 @@ trait Emitter extends AST
         
         case ast.Assert(_, pred, child) =>
           emitExpr(pred, dispatches) >> emitExpr(child, dispatches) >> emitInstr(Assert)
+
+        case ast.Observe(_, data, samples) =>
+          emitExpr(data, dispatches) >> emitExpr(samples, dispatches) >> emitInstr(Observe)
 
         case ast.New(loc, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(New))
@@ -501,36 +515,26 @@ trait Emitter extends AST
 
           val joined = reduce(groups ++ joins)
 
-          // This function takes a list of indices and a state, and produces
-          // a new list of indices and a new state, where the Nth index of the
-          // array will be moved into the correct location.
-          def fixN(n: Int): StateT[Id, (Seq[Int], EmitterState), Unit] = StateT.apply[Id, (Seq[Int], EmitterState), Unit] { 
-            case (indices, state) =>
-              val currentIndex = indices.indexOf(n)
-              val targetIndex  = n
+          def resolve(remap: Map[Int, Int])(i: Int): Int =
+            remap get i map resolve(remap) getOrElse i
 
-              (if (currentIndex == targetIndex) (indices, state)
-                else {
-                  var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
+          val (_, swaps) = indices.zipWithIndex.foldLeft((Map[Int, Int](), mzero[EmitterState])) {
+            case ((remap, state), (j, i)) if resolve(remap)(i) != j => {
+              // swap(i')
+              // swap(j)
+              // swap(i')
 
-                  val startValue = indices(startIndex)
-                  val newIndices = indices.updated(startIndex, indices(endIndex)).updated(endIndex, startValue)
+              val i2 = resolve(remap)(i)
 
-                  val newState = (startIndex until endIndex).foldLeft(state) {
-                    case (state, idx) =>
-                      state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
-                  }
+              val state2 = (i2 :: j :: i2 :: Nil) map { idx => emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)) } reduce { _ >> _ }
 
-                  (newIndices, newState)
-                }
-              , ())
+              (remap + (j -> i2), state >> state2)
+            }
+
+            case (pair, _) => pair
           }
 
-          val fixAll = (0 until indices.length).map(fixN)
-
-          val fixedState = fixAll.foldLeft[StateT[Id, (Seq[Int], EmitterState), Unit]](StateT.stateT(()))(_ >> _).exec((indices, mzero[EmitterState]))._2
-
-          joined >> fixedState
+          joined >> swaps
         
         case ast.Descent(loc, child, property) => 
           emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)

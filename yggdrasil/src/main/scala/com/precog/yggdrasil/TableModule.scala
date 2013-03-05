@@ -29,6 +29,7 @@ import blueeyes.json._
 import collection.Set
 
 import scalaz._
+import scalaz.syntax.monad._
 
 import java.nio.CharBuffer
 
@@ -55,12 +56,14 @@ case class ExactSize(minSize: Long) extends TableSize {
     case ExactSize(n) => ExactSize(minSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, minSize + n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
   
   def *(other: TableSize) = other match {
     case ExactSize(n) => ExactSize(minSize * n)
     case EstimateSize(n1, n2) => EstimateSize(minSize * n1, minSize * n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
 }
 
@@ -69,12 +72,14 @@ case class EstimateSize(minSize: Long, maxSize: Long) extends TableSize {
     case ExactSize(n) => EstimateSize(minSize + n, maxSize + n)
     case EstimateSize(n1, n2) => EstimateSize(minSize + n1, maxSize + n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
   
   def *(other: TableSize) = other match {
     case ExactSize(n) => EstimateSize(minSize * n, maxSize * n)
     case EstimateSize(n1, n2) => EstimateSize(minSize * n1, maxSize * n2)
     case UnknownSize => UnknownSize
+    case InfiniteSize => InfiniteSize
   }
 }
 
@@ -82,6 +87,12 @@ case object UnknownSize extends TableSize {
   val maxSize = Long.MaxValue
   def +(other: TableSize) = UnknownSize
   def *(other: TableSize) = UnknownSize
+}
+
+case object InfiniteSize extends TableSize {
+  val maxSize = Long.MaxValue
+  def +(other: TableSize) = InfiniteSize
+  def *(other: TableSize) = InfiniteSize
 }
 
 object TableModule {
@@ -100,6 +111,8 @@ object TableModule {
 trait TableModule[M[+_]] extends TransSpecModule {
   import TableModule._
 
+  implicit def M: Monad[M]
+
   type Reducer[α]
   type TableMetrics
 
@@ -110,6 +123,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
   
   trait TableCompanionLike {
     import trans._
+    //import trans._
+    import trans.constants._
 
     def empty: Table
 
@@ -200,6 +215,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def concat(t2: Table): Table
 
+    def zip(t2: Table): M[Table]
+
     def toArray[A](implicit tpe: CValueType[A]): Table
 
     /**
@@ -235,6 +252,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
   sealed trait GroupingSpec {
     def sources: Vector[GroupingSource] 
+    def sorted: M[GroupingSpec]
   }
 
   object GroupingSpec {
@@ -252,9 +270,17 @@ trait TableModule[M[+_]] extends TransSpecModule {
    */
   final case class GroupingSource(table: Table, idTrans: trans.TransSpec1, targetTrans: Option[trans.TransSpec1], groupId: GroupId, groupKeySpec: trans.GroupKeySpec) extends GroupingSpec {
     def sources: Vector[GroupingSource] = Vector(this)
+    def sorted: M[GroupingSource] = for {
+      t <- table.sort(trans.DerefObjectStatic(trans.Leaf(trans.Source), CPathField("key")))
+    } yield {
+      GroupingSource(t, idTrans, targetTrans, groupId, groupKeySpec)
+    }
   }
   
   final case class GroupingAlignment(groupKeyLeftTrans: trans.TransSpec1, groupKeyRightTrans: trans.TransSpec1, left: GroupingSpec, right: GroupingSpec, alignment: GroupingSpec.Alignment) extends GroupingSpec {
     def sources: Vector[GroupingSource] = left.sources ++ right.sources
+    def sorted: M[GroupingAlignment] = (left.sorted |@| right.sorted) { (t1, t2) =>
+      GroupingAlignment(groupKeyLeftTrans, groupKeyRightTrans, t1, t2, alignment)
+    }
   }
 }

@@ -39,5 +39,5 @@ class StaticAccountFinder(accountId: AccountId)(implicit executor: ExecutionCont
 
   def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
 
-  def findAccountById(accountId: AccountId): Future[Option[Account]] = Promise.successful(None)
+  def findAccountDetailsById(accountId: AccountId): Future[Option[AccountDetails]] = Promise.successful(None)
 }

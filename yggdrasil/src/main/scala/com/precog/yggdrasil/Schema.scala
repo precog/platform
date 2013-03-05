@@ -62,30 +62,27 @@ object Schema {
   def flatten(jtype: JType, refsOriginal: List[ColumnRef]): List[(CPath, CType)] = {
     def buildPath(nodes: List[CPathNode], refs: List[ColumnRef], jType: JType): List[(CPath, CType)] = jType match {
       case JArrayFixedT(indices) if indices.isEmpty =>
-        refs collect { case ColumnRef(CPath.Identity, CEmptyArray) =>
-          (CPath(nodes.reverse), CEmptyArray)
-        }
+        (CPath(nodes.reverse), CEmptyArray) :: Nil
         
-      case JArrayFixedT(fields) if fields.isEmpty =>
-        refs collect { case ColumnRef(CPath.Identity, CEmptyObject) =>
-          (CPath(nodes.reverse), CEmptyObject)
-        }
+      case JObjectFixedT(fields) if fields.isEmpty =>
+        (CPath(nodes.reverse), CEmptyObject) :: Nil
         
       case JArrayFixedT(indices) =>
-        indices.flatMap { case (idx, tpe) =>
+        indices.toList.flatMap { case (idx, tpe) =>
           val refs0 = refs collect { case ColumnRef(CPath(CPathIndex(`idx`), rest @ _*), ctype) =>
             ColumnRef(CPath(rest: _*), ctype)
           }
           buildPath(CPathIndex(idx) :: nodes, refs0, tpe)
-        }.toList
+        }
 
-      case JObjectFixedT(fields) => 
-        fields.flatMap { case (field, tpe) =>
+      case JObjectFixedT(fields) => {
+        fields.toList.flatMap { case (field, tpe) =>
           val refs0 = refs collect { case ColumnRef(CPath(CPathField(`field`), rest @ _*), ctype) =>
             ColumnRef(CPath(rest: _*), ctype)
           }
           buildPath(CPathField(field) :: nodes, refs0, tpe)
-        }.toList
+        }
+      }
 
       case JArrayUnfixedT =>
         refs collect { 

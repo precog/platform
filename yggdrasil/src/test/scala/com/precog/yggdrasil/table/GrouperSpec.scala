@@ -997,8 +997,8 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
         val s2 = Stream(0, 0, 0, 1, 1, 434608913, 193294286, 0, -1921860406, 2147483647, -2147483648, 1, -1, 0, -2147483648, 0, -113276442, -1564947365, 2147483647, -54676151, -1, 49986682, -391210112, 1, -1, 2147483647, 0, -1, 0, 0, 2147483647, -225140804, 1245119802, 1, -548778232, -1138847365, 1, 73483948, 0, -1, -996046474, -695581403, 2147483647, -2147483648, -1, 1563916971, -2147483648, 0, 1, 607908889, -2009071663, -1382431435, 778550183, 2147483647, -2147483648, 0, -1)
 
-        println("s1.size = %d, s2.size = %d".format(s1.size, s2.size))
-        println("distinct s1.size = %d, s2.size = %d".format(s1.map(_._1).toSet.size, s2.toSet.size))
+        //println("s1.size = %d, s2.size = %d".format(s1.size, s2.size))
+        //println("distinct s1.size = %d, s2.size = %d".format(s1.map(_._1).toSet.size, s2.toSet.size))
         testCtrPartialJoinOr(s1, s2)
       }
  

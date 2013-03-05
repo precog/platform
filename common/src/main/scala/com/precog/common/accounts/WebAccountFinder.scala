@@ -66,7 +66,7 @@ object WebAccountFinder {
        serviceConfig.get[String]("path").toSuccess(NEL("Configuration property service.path is required")) |@|
        serviceConfig.get[String]("user").toSuccess(NEL("Configuration property service.user is required")) |@|
        serviceConfig.get[String]("password").toSuccess(NEL("Configuration property service.password is required"))) {
-        (protocol, host, port, path, user, password) => 
+        (protocol, host, port, path, user, password) =>
           val cacheSize = serviceConfig[Int]("cache_size", 1000)
           new WebAccountFinder(protocol, host, port, path, user, password, cacheSize)
       }
@@ -103,10 +103,10 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
             right(None)
 
           case res =>
-            logger.error("Unexpected response from accounts service: " + res)
+            logger.error("Unexpected response from accounts service for findAccountByAPIKey: " + res)
             left("Unexpected response from accounts service; unable to proceed: " + res)
         } recoverWith {
-          case ex => 
+          case ex =>
             logger.error("findAccountByAPIKey for " + apiKey + "failed.", ex)
             Promise.successful(left("Client error accessing accounts service; unable to proceed: " + ex.getMessage))
         })
@@ -114,17 +114,16 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
     }
   }
 
-  def findAccountById(accountId: AccountId): Response[Option[Account]] = {
+  def findAccountDetailsById(accountId: AccountId): Response[Option[AccountDetails]] = {
     logger.debug("Finding accoung for id: " + accountId)
-    import Account.SafeSerialization._
     invoke { client =>
       eitherT(client.get[JValue]("/accounts/" + accountId) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jaccount), _) =>
-          logger.info("Got response for AccountId " + accountId) 
-          (((_:Extractor.Error).message) <-: jaccount.validated[Option[Account]]).disjunction
+          logger.info("Got response for AccountId " + accountId)
+          (((_:Extractor.Error).message) <-: jaccount.validated[Option[AccountDetails]]).disjunction
 
         case res =>
-          logger.error("Unexpected response from accounts service: " + res)
+          logger.error("Unexpected response from accounts serviceon findAccountDetailsById: " + res)
           left("Unexpected response from accounts service; unable to proceed: " + res)
       } recoverWith {
         case ex =>
@@ -146,6 +145,5 @@ class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionCo
   import EitherT.{ left => leftT, right => rightT, _ }
   private implicit val M: Monad[Future] = new FutureMonad(executor)
   def findAccountByAPIKey(apiKey: APIKey) = rightT(Some(accountId).point[Future])
-  def findAccountById(accountId: AccountId) = rightT(None.point[Future])
+  def findAccountDetailsById(accountId: AccountId) = rightT(None.point[Future])
 }
-

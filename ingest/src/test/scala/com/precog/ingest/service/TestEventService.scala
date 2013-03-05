@@ -63,7 +63,7 @@ trait TestEventService extends
   BlueEyesServiceSpecification with
   EventService with
   AkkaDefaults {
-  
+
   val config = """
     security {
       test = true
@@ -97,25 +97,25 @@ trait TestEventService extends
 
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  
+
   val accessTest = Set[Permission](
     ReadPermission(testAccount.rootPath, Set("test")),
     ReducePermission(testAccount.rootPath, Set("test")),
     WritePermission(testAccount.rootPath, Set()),
     DeletePermission(testAccount.rootPath, Set())
   )
-  
+
   val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {
     case (accountId, path) =>
-      apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey => 
+      apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey =>
         apiKeyManager.deriveAndAddGrant(None, None, testAccount.apiKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
       }
   } copoint
-  
+
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
-    println(apiKeyManager.apiKeys)
+    //println(apiKeyManager.apiKeys)
     val deps = EventServiceDeps(
       new DirectAPIKeyFinder(apiKeyManager),
       accountFinder,
@@ -146,7 +146,7 @@ trait TestEventService extends
       content <- response.content map (a => bi(a) map (Some(_))) getOrElse Future(None)
     } yield {
       (
-        response.copy(content = content), 
+        response.copy(content = content),
         stored.toList collect { case in: Ingest => in }
       )
     }

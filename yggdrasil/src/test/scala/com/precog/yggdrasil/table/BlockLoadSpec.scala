@@ -59,29 +59,31 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
     val Some((idCount, schema)) = sampleData.schema
     val actualSchema = inferSchema(sampleData.data map { _ \ "value" })
 
-    val projections = actualSchema.grouped(1) map { subschema =>
-      Path("/test") -> Projection( 
-        sampleData.data flatMap { jv =>
-          val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
-            case (obj, (jpath, ctype)) => { 
-              val vpath = JPath(JPathField("value") :: jpath.nodes)
-              val valueAtPath = jv.get(vpath)
+    val projections = List(actualSchema).map { subschema =>
+    
+      val stream = sampleData.data flatMap { jv =>
+        val back = subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+          case (obj, (jpath, ctype)) => { 
+            val vpath = JPath(JPathField("value") :: jpath.nodes)
+            val valueAtPath = jv.get(vpath)
               
-              if (compliesWithSchema(valueAtPath, ctype)) {
-                obj.set(vpath, valueAtPath)
-              } else { 
-                obj
-              }
+            if (compliesWithSchema(valueAtPath, ctype)) {
+              obj.set(vpath, valueAtPath)
+            } else { 
+              obj
             }
           }
-          
-          if (back \ "value" == JUndefined)
-            None
-          else
-            Some(back)
         }
-      )
+          
+        if (back \ "value" == JUndefined)
+          None
+        else
+          Some(back)
+      }
+    
+      Path("/test") -> Projection(stream)
     } toMap
+
   }
 
   def testLoadDense(sample: SampleData) = {
@@ -106,7 +108,8 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
 
     val cschema = module.schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
 
-    module.Table.constString(Set("/test")).load("dummyAPIKey", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toStream must_== expected
+    val result = module.Table.constString(Set("/test")).load("dummyAPIKey", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toList
+    result must_== expected.toList
   }
 
   def checkLoadDense = {

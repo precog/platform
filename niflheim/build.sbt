@@ -61,7 +61,7 @@ libraryDependencies ++= Seq(
   //"com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1",
   //"org.apfloat"                 %  "apfloat"            % "1.6.3",
   "org.spire-math"              % "spire_2.9.1"              % "0.3.0-M2",
-  "org.objectweb.howl"          %  "howl"               % "1.0.1-1"
+  "org.objectweb.howl"          %  "howl"               % "1.0.1-1-precog"
 )
 
 //mainClass := Some("com.precog.yggdrasil.util.YggUtils")

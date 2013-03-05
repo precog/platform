@@ -44,11 +44,19 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
           val SArray(arr1) = elems("Model1")
 
           arr1(0) must beLike { case SObject(elems) =>
-            elems("height") must beLike {
-              case SDecimal(d) => elems must haveSize(1)
+            elems.keys mustEqual Set("height")
+            
+            elems("height") must beLike { case SObject(obj) =>
+              obj("coefficient") must beLike { case SDecimal(d) =>
+                elems must haveSize(1)
+              }
             }
           }
-          arr1(1) must beLike { case SDecimal(d) => ok }
+          arr1(1) must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("coefficient")
+
+            obj("coefficient") must beLike { case SDecimal(d) => ok }
+          }
       }
     }
 
@@ -75,6 +83,29 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       }
     }
 
+    def testJoinLogistic(input: String, input2: String, idJoin: Boolean) = {
+      val results = evalE(input)
+      val resultsCount = evalE(input2)
+
+      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+      results must haveSize(count)
+
+      results must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          if (idJoin) ids must haveSize(2)
+          else ids must haveSize(1)
+
+          elems.keys must contain("predictedGender")
+
+          elems("predictedGender") must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("Model1")
+            obj("Model1") must beLike { case SDecimal(d) =>
+              (d must be_>=(BigDecimal(0))) and (d must be_<=(BigDecimal(1)))
+            }
+          }
+      }
+    }
+
     "join predicted results with original dataset" in {
       val input = """
         medals := //summer_games/london_medals
@@ -84,7 +115,53 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
 
         predictions := std::stats::predictLogistic(medals, model)
 
-        { height: medals.HeightIncm, predictedGender: predictions }
+        medals with { predictedGender: predictions }
+      """
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals where std::type::isNumber(medals.HeightIncm)
+        count(h)
+      """
+
+      testJoinLogistic(input, input2, false)
+    }
+
+    "join predicted results with original dataset when model is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+        model := new std::stats::logisticRegression(gender, { HeightIncm: medals.HeightIncm })
+
+        medals ~ model
+        predictions := std::stats::predictLogistic(medals, model)
+
+        medals with { predictedGender: predictions }
+      """
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals where std::type::isNumber(medals.HeightIncm)
+        count(h)
+      """
+
+      testJoinLogistic(input, input2, true)
+    }
+
+    "join predicted results with model when model is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+        model := new std::stats::logisticRegression(gender, { HeightIncm: medals.HeightIncm })
+
+        medals ~ model
+        predictions := std::stats::predictLogistic(medals, model)
+
+        model with { predictedGender: predictions }
       """
 
       val input2 = """ 
@@ -102,8 +179,9 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
-          ids must haveSize(1)
-          elems.keys mustEqual Set("height", "predictedGender") 
+          ids must haveSize(2)
+
+          elems.keys mustEqual Set("Model1", "predictedGender") 
 
           elems("predictedGender") must beLike { case SObject(obj) =>
             obj.keys mustEqual Set("Model1")

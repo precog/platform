@@ -30,7 +30,7 @@ import blueeyes.persistence.mongo._
 import akka.dispatch.Future
 import akka.util.Timeout
 
-import org.I0Itec.zkclient.ZkClient 
+import org.I0Itec.zkclient.ZkClient
 import org.streum.configrity.Configuration
 
 import scalaz._
@@ -43,7 +43,7 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
 
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable) = {
     val mongo = RealMongo(config.detach("mongo"))
-    
+
     val zkHosts = config[String]("zookeeper.hosts", "localhost:2181")
     val database = config[String]("mongo.database", "accounts_v1")
 
@@ -65,5 +65,6 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
   def APIKeyFinder(config: Configuration) = WebAPIKeyFinder(config).map(_.withM[Future]) valueOr { errs =>
     sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
   }
-}
 
+  def RootKey(config: Configuration) = config[String]("rootKey")
+}

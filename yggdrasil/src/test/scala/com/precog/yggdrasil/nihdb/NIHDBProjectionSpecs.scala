@@ -35,13 +35,14 @@ import blueeyes.json._
 
 import org.specs2.mutable.{After, Specification}
 import org.specs2.specification.{Fragments, Step}
+import org.specs2.ScalaCheck
 
 import scalaz.effect.IO
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
-
-class NIHDBProjectionSpecs extends Specification with FutureMatchers {
+class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
   val chef = actorSystem.actorOf(Props(new Chef(
@@ -53,8 +54,23 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
+  val maxDuration = Duration(60, "seconds")
+
+  implicit val params = set(minTestsOk -> 10)
+
+  val baseDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+
+  val dirSeq = new AtomicInteger
+
+  assert(baseDir.isDirectory && baseDir.canWrite)
+
   trait TempContext extends After {
-    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+    val workDir = new File(baseDir, "nihdbspec%03d".format(dirSeq.getAndIncrement))
+
+    if (!workDir.mkdirs) {
+      throw new Exception("Failed to create work directory! " + workDir)
+    }
+
     var projection = newProjection(workDir)
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
@@ -70,13 +86,19 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
   }
 
   "NIHDBProjections" should {
-    "Properly initialize and close" in new TempContext {
+    "Properly initialize and close" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val results = projection.getBlockAfter(None, None)
 
-      results must whenDelivered(beNone)
+      results must awaited(maxDuration) { beNone }
     }
 
-    "Insert and retrieve values below the cook threshold" in new TempContext {
+    "Insert and retrieve values below the cook threshold" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val toInsert = (0L to 2L).toSeq.map { i =>
@@ -89,44 +111,49 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
           result <- projection.getBlockAfter(None, None)
         } yield result
 
-      results must whenDelivered (beLike {
+      results must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
           data.size mustEqual 3
-          data.toJsonElements must containAllOf(expected).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
       })
     }
 
-    "Insert, close and re-read values below the cook threshold" in new TempContext {
+    "Insert, close and re-read values below the cook threshold" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       projection.insert((0L to 2L).toSeq.map { i =>
         IngestRecord(EventId.fromLong(i), JNum(i))
       }, "fake")
 
-      println("Raw log = " + fromFuture(projection.status).rawSize)
-
       val result = for {
         _ <- projection.close()
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
         status <- projection.status
-        _ = println("Raw log = " + status.rawSize)
         r <- projection.getBlockAfter(None, None)
       } yield r
 
-      result must whenDelivered (beLike {
-        case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 0L
-          max mustEqual 0L
-          data.size mustEqual 3
-          data.toJsonElements must containAllOf(expected).only.inOrder
-      })
+      result must awaited(maxDuration) {
+        beLike {
+          case Some(BlockProjectionData(min, max, data)) =>
+            min mustEqual 0L
+            max mustEqual 0L
+            data.size mustEqual 3
+            data.toJsonElements.map(_("value")) must containAllOf(expected).only.inOrder
+        }
+      }
     }
 
     "Properly filter on constrainted columns" in todo
 
-    "Properly convert raw blocks to cooked" in new TempContext {
+    "Properly convert raw blocks to cooked" in check { (discard: Int) =>
+      val ctxt = new TempContext {}
+      import ctxt._
+
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
       (0L to 1950L).map {
@@ -146,22 +173,23 @@ class NIHDBProjectionSpecs extends Specification with FutureMatchers {
       status.pending mustEqual 0
       status.rawSize mustEqual 751
 
-      projection.getBlockAfter(None, None) must whenDelivered (beLike {
+      projection.getBlockAfter(None, None) must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
           data.size mustEqual 1200
-          data.toJsonElements must containAllOf(expected.take(1200)).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected.take(1200)).only.inOrder
       })
 
-      projection.getBlockAfter(Some(0), None) must whenDelivered (beLike {
+      projection.getBlockAfter(Some(0), None) must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 1L
           max mustEqual 1L
           data.size mustEqual 751
-          data.toJsonElements must containAllOf(expected.drop(1200)).only.inOrder
+          data.toJsonElements.map(_("value")) must containAllOf(expected.drop(1200)).only.inOrder
       })
     }
+
   }
 
   def shutdown = actorSystem.shutdown()

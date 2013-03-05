@@ -20,6 +20,10 @@
 package com.precog.shard
 package service
 
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
+import akka.util.Duration
+
 import blueeyes._
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -27,9 +31,6 @@ import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
-
-import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
 import com.precog.common.security._
@@ -47,6 +48,8 @@ import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
 import scalaz.syntax.bifunctor._
 import scalaz.std.option._
+
+import java.util.concurrent.TimeUnit
 
 trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
   type Query = String
@@ -96,13 +99,13 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
   }
 
   private def getSortOn(request: HttpRequest[_]): Validation[String, List[CPath]] = {
-    import blueeyes.json.serialization.Extractor._    
+    import blueeyes.json.serialization.Extractor._
     val onError: Error => String = {
       case err @ Thrown(ex) =>
         logger.warn("Exceptiion thrown from JSON parsing of sortOn parameter", ex)
         err.message
-      case other => 
-        other.message          
+      case other =>
+        other.message
     }
 
     request.parameters.get('sortOn).filter(_ != null) map { paths =>
@@ -115,7 +118,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
           Validation.failure(Invalid("The sortOn query parameter was expected to be JSON string or array, but found " + badJVal))
       }
 
-      onError <-: parsed 
+      onError <-: parsed
     } getOrElse {
       Validation.success[String, List[CPath]](Nil)
     }
@@ -163,7 +166,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
             page = offsetAndLimit,
             sortOn = sortOn,
             sortOrder = sortOrder,
-            timeout = timeout,
+            timeout = timeout.map(Duration(_, TimeUnit.MILLISECONDS)),
             output = output
           )
 

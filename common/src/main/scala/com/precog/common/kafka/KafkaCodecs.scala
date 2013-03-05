@@ -74,7 +74,7 @@ class KafkaEventCodec extends Encoder[Event] {
   def toMessage(event: Event) = {
     val msgBuf = EventEncoding.toMessageBytes(event)
     val byteArray = new Array[Byte](msgBuf.limit)
-    msgBuf.get(byteArray) 
+    msgBuf.get(byteArray)
     // If you attempt to simply create the Message passing it the byte buffer,
     // as one of its constructors permits, the Kafka internal "magic byte"
     // and checksum do not get integrated, so things blow up deep in the internals
@@ -101,8 +101,8 @@ object EventEncoding extends EncodingFlags with Logging {
 
   def read(buffer: ByteBuffer): Validation[Error, Event] = {
     for {
-      msgType <- readHeader(buffer) 
-      jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer)) 
+      msgType <- readHeader(buffer)
+      jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer))
       event <-  msgType match {
                   case `jsonIngestFlag`  => jv.validated[Ingest]
                   case `jsonArchiveFlag` => jv.validated[Archive]
@@ -141,15 +141,17 @@ object EventMessageEncoding extends EncodingFlags with Logging {
   def write(buffer: ByteBuffer, msg: EventMessage) {
     buffer.put(toMessageBytes(msg))
   }
-  
-  def read(buffer: ByteBuffer): Validation[Error, EventMessage] = {
+
+  import EventMessage.EventMessageExtraction
+
+  def read(buffer: ByteBuffer): Validation[Error, EventMessageExtraction] = {
     for {
-      msgType <- readHeader(buffer) 
+      msgType <- readHeader(buffer)
       //_ = println(java.nio.charset.Charset.forName("UTF-8").decode(buffer).toString)
-      jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer)) 
+      jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer))
       message <-  msgType match {
-                    case `jsonIngestMessageFlag`  => jv.validated[IngestMessage]
-                    case `jsonArchiveMessageFlag` => jv.validated[ArchiveMessage]
+                    case `jsonIngestMessageFlag`  => jv.validated[EventMessageExtraction](IngestMessage.Extractor)
+                    case `jsonArchiveMessageFlag` => jv.validated[ArchiveMessage].map(\/.right(_))
                   }
     } yield message
   }

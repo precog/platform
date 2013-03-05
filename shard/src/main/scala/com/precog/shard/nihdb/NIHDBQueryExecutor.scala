@@ -94,7 +94,7 @@ trait NIHDBQueryExecutorComponent  {
   import blueeyes.json.serialization.Extractor
 
   def platformFactory(config0: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
-    new ManagedPlatform 
+    new ManagedPlatform
         with ShardQueryExecutorPlatform[Future]
         with NIHDBColumnarTableModule
         with NIHDBStorageMetadataSource
@@ -115,9 +115,11 @@ trait NIHDBQueryExecutorComponent  {
       }
 
       val clock = blueeyes.util.Clock.System
-      
+
+      val defaultTimeout = yggConfig.maxEvalDuration
+
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
-      
+
       private val threadPooling = new PerAccountThreadPooling(extAccountFinder)
 
       implicit val actorSystem = ActorSystem("nihdbExecutorActorSystem")
@@ -138,8 +140,7 @@ trait NIHDBQueryExecutorComponent  {
 
       val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, accessControl)))
 
-
-      val shardActors @ ShardActors(ingestSupervisor, _) = 
+      val shardActors @ ShardActors(ingestSupervisor, _) =
         initShardActors(extAccountFinder, projectionsActor)
 
       trait TableCompanion extends NIHDBColumnarTableCompanion //{

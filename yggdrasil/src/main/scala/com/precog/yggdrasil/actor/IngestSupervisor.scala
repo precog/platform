@@ -18,7 +18,7 @@
  *
  */
 package com.precog.yggdrasil
-package actor 
+package actor
 
 import com.precog.common._
 import com.precog.common.ingest._
@@ -69,9 +69,9 @@ case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestActi
  * The purpose of the ingest supervisor is to coordinate multiple sources of data from which data
  * may be ingested. At present, there are two such sources: the inbound kafka queue, represented
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
- * this actor. 
+ * this actor.
  */
-class IngestSupervisor( ingestActor: Option[ActorRef], 
+class IngestSupervisor( ingestActor: Option[ActorRef],
                         projectionsActor: ActorRef,
                         scheduler: Scheduler,
                         idleDelay: Duration,
@@ -106,24 +106,23 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
       logger.debug("Ingest supervisor status")
       sender ! status
 
-    case IngestErrors(messages) => 
+    case IngestErrors(messages) =>
       errors += 1
       messages.foreach(logger.error(_))
 
-    case IngestData(messages)   => 
+    case IngestData(messages)   =>
       processed += 1
       if (messages.nonEmpty) {
         logger.info("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
-        scheduleIngestRequest(Duration.Zero)
       }
 
     case DirectIngestData(d) =>
       logger.info("Processing direct ingest of " + d.size + " messages")
-      processMessages(d, sender) 
+      processMessages(d, sender)
   }
 
-  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) :: 
+  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) ::
                                                                  JField("processed", JNum(processed)) :: Nil)) :: Nil)
 
   /**
@@ -141,10 +140,4 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
     batchCoordinator ! ProjectionUpdatesExpected(updates.size)
     for (update <- updates) projectionsActor.tell(update, batchCoordinator)
   }
-
-  private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
-    initiated += 1
-    scheduler.scheduleOnce(delay, actor, GetMessages(self))
-  }
 }
-

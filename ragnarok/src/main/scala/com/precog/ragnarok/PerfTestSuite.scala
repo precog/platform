@@ -104,7 +104,7 @@ trait PerfTestSuite extends Logging {
     import RunConfig.OutputFormat
 
     try {
-      val runner = new JDBMPerfTestRunner(SimpleTimer,
+      val runner = new NIHDBPerfTestRunner(SimpleTimer,
         optimize = config.optimize,
         apiKey = "dummyAPIKey",
         _rootDir = config.rootDir,

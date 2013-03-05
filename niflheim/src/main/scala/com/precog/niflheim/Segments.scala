@@ -166,24 +166,31 @@ case class Segments(id: Long, var length: Int, t: CTree, a: ArrayBuffer[Segment]
   }
 
   def addBigDecimal(row: Int, tree: CTree, x: BigDecimal) {
-    val n = tree.getType(CNum)
-    if (n >= 0) {
-      val seg = a(n).asInstanceOf[ArraySegment[BigDecimal]]
-      seg.defined.set(row)
-      seg.values(row) = x
+    val j = x.toLong
+    if (false && BigDecimal(j) == x) {
+      addLong(row, tree, j)
     } else {
-      tree.setType(CNum, a.length)
-      val d = new BitSet()
-      d.set(row)
-      val v = new Array[BigDecimal](length)
-      v(row) = x
-      a.append(ArraySegment[BigDecimal](id, tree.path, CNum, d, v))
+      val n = tree.getType(CNum)
+  
+      if (n >= 0) {
+        val seg = a(n).asInstanceOf[ArraySegment[BigDecimal]]
+        seg.defined.set(row)
+        seg.values(row) = x
+      } else {
+        tree.setType(CNum, a.length)
+        val d = new BitSet()
+        d.set(row)
+        val v = new Array[BigDecimal](length)
+        v(row) = x
+        a.append(ArraySegment[BigDecimal](id, tree.path, CNum, d, v))
+      }
     }
   }
 
   // TODO: more principled number handling
-  def addNum(row: Int, tree: CTree, s: String): Unit =
-    addBigDecimal(row, tree, BigDecimal(s)) 
+  def addNum(row: Int, tree: CTree, s: String): Unit = {
+    addBigDecimal(row, tree, BigDecimal(s))
+  }
 
   def extendWithRows(rows: Seq[JValue]) {
     var i = 0

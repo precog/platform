@@ -40,17 +40,29 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           ids must haveSize(0)
           elems.keys mustEqual Set("Model1")
 
-          val SArray(arr1) = elems("Model1")
+          val SArray(arr) = elems("Model1")
 
-          arr1(0) must beLike { case SObject(elems) => 
-            elems("height") must beLike { 
-              case SDecimal(d) => elems must haveSize(1)
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("height")
+
+            obj("height") must beLike {
+              case SObject(height) => 
+                height.keys mustEqual Set("coefficient", "standard error")
+
+                height("coefficient") must beLike { case SDecimal(d) => ok }
+                height("standard error") must beLike { case SDecimal(d) => ok }
             }
           }
-          arr1(1) must beLike { case SDecimal(d) => ok }
+
+          arr(1) must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("coefficient", "standard error")
+
+            obj("coefficient") must beLike { case SDecimal(d) => ok }
+            obj("standard error") must beLike { case SDecimal(d) => ok }
+          }
       }
-    }    
-    
+    }
+
     "predict linear regression" in {
       val input = """
         medals := //summer_games/london_medals
@@ -72,6 +84,27 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       }
     }
 
+    def testJoinLinear(input: String, input2: String, idJoin: Boolean) = {
+      val results = evalE(input)
+      val resultsCount = evalE(input2)
+
+      val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+      results must haveSize(count)
+
+      results must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          if (idJoin) ids must haveSize(2)
+          else ids must haveSize(1)
+
+          elems.keys must contain("predictedWeight")
+
+          elems("predictedWeight") must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("Model1")
+            obj("Model1") must beLike { case SDecimal(_) => ok }
+          }
+      }
+    }
+
     "join predicted results with original dataset" in {
       val input = """
         medals := //summer_games/london_medals
@@ -79,7 +112,51 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         model := std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
         predictions := std::stats::predictLinear(medals, model)
 
-        { height: medals.HeightIncm, predictedWeight: predictions }
+        medals with { predictedWeight: predictions }
+      """
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals where std::type::isNumber(medals.HeightIncm)
+        count(h)
+      """
+
+      testJoinLinear(input, input2, false)
+    }
+
+    "join predicted results with original dataset when model is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
+
+        model ~ medals
+        predictions := std::stats::predictLinear(medals, model)
+
+        medals with { predictedWeight: predictions }
+      """
+
+      val input2 = """ 
+        medals := //summer_games/london_medals
+
+        h := medals where std::type::isNumber(medals.HeightIncm)
+        count(h)
+      """
+
+      testJoinLinear(input, input2, true)
+    }
+
+    "join predicted results with model when model is `new`ed" in {
+      val input = """
+        medals := //summer_games/london_medals
+        
+        model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
+
+        model ~ medals
+        predictions := std::stats::predictLinear(medals, model)
+
+        model with { predictedWeight: predictions }
       """
 
       val input2 = """ 
@@ -97,12 +174,12 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
-          ids must haveSize(1)
-          elems.keys must contain("predictedWeight")
+          ids must haveSize(2)
+          elems.keys mustEqual Set("predictedWeight", "Model1")
 
           elems("predictedWeight") must beLike { case SObject(obj) =>
             obj.keys mustEqual Set("Model1")
-            obj("Model1") must beLike { case SDecimal(d) => ok }
+            obj("Model1") must beLike { case SDecimal(_) => ok }
           }
       }
     }

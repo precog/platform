@@ -78,7 +78,7 @@ trait IdSourceScannerModule extends YggConfigComponent {
         var i = idsOffset
         var id = initId
         while (id < blockEnd && i < ids.length) {
-          ids(i) = id
+          ids(i) = id | Long.MinValue
           id += 1L
           i += 1
         }

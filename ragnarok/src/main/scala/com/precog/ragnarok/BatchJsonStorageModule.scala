@@ -28,22 +28,26 @@ import com.precog.util.PrecogUnit
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
 import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
 
-import blueeyes.json._
+import com.precog.yggdrasil.nihdb._
+import com.precog.yggdrasil.table._
 
-import akka.dispatch.Await
+import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
 import scalaz.syntax.copointed._
 
-import com.weiglewilczek.slf4s.Logging
+import akka.dispatch._
+import akka.actor.{ IO => _, _ }
 
+import com.weiglewilczek.slf4s.Logging
 
 /**
  * Provides a simple interface for ingesting bulk JSON data.
  */
-trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
-  implicit def M: Monad[M] with Copointed[M]
+trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
+  implicit def M: Monad[Future] with Copointed[Future]
+  def actorSystem: ActorSystem
 
   private val pid = System.currentTimeMillis.toInt & 0x7fffffff
   private val sid = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -57,16 +61,16 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
   /**
    * Reads a JArray from a JSON file or a set of JSON files zipped up together.
    */
-  private def readRows(data: File): Iterator[JValue] = {
+  private def readRows(data: File): Seq[JValue] = {
     // TODO Resource leak; need to close zippedData.
-    openZipFile(data) map { zippedData =>
+    openZipFile(data).map { zippedData =>
       new Iterator[ZipEntry] {
         val enum = zippedData.entries
         def next() = enum.nextElement()
         def hasNext = enum.hasMoreElements()
-      } map { zipEntry =>
+      }.map { zipEntry =>
         new InputStreamReader(zippedData.getInputStream(zipEntry))
-      } flatMap { reader =>
+      }.flatMap { reader =>
         val sb = new StringBuilder
         val buf = new BufferedReader(reader)
         var line = buf.readLine
@@ -75,12 +79,12 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
           line = buf.readLine
         }
         val str = sb.toString
-        val rows = JParser.parseUnsafe(str).children.toIterator
+        val rows = JParser.parseManyFromString(str).valueOr(throw _).toIterator
         reader.close()
         rows
-      }
+      }.toList
     } getOrElse {
-      (JParser.parseFromFile(data) | sys.error("parse failure")).children.toIterator
+      JParser.parseManyFromFile(data).valueOr(throw _)
     }
   }
 
@@ -91,18 +95,20 @@ trait BatchJsonStorageModule[M[+_]] extends StorageModule[M] with Logging {
   def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
-    // Same as used by YggUtil's import command.
-    val events = readRows(data) map { jval =>
-      IngestMessage(apiKey, Path(db), accountId, Vector(IngestRecord(EventId(pid, sid.getAndIncrement), jval)), None)
-    }
+    implicit val to = storageTimeout
 
-    events.grouped(batchSize).zipWithIndex foreach { case (batch, id) =>
-      storage.storeBatch(batch).copoint
+    val path = Path(db)
+    val projection = (projectionsActor ? FindProjection(path)).mapTo[NIHDBProjection].copoint
+    val eventId = EventId(pid, sid.getAndIncrement)
+    val records = readRows(data) map (IngestRecord(eventId, _))
+    projection.insert(records, accountId).copoint
+    while (projection.status.copoint.pending > 0) {
+      Thread.sleep(100)
     }
+    projection.close().copoint
 
     logger.debug("Ingested %s." format data)
 
     PrecogUnit
   }
 }
-

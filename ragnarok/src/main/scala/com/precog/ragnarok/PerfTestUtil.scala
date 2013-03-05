@@ -38,9 +38,9 @@ class PerfTestUtil(rootDir: File, runs: Int = 30) {
 
   val timeout = Duration(config.queryTimeout, "seconds")
 
-  def withRunner[A](config: RunConfig)(f: JDBMPerfTestRunner[Long] => A): A = {
+  def withRunner[A](config: RunConfig)(f: NIHDBPerfTestRunner[Long] => A): A = {
     val result = try {
-      val runner = new JDBMPerfTestRunner(SimpleTimer,
+      val runner = new NIHDBPerfTestRunner(SimpleTimer,
         optimize = config.optimize,
         apiKey = "dummyAPIKey",
         _rootDir = config.rootDir,

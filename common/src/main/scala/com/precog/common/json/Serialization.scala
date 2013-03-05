@@ -43,7 +43,7 @@ object Serialization {
   def versioned[A](decomposer: Decomposer[A], version: Option[String]): Decomposer[A] = new Decomposer[A] {
     def decompose(a: A): JValue = {
       val baseResult = decomposer.decompose(a)
-      version map { v => 
+      version map { v =>
        if (baseResult.isInstanceOf[JObject]) {
           baseResult.unsafeInsert(JPath(".schemaVersion"), JString(v))
         } else {
@@ -62,13 +62,13 @@ class MkDecomposerV[T] {
 }
 
 class MkExtractorV[T] {
-  def apply[F <: HList, L <: HList](fields: F, version: Option[String])(implicit iso: Iso[T, L], extractor: ExtractorAux[F, L]): Extractor[T] = 
+  def apply[F <: HList, L <: HList](fields: F, version: Option[String])(implicit iso: Iso[T, L], extractor: ExtractorAux[F, L]): Extractor[T] =
     Serialization.versioned(new IsoExtractor(fields, iso, extractor), version)
 }
 
 class MkSerializationV[T] {
   def apply[F <: HList, L <: HList](fields: F, version: Option[String])
     (implicit iso: Iso[T, L], decomposer: DecomposerAux[F, L], extractor: ExtractorAux[F, L]): (Decomposer[T], Extractor[T]) =
-      (Serialization.versioned(new IsoDecomposer(fields, iso, decomposer), version), 
+      (Serialization.versioned(new IsoDecomposer(fields, iso, decomposer), version),
        Serialization.versioned(new IsoExtractor(fields, iso, extractor), version))
 }

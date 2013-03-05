@@ -44,7 +44,10 @@ final case class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) ext
   }
 
   def cook(root: File, reader: StorageReader): ValidationNEL[IOException, File] = {
-    val files0 = reader.snapshot(None) map { seg =>
+    assert(root.exists)
+    assert(root.isDirectory)
+    assert(root.canWrite)
+    val files0 = reader.snapshot(None).segments map { seg =>
       val file = File.createTempFile(prefix(seg), ".cooked", root)
       val channel: WritableByteChannel = new FileOutputStream(file).getChannel()
       val result = try {

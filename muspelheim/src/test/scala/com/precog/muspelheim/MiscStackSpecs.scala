@@ -27,6 +27,61 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "ensure that two array elements are not switched in a solve" in {
+      val input = """
+        | orders := //orders
+        | orders' := orders with { rank: std::stats::rank(orders.total) }
+        |  
+        | buckets := solve 'rank = orders'.rank
+        |   minimum:= orders'.total where orders'.rank = 'rank
+        |   maximum:= min(orders'.total where orders'.rank > 'rank)
+        |   [minimum, maximum]
+        | 
+        | buckets
+        | """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(1)
+
+          elems must haveSize(2)
+          
+          elems(0) must beLike { case SDecimal(d0) =>
+            elems(1) must beLike { case SDecimal(d1) =>
+              d0 must be_<(d1)
+            }
+          }
+      }
+    }
+
+    "ensure that more than two array elements are not scrambled in a solve" in {
+      val input = """
+        | orders := //orders
+        | orders' := orders with { rank: std::stats::rank(orders.total) }
+        |  
+        | minimum:= orders'.total where orders'.rank = 1
+        | maximum:= min(orders'.total where orders'.rank > 1)
+        | [minimum, maximum, minimum, maximum]
+        | """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(1)
+
+          elems must haveSize(4)
+
+          val decimals = elems collect { case SDecimal(d) => d }
+
+          decimals(0) must be<(decimals(1))
+          decimals(0) mustEqual decimals(2)
+          decimals(1) mustEqual decimals(3)
+      }
+    }
+
     "ensure that with operation uses inner-join semantics" in {
       val input = """
         | clicks := //clicks
@@ -799,7 +854,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         }
       }
     }
-
+    
     "union two wheres of the same dynamic provenance" >> {
       val input = """
       | clicks := //clicks
@@ -2184,6 +2239,237 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = eval(input)
       results must not(beEmpty)
+    }
+    
+    "correctly filter the results of a non-trivial solve" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | import std::string::*
+        | 
+        | contains(set, string) := indexOf(set, string) >= 0
+        | 
+        | allAccounts := //byAccount
+        | accounts := allAccounts where !(contains(allAccounts.email, "test")) & !(contains(allAccounts.email, "precog.com")) & !(contains(allAccounts.email, "precog.io")) & !(contains(allAccounts.email, "reportgrid.com"))  & allAccounts.usage > 0
+        | 
+        | accounts' := accounts with {millis: getMillis(accounts.timestamp)}
+        | accounts'' := accounts' with {rank: denseRank(accounts'.millis)}
+        | 
+        | r := solve 'email
+        |   byEmail := accounts'' where accounts''.email = 'email
+        |   
+        |   today := byEmail where byEmail.rank = max(byEmail.rank)
+        |   firstDay := byEmail where byEmail.rank = min(byEmail.rank)
+        |   lastWeek := byEmail where byEmail.rank = max(byEmail.rank) - 7
+        |   past30days := byEmail where byEmail.rank = max(byEmail.rank) - 30
+        | 
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Current Usage",
+        |     value: sum(today.usage union (new 0) )
+        | 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past Week",
+        |     value:sum(lastWeek.usage union (new 0)) 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past 30 Days",
+        |     value: sum(past30days.usage union (new 0))
+        |   }
+        |   
+        | r where r.value > 0
+        | """.stripMargin
+        
+      eval(input) must not(beEmpty)
+    }
+    
+
+    "successfully complete a query with a lot of unions" in {
+      val input = """
+        | import std::time::*
+        | import std::stats::*
+        | import std::string::*
+        | 
+        | contains(set, string) := indexOf(set, string) >= 0
+        | 
+        | allAccounts := //byAccount
+        | accounts := allAccounts where !(contains(allAccounts.email, "test")) & !(contains(allAccounts.email, "precog.com")) & !(contains(allAccounts.email, "precog.io")) & !(contains(allAccounts.email, "reportgrid.com"))  & allAccounts.usage > 0
+        | 
+        | accounts' := accounts with {millis: getMillis(accounts.timestamp)}
+        | accounts'' := accounts' with {rank: denseRank(accounts'.millis)}
+        | 
+        | solve 'email
+        |   byEmail := accounts'' where accounts''.email = 'email
+        |   
+        |   today := byEmail where byEmail.rank = max(byEmail.rank)
+        |   firstDay := byEmail where byEmail.rank = min(byEmail.rank)
+        |   yesterday :=  byEmail where byEmail.rank = max(byEmail.rank) - 1
+        |   lastWeek := byEmail where byEmail.rank = max(byEmail.rank) - 7
+        |   past30days := byEmail where byEmail.rank = max(byEmail.rank) - 30
+        | 
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Current Usage",
+        |     value: sum(today.usage union (new 0) )
+        | 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past Week",
+        |     value:sum(lastWeek.usage union (new 0)) 
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Past 30 Days",
+        |     value: sum(past30days.usage union (new 0))
+        |   }
+        |   union
+        |   {
+        |     email: 'email,
+        |     accountCreatedOn: firstDay.timestamp,
+        |     server: firstDay.server,
+        |     account: firstDay.account,
+        |     type: "Increase Since Yesterday",
+        |     value: sum(yesterday.usage union (new 0))
+        |   }
+        | """.stripMargin
+        
+      eval(input) must not(beEmpty)
+    }
+    
+    // regression test for PLATFORM-986
+    "not explode on mysterious error" in {
+      val input = """
+        | import std::random::*
+        | 
+        | buckets := //benchmark/buckets/1361210162753
+        | test := //test
+        | 
+        | r := observe(test, uniform(38))
+        | 
+        | pred := test ~ buckets
+        |   range := buckets.range
+        | 
+        |   low := r >= range[1]
+        |   hi := r < range[0]
+        | 
+        |   test with {prediction: buckets.name where low & hi}
+        | 
+        | solve 'zone
+        |   pred' := pred where pred.currentZone = 'zone
+        | 
+        |   {
+        |     tp: count(pred'.prediction where pred'.prediction = pred'.currentZone),
+        |     fp: count(pred'.prediction where pred'.prediction != pred'.currentZone)    
+        |   }
+        | """.stripMargin
+        
+      eval(input) must not(throwA[Throwable])
+    }
+    
+    "not explode weirdly" in {
+      val input = """
+        | import std::stats::*
+        | import std::time::*
+        | 
+        | --locations := //devicelocations/2012/07/01
+        | locations := //test
+        | deviceTimes := [ locations.deviceId, locations.captureTimestamp ]
+        | 
+        | order := denseRank(deviceTimes)
+        | 
+        | locations' := locations with { rank : order }
+        | --locations'
+        | newLocations := new locations'
+        | newLocations' := newLocations with { rank : newLocations.rank - 1 }
+        | 
+        | joined := newLocations' ~ locations'
+        |   { first : locations', second : newLocations' } where locations'.rank
+        | = newLocations'.rank
+        | 
+        | r := joined where joined.first.deviceId = joined.second.deviceId
+        | 
+        | r' := 
+        |   {
+        |   data: r.first,
+        |   nextLocation: r.second.currentZone,
+        |   dwellTime: getMillis(r.second.captureTimestamp) - getMillis(r.first.captureTimestamp)
+        |   }
+        | 
+        | markov := solve 'location, 'nextLocation
+        |   r'' := r' where r'.data.currentZone = 'location & r'.nextLocation = 'nextLocation
+        |   total := count(r'.data.currentZone where r'.data.currentZone = 'location)
+        |   {
+        |   matrix: ['location, 'nextLocation],
+        |   prob: count(r''.nextLocation)/total
+        |   }
+        | 
+        | --markov
+        | 
+        | --function for creating cumulative probability distribution and formatting intervals
+        | createModel(data) :=  
+        |   predictedDistribution := data with {rank : indexedRank(data.prob) }
+        | 
+        |   cumProb := solve 'rank = predictedDistribution.rank
+        |     {
+        |     location: predictedDistribution.matrix where  predictedDistribution.rank = 'rank,
+        |     prob: sum(predictedDistribution.prob where predictedDistribution.rank <= 'rank),
+        |     rank: 'rank
+        |     }
+        | 
+        |   buckets := solve 'rank = cumProb.rank
+        |     minimum:= cumProb.prob where cumProb.rank = 'rank
+        |     maximum:= min(cumProb.prob where cumProb.rank > 'rank)
+        |     {
+        |      range: [minimum, maximum],
+        |      name: cumProb.matrix where cumProb.rank = 'rank
+        |     }
+        | buckets
+        | --end createModel Function
+        | 
+        | markov' := createModel(markov)
+        | markov'
+        | """.stripMargin
+        
+      eval(input) must not(throwA[Throwable])
+    }
+    
+    "produce something other than the empty set for join of conditional results" in {
+      val input = """
+        | clicks := //clicks
+        | 
+        | predicted := clicks with { female : 0 }
+        | observed := clicks with { female : if clicks = null then 1 else 0 }
+        | 
+        | [predicted, observed]
+        | """.stripMargin
+      
+      eval(input) must not(beEmpty)
     }
   }
 }

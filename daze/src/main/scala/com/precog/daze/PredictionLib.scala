@@ -39,114 +39,12 @@ import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.traverse._
 
-trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
+trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLibModule[M] {
   import trans._
   import trans.constants._
 
-  trait PredictionSupport extends ColumnarTableLib {
-    trait PredictionBase {
-      case class Model(name: String, featureValues: Map[CPath, Double], constant: Double)
-      case class ModelSet(identity: Seq[Option[Long]], models: Set[Model])
-      type Models = List[ModelSet]
-
-      protected val reducer: CReducer[Models] = new CReducer[Models] {
-        private val kPath = CPath(TableModule.paths.Key)
-        private val vPath = CPath(TableModule.paths.Value)
-
-        def reduce(schema: CSchema, range: Range): Models = {
-          val rowIdentities: Int => Seq[Option[Long]] = {
-            val indexedCols: Set[(Int, LongColumn)] = schema.columnRefs collect { 
-              case ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype) => 
-                val idxCols = schema.columns(JObjectFixedT(Map("key" -> JArrayFixedT(Map(idx -> JNumberT)))))  
-                assert(idxCols.size == 1)
-                (idx, idxCols.head match {
-                  case (col: LongColumn) => col
-                  case _ => sys.error("expected LongColumn")
-                })
-            }
-
-            val deref = indexedCols.toList.sortBy(_._1).map(_._2)
-            (i: Int) => deref.map(c => c.isDefinedAt(i).option(c.apply(i)))
-          }
-
-          val rowModels: Int => Set[Model] = {
-            val features: Map[String, Set[(String, CPath, CType)]] = {
-              schema.columnRefs.collect { 
-                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(0), rest @ _*), ctype) => 
-                  (modelName, path, ctype) 
-              } groupBy { _._1 }
-            }
-
-            val featureValues: Map[String, Set[Option[(CPath, DoubleColumn)]]] = features lazyMapValues {
-              _ map {
-                case (_, cpath, ctype) => {
-                  val jtpe: Option[JType] = Schema.mkType(Seq((cpath, ctype)))
-                  jtpe map { tpe => 
-                    val res = schema.columns(tpe)
-                    assert(res.size == 1)
-                    (cpath, res.head match {
-                      case (col: DoubleColumn) => col
-                      case _ => sys.error("expected DoubleColumn")
-                    })
-                  }
-                }
-              }
-            }
-
-            val constant: Map[String, (String, CPath, CType)] = {
-              schema.columnRefs.collect { 
-                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathIndex(1), rest @ _*), ctype) => 
-                  (modelName, path, ctype) 
-              } groupBy { _._1 } lazyMapValues { case set => 
-                assert(set.size == 1)
-                set.head
-              }
-            }
-
-            val constantValue: Map[String, Option[DoubleColumn]] = constant lazyMapValues {
-              case (_, cpath, ctype) => {
-                val jtpe: Option[JType] = Schema.mkType(Seq((cpath, ctype)))
-                jtpe map { tpe => 
-                  val res = schema.columns(tpe)
-                  assert(res.size == 1)
-                  res.head match {
-                    case (col: DoubleColumn) => col
-                    case _ => sys.error("expected DoubleColumn")
-                  }
-                }
-              }
-            }
-
-            val featuresFinal: Map[String, Map[CPath, DoubleColumn]] = featureValues lazyMapValues {
-              _ collect { case opt if opt.isDefined => opt.get } toMap
-            }
-
-            val constantFinal: Map[String, DoubleColumn] = constantValue collect {
-              case (str, opt) if opt.isDefined => (str, opt.get)
-            }
-
-            val joined: Map[String, (Map[CPath, DoubleColumn], DoubleColumn)] = {
-              featuresFinal flatMap {
-                case (field1, values) => constantFinal collect {
-                  case (field2, col) if field1 == field2 => (field1, (values, col))
-                }
-              }
-            }
-
-            (i: Int) => joined collect { case (field, (values, constant)) if constant.isDefinedAt(i) => 
-              val fts = values collect { case (CPath(TableModule.paths.Value, CPathField(_), CPathIndex(0), rest @ _*), col) if col.isDefinedAt(i) => 
-                val paths = TableModule.paths.Value +: rest
-                (CPath(paths: _*), col.apply(i))
-              }
-              val cnst = constant.apply(i)
-              Model(field, fts, cnst)
-            } toSet
-          }
-
-          range.toList map { i => ModelSet(rowIdentities(i), rowModels(i)) }
-        }
-      }
-
+  trait PredictionSupport extends ColumnarTableLib with ModelSupport {
+    trait PredictionBase extends ModelBase {
       protected def morph1Apply(models: Models, function: Double => Double): Morph1Apply = new Morph1Apply {
         def scanner(modelSet: ModelSet): CScanner = new CScanner {
           type A = Unit
@@ -188,7 +86,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
                   val modelDoubles = cpaths map { model.featureValues(_) }
 
-                  val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toSeq sortBy { _._1 } toMap
+                  val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toMap
                   val includedDoubles = cpaths map { includedCols(_).apply(i) }
 
                   assert(modelDoubles.length == includedDoubles.length)
@@ -202,17 +100,19 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
               } 
               
               val identitiesResult: Map[ColumnRef, Column] = {
-                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
-                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => 
-                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), CLong), Column.const(id))
-                } toMap
-
                 val featureCols = cols collect { 
                   case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) => 
-                    val path = Seq(TableModule.paths.Key, CPathIndex(idx + modelIds.size))
+                    val path = Seq(TableModule.paths.Key, CPathIndex(idx))
                     (ColumnRef(CPath(path: _*), ctype), col)
                   case c @ (ColumnRef(CPath(TableModule.paths.Key), _), _) => c
                 }
+
+                val shift = featureCols.size
+                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
+
+                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => 
+                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx + shift)), CLong), Column.const(id))
+                } toMap
 
                 modelCols ++ featureCols
               }

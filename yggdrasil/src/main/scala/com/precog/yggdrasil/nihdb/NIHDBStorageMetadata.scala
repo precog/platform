@@ -29,9 +29,12 @@ import akka.dispatch.{Future, Promise}
 import akka.pattern.ask
 import akka.util.Timeout
 
+import com.precog.niflheim._
+
 import blueeyes.bkka.FutureMonad
 
-import scalaz.Monad
+import scalaz._
+import scalaz.syntax.monad._
 
 class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSystem: ActorSystem, storageTimeout: Timeout) extends StorageMetadata[Future] {
   implicit val asyncContext = actorSystem.dispatcher
@@ -40,38 +43,33 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   implicit def M: Monad[Future] = new FutureMonad(actorSystem.dispatcher)
 
   def findDirectChildren(path: Path): Future[Set[Path]] = {
-    val paths = (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
+    val paths = (projectionsActor ? FindChildren(path, apiKey)).mapTo[Set[Path]]
     paths.map(_.flatMap(_ - path))
   }
 
-  def findSize(path: Path): Future[Long] =
-    (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]].flatMap {
-      case Some(proj) => proj.length
-      case None => Promise.successful(0L)(asyncContext)
-    }
+  private def findProjection(path: Path): Future[Option[NIHDBProjection]] =
+    (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]]
 
-  def findSelectors(path: Path): Future[Set[CPath]] =
-    (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]].flatMap {
-      case Some(proj) => proj.structure.map(_.map(_.selector))
-      case None => Promise.successful(Set.empty[CPath])(asyncContext)
-    }
+  def findSize(path: Path): Future[Long] = findProjection(path).flatMap {
+    case Some(proj) => proj.length
+    case None => Promise.successful(0L)(asyncContext)
+  }
 
-  def findStructure(path: Path, selector: CPath): Future[PathStructure] =
-    (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]].flatMap {
-      case Some(proj) => 
-        for {
-          structure <- proj.structure
-        } yield {
-          val types : Map[CType, Long] = structure.collect { 
-            // FIXME: This should use real counts once we have that stored in NIHDB blocks
-            case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-          }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+  def findSelectors(path: Path): Future[Set[CPath]] = findProjection(path).flatMap {
+    case Some(proj) => proj.structure.map(_.map(_.selector))
+    case None => Promise.successful(Set.empty[CPath])(asyncContext)
+  }
 
-          PathStructure(types, structure.map(_.selector))
-        }
-
-      case None => Promise.successful(PathStructure.Empty)(asyncContext)
-    }
+  def findStructure(path: Path, selector: CPath): Future[PathStructure] = {
+    OptionT(findProjection(path)) flatMapF (_.getSnapshot()) flatMapF { snapshot =>
+      val childrenM = M.point { snapshot.structure map (_._1) }
+      // val countM = M.point { snapshot.count(Some(Set(selector))) }
+      val typesM = M.point { snapshot.reduce(Reductions.count, selector) }
+      (childrenM /*|@| countM*/ |@| typesM) { (children/*, count*/, types) =>
+        PathStructure(types, children)
+      }
+    } getOrElse PathStructure.Empty
+  }
 }
 
 trait NIHDBStorageMetadataSource extends StorageMetadataSource[Future] {
@@ -82,4 +80,3 @@ trait NIHDBStorageMetadataSource extends StorageMetadataSource[Future] {
   def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = 
     new NIHDBStorageMetadata(apiKey, projectionsActor, actorSystem, storageTimeout)
 }
-

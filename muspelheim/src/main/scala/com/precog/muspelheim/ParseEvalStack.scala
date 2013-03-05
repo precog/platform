@@ -33,7 +33,6 @@ import scalaz._
 
 trait ParseEvalStack[M[+_]] extends Compiler
     with LineErrors
-    with ProvenanceChecker
     with Emitter 
     with StdLibEvaluatorStack[M]
 

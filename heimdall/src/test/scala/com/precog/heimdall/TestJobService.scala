@@ -72,7 +72,7 @@ class JobServiceSpec extends TestJobService {
 
   implicit val copointedFuture = new Copointed[Future] {
     def map[A, B](m: Future[A])(f: A => B) = m map f
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(1, "seconds"))
+    def copoint[A](f: Future[A]) = Await.result(f, Duration(10, "seconds"))
   }
 
   val JSON = MimeTypes.application / MimeTypes.json

@@ -42,18 +42,18 @@ object v1 {
   case class GrantDetails(grantId: GrantId, name: Option[String], description: Option[String], permissions: Set[Permission], expirationDate: Option[DateTime])
   object GrantDetails {
     implicit val grantDetailsIso = Iso.hlist(GrantDetails.apply _, GrantDetails.unapply _)
-    
+
     val schema = "grantId" :: "name" :: "description" :: "permissions" :: "expirationDate" :: HNil
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[GrantDetails](schema)
   }
 
-  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails])
+  case class APIKeyDetails(apiKey: APIKey, name: Option[String], description: Option[String], grants: Set[GrantDetails], issuerChain: List[APIKey])
   object APIKeyDetails {
     implicit val apiKeyDetailsIso = Iso.hlist(APIKeyDetails.apply _, APIKeyDetails.unapply _)
-    
-    val schema = "apiKey" :: "name" :: "description" :: "grants" :: HNil
-    
+
+    val schema = "apiKey" :: "name" :: "description" :: "grants" :: "issuerChain" :: HNil
+
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[APIKeyDetails](schema)
   }
 
@@ -61,16 +61,16 @@ object v1 {
     def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
       case (None, _) => false
       case (_, None) => true
-      case (Some(expiry), Some(ref)) => expiry.isBefore(ref) 
-    } 
+      case (Some(expiry), Some(ref)) => expiry.isBefore(ref)
+    }
   }
 
   object NewGrantRequest {
     private implicit val reqPermDecomposer = Permission.decomposerV1Base
     implicit val newGrantRequestIso = Iso.hlist(NewGrantRequest.apply _, NewGrantRequest.unapply _)
-    
+
     val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
-    
+
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewGrantRequest](schemaV1)
 
     def newGrant(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
@@ -85,7 +85,7 @@ object v1 {
 
   object NewAPIKeyRequest {
     implicit val newAPIKeyRequestIso = Iso.hlist(NewAPIKeyRequest.apply _, NewAPIKeyRequest.unapply _)
-    
+
     val schemaV1 = "name" :: "description" :: "grants" :: HNil
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewAPIKeyRequest](schemaV1)

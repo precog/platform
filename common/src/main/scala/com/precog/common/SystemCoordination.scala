@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import shapeless._
 import scalaz._
 import scalaz.syntax.apply._
+import scalaz.syntax.plus._
 
 trait CheckpointCoordination {
   def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]]
@@ -53,7 +54,7 @@ trait SystemCoordination extends CheckpointCoordination {
   def unregisterRelayAgent(agent: String, state: EventRelayState): Unit
 
   def renewEventRelayState(agent: String, offset: Long, producerId: Int, blockSize: Int): Validation[Error, EventRelayState]
-  def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] 
+  def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState]
 
   def close(): Unit
 }
@@ -69,22 +70,25 @@ case object EmptyIdSequence extends IdSequence {
 }
 
 
-case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId: Int) extends IdSequence {    
+case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId: Int) extends IdSequence {
   private val currentSequenceId = new AtomicInteger(firstSequenceId)
 
   def isEmpty() = currentSequenceId.get > lastSequenceId
 
-  def next() = { 
-    val sequenceId = currentSequenceId.getAndIncrement 
+  def next() = {
+    val sequenceId = currentSequenceId.getAndIncrement
     if(sequenceId > lastSequenceId) sys.error("Id sequence block is exhausted no more ids available.")
     (producerId, sequenceId)
-  }   
+  }
 }
 
 object IdSequenceBlock {
   implicit val iso = Iso.hlist(IdSequenceBlock.apply _ , IdSequenceBlock.unapply _)
   val schemaV1 = "producerId" :: "firstSequenceId" :: "lastSequenceId" :: HNil
-  implicit val (decomposerV1, extractorV1) = serializationV[IdSequenceBlock](schemaV1, Some("1.0"))
+  val extractorPreV = extractorV[IdSequenceBlock](schemaV1, None)
+  val (decomposerV1, extractorV1) = serializationV[IdSequenceBlock](schemaV1, Some("1.0"))
+  implicit val decomposer = decomposerV1
+  implicit val extractor = extractorV1 <+> extractorPreV
 }
 
 case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: IdSequenceBlock) {
@@ -96,7 +100,10 @@ case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: I
 object EventRelayState {
   implicit val iso = Iso.hlist(EventRelayState.apply _ , EventRelayState.unapply _)
   val schemaV1 = "offset" :: "nextSequenceId" :: "idSequenceBlock" :: HNil
-  implicit val (decomposerV1, extractorV1) = serializationV[EventRelayState](schemaV1, Some("1.0"))
+  val extractorPreV = extractorV[EventRelayState](schemaV1, None)
+  val (decomposerV1, extractorV1) = serializationV[EventRelayState](schemaV1, Some("1.0"))
+  implicit val decomposer = decomposerV1
+  implicit val extractor = extractorV1 <+> extractorPreV
 }
 
 case class ProducerState(lastSequenceId: Int)
@@ -113,13 +120,18 @@ case class YggCheckpoint(offset: Long, messageClock: VectorClock) {
 object YggCheckpoint {
   val Empty = YggCheckpoint(0, VectorClock.empty)
 
-  sealed trait LoadError 
+  sealed trait LoadError
   case class CheckpointParseError(message: String) extends LoadError
   case class ShardCheckpointMissing(shardId: String) extends LoadError
 
   implicit val iso = Iso.hlist(YggCheckpoint.apply _ , YggCheckpoint.unapply _)
   val schemaV1 = "offset" :: "messageClock" :: HNil
-  implicit val (decomposerV1, extractorV1) = serializationV[YggCheckpoint](schemaV1, Some("1.0"))
+
+  val extractorPreV = extractorV[YggCheckpoint](schemaV1, None)
+  val (decomposerV1, extractorV1) = serializationV[YggCheckpoint](schemaV1, Some("1.0"))
+
+  implicit val decomposer = decomposerV1
+  implicit val extractor = extractorV1 <+> extractorPreV
 
   implicit val ordering = scala.math.Ordering.by((_: YggCheckpoint).offset)
 }
