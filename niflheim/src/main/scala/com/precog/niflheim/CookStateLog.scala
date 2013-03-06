@@ -27,6 +27,7 @@ import org.objectweb.howl.log._
 
 import java.io.{File, RandomAccessFile}
 import java.nio.ByteBuffer
+import java.util.concurrent.ScheduledExecutorService
 
 import scala.collection.immutable.SortedMap
 
@@ -35,7 +36,7 @@ object CookStateLog {
   final val logName = "CookStateLog"
 }
 
-class CookStateLog(baseDir: File) extends Logging {
+class CookStateLog(baseDir: File, scheduler: ScheduledExecutorService) extends Logging {
   import CookStateLog._
 
   private[this] val workLock = FileLock(baseDir, lockName)
@@ -45,6 +46,7 @@ class CookStateLog(baseDir: File) extends Logging {
   txLogConfig.setLogFileName(logName)
   txLogConfig.setLogFileMode("rwd") // Force file sync to underlying hardware
   txLogConfig.setChecksumEnabled(true)
+  txLogConfig.setScheduler(scheduler)
 
   private[this] val txLog = new Logger(txLogConfig)
   txLog.open()

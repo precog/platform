@@ -47,6 +47,7 @@ import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
 import java.nio.file.Files
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.SortedMap
@@ -71,14 +72,14 @@ case object GetAuthorities
 object NIHDB
 
 class NIHDB(val baseDir: File, chef: ActorRef,
-    cookThreshold: Int, timeout: Timeout)(implicit
+    cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit
     actorSystem: ActorSystem) extends GracefulStopSupport with AskSupport {
 
   private implicit val asyncContext: ExecutionContext = actorSystem.dispatcher
   private implicit val impTimeout = timeout
 
   private val actor = actorSystem.actorOf(Props(
-    new NIHDBActor(baseDir, chef, cookThreshold)))
+    new NIHDBActor(baseDir, chef, cookThreshold, txLogScheduler)))
 
   def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
@@ -146,7 +147,7 @@ object NIHDBActor {
   final def hasProjection(dir: File) = (new File(dir, descriptorFilename)).exists
 }
 
-class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
+class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int, txLogScheduler: ScheduledExecutorService)
     extends Actor
     with Logging {
   private case class BlockState(cooked: List[CookedReader], pending: Map[Long, StorageReader], rawLog: RawHandler)
@@ -179,7 +180,7 @@ class NIHDBActor(baseDir: File, chef: ActorRef, cookThreshold: Int)
   }
 
   logger.debug("Opening log in " + baseDir)
-  private[this] val txLog = new CookStateLog(baseDir)
+  private[this] val txLog = new CookStateLog(baseDir, txLogScheduler)
 
   private[this] var currentState =
     if (descriptorFile.exists) {

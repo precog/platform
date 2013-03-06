@@ -76,14 +76,14 @@ trait Tracer extends parser.AST with typer.Binder {
    * Returns a set of backtraces, where each backtrace is a stack of expressions
    * and associated actual context.
    */
-  def buildBacktrace(trace: Tree[(Map[Formal, Expr], Expr)])(target: Expr): Set[List[(Map[Formal, Expr], Expr)]] = {
-    def loop(stack: List[(Map[Formal, Expr], Expr)])(trace: Tree[(Map[Formal, Expr], Expr)]): Set[List[(Map[Formal, Expr], Expr)]] = {
+  def buildBacktrace(trace: Tree[(Map[Formal, Expr], Expr)])(target: Expr): List[List[(Map[Formal, Expr], Expr)]] = {
+    def loop(stack: List[(Map[Formal, Expr], Expr)])(trace: Tree[(Map[Formal, Expr], Expr)]): List[List[(Map[Formal, Expr], Expr)]] = {
       val Tree.Node(pair @ (_, expr), children) = trace
 
       if (expr == target)
-        Set(stack)
+        stack :: Nil
       else
-        children map loop(pair :: stack) reduceOption { _ ++ _ } getOrElse Set()
+        (children map loop(pair :: stack)).foldRight(List[List[(Map[Formal, Expr], Expr)]]()) { _ ::: _ }
     }
     
     loop(Nil)(trace)

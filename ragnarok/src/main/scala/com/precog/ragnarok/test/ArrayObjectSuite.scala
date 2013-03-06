@@ -17,37 +17,26 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package ragnarok
+package test
 
-import com.precog.util.IOUtils
+object ArrayObjectSuite extends PerfTestSuite {
+  "array joining" := {
+    query("""
+      medals' := //summer_games/london_medals
+      medals'' := new medals'
 
-import java.util.concurrent.ScheduledThreadPoolExecutor
-
-import org.specs2.mutable.{After, Specification}
-
-class CookStateLogSpecs extends Specification {
-  val txLogScheduler = new ScheduledThreadPoolExecutor(5)
-
-  trait LogState extends After {
-    val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
-
-    def after = {
-      IOUtils.recursiveDelete(workDir).unsafePerformIO
-    }
+      medals'' ~ medals'
+      [medals', medals'', medals'] where medals'.Total = medals''.Total""")
   }
 
-  "CookStateLog" should {
-    "Properly initialize" in new LogState {
-      val txLog = new CookStateLog(workDir, txLogScheduler)
-
-      txLog.currentBlockId mustEqual 0l
-      txLog.pendingCookIds must beEmpty
-    }
-
-    "Lock its directory during operation" in new LogState {
-      val txLog = new CookStateLog(workDir, txLogScheduler)
-
-      (new CookStateLog(workDir, txLogScheduler)) must throwAn[Exception]
-    }
+  "object joining" := {
+    query("""
+      medals' := //summer_games/london_medals
+      medals'' := new medals'
+      
+      medals'' ~ medals'
+      { a: medals', b: medals'', c: medals' } where medals'.Total = medals''.Total""")
   }
 }

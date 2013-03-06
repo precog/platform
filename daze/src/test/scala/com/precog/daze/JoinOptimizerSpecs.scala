@@ -56,7 +56,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   }
 
   "join optimization" should {
-    "eliminate naive cartesian products in trivial cases" in {
+    "eliminate naive cartesian products in trivial object join cases" in {
       
       val rawInput = """
         | a := //users
@@ -117,6 +117,68 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
           Join(WrapObject, CrossLeftSort,
             name,
+            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
+
+      opt must_== expectedOpt
+    }
+
+    "eliminate naive cartesian products in trivial array join cases" in {
+      
+      val rawInput = """
+        | a := //users
+        | b := //heightWeight
+        | a ~ b
+        |   [b.height, a.name] where a.userId = b.userId """.stripMargin
+        
+      val line = Line(1, 1, "")
+      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
+      val height = Const(CString("height"))(line)
+      val name = Const(CString("name"))(line)
+      val userId = Const(CString("userId"))(line)
+      val key = Const(CString("key"))(line)
+      val value = Const(CString("value"))(line)
+
+      val liftedLHS =
+        SortBy(
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
+              key,
+              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+          "key", "value", 0)
+        
+      val liftedRHS =
+        SortBy(
+          Join(JoinObject, IdentitySort,
+            Join(WrapObject, CrossLeftSort,
+              key,
+              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
+            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+          "key", "value", 0)
+          
+      val input =
+        Filter(IdentitySort,
+          Join(JoinArray, CrossLeftSort,
+            Operate(WrapArray,
+              Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
+            Operate(WrapArray,
+              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
+          Join(Eq, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
+              users,
+              userId)(line),
+            Join(DerefObject, CrossLeftSort,
+              heightWeight,
+              userId)(line))(line))(line)    
+      
+      val opt = optimizeJoins(input, Set.empty, new IdGen)
+      
+      val expectedOpt =
+        Join(JoinArray, ValueSort(0),
+          Operate(WrapArray,
+            Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
+          Operate(WrapArray,
             Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
 
       opt must_== expectedOpt
