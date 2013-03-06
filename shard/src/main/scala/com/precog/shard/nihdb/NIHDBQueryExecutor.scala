@@ -117,7 +117,6 @@ trait NIHDBQueryExecutorComponent  {
       val clock = blueeyes.util.Clock.System
 
       val defaultTimeout = yggConfig.maxEvalDuration
-      override val quirrelCacheSize = config0[Int]("quirrel.cache_size", 1000)
 
       protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
 

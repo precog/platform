@@ -36,6 +36,7 @@ class Service(object):
         #args = ['curl', '-v', '-H', mime, '--data-bin', "@" + fspath, url]
         args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
         call(args)
+        print ""
     
     def query(self, query):
         url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.account)
