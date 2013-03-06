@@ -4,6 +4,7 @@ package nihdb
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.yggdrasil.table._
 import com.precog.util.IOUtils
@@ -36,7 +37,10 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
   val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
-  def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"), txLogScheduler)
+  def newProjection(workDir: File, threshold: Int = 1000) =
+    NIHDB.create(chef, Authorities("test"), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map { db =>
+      new NIHDBActorProjection(db)(actorSystem.dispatcher)
+    }.valueOr { e => throw new Exception(e.message) }
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
@@ -61,7 +65,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close())
+    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
 
     def stop = {
       (for {
@@ -93,7 +97,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val results =
         for {
-          _ <- projection.insert(toInsert, "fake")
+          _ <- projection.insert(toInsert)
           result <- projection.getBlockAfter(None, None)
         } yield result
 
@@ -114,10 +118,10 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       projection.insert((0L to 2L).toSeq.map { i =>
         IngestRecord(EventId.fromLong(i), JNum(i))
-      }, "fake")
+      })
 
       val result = for {
-        _ <- projection.close()
+        _ <- projection.close(actorSystem)
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
         status <- projection.status
         r <- projection.getBlockAfter(None, None)
@@ -144,7 +148,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       (0L to 1950L).map {
         i => IngestRecord(EventId.fromLong(i), JNum(i))
-      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values, "fake") }
+      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values) }
 
       var waits = 10
 
