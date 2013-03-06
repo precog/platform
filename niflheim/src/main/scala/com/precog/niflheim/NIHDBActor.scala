@@ -29,6 +29,7 @@ import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
 import java.nio.file.Files
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.SortedMap
@@ -51,12 +52,12 @@ case class Structure(columns: Set[(CPath, CType)])
 case object GetAuthorities
 
 object NIHDB {
-  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout)(implicit actorSystem: ActorSystem) = {
-    NIHDBActor.create(chef, authorities, baseDir, cookThreshold, timeout) map { _ map { actor => new NIHDB(actor, timeout) } }
+  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
+    NIHDBActor.create(chef, authorities, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { actor => new NIHDB(actor, timeout) } }
   }
 
-  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout)(implicit actorSystem: ActorSystem) = {
-    NIHDBActor.open(chef, baseDir, cookThreshold, timeout) map { _ map { _ map { case (authorities, actor) => (authorities, new NIHDB(actor, timeout)) } } }
+  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
+    NIHDBActor.open(chef, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { _ map { case (authorities, actor) => (authorities, new NIHDB(actor, timeout)) } } }
   }
 }
 
@@ -112,7 +113,7 @@ object NIHDBActor extends Logging {
   private[niflheim] final val internalDirs =
     Set(cookedSubdir, rawSubdir, descriptorFilename, CookStateLog.logName + "_1.log", CookStateLog.logName + "_2.log",  lockName + ".lock", CookStateLog.lockName + ".lock")
 
-  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout)(implicit actorSystem: ActorSystem): IO[Validation[Error, ActorRef]] = {
+  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Validation[Error, ActorRef]] = {
     val descriptorFile = new File(baseDir, descriptorFilename)
     val currentState: IO[Validation[Error, ProjectionState]] =
       if (descriptorFile.exists) {
@@ -127,7 +128,7 @@ object NIHDBActor extends Logging {
         }
       }
 
-    currentState map { _ map { s => actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold))) } }
+    currentState map { _ map { s => actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold, txLogScheduler))) } }
   }
 
   def readDescriptor(baseDir: File): IO[Option[Validation[Error, ProjectionState]]] = {
@@ -140,10 +141,10 @@ object NIHDBActor extends Logging {
     }
   }
 
-  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout)(implicit actorSystem: ActorSystem): IO[Option[Validation[Error, (Authorities, ActorRef)]]] = {
+  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Option[Validation[Error, (Authorities, ActorRef)]]] = {
     val currentState: IO[Option[Validation[Error, ProjectionState]]] = readDescriptor(baseDir)
 
-    currentState map { _ map { _ map { s => (s.authorities, actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold)))) } } }
+    currentState map { _ map { _ map { s => (s.authorities, actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold, txLogScheduler)))) } } }
   }
 
   def escapePath(path: Path, toEscape: Set[String]) =
@@ -163,7 +164,7 @@ object NIHDBActor extends Logging {
   final def hasProjection(dir: File) = (new File(dir, descriptorFilename)).exists
 }
 
-class NIHDBActor private (private var currentState: ProjectionState, baseDir: File, chef: ActorRef, cookThreshold: Int)
+class NIHDBActor private (private var currentState: ProjectionState, baseDir: File, chef: ActorRef, cookThreshold: Int, txLogScheduler: ScheduledExecutorService)
     extends Actor
     with Logging {
   private case class BlockState(cooked: List[CookedReader], pending: Map[Long, StorageReader], rawLog: RawHandler)
@@ -196,7 +197,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
   }
 
   logger.debug("Opening log in " + baseDir)
-  private[this] val txLog = new CookStateLog(baseDir)
+  private[this] val txLog = new CookStateLog(baseDir, txLogScheduler)
 
   logger.debug("Current raw block id = " + txLog.currentBlockId)
 

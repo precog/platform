@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.cache.Cache
@@ -35,6 +37,7 @@ import scalaz.syntax.std.list._
 import scalaz.syntax.traverse._
 
 import java.io.{File, FileFilter, IOException}
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 import scala.collection.mutable
 
@@ -63,7 +66,8 @@ class NIHDBProjectionsActor(
     chef: ActorRef,
     cookThreshold: Int,
     storageTimeout: Timeout,
-    apiKeyFinder: APIKeyFinder[Future]
+    apiKeyFinder: APIKeyFinder[Future],
+    txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
     ) extends Actor with Logging {
 
   implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -92,6 +96,8 @@ class NIHDBProjectionsActor(
     Await.result(projections.values.toList.map (_.values.toList.map(_.close(context.system))).flatten.sequence, storageTimeout.duration)
     logger.info("Projection shutdown complete")
   }
+
+  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
   /**
     * Computes the stable path for a given vfs path relative to the given base dir
@@ -249,7 +255,7 @@ class NIHDBProjectionsActor(
     projections.get(path).flatMap(_.get(authorities)).map(IO(_)) getOrElse {
       for {
         bd <- ensureDescriptorDir(path, authorities)
-        dbv <- NIHDB.create(chef, authorities, bd, cookThreshold, storageTimeout)(context.system)
+        dbv <- NIHDB.create(chef, authorities, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system)
       } yield {
         val proj = dbv map { db => new NIHDBActorProjection(db)(context.dispatcher) } valueOr { error =>
           sys.error("An error occurred in deserialization of projection metadata for " + path + ", " + authorities + ": " + error.message)
@@ -270,7 +276,7 @@ class NIHDBProjectionsActor(
       logger.debug("Opening new projection for " + path)
       findDescriptorDirs(path).map { projDirs =>
         projDirs.toList.map { bd =>
-          NIHDB.open(chef, bd, cookThreshold, storageTimeout)(context.system).map { dbov =>
+          NIHDB.open(chef, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system).map { dbov =>
             dbov.map { dbv =>
               dbv.map { case (authorities, db) =>
                 val proj = new NIHDBActorProjection(db)(context.dispatcher)
