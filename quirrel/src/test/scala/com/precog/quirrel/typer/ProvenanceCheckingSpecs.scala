@@ -147,6 +147,288 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance.possibilities must containAllOf(List(StaticProvenance("/foo"), StaticProvenance("/bar")))
       tree.errors must beEmpty
     }
+
+    "reject sum of two news of same value" in {
+      val input = """ (new 5) + (new 5) """
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject sum of two unrelated news" in {
+      val input = """ (new 5) + (new 6) """
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject relation of two news" in {
+      val input = """
+        new 5 ~ new 5
+          (new 5) + (new 5)
+      """
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject case when two already-related news are related through dispatch" in {
+      val input = """
+        five := new 5
+        five ~ five 
+          five + five 
+      """
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(AlreadyRelatedSets)
+    }
+
+    "accept case when two news are related" in {
+      val input = """
+        five := new 5
+        six := new 6
+        five ~ six 
+          five + six 
+      """
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike {
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      tree.errors must beEmpty
+    }
+
+    "accept sum of two related news through dispatch" in {
+      val input = """
+        five := new 5
+        five + five 
+      """
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }
+
+    "reject relate of two dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        |
+        | f(5) ~ f(6)
+        |   f(5) + f(6)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject relate of two `equivalent` dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        |
+        | f(5) ~ f(5)
+        |   f(5) + f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "accept relate of two equivalent dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        | y := f(5)
+        | z := f(6)
+        |
+        | y ~ z
+        |   y + z
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike {
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      tree.errors must beEmpty
+    }
+    
+    "reject sum of two distinct dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        | y := f(5)
+        | z := f(6)
+        | y + z
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject sum of two `equivalent` dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        | y := f(5)
+        | z := f(5)
+        | y + z
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject sum of two dispatches from the same new function" in {
+      val input = """
+        | f(x) := new x
+        |
+        | f(5) + f(6)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject sum of two equivalent dispatches from the same function" in {
+      val input = """
+        | f(x) := new x
+        | f(5) + f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "accept relate of two dispatches through dispatch from the same function" in {
+      val input = """
+        | f(x) :=
+        |   y := new x
+        |   z := new x
+        |   y ~ z
+        |     y + z
+        | f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike {
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      tree.errors must beEmpty
+    }
+    
+    "reject sum of two equivalent dispatches through dispatch from the same function" in {
+      val input = """
+        | f(x) :=
+        |   y := new x
+        |   z := new x
+        |   y + z
+        | f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject sum of two news in the same function" in {
+      val input = """
+        | f(x) :=
+        |   (new x) + (new x)
+        | f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject relate of dispatch through relate" in {
+      val input = """
+        | f(x) :=
+        |   new x ~ new x
+        |   (new x) + (new x)
+        | f(5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }.pendingUntilFixed  //doesn't compile correctly, see PLATFORM-1093
+    
+    "reject relate of dispatch with two equivalent parameters" in {
+      val input = """
+        | f(x, y) :=
+        |   new x ~ new y
+        |   (new x) + (new y)
+        | f(5, 5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject relate of dispatch with two equivalent parameters" in {
+      val input = """
+        | f(x, y) := (new x) + (new y)
+        | f(5, 5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject sum of dispatch with two distinct parameters" in {
+      val input = """
+        | f(x, y) := (new x) + (new y)
+        | f(5, 6)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "accept relate of dispatch with two distinct parameters" in {
+      val input = """
+        | f(x, y) :=
+        |   a := new x
+        |   b := new y
+        |   a ~ b
+        |     a + b
+        | f(5, 6)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike {
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      tree.errors must beEmpty
+    }
+    
+    "accept relate of dispatch with equal parameters" in {
+      val input = """
+        | f(x, y) :=
+        | a := new x
+        | b := new y
+        | a ~ b
+        |   a + b
+        | f(5, 5)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance must beLike {
+        case ProductProvenance(DynamicProvenance(_), DynamicProvenance(_)) => ok
+      }
+      tree.errors must beEmpty
+    }
     
     "accept a dispatch to a function wrapping Add with related parameters" in {
       val tree = compileSingle("a(b) := b + //foo a(//foo)")

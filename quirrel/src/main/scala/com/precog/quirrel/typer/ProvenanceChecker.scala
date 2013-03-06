@@ -312,9 +312,22 @@ trait ProvenanceChecker extends parser.AST with Binder {
         case New(_, child) => {
           val (errors, constr) = loop(child, relations, constraints)
 
-          if (errors.nonEmpty) expr.provenance = NullProvenance
-          else if (child.provenance == InfiniteProvenance) expr.provenance = InfiniteProvenance
-          else expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+          if (errors.nonEmpty)
+            expr.provenance = NullProvenance
+          else if (child.provenance == InfiniteProvenance)
+            expr.provenance = InfiniteProvenance
+          else if (child.provenance.isParametric)
+            // We include an identity in ParametricDynamicProvenance so that we can
+            // distinguish two `New` nodes that have the same `child`, each assigning
+            // different identities. No two `New` nodes should ever have identical provenance.
+            // | f(x) :=
+            // |   y := new x
+            // |   z := new x
+            // |   y + z
+            // | f(5)
+            expr.provenance = ParametricDynamicProvenance(child.provenance, currentId.getAndIncrement())
+          else
+            expr.provenance = DynamicProvenance(currentId.getAndIncrement())
 
           (errors, constr)
         }
@@ -330,8 +343,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
           } else if (from.provenance.isParametric || to.provenance.isParametric) {
             (Set(), Set(NotRelated(from.provenance, to.provenance)))
           } else {
-            if (unified.isDefined && unified != Some(NullProvenance))
-              (Set(Error(expr, AlreadyRelatedSets)), Set())
+            if (unified.isDefined && unified != Some(NullProvenance)) {
+              (Set(Error(expr, AlreadyRelatedSets)), Set()) }
             else
               (Set(), Set())
           }
@@ -376,13 +389,14 @@ trait ProvenanceChecker extends parser.AST with Binder {
               
               val ids = let.params map { Identifier(Vector(), _) }
               val zipped = ids zip (actuals map { _.provenance })
-              
+
               def sub(target: Provenance): Provenance = {
                 zipped.foldLeft(target) {
-                  case (target, (id, sub)) => substituteParam(id, let, target, sub)
+                  case (target, (id, sub)) =>
+                    substituteParam(id, let, target, sub)
                 }
               }
-              
+
               val constraints2 = let.constraints map {
                 case Related(left, right) => {
                   val left2 = resolveUnifications(relations)(sub(left))
@@ -415,8 +429,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
                 }
                 
                 case NotRelated(left, right) if !left.isParametric && !right.isParametric => {
-                  if (unifyProvenance(relations)(left, right).isDefined)
+                  if (unifyProvenance(relations)(left, right).isDefined) {
                     Some(Left(Error(expr, AlreadyRelatedSets)))
+                  }
                   else
                     None
                 }
@@ -744,15 +759,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
       unionP orElse leftP orElse rightP
     }
 
-    case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
-      Some(StaticProvenance(path1))
-    
-    case (DynamicProvenance(id1), DynamicProvenance(id2)) if id1 == id2 =>
-      Some(DynamicProvenance(id1))
-    
-    case (ParamProvenance(id1, let1), ParamProvenance(id2, let2)) if id1 == id2 && let1 == let2 =>
-      Some(ParamProvenance(id1, let1))
-    
     case (NullProvenance, p) => Some(NullProvenance)
     case (p, NullProvenance) => Some(NullProvenance)
     
@@ -781,6 +787,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
   
   def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
     case ParamProvenance(`id`, `let`) => sub
+
+    case ParametricDynamicProvenance(prov, _) if prov.possibilities.contains(ParamProvenance(`id`, `let`)) =>
+      substituteParam(id, let, prov, DynamicProvenance(currentId.getAndIncrement()))
     
     case UnifiedProvenance(left, right) =>
       UnifiedProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
@@ -804,7 +813,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           ValueProvenance
       } getOrElse DynamicDerivedProvenance(left2, right2)
     }
-    
+
     case _ => target
   }
   
@@ -839,7 +848,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case DynamicDerivedProvenance(left, right) =>
       DynamicDerivedProvenance(resolveUnifications(relations)(left), resolveUnifications(relations)(right))
     
-    case ParamProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | UndefinedProvenance | NullProvenance | InfiniteProvenance =>
+    case ParamProvenance(_, _) | ParametricDynamicProvenance(_, _) | StaticProvenance(_) | DynamicProvenance(_) | ValueProvenance | UndefinedProvenance | NullProvenance | InfiniteProvenance =>
       prov
   }
   
@@ -936,6 +945,19 @@ trait ProvenanceChecker extends parser.AST with Binder {
         case (ParamProvenance(_, _), _) => GT
         case (_, ParamProvenance(_, _)) => LT
 
+        case (ParametricDynamicProvenance(prov1, id1), ParametricDynamicProvenance(prov2, id2)) => {
+          if (prov1 == prov2) {
+            if (id1 == id2) EQ
+            else if (id1 < id2) LT
+            else GT
+          } else {
+            prov1 ?|? prov2
+          }
+        }
+        case (ParametricDynamicProvenance(_, _), _) => GT
+        case (_, ParametricDynamicProvenance(_, _)) => LT
+
+
         case (DynamicDerivedProvenance(left1, right1), DynamicDerivedProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
         case (DynamicDerivedProvenance(_, _), _) => GT
         case (_, DynamicDerivedProvenance(_, _)) => LT
@@ -1027,6 +1049,11 @@ trait ProvenanceChecker extends parser.AST with Binder {
   case class DynamicProvenance(id: Int) extends Provenance {
     override val toString = "@" + id
     val isParametric = false
+  }
+  
+  case class ParametricDynamicProvenance(prov: Provenance, id: Int) extends Provenance {
+    override val toString = "@@" + prov.toString
+    val isParametric = true
   }
   
   case object ValueProvenance extends Provenance {

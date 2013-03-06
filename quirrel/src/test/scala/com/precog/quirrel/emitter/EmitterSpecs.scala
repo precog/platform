@@ -358,6 +358,181 @@ object EmitterSpecs extends Specification
         ))
     }
 
+    "emit a match after a cross in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { five: five, increasedWeight: fivePlus }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit two matches after a cross in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { five: five, increasedWeight: fivePlus, weight: medals.Weight }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          PushString("weight"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match and a cross in the correct order, after a cross, in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   six := new 6
+        |
+        |   six ~ fivePlus
+        |     { five: five, increasedWeight: fivePlus, six: six }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          PushString("six"),
+          PushNum("6"),
+          Map1(New),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match and a cross in the correct order, after a cross, from a dispatch, in a join-object" in {
+      val input = """
+        | --medals := //summer_games/london_medals
+        | makeNew(x) := new x
+        | five := makeNew(5)
+        | six := makeNew(6)
+        | five ~ six
+        | five + six
+        |
+        | --five ~ medals
+        | --  fivePlus := five + medals.Weight
+        | --  six := makeNew(6)
+        |
+        | --  six ~ fivePlus
+        | --    { five: five, increasedWeight: fivePlus, six: six }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          PushString("six"),
+          PushNum("6"),
+          Map1(New),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match after a cross in a join-array" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   [medals.Weight, fivePlus]
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector())
+    }
+
     "emit two distinct callsites of the same function" in {
       val input = """
         | medals := //summer_games/london_medals 
@@ -1441,25 +1616,27 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           Group(0),
           Split,
+          PushString("kay"),
+          PushGroup(0),
+          Map2Cross(WrapObject),
           PushString("jay"),
           PushString("/views"),
           Morph1(BuiltInMorphism1(expandGlob)),
           LoadLocal,
           Dup,
+          Swap(3),
           Swap(2),
           Swap(1),
           PushString("time"),
           Map2Cross(DerefObject),
           Swap(1),
           Swap(2),
+          Swap(3),
           PushString("time"),
           Map2Cross(DerefObject),
           PushKey(1),
           Map2Cross(Gt),
           FilterMatch,
-          Map2Cross(WrapObject),
-          PushString("kay"),
-          PushGroup(0),
           Map2Cross(WrapObject),
           Map2Cross(JoinObject),
           Merge))

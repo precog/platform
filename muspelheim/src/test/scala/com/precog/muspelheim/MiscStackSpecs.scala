@@ -87,6 +87,84 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
+  /*
+    "ensure that" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { weight: medals.Weight, increasedWeight: fivePlus }
+        | """.stripMargin
+
+      val input2 = """
+        | medals := //summer_games/london_medals
+        | medals.Weight where std::type::isNumber(medals.Weight)
+        | """.stripMargin
+
+      val result = evalE(input)
+      val result2 = evalE(input2)
+
+      result.size mustEqual(result2.size)
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(2)
+
+          elems.keys mustEqual(Set("weight", "increasedWeight"))
+      }
+
+      val weights = result collect { case (_, SObject(elems)) => elems("weight") }
+      val expectedWeights = result2 collect { case (_, w) => w }
+
+      val weightsPlus = result collect { case (_, SObject(elems)) => elems("increasedWeight") }
+      val expectedWeightsPlus = expectedWeights collect { case SDecimal(d) => SDecimal(d + 5) }
+
+      weights mustEqual(expectedWeights)
+      weightsPlus mustEqual(expectedWeightsPlus)
+    }
+
+    "ensure that" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { five: five, increasedWeight: fivePlus }
+        | """.stripMargin
+
+      val input2 = """
+        | medals := //summer_games/london_medals
+        | medals.Weight where std::type::isNumber(medals.Weight)
+        | """.stripMargin
+
+      val result = evalE(input)
+      val result2 = evalE(input2)
+
+      result.size mustEqual(result2.size)
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) =>
+          ids must haveSize(2)
+
+          elems.keys mustEqual(Set("five", "increasedWeight"))
+      }
+
+      val fives = result collect { case (_, SObject(elems)) =>
+        (elems("five"): @unchecked) match { case SDecimal(d) => d }
+      }
+      val weights = result2 collect { case (_, w) => w }
+
+      val weightsPlus = result collect { case (_, SObject(elems)) => elems("increasedWeight") }
+      val expectedWeightsPlus = weights collect { case SDecimal(d) => SDecimal(d + 5) }
+
+      fives must contain(BigDecimal(5)).only
+      weightsPlus mustEqual(expectedWeightsPlus)
+    }
+    /*
+
     "ensure that two array elements are not switched in a solve" in {
       val input = """
         | orders := //orders
@@ -2530,7 +2608,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
       
       eval(input) must not(beEmpty)
-    }
+    }*/
   }
 }
 

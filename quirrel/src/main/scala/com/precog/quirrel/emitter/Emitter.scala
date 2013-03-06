@@ -427,13 +427,13 @@ trait Emitter extends AST
         case ast.Observe(_, data, samples) =>
           emitExpr(data, dispatches) >> emitExpr(samples, dispatches) >> emitInstr(Observe)
 
-        case ast.New(loc, child) => 
+        case ast.New(_, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(New))
         
-        case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
+        case ast.Relate(_, _, _, in) =>
           emitExpr(in, dispatches)
         
-        case t @ ast.TicVar(loc, name) => { 
+        case t @ ast.TicVar(_, name) => { 
           t.binding match {
             case SolveBinding(solve) => {
               emitOrDup(MarkTicVar(solve, name)) {
@@ -447,53 +447,58 @@ trait Emitter extends AST
           }
         }
         
-        case ast.StrLit(loc, value) => 
+        case ast.StrLit(_, value) => 
           emitInstr(PushString(value))
         
-        case ast.NumLit(loc, value) => 
+        case ast.NumLit(_, value) => 
           emitInstr(PushNum(value))
         
-        case ast.BoolLit(loc, value) => 
+        case ast.BoolLit(_, value) => 
           emitInstr(value match {
             case true  => PushTrue
             case false => PushFalse
           })
 
-        case ast.NullLit(loc) =>
+        case ast.NullLit(_) =>
           emitInstr(PushNull)
         
-        case ast.UndefinedLit(loc) =>
+        case ast.UndefinedLit(_) =>
           emitInstr(PushUndefined)
 
-        case ast.ObjectDef(loc, Vector()) => emitInstr(PushObject)
+        case ast.ObjectDef(_, Vector()) => emitInstr(PushObject)
         
-        case ast.ObjectDef(loc, props) => 
-          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
+        case ast.ObjectDef(_, props) => 
+          // props: Vector[(String, Expr)]
 
-          val provToField = props.groupBy(_._2.provenance)
+          def fieldToObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
 
-          // TODO: The fields are not in the right order because of the group operation
-          val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
-            case (vector, (provenance, fields)) =>
-              val singles = fields.map(field2ObjInstr)
+          val singles = props map { fieldToObjInstr }
+
+          // if `props` has size one, we should not emit a join instruction
+          val (_, joins) = props.tail.foldLeft((props.head._2.provenance.possibilities, Vector.empty[EmitterState])) {
+            case ((provAcc, instrAcc), (_, expr)) =>
 
               val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-                val resolved = e.subResolve(provenance)
-                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
+                val resolved = e.subResolve(expr.provenance)
+
+                assert(!resolved.isParametric)
+
+                val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+  
+                emitInstr(if (itx.isEmpty) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
               }
 
-              val joins = Vector.fill(singles.length - 1)(joinInstr)
+              //todo not quite right, need to resolve first?
+              val resultProv = provAcc ++ expr.provenance.possibilities
 
-              vector ++ (singles ++ joins)
+              (resultProv, joinInstr +: instrAcc)
           }
 
-          val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
+          reduce(singles ++ joins)
 
-          reduce(groups ++ joins)
-          
-        case ast.ArrayDef(loc, Vector()) => emitInstr(PushArray)
+        case ast.ArrayDef(_, Vector()) => emitInstr(PushArray)
 
-        case ast.ArrayDef(loc, values) => 
+        case ast.ArrayDef(_, values) => 
           val indexedValues = values.zipWithIndex
 
           val provToElements = indexedValues.groupBy(_._1.provenance)
