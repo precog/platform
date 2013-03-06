@@ -31,13 +31,9 @@ import scala.collection.mutable
  * you mix in the other requisite traits.
  */
 trait Compiler extends Phases with parser.Parser with typer.TreeShaker with parser.QuirrelCache {
-  private val cache = new Cache()
+  def quirrelCacheSize: Int = 1000
+  private val cache = new ParseCache(quirrelCacheSize)
 
-  //def compile(str: LineStream): Set[Expr] = cache.getOrElseUpdate(str)(parse) map shakeTree
   def compile(str: LineStream): Set[Expr] = cache.getOrElseUpdate(str)(parse(_) map shakeTree)
-  def compile(str: String): Set[Expr] = {
-    val ls = LineStream(str)
-    assert(ls.toString == str)
-    compile(ls)
-  }
+  def compile(str: String): Set[Expr] = compile(LineStream(str))
 }

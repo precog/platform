@@ -271,7 +271,7 @@ trait Parser extends RegexParsers with Filters with AST {
     builders.foldRight(e) { _(_) }
   }
   
-  private def canonicalizeStr(str: String): String = {
+  private[quirrel] def canonicalizeStr(str: String): String = {
     val (back, _) = str.foldLeft(("", false)) {
       case ((acc, false), '\\') => (acc, true)
       case ((acc, false), c) => (acc + c, false)
@@ -288,7 +288,7 @@ trait Parser extends RegexParsers with Filters with AST {
     back.substring(1, back.length - 1)
   }
   
-  private def canonicalizePath(str: String): String = str substring 1
+  private[quirrel] def canonicalizePath(str: String): String = str substring 1
   
   private def canonicalizePropertyName(str: String): String = {
     val (back, _) = str.substring(1, str.length - 1).foldLeft(("", false)) {

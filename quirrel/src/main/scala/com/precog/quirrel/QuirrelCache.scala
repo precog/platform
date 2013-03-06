@@ -20,6 +20,8 @@
 package com.precog.quirrel
 package parser
 
+import com.precog.common.cache._
+
 import com.codecommit.gll._
 
 import scala.collection.mutable
@@ -41,7 +43,13 @@ trait QuirrelCache extends AST { parser: Parser =>
   case class Ignore(r: Regex) extends Rule(r)
 
   case class Slot(lineNum: Int, colNum: Int, width: Int)
-  case class Binding(tpe: String, name: String, value: String, pos: Int)
+  case class Binding(tpe: String, name: String, rawValue: String, pos: Int) {
+    def value: String = tpe match {
+      case "p" => canonicalizePath(rawValue)
+      case "s" => canonicalizeStr(rawValue)
+      case _ => rawValue
+    }
+  }
 
   type CacheKey = String
   type CacheValue = (Expr, Map[String, Slot])
@@ -50,8 +58,8 @@ trait QuirrelCache extends AST { parser: Parser =>
     val spaceRe = """[ \n\r]+""".r
     val numRe = parser.numLiteralRegex
     val strRe = parser.strLiteralRegex
-    val boolRe = """(?:true|false)(?!\b)""".r
-    val commentRe = """--[^\n]+""".r
+    val boolRe = """(?:true|false)(?!\B)""".r
+    val commentRe = """--[^\n]*""".r
     //val commentRe2 = """\(-(?:[^-]|-[^\)])*-\)""".r
     val pathRe = parser.pathLiteralRegex
     val wordRe = """['a-zA-Z_]['a-zA-Z0-9_]*""".r
@@ -86,7 +94,6 @@ trait QuirrelCache extends AST { parser: Parser =>
           rules(j) match {
             case Ignore(re) =>
               re.findPrefixOf(input.substring(i)).foreach { m =>
-                //println("appending data %s" format m)
                 output.append(m)
                 matched = true
                 i += m.length
@@ -95,7 +102,6 @@ trait QuirrelCache extends AST { parser: Parser =>
               re.findPrefixOf(input.substring(i)).foreach { m =>
                 val name = nextName(tpe)
                 bindings.append(Binding(tpe, name, m, i))
-                //println("appending name %s" format name)
                 output.append(name)
                 matched = true
                 i += m.length
@@ -105,7 +111,6 @@ trait QuirrelCache extends AST { parser: Parser =>
         }
         if (!matched) {
           val c = input.charAt(i)
-          //println("appending single %s" format c)
           output.append(c)
           i += 1
         }
@@ -212,13 +217,13 @@ trait QuirrelCache extends AST { parser: Parser =>
 
   def locUpdates(bindings: IndexedSeq[Binding], slots: Map[String, Slot]): LineStream => LineStream = {
     val widths: Map[String, Int] = bindings.map { b =>
-      (b.name, b.value.length)
+      (b.name, b.rawValue.length)
     }.toMap
 
     val deltas: Map[Int, List[(Int, Int)]] = slots.toList.map {
       case (name, Slot(lineNum, colNum, oldWidth)) =>
         val width = widths(name)
-        val delta = oldWidth - width
+        val delta = width - oldWidth
         lineNum -> (colNum, delta)
       }.groupBy(_._1).map { case (lineNum, ds) =>
         (lineNum, ds.map(_._2).sortBy(_._1))
@@ -429,8 +434,8 @@ trait QuirrelCache extends AST { parser: Parser =>
     result.eval(bindings)
   }
 
-  class Cache {
-    private val cache: mutable.Map[CacheKey, CacheValue] = mutable.Map.empty
+  class ParseCache(maxSize: Long) {
+    private val cache: mutable.Map[CacheKey, CacheValue] = Cache.simple(Cache.MaxSize(maxSize))
 
     def getOrElseUpdate(query: LineStream)(f: LineStream => Set[Expr]): Set[Expr] = {
       val s = query.toString
@@ -447,7 +452,6 @@ trait QuirrelCache extends AST { parser: Parser =>
         if (exprs.size == 1) {
           val value = exprs.head
           val (key2, slots) = CacheKey.fromExpr(s, value)
-          // TODO: need to store loc or line info?
           cache(key2) = (value, slots)
         }
         exprs
