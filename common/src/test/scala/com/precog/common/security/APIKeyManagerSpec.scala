@@ -36,7 +36,7 @@ trait APIKeyManagerSpec[M[+_]] extends Specification {
   "API Key Manager" should {
     "properly ascribe parentage for grants" in {
       val path = Path("/user1/")
-      val mgr = new InMemoryAPIKeyManager[M]
+      val mgr = new InMemoryAPIKeyManager[M](blueeyes.util.Clock.System)
 
       val grantRequest = v1.NewGrantRequest.newGrant("012345", path, Some("testGrant"), None, Set(), None)
       val grantParentage = for {

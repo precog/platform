@@ -22,15 +22,20 @@ package security
 
 import service.v1
 import accounts.AccountId
+import accounts.AccountFinder
 import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import scalaz._
-import scalaz.std.option._
+import scalaz.\/._
+import scalaz.std.option.optionInstance
 import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
+import scalaz.syntax.bitraverse._
+import scalaz.syntax.std.option._
 
 trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   def findAPIKey(apiKey: APIKey, rootKey: Option[APIKey]): M[Option[v1.APIKeyDetails]]
@@ -59,9 +64,17 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   }
 }
 
+object APIKeyFinder {
+  def listPermissions[M[+_]](apiKeyFinder: APIKeyFinder[M], apiKey: APIKey, pathPrefix: Path)(implicit M: Functor[M]): M[Set[Permission]] = {
+    apiKeyFinder.findAPIKey(apiKey, None) map { details =>
+      details.toSet.flatMap(_.grants).flatMap(_.permissions) filter { perm => pathPrefix isEqualOrParent perm.path }
+    }
+  }
+}
+
 class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging {
   val grantDetails: Grant => v1.GrantDetails = {
-    case Grant(gid, gname, gdesc, _, _, perms, exp) => v1.GrantDetails(gid, gname, gdesc, perms, exp)
+    case Grant(gid, gname, gdesc, _, _, perms, createdAt, exp) => v1.GrantDetails(gid, gname, gdesc, perms, createdAt, exp)
   }
 
   def recordDetails(rootKey: Option[APIKey]): PartialFunction[APIKeyRecord, M[v1.APIKeyDetails]] = {

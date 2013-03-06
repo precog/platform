@@ -22,6 +22,7 @@ package kafka
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.security._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.util._
@@ -39,27 +40,31 @@ import _root_.kafka.message._
 import _root_.kafka.producer._
 
 import org.streum.configrity.{Configuration, JProperties}
-import com.weiglewilczek.slf4s._ 
+import com.weiglewilczek.slf4s._
 
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
 import scalaz.syntax.std.option._
 
 object KafkaEventStore {
-  def apply(config: Configuration, accountFinder: AccountFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
+  def apply(config: Configuration, permissionsFinder: PermissionsFinder[Future])(implicit executor: ExecutionContext): Validation[NEL[String], (EventStore[Future], Stoppable)] = {
     val localConfig = config.detach("local")
     val centralConfig = config.detach("central")
 
     centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
       val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
+      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, yggCheckpointsEnabled = true)
       val agent = serviceUID.hostId + serviceUID.serviceId
 
-      val eventIdSeq = new SystemEventIdSequence(agent, coordination)
+      val eventIdSeq = SystemEventIdSequence(agent, coordination)
       val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
-      val (_, raStop) = KafkaRelayAgent(accountFinder, eventIdSeq, localConfig, centralConfig)
 
-      (eventStore, esStop.parent(raStop))
+      val stoppables = if (config[Boolean]("relay_data", true)) {
+        val (_, raStop) = KafkaRelayAgent(permissionsFinder, eventIdSeq, localConfig, centralConfig)
+        esStop.parent(raStop)
+      } else esStop
+
+      (eventStore, stoppables)
     }
   }
 }

@@ -53,6 +53,7 @@ import akka.pattern.gracefulStop
 import akka.util.{Duration, Timeout}
 
 import blueeyes.bkka._
+import blueeyes.util.Clock
 
 import com.codecommit.gll.LineStream
 
@@ -61,6 +62,7 @@ import org.streum.configrity.io.BlockFormat
 
 import scalaz._
 import scalaz.effect.IO
+import scalaz.syntax.copointed._
 
 import java.io.File
 
@@ -121,7 +123,10 @@ object SBTConsole {
 
     val storageTimeout = yggConfig.storageTimeout
 
-    val accessControl = new UnrestrictedAccessControl[Future]()
+    val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future](Clock.System)
+    val accessControl = new DirectAPIKeyFinder(rawAPIKeyFinder)
+
+    val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
 
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
@@ -141,7 +146,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      consumeEval("dummyAPIKey", dag, Path.Root)
+      consumeEval(rootAPIKey, dag, Path.Root)
     }
 
     def produceDAG(str: String) = {

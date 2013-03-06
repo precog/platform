@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+import blueeyes.util.Clock
 
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
@@ -278,7 +279,7 @@ object KafkaTools extends Command {
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.buffer) match {
-        case Success(Ingest(apiKey, path, ownerAccountId, data, _)) =>
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
 
@@ -291,7 +292,7 @@ object KafkaTools extends Command {
   case object CentralFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventMessageEncoding.read(msg.message.buffer) match {
-        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _))) =>
+        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _, _))) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
 
@@ -562,9 +563,9 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = new UnrestrictedAccessControl[Future]
+      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), apiKeyFinder)))
     }
 
     import shardModule._
@@ -579,7 +580,7 @@ object ImportTools extends Command with Logging {
         val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
 
         ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
-          val update = ProjectionInsert(Path(db), records, config.accountId)
+          val update = ProjectionInsert(Path(db), records, Authorities(config.accountId))
 
           logger.info(records.size + " events to be inserted")
           Await.result(projectionsActor ? update, Duration(300, "seconds"))

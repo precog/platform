@@ -20,6 +20,7 @@
 package com.precog.auth
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import org.specs2.mutable._
 
@@ -53,6 +54,7 @@ import com.precog.common.security._
 import com.precog.common.security.service.v1
 import com.precog.common.accounts._
 
+
 import DefaultBijections._
 
 trait TestAPIKeyService extends BlueEyesServiceSpecification
@@ -83,8 +85,10 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
 }
 
 class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
+  import Permission._
+
   val authService: HttpClient[JValue] = client.contentType[JValue](application/(MimeTypes.json))
-  val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   val tc = new AsyncHttpTranscoder[JValue, JValue] {
     def apply(a: HttpRequest[JValue]): HttpRequest[JValue] = a
@@ -148,7 +152,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   def equalGrant(g1: Grant, g2: Grant) = (g1.grantId == g2.grantId) && (g1.permissions == g2.permissions) && (g1.expirationDate == g2.expirationDate)
 
   def mkNewGrantRequest(grant: Grant) = grant match {
-    case Grant(_, name, description, _, parentIds, permissions, expirationDate) =>
+    case Grant(_, name, description, _, parentIds, permissions, _, expirationDate) =>
       v1.NewGrantRequest(name, description, parentIds, permissions, expirationDate)
   }
 
@@ -183,12 +187,17 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   val allAPIKeys = Await.result(apiKeyManager.listAPIKeys(), to)
   val allGrants = Await.result(apiKeyManager.listGrants(), to)
 
-  val rootGrants = {
-    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
+  val rootPermissions = Set[Permission](
+    WritePermission(Path.Root, WriteAsAny), 
+    ReadPermission(Path.Root, WrittenByAny),  
+    DeletePermission(Path.Root, WrittenByAny)
+  )
 
+  val rootGrants = {
     Set(Grant(
       rootGrantId, Some("root-grant"), Some("The root grant"), rootAPIKey, Set(),
-      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      rootPermissions,
+      new Instant(0L),
       None
     ))
   }
@@ -338,7 +347,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       getGrantDetails(user1.apiKey, user1Grant.grantId) must awaited(to) { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jgd), _) =>
           jgd.deserialize[v1.GrantDetails] must beLike {
-            case v1.GrantDetails(gid, gname, gdesc, perms, exp) =>
+            case v1.GrantDetails(gid, gname, gdesc, perms, _, exp) =>
               gid must_== user1Grant.grantId
               gname must_== user1Grant.name
               gdesc must_== user1Grant.description
@@ -355,7 +364,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "create a new grant derived from the grants of the authorization API key" in {
-      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/read-me"), Set("user1"))), None)) must awaited(to) { beLike {
+      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/read-me"), WrittenByAccount("user1"))), None)) must awaited(to) { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
           val id = jid.deserialize[v1.GrantDetails]
           id.grantId.length must be_>(0)
@@ -363,7 +372,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "don't create a new grant if it can't be derived from the authorization API keys grants" in {
-      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user2/secret"), Set("user2"))), None)) must awaited(to) { beLike {
+      createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user2/secret"), WrittenByAccount("user2"))), None)) must awaited(to) { beLike {
         case
           HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(elems)), _) if elems.contains("error") =>
             elems("error") must beLike {
@@ -387,7 +396,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
     }
 
     "add a child grant to the given grant" in {
-      addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None)) must awaited(to) { beLike {
+      addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), WrittenByAccount("user1"))), None)) must awaited(to) { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jid), _) =>
           val id = jid.deserialize[v1.GrantDetails]
           id.grantId.length must be_>(0)
@@ -396,7 +405,7 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
 
     "delete a grant" in {
       (for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), Set("user1"))), None))
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _)      <- addGrantChild(user1.apiKey, user1Grant.grantId, v1.NewGrantRequest(None, None, Set.empty[GrantId], Set(ReadPermission(Path("/user1/secret"), WrittenByAccount("user1"))), None))
         details                                               = jid.deserialize[v1.GrantDetails]
         HttpResponse(HttpStatus(OK, _), _, Some(jgs), _)      <- getGrantChildren(user1.apiKey, user1Grant.grantId)
         beforeDelete                                          = jgs.deserialize[Set[v1.GrantDetails]]
@@ -411,14 +420,14 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
       getPermissions(user1.apiKey, Path("/user1")) must awaited(to) { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jperms), _) =>
           val perms = jperms.deserialize[Set[Permission]] map Permission.accessType
-          val types = Set("read", "reduce", "write", "delete")
+          val types = Set("read", "write", "delete")
           perms must_== types
       }}
     }
 
     "retrieve permissions for a path we don't own" in {
       val permsM = for {
-        HttpResponse(HttpStatus(OK, _), _, Some(jid), _) <- createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty, Set(ReadPermission(Path("/user1/public"), Set("user1"))), None))
+        HttpResponse(HttpStatus(OK, _), _, Some(jid), _) <- createAPIKeyGrant(user1.apiKey, v1.NewGrantRequest(None, None, Set.empty, Set(ReadPermission(Path("/user1/public"), WrittenByAccount("user1"))), None))
         _ <- addAPIKeyGrant(user1.apiKey, user4.apiKey, jid.deserialize[v1.GrantDetails].grantId)
         HttpResponse(HttpStatus(OK, _), _, Some(jperms), _) <- getPermissions(user4.apiKey, Path("/user1/public"))
       } yield jperms.deserialize[Set[Permission]]

@@ -18,33 +18,16 @@
  *
  */
 package com.precog.common
-package accounts
+package security
 
-import com.precog.common.security._
+import org.joda.time.DateTime
 
-import com.weiglewilczek.slf4s.Logging
+import blueeyes.util.Clock
 
 import scalaz._
+import scalaz.std.option._
 import scalaz.syntax.monad._
 
-trait AccountFinder[M[+_]] extends Logging { self =>
-  def findAccountByAPIKey(apiKey: APIKey) : M[Option[AccountId]]
-
-  def findAccountDetailsById(accountId: AccountId): M[Option[AccountDetails]]
-
-  def withM[N[+_]](implicit t: M ~> N) = new AccountFinder[N] {
-    def findAccountByAPIKey(apiKey: APIKey) = t(self.findAccountByAPIKey(apiKey))
-
-    def findAccountDetailsById(accountId: AccountId) = t(self.findAccountDetailsById(accountId))
-  }
+class UnrestrictedAPIKeyManager[M[+_]: Monad](clock: Clock) extends InMemoryAPIKeyManager[M](clock) {
+  override def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = true.point[M]
 }
-
-object AccountFinder {
-  def Empty[M[+_]: Monad] = new AccountFinder[M] {
-    def findAccountByAPIKey(apiKey: APIKey) = None.point[M]
-    def findAccountDetailsById(accountId: AccountId) = None.point[M]
-  }
-}
-
-
-// vim: set ts=4 sw=4 et:

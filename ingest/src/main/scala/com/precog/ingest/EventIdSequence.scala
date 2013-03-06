@@ -21,10 +21,7 @@ package com.precog.ingest
 
 import com.precog.common._
 import com.precog.common.ingest._
-import com.precog.util._
 import com.precog.util.PrecogUnit
-
-import akka.dispatch.Future
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -36,36 +33,17 @@ trait EventIdSequence {
   def getLastOffset(): Long
 }
 
-class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blockSize: Int = 100000)/*(implicit executor: ExecutionContext) */extends EventIdSequence {
-
-  private case class InternalState(eventRelayState: EventRelayState) {
-    private val nextSequenceId = new AtomicInteger(eventRelayState.nextSequenceId)
-
-    val block = eventRelayState.idSequenceBlock
-    val lastOffset = eventRelayState.offset
-
-    def current = nextSequenceId.get
-    def isEmpty = current > block.lastSequenceId
-    def next() = if(isEmpty) sys.error("Next on empty sequence is invalid.") else
-                             EventId(block.producerId, nextSequenceId.getAndIncrement)
-  }
-
-  // How to approach this from a lazy viewpoint (deferred at this time but need to return) -nm
-  // The correct way to do this is to pass the initial state as a constructor argument, and make
-  // the constructor private and only expose it via the companion object's apply method. Since registering  // the relay agent (as is done in loadInitialState) is an operation that can fail, you should not be
-  // able to even construct such an id sequence if you can't obtain the initial state.
-  private var state: InternalState = loadInitialState
-
-  private def loadInitialState() = {
-    val eventRelayState = coordination.registerRelayAgent(agent, blockSize).getOrElse(sys.error("Unable to retrieve relay agent state."))    
-    InternalState(eventRelayState)
-  }
+class SystemEventIdSequence private(agent: String,
+                                    coordination: SystemCoordination,
+                                    private var state: SystemEventIdSequence.InternalState,
+                                    blockSize: Int) /*(implicit executor: ExecutionContext) */ extends EventIdSequence {
+  import SystemEventIdSequence.InternalState
 
   def next(offset: Long) = {
     if(state.isEmpty) {
       state = refill(offset)
     }
-    state.next
+    state.next()
   }
 
   def currentRelayState(offset: Long) = {
@@ -90,5 +68,30 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
 
   def getLastOffset(): Long = {
     state.lastOffset
+  }
+}
+
+object SystemEventIdSequence {
+  class UnableToRetrieveRelayAgentState() extends Exception("Unable to retrieve relay agent state.")
+
+  private[ingest] case class InternalState(eventRelayState: EventRelayState) {
+    private val nextSequenceId = new AtomicInteger(eventRelayState.nextSequenceId)
+
+    val block = eventRelayState.idSequenceBlock
+    val lastOffset = eventRelayState.offset
+
+    def current = nextSequenceId.get
+    def isEmpty = current > block.lastSequenceId
+    def next() = if(isEmpty) sys.error("Next on empty sequence is invalid.") else
+      EventId(block.producerId, nextSequenceId.getAndIncrement)
+  }
+
+  def apply(agent: String, coordination: SystemCoordination, blockSize: Int = 100000): SystemEventIdSequence = {
+    def loadInitialState() = {
+      val eventRelayState = coordination.registerRelayAgent(agent, blockSize).getOrElse(throw new UnableToRetrieveRelayAgentState)
+      InternalState(eventRelayState)
+    }
+
+    new SystemEventIdSequence(agent, coordination, loadInitialState(), blockSize)
   }
 }

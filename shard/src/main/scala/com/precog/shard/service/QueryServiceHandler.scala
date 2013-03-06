@@ -198,10 +198,7 @@ class SyncQueryServiceHandler(
   }
 }
 
-class AsyncQueryServiceHandler(
-    val platform: Platform[Future, JobId])(implicit
-    M: Monad[Future]) extends QueryServiceHandler[JobId] {
-
+class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
   def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): HttpResponse[QueryResult] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
