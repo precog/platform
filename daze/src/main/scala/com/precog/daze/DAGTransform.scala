@@ -73,6 +73,8 @@ trait DAGTransform extends DAG {
   
         case graph @ Assert(pred, child) => f(Assert(transformAux(splits, pred), transformAux(splits, child))(graph.loc))
         
+        case graph @ Cond(pred, left, leftJoin, right, rightJoin) => f(Cond(transformAux(splits, pred), transformAux(splits, left), leftJoin, transformAux(splits, right), rightJoin)(graph.loc))
+        
         case graph @ Observe(data, samples) => f(Observe(transformAux(splits, data), transformAux(splits, samples))(graph.loc))
         
         case graph @ IUI(union, left, right) => f(IUI(union, transformAux(splits, left), transformAux(splits, right))(graph.loc))

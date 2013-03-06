@@ -131,6 +131,13 @@ trait Memoizer extends DAG {
             dag.Assert(memoized(splits)(pred), memoized(splits)(child))(node.loc)
         }
         
+        case node @ dag.Cond(pred, left, leftJoin, right, rightJoin) => {
+          if (numRefs(node) > MemoThreshold)
+            Memoize(dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(node.loc), scaleMemoPriority(numRefs(node)))
+          else
+            dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(node.loc)
+        }
+        
         case node @ dag.Observe(data, samples) => {
           if (numRefs(node) > MemoThreshold)
             Memoize(dag.Observe(memoized(splits)(data), memoized(splits)(samples))(node.loc), scaleMemoPriority(numRefs(node)))
@@ -258,6 +265,49 @@ trait Memoizer extends DAG {
     case Assert(pred, child) => {
       val merged = findForcingRefs(pred, OpSide.Left(graph)) |+| findForcingRefs(child, OpSide.Right(graph))
       updateMap(merged, graph, force)
+    }
+    
+    case Cond(pred, left, CrossLeftSort | CrossRightSort, right, _) if !pred.isInstanceOf[Root] && !left.isInstanceOf[Root] => {
+      // no, the sides here are *not* typos; don't change them
+      val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
+        findForcingRefs(left, OpSide.Left(graph)) |+| 
+        findForcingRefs(right, OpSide.Left(graph))
+        
+      updateMap(merged, graph, force)
+    }
+    
+    case Cond(pred, left, _, right, CrossLeftSort | CrossRightSort) if !pred.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
+      // no, the sides here are *not* typos; don't change them
+      val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
+        findForcingRefs(left, OpSide.Left(graph)) |+| 
+        findForcingRefs(right, OpSide.Left(graph))
+        
+      updateMap(merged, graph, force)
+    }
+    
+    case Cond(pred, left, IdentitySort | ValueSort(_), right, _) if pred.identities != left.identities => {
+      // no, the sides here are *not* typos; don't change them
+      val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
+        findForcingRefs(left, OpSide.Left(graph)) |+| 
+        findForcingRefs(right, OpSide.Left(graph))
+        
+      updateMap(merged, graph, force)
+    }
+    
+    case Cond(pred, left, _, right, IdentitySort | ValueSort(_)) if pred.identities != right.identities => {
+      // no, the sides here are *not* typos; don't change them
+      val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
+        findForcingRefs(left, OpSide.Left(graph)) |+| 
+        findForcingRefs(right, OpSide.Left(graph))
+        
+      updateMap(merged, graph, force)
+    }
+    
+    case Cond(pred, left, leftJoin, right, rightJoin) => {
+      // no, the sides here are *not* typos; don't change them
+      findForcingRefs(pred, OpSide.Right(graph)) |+| 
+        findForcingRefs(left, OpSide.Left(graph)) |+| 
+        findForcingRefs(right, OpSide.Left(graph))
     }
     
     case Observe(data, samples) => {

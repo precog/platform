@@ -66,6 +66,7 @@ case class EvaluationContext(apiKey: APIKey, basePath: Path, startTime: DateTime
 trait EvaluatorModule[M[+_]] extends CrossOrdering
     with Memoizer
     with TypeInferencer
+    with CondRewriter
     with JoinOptimizer
     with SortPushDown
     with OpFinderModule[M] 
@@ -109,23 +110,26 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       if (optimize) funcs.reverse.map(Endo[DepGraph]).suml.run else identity
 
     // Have to be idempotent on subgraphs
-    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph =
+    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph = {
       composeOptimizations(optimize, List(
         inlineStatics(_, ctx, splits),
         optimizeJoins(_, splits)
       ))
+    }
 
-    def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph =
+    def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
       stagedRewriteDAG(optimize, ctx, Set.empty) andThen
-      (orderCrosses _) andThen
-      composeOptimizations(optimize, List[DepGraph => DepGraph](
-        // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
-        //predicatePullups(_, ctx),
-        inferTypes(JType.JUniverseT),
-        { g => megaReduce(g, findReductions(g, ctx)) },
-        pushDownSorts,
-        memoize
-      ))
+        (orderCrosses _) andThen
+        composeOptimizations(optimize, List[DepGraph => DepGraph](
+          // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
+          //predicatePullups(_, ctx),
+          inferTypes(JType.JUniverseT),
+          { g => megaReduce(g, findReductions(g, ctx)) },
+          rewriteConditionals,
+          pushDownSorts,
+          memoize
+        ))
+    }
 
     /**
      * The entry point to the evaluator.  The main implementation of the evaluator
@@ -589,6 +593,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               
               result = childPending.table transform liftToValues(childPending.trans)
             } yield PendingTable(result, graph, TransSpec1.Id)
+            
+          case c @ dag.Cond(pred, left, _, right, _) =>
+            evalNotTransSpecable(c.peer)     // TODO
           
           case IUI(union, left, right) => 
             for {
@@ -910,6 +917,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case dag.Split(specs, child) => queue2 enqueue child enqueue listParents(specs)
             
             case dag.Assert(pred, child) => queue2 enqueue pred enqueue child
+            case dag.Cond(pred, left, _, right, _) => queue2 enqueue pred enqueue left enqueue right
             
             case dag.Observe(data, samples) => queue2 enqueue data enqueue samples
             
