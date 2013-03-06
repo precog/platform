@@ -39,12 +39,12 @@ import scalaz.std.vector._
 trait QuirrelCache extends AST { parser: Parser =>
   import ast._
 
-  sealed abstract class Rule(val re: Regex)
-  case class Keep(tpe: String, r: Regex) extends Rule(r)
-  case class Ignore(r: Regex) extends Rule(r)
+  private sealed abstract class Rule(val re: Regex)
+  private case class Keep(tpe: String, r: Regex) extends Rule(r)
+  private case class Ignore(r: Regex) extends Rule(r)
 
-  case class Slot(lineNum: Int, colNum: Int, width: Int)
-  case class Binding(tpe: String, name: String, rawValue: String, pos: Int) {
+  private case class Slot(lineNum: Int, colNum: Int, width: Int)
+  private case class Binding(tpe: String, name: String, rawValue: String, pos: Int) {
     def value: String = tpe match {
       case "p" => canonicalizePath(rawValue)
       case "s" => canonicalizeStr(rawValue)
@@ -52,21 +52,21 @@ trait QuirrelCache extends AST { parser: Parser =>
     }
   }
 
-  type CacheKey = String
-  type CacheValue = (Expr, Map[String, Slot])
+  private type CacheKey = String
+  private type CacheValue = (Expr, Map[String, Slot])
 
-  object CacheKey {
-    val spaceRe = """[ \n\r]+""".r
+  private object CacheKey {
+    val spaceRe = parser.whitespace
     val numRe = parser.numLiteralRegex
     val strRe = parser.strLiteralRegex
     val boolRe = """(?:true|false)(?!\B)""".r
-    val commentRe = """--[^\n]*""".r
+    //val commentRe = """--[^\n]*""".r
     //val commentRe2 = """\(-(?:[^-]|-[^\)])*-\)""".r
     val pathRe = parser.pathLiteralRegex
     val wordRe = """['a-zA-Z_]['a-zA-Z0-9_]*""".r
 
     val rules = Array(
-      Ignore(commentRe),
+      // Ignore(commentRe),
       Ignore(spaceRe),
       Keep("n", numRe),
       Keep("b", boolRe),
@@ -122,15 +122,7 @@ trait QuirrelCache extends AST { parser: Parser =>
     }
 
     def fromExpr(original: String, expr: Expr): (CacheKey, Map[String, Slot]) = {
-      def loop(expr: Expr): List[Literal] = expr match {
-        case b: BoolLit => b :: Nil
-        case n: NumLit => n :: Nil
-        case s: StrLit => s :: Nil
-        case node =>
-          node.children.flatMap(loop)
-      }
-
-      val lits: List[Literal] = loop(expr).sortBy { lit =>
+      val lits: List[Literal] = findHoles(expr).sortBy { lit =>
         (lit.loc.lineNum, lit.loc.colNum)
       }
 
@@ -138,7 +130,8 @@ trait QuirrelCache extends AST { parser: Parser =>
         val lens = mutable.ArrayBuffer.empty[Int]
         lens.append(0)
         var i = 0
-        original.foreach { c =>
+        while (i < original.length) {
+          val c = original.charAt(i)
           i += 1
           if (c == '\n') lens.append(i)
         }
@@ -249,9 +242,9 @@ trait QuirrelCache extends AST { parser: Parser =>
     }
   }
 
-  type BindingS[+A] = StateT[Option, List[Binding], A]
+  private type BindingS[+A] = StateT[Option, List[Binding], A]
 
-  def replaceLiteralsS(expr0: Expr, bindings: List[Binding], updateLoc: LineStream => LineStream): Option[Expr] = {
+  private def replaceLiteralsS(expr0: Expr, bindings: List[Binding], updateLoc: LineStream => LineStream): Option[Expr] = {
     implicit val stateM = StateT.stateTMonadState[List[Binding], Option]
     import stateM._
 

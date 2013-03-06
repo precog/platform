@@ -197,13 +197,13 @@ trait Parser extends RegexParsers with Filters with AST {
     | """"([^"\\]|\\.)+"""".r ^^ canonicalizeStr        //"
   )
   
-  protected val pathLiteralRegex = """/(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+""".r
+  private[quirrel] lazy val pathLiteralRegex = """/(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+""".r
   private lazy val pathLiteral = (pathLiteralRegex preferred) ^^ canonicalizePath 
   
-  protected val strLiteralRegex = """"([^\n\r\\"]|\\.)*"""".r
-  private lazy val strLiteral = strLiteralRegex ^^ canonicalizeStr  //"
+  private[quirrel] lazy val strLiteralRegex = """"([^\n\r\\"]|\\.)*"""".r //"
+  private lazy val strLiteral = strLiteralRegex ^^ canonicalizeStr
   
-  protected val numLiteralRegex = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  private[quirrel] lazy val numLiteralRegex = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   private lazy val numLiteral = numLiteralRegex
   
   private lazy val boolLiteral: Parser[Boolean] = (
