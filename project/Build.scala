@@ -155,7 +155,7 @@ object PlatformBuild extends Build {
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
 
   lazy val quirrel = Project(id = "quirrel", base = file("quirrel")).
-    settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util, common, logging % "test->test")
+    settings(commonNexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util, logging % "test->test")
 
   lazy val niflheim = Project(id = "niflheim", base = file("niflheim")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util, logging % "test->test")

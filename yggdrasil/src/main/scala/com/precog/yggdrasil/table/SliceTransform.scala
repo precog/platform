@@ -22,7 +22,8 @@ package table
 
 import com.precog.common._
 import com.precog.common.json._
-import com.precog.common.{Path, VectorCase}
+import com.precog.common.Path
+import com.precog.util.VectorCase
 import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._

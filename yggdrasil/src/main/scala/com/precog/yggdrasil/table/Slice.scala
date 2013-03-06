@@ -23,7 +23,7 @@ package table
 import util.CPathUtils
 
 import com.precog.common._
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 import com.precog.bytecode._
 import com.precog.util._
 import com.precog.yggdrasil.util._

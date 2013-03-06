@@ -21,7 +21,7 @@ package com.precog.common
 package security
 
 import com.precog.common.accounts.AccountId
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 
 import akka.util.Duration
 import java.util.concurrent.TimeUnit._

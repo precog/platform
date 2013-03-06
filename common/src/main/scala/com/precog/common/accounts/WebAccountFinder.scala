@@ -21,7 +21,7 @@ package com.precog.common
 package accounts
 
 import com.precog.common.Path
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.util._

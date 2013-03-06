@@ -41,7 +41,14 @@ object QuirrelCacheSpecs extends Specification
       if (pf.isDefinedAt(expr)) {
         Some(pf(expr))
       } else {
-        expr.children.iterator map loop collectFirst {
+        val cs = expr match {
+          // special-case Let because its children
+          // doesn't return all the sub-exprs
+          case Let(_, _, _, c1, c2) => c1 :: c2 :: Nil
+          case e => e.children
+        }
+            
+        cs.iterator map loop collectFirst {
           case Some(a) => a
         }
       }

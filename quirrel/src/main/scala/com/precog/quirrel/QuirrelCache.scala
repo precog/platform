@@ -20,7 +20,7 @@
 package com.precog.quirrel
 package parser
 
-import com.precog.common.cache._
+import com.precog.util.cache._
 import com.precog.util._
 
 import com.codecommit.gll._
@@ -87,7 +87,6 @@ trait QuirrelCache extends AST { parser: Parser =>
       val bindings = mutable.ArrayBuffer.empty[Binding]
       val output = new StringBuilder(input.length)
 
-      Timing.time("really?") {
       var i = 0
       while (i < len) { 
         var j = 0
@@ -116,7 +115,6 @@ trait QuirrelCache extends AST { parser: Parser =>
           output.append(c)
           i += 1
         }
-      }
       }
       (output.toString, bindings)
     }
@@ -189,9 +187,18 @@ trait QuirrelCache extends AST { parser: Parser =>
   }
 
   def findHoles(expr: Expr): List[Literal] = expr match {
+    
+    // These are the kinds of literals we are interested in
+    // (those whose values vary).
     case b: BoolLit => b :: Nil
     case n: NumLit => n :: Nil
     case s: StrLit => s :: Nil
+
+    // Let#children does not return all the children, so we will
+    // handle it specially.
+    case Let(_, _, _, c1, c2) =>
+      findHoles(c1) ++ findHoles(c2)
+    
     case node => node.children.flatMap(findHoles)
   }
 

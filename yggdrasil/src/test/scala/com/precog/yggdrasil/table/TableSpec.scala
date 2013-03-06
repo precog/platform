@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 
 import org.specs2.mutable._
 import org.specs2.matcher.MatchResult

@@ -24,7 +24,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import com.precog.common._
 import com.precog.common.accounts._
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.common.security._
