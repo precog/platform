@@ -40,7 +40,7 @@ import _root_.kafka.message._
 import _root_.kafka.producer._
 
 import org.streum.configrity.{Configuration, JProperties}
-import com.weiglewilczek.slf4s._ 
+import com.weiglewilczek.slf4s._
 
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
@@ -53,14 +53,18 @@ object KafkaEventStore {
 
     centralConfig.get[String]("zk.connect").toSuccess(NEL("central.zk.connect configuration parameter is required")) map { centralZookeeperHosts =>
       val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
+      val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, yggCheckpointsEnabled = true)
       val agent = serviceUID.hostId + serviceUID.serviceId
 
-      val eventIdSeq = new SystemEventIdSequence(agent, coordination)
+      val eventIdSeq = SystemEventIdSequence(agent, coordination)
       val Some((eventStore, esStop)) = LocalKafkaEventStore(localConfig)
-      val (_, raStop) = KafkaRelayAgent(permissionsFinder, eventIdSeq, localConfig, centralConfig)
 
-      (eventStore, esStop.parent(raStop))
+      val stoppables = if (config[Boolean]("relay_data", true)) {
+        val (_, raStop) = KafkaRelayAgent(permissionsFinder, eventIdSeq, localConfig, centralConfig)
+        esStop.parent(raStop)
+      } else esStop
+
+      (eventStore, stoppables)
     }
   }
 }

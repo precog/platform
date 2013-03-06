@@ -56,7 +56,6 @@ object KafkaRelayAgent extends Logging {
 
     val localTopic = localConfig[String]("topic", "local_event_cache")
     val centralTopic = centralConfig[String]("topic", "central_event_store")
-    val timestampRequiredAfter = new Instant(centralConfig[Long]("ingest.timestamp_required_after", 1363327426906L))
 
     val centralProperties: java.util.Properties = {
       val props = JProperties.configurationToProperties(centralConfig)
@@ -70,7 +69,7 @@ object KafkaRelayAgent extends Logging {
     val consumerPort = localConfig[String]("broker.port", "9082").toInt
     val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
 
-    val relayAgent = new KafkaRelayAgent(permissionsFinder, eventIdSeq, consumer, localTopic, producer, centralTopic, timestampRequiredAfter) 
+    val relayAgent = new KafkaRelayAgent(permissionsFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
     val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
 
     new Thread(relayAgent).start()
@@ -83,7 +82,6 @@ final class KafkaRelayAgent(
     permissionsFinder: PermissionsFinder[Future], eventIdSeq: EventIdSequence,
     consumer: SimpleConsumer, localTopic: String, 
     producer: Producer[String, EventMessage], centralTopic: String, 
-    timestampRequiredAfter: Instant,
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
@@ -95,13 +93,13 @@ final class KafkaRelayAgent(
 
   override def run() {
     while (runnable) {
-      val offset = eventIdSeq.getLastOffset
+      val offset = eventIdSeq.getLastOffset()
       logger.debug("Kafka consumer starting from offset: " + offset)
 
       try {
         ingestBatch(offset, 0, 0, 0)
       } catch {
-        case ex => logger.error("Error in kafka consumer.", ex)
+        case ex: Exception => logger.error("Error in kafka consumer.", ex)
       }
 
       Thread.sleep(retryDelay)
@@ -143,12 +141,12 @@ final class KafkaRelayAgent(
   }
 
   private def forwardAll(messages: List[MessageAndOffset]) = {
-    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg => 
-      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) } 
+    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg =>
+      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) }
     }
 
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
-      Future.sequence(messageFutures) map { messages => 
+      Future.sequence(messageFutures) map { messages =>
         producer.send(new ProducerData[String, EventMessage](centralTopic, messages))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
