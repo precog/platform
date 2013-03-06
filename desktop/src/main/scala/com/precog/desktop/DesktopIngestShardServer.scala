@@ -24,12 +24,8 @@ import akka.actor.ActorSystem
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.bkka.{FutureMonad, Stoppable}
-
-import scalaz.{EitherT, Monad}
-
-import org.apache.zookeeper.server._
-
-import org.streum.configrity.Configuration
+import blueeyes.core.data.ByteChunk
+import blueeyes.core.http._
 
 import com.precog.common.jobs.InMemoryJobManager
 import com.precog.common.accounts.StaticAccountFinder
@@ -39,7 +35,17 @@ import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
 import com.precog.ingest.kafka.KafkaEventStore
 
-import scala.collection.JavaConversions
+import java.util.Properties
+
+import kafka.server.{KafkaConfig, KafkaServerStartable}
+
+import org.apache.zookeeper.server._
+
+import org.streum.configrity.Configuration
+
+import scala.collection.JavaConverters._
+
+import scalaz.{EitherT, Monad}
 
 object DesktopIngestShardServer
     extends StandaloneShardServer
@@ -51,9 +57,20 @@ object DesktopIngestShardServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  // FIXME: We should embed ZK and Kafka via internal calls (as opposed to using scripts for startup/shutdown)
+  def configureShardState(config: Configuration, rootConfig: Configuration) = Future {
+    val zookeeper = startZookeeperStandalone(rootConfig.detach("zookeeper"))
 
-  def configureShardState(config: Configuration) = Future {
+    logger.debug("Waiting for ZK startup")
+
+    // FIXME: This is a poor way to do this
+    Thread.sleep(5000)
+
+    val (kafkaLocal, kafkaCentral) = startKafkaStandalone(rootConfig)
+
+    logger.debug("Waiting for Kafka startup")
+
+    Thread.sleep(5000)
+
     println("Configuration at configure shard state=%s".format(config))
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
     val apiKeyFinder = new StaticAPIKeyFinder(rootAPIKey)
@@ -62,7 +79,13 @@ object DesktopIngestShardServer
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
 
     val stoppable = Stoppable.fromFuture {
-      platform.shutdown
+      platform.shutdown.map { _ =>
+        zookeeper.stop
+        kafkaLocal.shutdown
+        kafkaCentral.shutdown
+        kafkaLocal.awaitShutdown
+        kafkaCentral.awaitShutdown
+      }
     }
 
     ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
@@ -73,26 +96,9 @@ object DesktopIngestShardServer
       Promise.failed(ex)
   }
 
-  case class EmbeddedServices(zookeeper: ZookeeperServerMain, kafka: (KafkaServerStartable, KafkaServerStartable))
-A
-  val embeddedService = this.service("embedded", "1.0") { context =>
-    startup {
-      val rootConfig = context.rootConfig
-
-      EmbeddedServices(startZookeeperStandalone(rootConfig.detach("zookeeper")), startKafkaStandalone(rootConfig))
-    } ->
-    shutdown { (e: EmbeddedServices) =>
-      e.zookeeper.shutdown()
-      e.kafka._1.shutdown
-      e.kafka._1.awaitShutdown
-      e.kafka._2.shutdown
-      e.kafka._2.awaitShutdown
-    }
-  }
-
   def startKafkaStandalone(config: Configuration): (KafkaServerStartable, KafkaServerStartable) = {
-    val defaultProps = new java.util.Properties
-    defaultProps.setProperty("brokerId", "0")
+    val defaultProps = new Properties
+    defaultProps.setProperty("brokerid", "0")
     defaultProps.setProperty("num.threads", "8")
     defaultProps.setProperty("socket.send.buffer", "1048576")
     defaultProps.setProperty("socket.receive.buffer", "1048576")
@@ -108,10 +114,10 @@ A
 
     defaultProps.setProperty("zk.connect", "localhost:" + config[String]("zookeeper.port"))
 
-    val localProps = new Properties(defaultProps)
+    val localProps = defaultProps.clone.asInstanceOf[Properties]
     localProps.putAll(config.detach("kafka.local").data.asJava)
 
-    val centralProps = new Properties(defaultProps)
+    val centralProps = defaultProps.clone.asInstanceOf[Properties]
     centralProps.putAll(config.detach("kafka.central").data.asJava)
     centralProps.setProperty("enable.zookeeper", "true")
 
@@ -128,15 +134,19 @@ A
     (local, central)
   }
 
-  def startZookeeperStandalone(config: Configuration): ZookeeperServerMain = {
-    val config = new ServerConfig
-    config.parse(Array[String](config[String]("port"), config[String]("dataDir")))
+  class EmbeddedZK extends ZooKeeperServerMain {
+    def stop = shutdown()
+  }
 
-    val server = new ZookeeperServerMain
+  def startZookeeperStandalone(config: Configuration): EmbeddedZK = {
+    val serverConfig = new ServerConfig
+    serverConfig.parse(Array[String](config[String]("port"), config[String]("dataDir")))
+
+    val server = new EmbeddedZK
 
     (new Thread {
       override def run() = {
-        server.runFromConfig(config)
+        server.runFromConfig(serverConfig)
       }
     }).start()
 

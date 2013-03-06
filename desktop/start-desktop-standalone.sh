@@ -101,7 +101,6 @@ echo "Using base: $BASEDIR"
 
 VERSION=`git describe`
 DESKTOP_ASSEMBLY="$BASEDIR"/desktop/target/desktop-assembly-$VERSION.jar
-RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
 GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
 
@@ -109,7 +108,7 @@ JAVA="java $GC_OPTS"
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
-for ASM in "$DESKTOP_ASSEMBLY" "$RATATOSKR_ASSEMBLY"; do
+for ASM in "$DESKTOP_ASSEMBLY"; do
     if [ ! -f "$ASM" ]; then
         if [ -n "$BUILDMISSING" ]; then
             # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
@@ -130,7 +129,7 @@ done
 
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
-    echo "Up-to-date desktop and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
+    echo "Up-to-date desktop assembly is required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
     done
@@ -150,32 +149,32 @@ function exists {
     return 1
 }
 
-# Check for prereqs first
-ARTIFACTDIR="$BASEDIR/standaloneArtifacts"
-
-echo "Using artifacts in $ARTIFACTDIR"
-
-[ -d "$ARTIFACTDIR" ] || mkdir "$ARTIFACTDIR"
-
-(exists "$ARTIFACTDIR"/zookeeper* && echo "  ZooKeeper exists") || {
-    echo "Downloading current ZooKeeper artifact"
-    pushd "$ARTIFACTDIR" > /dev/null
-    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || {
-        echo "Failed to download zookeeper" >&2
-        exit 3
-    }
-    popd > /dev/null
-}
-
-(exists "$ARTIFACTDIR"/kafka* && echo "  Kafka exists") || {
-    echo "Downloading current Kafka artifact"
-    pushd "$ARTIFACTDIR" > /dev/null
-    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || {
-        echo "Failed to download kafka" >&2
-        exit 3
-    }
-    popd > /dev/null
-}
+## Check for prereqs first
+#ARTIFACTDIR="$BASEDIR/standaloneArtifacts"
+#
+#echo "Using artifacts in $ARTIFACTDIR"
+#
+#[ -d "$ARTIFACTDIR" ] || mkdir "$ARTIFACTDIR"
+#
+#(exists "$ARTIFACTDIR"/zookeeper* && echo "  ZooKeeper exists") || {
+#    echo "Downloading current ZooKeeper artifact"
+#    pushd "$ARTIFACTDIR" > /dev/null
+#    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || {
+#        echo "Failed to download zookeeper" >&2
+#        exit 3
+#    }
+#    popd > /dev/null
+#}
+#
+#(exists "$ARTIFACTDIR"/kafka* && echo "  Kafka exists") || {
+#    echo "Downloading current Kafka artifact"
+#    pushd "$ARTIFACTDIR" > /dev/null
+#    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || {
+#        echo "Failed to download kafka" >&2
+#        exit 3
+#    }
+#    popd > /dev/null
+#}
 
 unset REBEL_OPTS
 if [ -e "$REBEL_HOME" ]; then
@@ -223,27 +222,27 @@ function on_exit() {
         wait $SHARDPID
     fi
 
-    if is_running $KFGLOBALPID; then
-        echo "Stopping kafka..."
-        # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches
-        # the Java process, leaving it running. Instead, we kill all child processes
-        for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
-        wait $KFGLOBALPID
-    fi
-
-    if is_running $KFLOCALPID; then
-        for pid in `ps -o pid,ppid | awk -v PID=$KFLOCALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
-        wait $KFLOCALPID
-    fi
-
-    echo "Stopping zookeeper..."
-    cd $ZKBASE/bin
-    ./zkServer.sh stop
-
-    if [ -z "$DONTCLEAN" ]; then
-        echo "Cleaning up temp work dir"
-        rm -rf "$WORKDIR"
-    fi
+#    if is_running $KFGLOBALPID; then
+#        echo "Stopping kafka..."
+#        # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches
+#        # the Java process, leaving it running. Instead, we kill all child processes
+#        for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
+#        wait $KFGLOBALPID
+#    fi
+#
+#    if is_running $KFLOCALPID; then
+#        for pid in `ps -o pid,ppid | awk -v PID=$KFLOCALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
+#        wait $KFLOCALPID
+#    fi
+#
+#    echo "Stopping zookeeper..."
+#    cd $ZKBASE/bin
+#    ./zkServer.sh stop
+#
+#    if [ -z "$DONTCLEAN" ]; then
+#        echo "Cleaning up temp work dir"
+#        rm -rf "$WORKDIR"
+#    fi
 
     echo "Shutdown complete"
 }
@@ -295,14 +294,14 @@ ZOOKEEPER_PORT=$(random_port "Zookeeper")
 #cd "$WORKDIR"/kafka/config
 #chmod +x $KFBASE/bin/kafka-server-start.sh
 #
-#KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
+KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
 #sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
 #$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
 #KFGLOBALPID=$!
 #
 #wait_until_port_open $KAFKA_GLOBAL_PORT
 #
-#KAFKA_LOCAL_PORT=$(random_port "Kafka local")
+KAFKA_LOCAL_PORT=$(random_port "Kafka local")
 #sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
 #$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
 #KFLOCALPID=$!
@@ -327,14 +326,14 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shar
 
 cd "$BASEDIR"
 
-# Prior to ingest startup, we need to set an initial checkpoint if it's not already there
-if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar $RATATOSKR_ASSEMBLY zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-desktop/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
-        echo "Couldn't set initial checkpoint!" >&2
-        exit 3
-    }
-    touch "$WORKDIR"/initial_checkpoint.json
-fi
+## Prior to ingest startup, we need to set an initial checkpoint if it's not already there
+#if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
+#    $JAVA $REBEL_OPTS -jar $RATATOSKR_ASSEMBLY zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-desktop/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
+#        echo "Couldn't set initial checkpoint!" >&2
+#        exit 3
+#    }
+#    touch "$WORKDIR"/initial_checkpoint.json
+#fi
 
 echo "Starting desktop service"
 $JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.DesktopIngestShardServer --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &

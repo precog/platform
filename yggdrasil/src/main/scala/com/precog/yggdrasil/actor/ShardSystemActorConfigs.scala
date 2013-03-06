@@ -76,6 +76,8 @@ trait KafkaIngestActorProjectionSystemConfig extends ShardConfig {
     }
   }
 
+  def createYggCheckpointFlag = config.get[String]("ingest.createCheckpointFlag")
+
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
   //def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
   //def zookeeperPrefix: String = config[String]("zookeeper.prefix")
@@ -125,7 +127,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
     }
   }
 
-  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined)
+  override def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestConfig.isDefined, yggConfig.createYggCheckpointFlag)
 }
 
 trait StandaloneShardSystemConfig extends ShardConfig {

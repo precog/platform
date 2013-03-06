@@ -50,7 +50,7 @@ object NIHDBShardServer extends BlueEyesServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  override def configureShardState(config: Configuration) = M.point {
+  override def configureShardState(config: Configuration, rootConfig: Configuration) = M.point {
     val apiKeyFinder = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
     }

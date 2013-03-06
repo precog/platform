@@ -54,7 +54,7 @@ Please note that path globs are not yet supported in Precog for PostgreSQL
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = M.point {
+  def configureShardState(config: Configuration, rootConfig: Configuration) = M.point {
     val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
     BasicShardState(JDBCQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
   }

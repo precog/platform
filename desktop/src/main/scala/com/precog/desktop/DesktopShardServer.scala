@@ -44,7 +44,7 @@ object DesktopShardServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = Future {
+  def configureShardState(config: Configuration, rootConfig: Configuration) = Future {
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
     val apiKeyFinder = new StaticAPIKeyFinder(rootAPIKey)
     val accountFinder = new StaticAccountFinder(rootAPIKey, "desktop")
