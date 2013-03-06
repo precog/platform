@@ -35,6 +35,8 @@ import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
 import com.precog.ingest.kafka.KafkaEventStore
 
+import java.io.IOException
+import java.net.{InetAddress, Socket}
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, KafkaServerStartable}
@@ -43,6 +45,7 @@ import org.apache.zookeeper.server._
 
 import org.streum.configrity.Configuration
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
 import scalaz.{EitherT, Monad}
@@ -62,14 +65,21 @@ object DesktopIngestShardServer
 
     logger.debug("Waiting for ZK startup")
 
-    // FIXME: This is a poor way to do this
-    Thread.sleep(5000)
+    if (!waitForPortOpen(rootConfig[Int]("zookeeper.port"), 60)) {
+      throw new Exception("Timeout waiting for ZK port to open")
+    }
 
     val (kafkaLocal, kafkaCentral) = startKafkaStandalone(rootConfig)
 
     logger.debug("Waiting for Kafka startup")
 
-    Thread.sleep(5000)
+    if (!waitForPortOpen(rootConfig[Int]("kafka.local.port"), 60)) {
+      throw new Exception("Time out waiting on kafka local port to open")
+    }
+
+    if (!waitForPortOpen(rootConfig[Int]("kafka.central.port"), 60)) {
+      throw new Exception("Time out waiting on kafka central port to open")
+    }
 
     println("Configuration at configure shard state=%s".format(config))
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
@@ -77,6 +87,23 @@ object DesktopIngestShardServer
     val accountFinder = new StaticAccountFinder(rootAPIKey, "desktop")
     val jobManager = new InMemoryJobManager
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+
+    // Fire up a thread to wait on Jetty and spawn the desktop browser window if we can
+    import java.awt.Desktop
+
+    if (Desktop.isDesktopSupported) {
+      logger.info("Opening browser for standalone")
+      (new Thread() {
+        override def run() = {
+          val jettyPort = rootConfig[Int]("services.quirrel.v1.labcoat.port")
+          if (waitForPortOpen(jettyPort, 60)) {
+            java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
+          }
+        }
+      }).start()
+    } else {
+      logger.info("Skipping browser open on non-desktop system")
+    }
 
     val stoppable = Stoppable.fromFuture {
       platform.shutdown.map { _ =>
@@ -94,6 +121,23 @@ object DesktopIngestShardServer
       System.err.println("Could not start NIHDB Shard server!!!")
       ex.printStackTrace
       Promise.failed(ex)
+  }
+
+  def waitForPortOpen(port: Int, tries: Int): Boolean = {
+    var remainingTries = tries
+    while (remainingTries > 0) {
+      try {
+        val conn = new Socket(InetAddress.getLocalHost, port)
+        conn.close()
+        return true
+      } catch {
+        case ioe: IOException =>
+          Thread.sleep(500)
+          remainingTries -= 1
+      }
+    }
+
+    false
   }
 
   def startKafkaStandalone(config: Configuration): (KafkaServerStartable, KafkaServerStartable) = {
