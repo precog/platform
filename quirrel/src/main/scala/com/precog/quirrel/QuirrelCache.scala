@@ -2,6 +2,7 @@ package com.precog.quirrel
 package parser
 
 import com.precog.common.cache._
+import com.precog.util._
 
 import com.codecommit.gll._
 
@@ -67,6 +68,7 @@ trait QuirrelCache extends AST { parser: Parser =>
       val bindings = mutable.ArrayBuffer.empty[Binding]
       val output = new StringBuilder(input.length)
 
+      Timing.time("really?") {
       var i = 0
       while (i < len) { 
         var j = 0
@@ -95,6 +97,7 @@ trait QuirrelCache extends AST { parser: Parser =>
           output.append(c)
           i += 1
         }
+      }
       }
       (output.toString, bindings)
     }
@@ -193,7 +196,8 @@ trait QuirrelCache extends AST { parser: Parser =>
       (b, index(i))
     }.sortBy(_._2).map(_._1).toList
 
-    replaceLiteralsS(expr, sortedBindings, locUpdates(bindings, slots))
+    val result = replaceLiteralsS(expr, sortedBindings, locUpdates(bindings, slots))
+    result
   }
 
   def locUpdates(bindings: IndexedSeq[Binding], slots: Map[String, Slot]): LineStream => LineStream = {
