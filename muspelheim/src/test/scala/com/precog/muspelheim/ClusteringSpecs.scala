@@ -76,7 +76,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
       }
     }
 
-    def testJoinCluster(input: String, input2: String) = {
+    def testJoinCluster(input: String, input2: String, idJoin: Boolean) = {
       val results = evalE(input)
       val resultsCount = evalE(input2)
 
@@ -89,6 +89,9 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
+          if (idJoin) ids must haveSize(2)
+          else ids must haveSize(1)
+
           elems.keys must contain("cluster")
           elems("cluster") must beLike {
             case SObject(obj) =>
@@ -123,7 +126,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
         count({ height: h, weight: w })
       """
 
-      testJoinCluster(input, input2)
+      testJoinCluster(input, input2, false)
     }
 
     "join cluster information to original data when clustering is `new`ed" in {
@@ -150,7 +153,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
         count({ height: h, weight: w })
       """
 
-      testJoinCluster(input, input2)
+      testJoinCluster(input, input2, true)
     }
 
     "join cluster information to clustering when clustering is `new`ed" in {
@@ -189,6 +192,8 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
+          ids must haveSize(2)
+
           elems.keys mustEqual Set("cluster", "Model1")
 
           elems("Model1") must beLike {
