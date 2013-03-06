@@ -484,6 +484,9 @@ class IngestServiceHandler(
                     val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
                     val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
                     logger.info("Streaming sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
+                    if (ingested == 0 && !error.isDefined)
+                      logger.info("No ingested data and no errors to %s with %s. Headers: %s. Content: %s".format(path, apiKey,
+                        request.headers, content.fold(_.toString(), _.map(x => x.toString()).toStream.apply().toList)))
                     HttpResponse(responseCode, content = Some(responseContent))
                 }
               )

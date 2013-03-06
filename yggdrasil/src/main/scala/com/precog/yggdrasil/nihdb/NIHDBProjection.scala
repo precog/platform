@@ -46,6 +46,7 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 
 import java.io.{File, FileNotFoundException, IOException}
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
