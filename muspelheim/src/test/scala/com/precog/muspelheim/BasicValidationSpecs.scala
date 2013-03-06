@@ -7,6 +7,7 @@ import com.precog.daze._
 
 trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
   "Fundamental stack support" should {
+
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
@@ -40,7 +41,7 @@ trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
         eval("count((//campaigns).ageRange)") mustEqual Set(SDecimal(100))
       }
     }
-
+ 
     "reduce the obnoxiously large dataset" >> {
       "<root>" >> {
         eval("mean((//obnoxious).v)") mustEqual Set(SDecimal(50000.5))
@@ -145,5 +146,6 @@ trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
     "flatten an array into a set" in {
       eval("flatten([1, 2, 3])") mustEqual Set(SDecimal(1), SDecimal(2), SDecimal(3))
     }
+ 
   }
 }
