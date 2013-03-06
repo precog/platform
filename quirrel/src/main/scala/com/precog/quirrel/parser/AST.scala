@@ -809,7 +809,6 @@ trait AST extends Phases {
       
       val isPrefix = true
       
-      override def children = List(left, right)
       def child = right
       
       private val _dispatches = attribute[Set[Dispatch]](bindNames)

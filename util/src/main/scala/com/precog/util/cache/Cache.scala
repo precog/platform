@@ -1,6 +1,5 @@
-package com.precog.common.cache
-
-import com.precog.util.PrecogUnit
+package com.precog.util
+package cache
 
 import akka.util.Duration
 
