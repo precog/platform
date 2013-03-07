@@ -100,9 +100,6 @@ trait StandaloneShardServer
       server.setHandler(corsHandler)
       server.start()
 
-      //launch labcoat
-      if (config[Boolean]("labcoat.launchBrowser",false)) openBrowser(serverPort)
-
       Future(server)(executionContext)
     } ->
     request { (server: Server) =>
