@@ -117,7 +117,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
-      
+
       def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => 
           for {
@@ -212,7 +212,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
       def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
-        
+
         val startTime = System.nanoTime
         
         def assumptionCheck(graph: DepGraph): StateT[N, EvaluatorState, Option[Table]] =
@@ -541,7 +541,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 }
 
                 val back = fullEval(rewritten, splits2, s :: splits.keys.toList)
-                val start = System.nanoTime
                 back.eval(state)
               })
             } yield {
