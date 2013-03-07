@@ -361,14 +361,21 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
            * objects.
            */
           def isDisjoint(s1: Slice, s2: Slice): Boolean = {
-            def containsEmptyObject(slice: Slice): Boolean =
-              slice.columns.exists(_._1.ctype == CEmptyObject)
+            false // TODO: We really want to optimize the case where
+                  // we are constructing a simple object from some
+                  // other object where usually the definedness is equal
+                  // on both sides, so we can just ++ the columns. But,
+                  // we need to be a bit smarter about checking for equal
+                  // definedness.
 
-            if (containsEmptyObject(s1) || containsEmptyObject(s2))
-              return false
+            // def containsEmptyObject(slice: Slice): Boolean =
+            //   slice.columns.exists(_._1.ctype == CEmptyObject)
 
-            val keys = s1.columns.map(_._1.selector).toSet
-            !s2.columns.map(_._1.selector).exists(keys)
+            // if (containsEmptyObject(s1) || containsEmptyObject(s2))
+            //   return false
+
+            // val keys = s1.columns.map(_._1.selector).toSet
+            // !s2.columns.map(_._1.selector).exists(keys)
           }
 
           if (objects.size == 1) {
