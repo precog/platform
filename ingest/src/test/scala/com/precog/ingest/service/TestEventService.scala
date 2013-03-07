@@ -77,7 +77,7 @@ trait TestEventService extends
     }
   """
 
-  override val configuration = "services { ingest { v1 { " + config + " } } }"
+  override val configuration = "services { ingest { v2 { " + config + " } } }"
 
   private val to = Duration(5, "seconds")
 
