@@ -19,6 +19,8 @@ import scalaz.Monad
 import com.precog.accounts._
 import com.precog.common.security._
 import com.precog.shard.ShardService
+import java.awt.Desktop
+import java.net.URI
 
 
 trait StandaloneShardServer
@@ -29,6 +31,10 @@ trait StandaloneShardServer
   implicit def executionContext: ExecutionContext
 
   def caveatMessage: Option[String]
+
+  def openBrowser(port: Int){
+    Desktop.getDesktop.browse(new URI("http://localhost:%s".format(port)))
+  }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
     startup {
@@ -63,6 +69,9 @@ trait StandaloneShardServer
       handlers.setHandlers(Array[Handler](rootHandler, resourceHandler, new DefaultHandler))
       server.setHandler(handlers)
       server.start()
+
+      //launch labcoat
+      if (config[Boolean]("labcoat.launchBrowser",false)) openBrowser(serverPort)
 
       Future(server)(executionContext)
     } ->
