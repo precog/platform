@@ -49,6 +49,8 @@ trait JoinOptimizer extends DAGTransform {
           merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
 
         case Filter(IdentitySort, body, _) => determinedByAux(body, determiner)
+
+        case Operate(_, body) => determinedByAux(body, determiner)
         
         case Memoize(parent, _) => determinedByAux(parent, determiner)
     

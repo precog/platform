@@ -92,7 +92,7 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
 
   val accountManager = new InMemoryAccountManager()(M)
   def AccountManager(config: Configuration) = (accountManager, Stoppable.Noop)
-  val apiKeyManager = new InMemoryAPIKeyManager()(M)
+  val apiKeyManager = new InMemoryAPIKeyManager(blueeyes.util.Clock.System)(M)
   def APIKeyFinder(config: Configuration) = new DirectAPIKeyFinder(apiKeyManager)
   def RootKey(config: Configuration) = M.copoint(apiKeyManager.rootAPIKey)
 

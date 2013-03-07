@@ -21,7 +21,7 @@ package com.precog.common
 package ingest
 
 import accounts.AccountId
-import security.APIKey
+import security._
 import jobs.JobId
 import json._
 
@@ -30,8 +30,11 @@ import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
+import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor, InstantDecomposer}
 
-import scalaz.Validation
+import org.joda.time.Instant
+
+import scalaz._
 import scalaz.Validation._
 import scalaz.std.option._
 import scalaz.syntax.plus._
@@ -52,14 +55,17 @@ object Event {
   }
 }
 
-case class Ingest(apiKey: APIKey, path: Path, ownerAccountId: Option[AccountId], data: Seq[JValue], jobId: Option[JobId]) extends Event {
+/**
+ * If writeAs is None, then the downstream 
+ */
+case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A = ingest(this)
 }
 
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
@@ -72,7 +78,7 @@ object Ingest {
         obj.validated[Path]("path") |@|
         obj.validated[Option[AccountId]]("ownerAccountId") ) { (apiKey, path, ownerAccountId) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, ownerAccountId, if (jv == JUndefined) Vector() else Vector(jv), None)
+          Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp)
         }
     }
   }
@@ -82,7 +88,7 @@ object Ingest {
       ( obj.validated[String]("tokenId") |@|
         obj.validated[Path]("path") ) { (apiKey, path) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None)
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp)
         }
     }
   }
@@ -91,15 +97,15 @@ object Ingest {
   implicit val Extractor: Extractor[Ingest] = extractorV1 <+> extractorV1a <+> extractorV0
 }
 
-case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId]) extends Event {
+case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A = archive(this)
 }
 
 object Archive {
   implicit val archiveIso = Iso.hlist(Archive.apply _, Archive.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "jobId" :: HNil
-  val schemaV0 = "tokenId" :: "path" :: Omit :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: ("timestamp" ||| EventMessage.defaultTimestamp) :: HNil
+  val schemaV0 = "tokenId" :: "path" :: Omit :: ("timestamp" ||| EventMessage.defaultTimestamp) :: HNil
 
   val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0"))
   val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0")) <+> extractorV1a
@@ -107,8 +113,8 @@ object Archive {
   // Support un-versioned V1 schemas and out-of-order fields due to an earlier bug
   val extractorV1a: Extractor[Archive] = extractorV[Archive](schemaV1, None) map {
     // FIXME: This is a complete hack to work around an accidental mis-ordering of fields for serialization
-    case Archive(apiKey, path, jobId) if (apiKey.startsWith("/")) =>
-      Archive(path.components.head.toString, Path(apiKey), jobId)
+    case Archive(apiKey, path, jobId, timestamp) if (apiKey.startsWith("/")) =>
+      Archive(path.components.head.toString, Path(apiKey), jobId, timestamp)
 
     case ok => ok
   }

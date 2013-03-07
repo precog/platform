@@ -24,6 +24,7 @@ import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
+import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
 import blueeyes.bkka._
@@ -41,15 +42,17 @@ import _root_.kafka.producer._
 import _root_.kafka.message._
 
 import java.util.Properties
+import org.joda.time.Instant
 import org.streum.configrity.{Configuration, JProperties}
 
 import scalaz._
 import scalaz.std.list._
 import scalaz.syntax.traverse._
+import scalaz.syntax.monad._
 import scala.annotation.tailrec
 
 object KafkaRelayAgent extends Logging {
-  def apply(accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
+  def apply(permissionsFinder: PermissionsFinder[Future], eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit executor: ExecutionContext): (KafkaRelayAgent, Stoppable) = {
 
     val localTopic = localConfig[String]("topic", "local_event_cache")
     val centralTopic = centralConfig[String]("topic", "central_event_store")
@@ -66,7 +69,7 @@ object KafkaRelayAgent extends Logging {
     val consumerPort = localConfig[String]("broker.port", "9082").toInt
     val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
 
-    val relayAgent = new KafkaRelayAgent(accountFinder, eventIdSeq, consumer, localTopic, producer, centralTopic)
+    val relayAgent = new KafkaRelayAgent(permissionsFinder, eventIdSeq, consumer, localTopic, producer, centralTopic)
     val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
 
     new Thread(relayAgent).start()
@@ -76,7 +79,7 @@ object KafkaRelayAgent extends Logging {
 /** An independent agent that will consume records using the specified consumer,
   * augment them with record identities, then send them with the specified producer. */
 final class KafkaRelayAgent(
-    accountFinder: AccountFinder[Future], eventIdSeq: EventIdSequence,
+    permissionsFinder: PermissionsFinder[Future], eventIdSeq: EventIdSequence,
     consumer: SimpleConsumer, localTopic: String,
     producer: Producer[String, EventMessage], centralTopic: String,
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
@@ -90,13 +93,13 @@ final class KafkaRelayAgent(
 
   override def run() {
     while (runnable) {
-      val offset = eventIdSeq.getLastOffset
+      val offset = eventIdSeq.getLastOffset()
       logger.debug("Kafka consumer starting from offset: " + offset)
 
       try {
         ingestBatch(offset, 0, 0, 0)
       } catch {
-        case ex => logger.error("Error in kafka consumer.", ex)
+        case ex: Exception => logger.error("Error in kafka consumer.", ex)
       }
 
       Thread.sleep(retryDelay)
@@ -157,20 +160,20 @@ final class KafkaRelayAgent(
 
   private def identify(event: Event, offset: Long): Future[EventMessage] = {
     event match {
-      case Ingest(apiKey, path, ownerAccountId, data, jobId) =>
-        accountFinder.resolveForWrite(ownerAccountId, apiKey) map {
-          case Some(accountId) =>
+      case Ingest(apiKey, path, writeAs, data, jobId, timestamp) =>
+        writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))) map {
+          case Some(authorities) =>
             val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            IngestMessage(apiKey, path, accountId, ingestRecords, jobId)
+            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
 
           case None =>
             // cannot relay event without a resolved owner account ID; fail loudly.
             // this will abort the future, ensuring that state doesn't get corrupted
-            sys.error("Unable to establish owner account ID for ingest " + event)
+            sys.error("Unable to establish owner account ID for ingest of event " + event)
         }
 
-      case archive @ Archive(_, _, _) =>
-        Promise.successful(ArchiveMessage(eventIdSeq.next(offset), archive))
+      case archive @ Archive(apiKey, path, jobId, timestamp) =>
+        Promise.successful(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp))
     }
   }
 }

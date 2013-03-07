@@ -20,7 +20,10 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.yggdrasil.table._
 import com.precog.util.IOUtils
@@ -41,6 +44,7 @@ import scalaz.effect.IO
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatchers {
   val actorSystem = ActorSystem("NIHDBActorSystem")
@@ -50,7 +54,12 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
     VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))
   ))
 
-  def newProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
+  val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  def newProjection(workDir: File, threshold: Int = 1000) =
+    NIHDB.create(chef, Authorities("test"), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map { db =>
+      new NIHDBActorProjection(db)(actorSystem.dispatcher)
+    }.valueOr { e => throw new Exception(e.message) }
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
@@ -64,7 +73,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
   assert(baseDir.isDirectory && baseDir.canWrite)
 
-  trait TempContext extends After {
+  trait TempContext {
     val workDir = new File(baseDir, "nihdbspec%03d".format(dirSeq.getAndIncrement))
 
     if (!workDir.mkdirs) {
@@ -75,9 +84,9 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close())
+    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
 
-    def after = {
+    def stop = {
       (for {
         _ <- IO { close(projection) }
         _ <- IOUtils.recursiveDelete(workDir)
@@ -92,7 +101,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val results = projection.getBlockAfter(None, None)
 
-      results must awaited(maxDuration) { beNone }
+      results.onComplete { _ => ctxt.stop } must awaited(maxDuration) { beNone }
     }
 
     "Insert and retrieve values below the cook threshold" in check { (discard: Int) =>
@@ -107,11 +116,11 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val results =
         for {
-          _ <- projection.insert(toInsert, "fake")
+          _ <- projection.insert(toInsert)
           result <- projection.getBlockAfter(None, None)
         } yield result
 
-      results must awaited(maxDuration) (beLike {
+      results.onComplete { _ => ctxt.stop }  must awaited(maxDuration) (beLike {
         case Some(BlockProjectionData(min, max, data)) =>
           min mustEqual 0L
           max mustEqual 0L
@@ -128,16 +137,16 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       projection.insert((0L to 2L).toSeq.map { i =>
         IngestRecord(EventId.fromLong(i), JNum(i))
-      }, "fake")
+      })
 
       val result = for {
-        _ <- projection.close()
+        _ <- projection.close(actorSystem)
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
         status <- projection.status
         r <- projection.getBlockAfter(None, None)
       } yield r
 
-      result must awaited(maxDuration) {
+      result.onComplete { _ => ctxt.stop } must awaited(maxDuration) {
         beLike {
           case Some(BlockProjectionData(min, max, data)) =>
             min mustEqual 0L
@@ -158,7 +167,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       (0L to 1950L).map {
         i => IngestRecord(EventId.fromLong(i), JNum(i))
-      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values, "fake") }
+      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values) }
 
       var waits = 10
 
@@ -173,26 +182,35 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       status.pending mustEqual 0
       status.rawSize mustEqual 751
 
-      projection.getBlockAfter(None, None) must awaited(maxDuration) (beLike {
-        case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 0L
-          max mustEqual 0L
-          data.size mustEqual 1200
-          data.toJsonElements.map(_("value")) must containAllOf(expected.take(1200)).only.inOrder
-      })
+      val result = for {
+        firstBlock <- projection.getBlockAfter(None, None)
+        secondBlock <- projection.getBlockAfter(Some(0), None)
+      } yield {
+        ctxt.stop
+        (firstBlock, secondBlock)
+      }
 
-      projection.getBlockAfter(Some(0), None) must awaited(maxDuration) (beLike {
-        case Some(BlockProjectionData(min, max, data)) =>
-          min mustEqual 1L
-          max mustEqual 1L
-          data.size mustEqual 751
-          data.toJsonElements.map(_("value")) must containAllOf(expected.drop(1200)).only.inOrder
+      result must awaited(maxDuration) (beLike {
+        case (Some(BlockProjectionData(min1, max1, data1)), Some(BlockProjectionData(min2, max2, data2))) =>
+          min1 mustEqual 0L
+          max1 mustEqual 0L
+          data1.size mustEqual 1200
+          data1.toJsonElements.map(_("value")) must containAllOf(expected.take(1200)).only.inOrder
+
+          min2 mustEqual 1L
+          max2 mustEqual 1L
+          data2.size mustEqual 751
+          data2.toJsonElements.map(_("value")) must containAllOf(expected.drop(1200)).only.inOrder
       })
     }
 
   }
 
-  def shutdown = actorSystem.shutdown()
+  def shutdown = {
+    actorSystem.shutdown()
+    IOUtils.recursiveDelete(baseDir).unsafePerformIO
+    assert(!baseDir.isDirectory)
+  }
 
   override def map(fs: => Fragments) = fs ^ Step(shutdown)
 }

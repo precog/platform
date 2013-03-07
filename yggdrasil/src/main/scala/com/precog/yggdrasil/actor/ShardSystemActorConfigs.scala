@@ -23,7 +23,7 @@ package actor
 import metadata.ColumnMetadata
 import com.precog.util._
 import com.precog.common._
-import com.precog.common.accounts.AccountFinder
+import com.precog.common.security.PermissionsFinder
 import com.precog.common.kafka._
 
 import akka.actor._
@@ -44,6 +44,8 @@ import _root_.kafka.consumer._
 
 import java.io.File
 import java.net.InetAddress
+
+import org.joda.time.Instant
 
 import scalaz._
 import scalaz.syntax.id._
@@ -97,7 +99,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 
   def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]) = {
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = {
     yggConfig.ingestConfig map { conf =>
       val consumer = new SimpleConsumer(yggConfig.kafkaHost,
                                         yggConfig.kafkaPort,
@@ -109,7 +111,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
                                    initialCheckpoint = checkpoint,
                                    consumer = consumer,
                                    topic = yggConfig.kafkaTopic,
-                                   accountFinder = accountFinder,
+                                   permissionsFinder = permissionsFinder,
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
                                    ingestTimeout = conf.batchTimeout,
@@ -137,7 +139,7 @@ trait StandaloneShardSystemConfig extends ShardConfig {
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, accountFinder: AccountFinder[Future]) = None
+  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = None
   override def checkpointCoordination = CheckpointCoordination.Noop
 }
 

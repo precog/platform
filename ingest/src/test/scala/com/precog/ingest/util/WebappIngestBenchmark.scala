@@ -57,6 +57,8 @@ import blueeyes.core.service.AsyncHttpTranscoder
 
 import blueeyes.json._
 
+import org.joda.time.Instant
+
 import scalaz.NonEmptyList
 
 abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage with AkkaDefaults {
@@ -106,7 +108,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None)
+            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None, new Instant())
 
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
@@ -174,7 +176,7 @@ Usage:
 
   def run(url: String, apiKey: String, datafile: String) {
     val data = IOUtils.readFileToString(new File(datafile)).unsafePerformIO
-    val json = JParser.parse(data)
+    val json = JParser.parseUnsafe(data)
     json match {
       case JArray(elements) => elements.foreach { send(url, apiKey, _ ) } 
       case _                =>
@@ -219,7 +221,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
-  val ingestOwnerAccountId: Option[AccountId] = None
+  val ingestOwnerAccountId = Authorities("dummy")
   val client = new HttpClientXLightWeb 
 
   implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)

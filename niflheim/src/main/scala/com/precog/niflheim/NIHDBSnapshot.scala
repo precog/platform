@@ -26,6 +26,8 @@ import com.precog.common.json._
 import com.precog.common.security.Authorities
 import com.precog.util._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.collection.mutable
 import scala.collection.immutable.SortedMap
 
@@ -39,7 +41,7 @@ object NIHDBSnapshot {
     }
 }
 
-trait NIHDBSnapshot {
+trait NIHDBSnapshot extends Logging {
   def blockIds: Array[Long]
   def readers: Array[StorageReader]
 
@@ -56,6 +58,7 @@ trait NIHDBSnapshot {
     // be careful! the semantics of findReaderAfter are somewhat subtle
     val i = id0.map(Arrays.binarySearch(blockIds, _)) getOrElse -1
     val j = if (i < 0) -i - 1 else i + 1
+    logger.trace("findReaderAfter(%s) has i = %d, j = %d with blockIds.length = %d".format(id0, i, j, blockIds.length))
     if (j >= blockIds.length) None else Some(readers(j))
   }
 
