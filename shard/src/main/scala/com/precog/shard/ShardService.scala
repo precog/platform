@@ -27,6 +27,7 @@ import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobManager
 import com.precog.common.security._
+import com.precog.common.services._
 import com.precog.daze._
 import com.precog.shard.service._
 
@@ -209,7 +210,10 @@ trait ShardService extends
           configureShardState(context.config, context.rootConfig)
         } ->
         request { state =>
-          asyncHandler(state) ~ syncHandler(state)
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*") {
+            asyncHandler(state) ~ syncHandler(state)
+          }
         } ->
         stop { state: ShardState =>
           state.stoppable

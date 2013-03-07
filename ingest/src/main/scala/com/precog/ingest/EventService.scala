@@ -91,30 +91,33 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           }
         } ->
         request { (state: EventServiceState) =>
-          decompress {
-            jsonp {
-              (jsonAPIKey(state.accessControl) {
-                dataPath("/fs") {
-                  post(state.ingestHandler) ~
-                  delete(state.archiveHandler)
-                } ~ //legacy handler
-                path("/(?<sync>a?sync)") {
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*") {
+            decompress {
+              jsonp {
+                (jsonAPIKey(state.accessControl) {
                   dataPath("/fs") {
                     post(state.ingestHandler) ~
                     delete(state.archiveHandler)
-                  }
-                } ~ //for legacy labcoat compatibility
-                path("/ingest/(?<sync>a?sync)") {
-                  dataPath("/fs") {
-                    post(state.ingestHandler) ~
-                    delete(state.archiveHandler) ~
-                    options {
-                      (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => eventOptionsResponse
+                  } ~ //legacy handler
+                  path("/(?<sync>a?sync)") {
+                    dataPath("/fs") {
+                      post(state.ingestHandler) ~
+                      delete(state.archiveHandler)
+                    }
+                  } ~ //for legacy labcoat compatibility
+                  path("/ingest/(?<sync>a?sync)") {
+                    dataPath("/fs") {
+                      post(state.ingestHandler) ~
+                      delete(state.archiveHandler) ~
+                      options {
+                        (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => eventOptionsResponse
+                      }
                     }
                   }
+                }) map {
+                  _ map { _ map jvalueToChunk }
                 }
-              }) map {
-                _ map { _ map jvalueToChunk }
               }
             }
           }
