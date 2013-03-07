@@ -20,23 +20,28 @@
 package com.precog.common
 package security
 
+
 import com.precog.common.accounts._
 import com.precog.common.security.service._
+
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monad._
+import Permission._
 
 class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging { self =>
   private val permissions = Set[Permission](
-    ReadPermission(Path("/"), Set.empty[AccountId]),
-    DeletePermission(Path("/"), Set.empty[AccountId])
+    ReadPermission(Path("/"), WrittenByAny),
+    WritePermission(Path("/"), WriteAs.any),
+    DeletePermission(Path("/"), WrittenByAny)
   )
 
-  val rootGrant = v1.GrantDetails(java.util.UUID.randomUUID.toString, None, None, permissions, None)
+  val rootGrant = v1.GrantDetails(java.util.UUID.randomUUID.toString, None, None, permissions, new Instant(0l), None)
   val rootAPIKeyRecord = v1.APIKeyDetails(apiKey, Some("Static api key"), None, Set(rootGrant), Nil)
 
   val rootGrantId = M.point(rootGrant.grantId)

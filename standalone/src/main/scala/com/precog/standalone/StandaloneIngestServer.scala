@@ -48,13 +48,15 @@ trait StandaloneIngestServer
     with EventService {
   def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
     val apiKey = config[String]("security.masterAccount.apiKey")
-    val accountFinder0 = new StaticAccountFinder(apiKey, config[String]("security.masterAccount.accountId"))
-    val (eventStore0, stoppable) = KafkaEventStore(config, accountFinder0) getOrElse {
+    val apiKeyFinder0 = new StaticAPIKeyFinder[Future](apiKey)
+    val accountFinder0 = new StaticAccountFinder[Future](apiKey, config[String]("security.masterAccount.accountId"))
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, Clock.System.instant())
+    val (eventStore0, stoppable) = KafkaEventStore(config, permissionsFinder) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 
     val deps = EventServiceDeps[Future](
-      apiKeyFinder = new StaticAPIKeyFinder[Future](apiKey),
+      apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
       jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ]()

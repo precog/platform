@@ -83,7 +83,8 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _) :: Nil) => values must contain(testValue).only
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) => 
+          values must contain(testValue).only
       }
     }
 
@@ -155,14 +156,14 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok 
       }
     }
     
     "reject track request when path is not accessible by API key" in {
       val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue) 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok 
       }
     }
 

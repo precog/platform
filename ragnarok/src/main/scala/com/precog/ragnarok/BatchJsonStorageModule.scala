@@ -21,8 +21,9 @@ package com.precog.ragnarok
 
 import com.precog.yggdrasil._
 import com.precog.common._
-import com.precog.common.ingest._
 import com.precog.common.accounts._
+import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
@@ -92,20 +93,25 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", batchSize: Int = 1000): IO[PrecogUnit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root"): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     implicit val to = storageTimeout
 
     val path = Path(db)
-    val projection = (projectionsActor ? FindProjection(path)).mapTo[NIHDBProjection].copoint
     val eventId = EventId(pid, sid.getAndIncrement)
     val records = readRows(data) map (IngestRecord(eventId, _))
-    projection.insert(records, accountId).copoint
+
+    val projection = (projectionsActor ? ProjectionInsert(path, records, Authorities(accountId))).flatMap { _ =>
+      logger.debug("Insert complete on //%s, waiting for cook".format(db))
+
+      (projectionsActor ? FindProjection(path)).mapTo[NIHDBActorProjection]
+    }.copoint
+
     while (projection.status.copoint.pending > 0) {
       Thread.sleep(100)
     }
-    projection.close().copoint
+    projection.close(actorSystem).copoint
 
     logger.debug("Ingested %s." format data)
 

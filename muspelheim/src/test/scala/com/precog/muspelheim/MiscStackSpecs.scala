@@ -27,6 +27,66 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "join arrays after a relate" in {
+      val input = """
+        medals' := //summer_games/london_medals
+        medals'' := new medals'
+  
+        medals'' ~ medals'
+        [medals'.Name, medals''.Name] where medals'.Name = medals''.Name"""
+
+      val input2 = """
+        medals' := //summer_games/london_medals
+        medals'' := new medals'
+  
+        medals'' ~ medals'
+        medals''.Age + medals'.Age where medals'.Name = medals''.Name"""
+  
+      val result = evalE(input)
+      val result2 = evalE(input2)
+      
+      result must not(beEmpty)
+      result must haveSize(result2.size)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(2)
+
+          elems must haveSize(2)
+          elems(0) mustEqual elems(1)
+      }
+    }
+
+    "join arrays with a nested operate, after a relate" in {
+      val input = """
+        medals' := //summer_games/london_medals
+        medals'' := new medals'
+  
+        medals'' ~ medals'
+        [std::math::sqrt(medals''.Age), std::math::sqrt(medals'.Age)] where medals'.Age = medals''.Age"""
+
+      val input2 = """
+        medals' := //summer_games/london_medals
+        medals'' := new medals'
+  
+        medals'' ~ medals'
+        medals''.Age + medals'.Age where medals'.Age = medals''.Age"""
+  
+      val result = evalE(input)
+      val result2 = evalE(input2)
+      
+      result must not(beEmpty)
+      result must haveSize(result2.size)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(elems)) =>
+          ids must haveSize(2)
+
+          elems must haveSize(2)
+          elems(0) mustEqual elems(1)
+      }
+    }
+
     "ensure that two array elements are not switched in a solve" in {
       val input = """
         | orders := //orders

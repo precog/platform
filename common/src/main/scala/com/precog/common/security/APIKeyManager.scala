@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit._
 import com.weiglewilczek.slf4s.Logging
 import org.joda.time.DateTime
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.syntax.id._
@@ -56,11 +56,17 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord]
 
   def newAccountGrant(accountId: AccountId, name: Option[String] = None, description: Option[String] = None, issuerKey: APIKey, parentIds: Set[GrantId], expiration: Option[DateTime] = None): M[Grant] = {
-    val path = "/"+accountId+"/"
-    // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, NewGrantRequest
-    val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path("/"), Set(accountId)) : Permission)
-    val writePerms = Set(WritePermission, DeletePermission).map(_(Path(path), Set()) : Permission)
-    newGrant(name, description, issuerKey, parentIds, readPerms ++ writePerms, expiration)
+    import Permission._
+    val accountPath = Path("/"+accountId+"/")
+    // Path is "/" so that an account may read data it wrote no matter what path it exists under. 
+    // See AccessControlSpec, NewGrantRequest
+    val permissions = Set[Permission](
+      WritePermission(accountPath, WriteAsAny),
+      DeletePermission(accountPath, WrittenByAny),
+      ReadPermission(Path.Root, WrittenByAccount(accountId))
+    )
+
+    newGrant(name, description, issuerKey, parentIds, permissions, expiration)
   }
 
   def newStandardAccountGrant(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None): M[Grant] =

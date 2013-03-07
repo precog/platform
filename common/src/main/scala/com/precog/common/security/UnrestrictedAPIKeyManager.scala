@@ -17,37 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog.common
+package security
 
-import com.precog.util.IOUtils
+import org.joda.time.DateTime
 
-import java.util.concurrent.ScheduledThreadPoolExecutor
+import blueeyes.util.Clock
 
-import org.specs2.mutable.{After, Specification}
+import scalaz._
+import scalaz.std.option._
+import scalaz.syntax.monad._
 
-class CookStateLogSpecs extends Specification {
-  val txLogScheduler = new ScheduledThreadPoolExecutor(5)
-
-  trait LogState extends After {
-    val workDir = IOUtils.createTmpDir("cookstatespecs").unsafePerformIO
-
-    def after = {
-      IOUtils.recursiveDelete(workDir).unsafePerformIO
-    }
-  }
-
-  "CookStateLog" should {
-    "Properly initialize" in new LogState {
-      val txLog = new CookStateLog(workDir, txLogScheduler)
-
-      txLog.currentBlockId mustEqual 0l
-      txLog.pendingCookIds must beEmpty
-    }
-
-    "Lock its directory during operation" in new LogState {
-      val txLog = new CookStateLog(workDir, txLogScheduler)
-
-      (new CookStateLog(workDir, txLogScheduler)) must throwAn[Exception]
-    }
-  }
+class UnrestrictedAPIKeyManager[M[+_]: Monad](clock: Clock) extends InMemoryAPIKeyManager[M](clock) {
+  override def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = true.point[M]
 }

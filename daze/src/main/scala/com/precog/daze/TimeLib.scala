@@ -36,7 +36,7 @@ import org.joda.time._
 import org.joda.time.format._
 
 import com.precog.util.DateTimeUtil.{parseDateTime, parseDateTimeFlexibly, isDateTimeFlexibly}
-import com.precog.util.BitSet
+import com.precog.util.{BitSet, BitSetUtil}
 
 import TransSpecModule._
 
@@ -239,13 +239,13 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
             else Array(startCol.get, endCol.get, stepCol.get)
           }
 
-          val defined = BitSetUtil.filteredRange(range.start, range.end) {
+          val baseDefined = BitSetUtil.filteredRange(range.start, range.end) {
             i => Column.isDefinedAtAll(rawCols, i)
           }
 
-          val definedRange = range.filter(defined(_))
+          val definedRange = range.filter(baseDefined(_))
 
-          val dateTimeArrays = new Array[Array[DateTime]](range.length)
+          val dateTimeArrays = Array.fill(range.length)(Array.empty[DateTime])
 
           val dateTimes: Array[Array[DateTime]] = {
             definedRange.toArray map { i =>
@@ -267,8 +267,32 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
             }
             dateTimeArrays
           }
-          
-          ((), Map(ColumnRef(CPathArray, CArrayType(CDate)) -> ArrayHomogeneousArrayColumn(defined, dateTimes)))
+
+          // creates a BitSet for each array-column with index `idx`
+          def defined(idx: Int): BitSet = {
+            val bools = dateTimes map { _.length > idx }
+            val indices = bools.zipWithIndex collect { case (true, idx) => idx }
+            
+            BitSetUtil.create(indices)
+          }
+
+          // creates the DateTime values for each array-column with index `idx`
+          def dateCol(idx: Int): Array[DateTime] = dateTimes map { arr => 
+            if (arr.length > idx) arr(idx)
+            else new DateTime()
+          }
+
+          val result = {
+            val lengths = dateTimes map { _.length }
+
+            (0 until lengths.max) map { idx => 
+              val colRef = ColumnRef(CPathIndex(idx), CDate)
+              val col = ArrayDateColumn(defined(idx), dateCol(idx))
+              (colRef, col)
+            } toMap
+          }
+
+          ((), result)
         }
       }
 

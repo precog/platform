@@ -22,6 +22,7 @@ package com.precog.performance
 import org.specs2.mutable.Specification
 
 import com.precog.common._
+import com.precog.common.security.Authorities
 import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -39,8 +40,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   "routing actor" should {
-    
-    "route" in { 
+
+    "route" in {
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
 
       val benchParams = BenchmarkParameters(5, 500, Some(500), false)
@@ -60,52 +61,52 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       val seq = new AtomicInteger(0)
 
-      val batch: Seq[IngestMessage] = samples map 
-           { jval => Event(Path("/"), "apiKey", jval, Map()) } map 
+      val batch: Seq[IngestMessage] = samples map
+           { jval => Event(Path("/"), "apiKey", jval, Map()) } map
            { event => EventMessage(0, seq.getAndIncrement, event) }
 
- 
-      val metadataActor: ActorRef = 
+
+      val metadataActor: ActorRef =
         system.actorOf(Props(new MockMetadataActor()), "mock_metadata_actor")
 
-      val projectionActor: ActorRef = 
+      val projectionActor: ActorRef =
         system.actorOf(Props(new MockProjectionActor), "mock_projection_actor")
- 
-      val projectionActors: ActorRef = 
+
+      val projectionActors: ActorRef =
         system.actorOf(Props(new MockProjectionActors(projectionActor)), "mock_projections_actor")
 
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
-      
-      val ingestActor: ActorRef = 
+
+      val ingestActor: ActorRef =
         system.actorOf(Props(new MockIngestActor(inserts / batchSize, batch)), "mock_shard_ingest")
-      
+
       val routingActor: ActorRef = {
         val routingTable = new SingleColumnProjectionRoutingTable
         val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(system))
-        system.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), system.scheduler)), "router") 
+        system.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), system.scheduler)), "router")
       }
-     
+
       def testIngest() = {
           val barrier = new CountDownLatch(1)
 
           ingestActor ! MockIngestReset(barrier)
-          routingActor ! Start 
-          
+          routingActor ! Start
+
           barrier.await
 
           val fut = routingActor ? ControlledStop
-          
-          Await.result(fut, Duration(60, "seconds"))      
+
+          Await.result(fut, Duration(60, "seconds"))
       }
 
       try {
         println("routing actor performance")
         val result = Performance().benchmark(testIngest(), benchParams, benchParams)
         //perfUtil.uploadResults("routing actor", result)
-        //val result = Performance().profile(testIngest())   
- 
+        //val result = Performance().profile(testIngest())
+
         result.report("routing actor", System.out)
-        
+
         true must_== true
       } finally {
         system.shutdown
@@ -128,13 +129,13 @@ class MockIngestActor(toSend: Int, messageBatch: Seq[IngestMessage]) extends Act
   private var sent = 0
 
   def receive = {
-    case MockIngestReset(b) => 
+    case MockIngestReset(b) =>
       barrier = b
       sent = 0
     case GetMessages(replyTo) =>
       sent += 1
       if(sent < toSend) {
-        replyTo ! IngestData(messageBatch) 
+        replyTo ! IngestData(messageBatch)
       } else {
         barrier.countDown
         replyTo ! NoIngestData
@@ -159,7 +160,7 @@ class MockProjectionActors(projectionActor: ActorRef) extends Actor {
     case ReleaseProjection(_) =>
     case ReleaseProjectionBatch(_) => sender ! ()
     case _                     =>  println("Unplanned projection actors action")
-  } 
+  }
 }
 
 class MockProjectionActor extends Actor {

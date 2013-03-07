@@ -21,7 +21,7 @@ package com.precog.common
 package ingest
 
 import accounts.AccountId
-import security.APIKey
+import security._
 import jobs.JobId
 import json._
 
@@ -30,9 +30,11 @@ import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor, InstantDecomposer}
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import org.joda.time.Instant
 
 import scalaz._
 import scalaz.Validation._
@@ -44,11 +46,18 @@ import scalaz.syntax.validation._
 import shapeless._
 
 sealed trait EventMessage {
+  def apiKey: APIKey
+  def path: Path
+  def jobId: Option[JobId]
+  def timestamp: Instant
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A
 }
 
 object EventMessage {
-  type EventMessageExtraction = \/[(APIKey, AccountId => EventMessage), EventMessage]
+  type EventMessageExtraction = (APIKey, Path, Authorities => EventMessage) \/ EventMessage
+
+  // an instant that's close enough to the start of timestamping for our purposes
+  val defaultTimestamp = new Instant(1362465101979L)
 
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
@@ -88,16 +97,16 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, ownerAccountId: AccountId, data: Seq[IngestRecord], jobId: Option[JobId]) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
 }
 
 object IngestMessage {
-  import EventMessage.EventMessageExtraction
+  import EventMessage._
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "ownerAccountId" :: "data" :: "jobId" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0"))
@@ -112,12 +121,13 @@ object IngestMessage {
         (obj.validated[Int]("producerId") |@|
          obj.validated[Int]("eventId")) { (producerId, sequenceId) =>
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
-          ingest.ownerAccountId.map { ownerAccountId =>
+          ingest.writeAs map { authorities =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, ownerAccountId, eventRecords, ingest.jobId))
-          }.getOrElse {
-            \/.left((ingest.apiKey, (account: AccountId) =>
-              IngestMessage(ingest.apiKey, ingest.path, account, eventRecords, ingest.jobId))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
+          } getOrElse {
+            \/.left(
+              (ingest.apiKey, ingest.path, (authorities: Authorities) =>
+                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
             )
           }
         }
@@ -128,14 +138,15 @@ object IngestMessage {
   implicit val Extractor: Extractor[EventMessageExtraction] = extractorV1 <+> extractorV0
 }
 
-case class ArchiveMessage(eventId: EventId, archive: Archive) extends EventMessage {
+case class ArchiveMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, timestamp: Instant) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = am(this)
 }
 
 object ArchiveMessage {
+  import EventMessage._
   implicit val archiveMessageIso = Iso.hlist(ArchiveMessage.apply _, ArchiveMessage.unapply _)
 
-  val schemaV1 = "eventId" :: "archive" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "eventId" :: "timestamp" :: HNil
 
   val decomposerV1: Decomposer[ArchiveMessage] = decomposerV[ArchiveMessage](schemaV1, Some("1.0"))
   val extractorV1: Extractor[ArchiveMessage] = extractorV[ArchiveMessage](schemaV1, Some("1.0"))
@@ -144,7 +155,7 @@ object ArchiveMessage {
       (obj.validated[Int]("producerId") |@|
        obj.validated[Int]("deletionId") |@|
        obj.validated[Archive]("deletion")) { (producerId, sequenceId, archive) =>
-        ArchiveMessage(EventId(producerId, sequenceId), archive)
+        ArchiveMessage(archive.apiKey, archive.path, archive.jobId, EventId(producerId, sequenceId), defaultTimestamp)
       }
     }
   }
