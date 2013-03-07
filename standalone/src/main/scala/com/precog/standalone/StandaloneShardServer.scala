@@ -31,7 +31,7 @@ import blueeyes.util.Clock
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 import org.eclipse.jetty.server.{Handler, Request, Server}
-import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, ResourceHandler}
+import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, HandlerWrapper, ResourceHandler}
 
 import scalaz.Monad
 
@@ -65,6 +65,15 @@ trait StandaloneShardServer
       resourceHandler.setWelcomeFiles(new Array[String](0))
       resourceHandler.setResourceBase(this.getClass.getClassLoader.getResource("web").toString)
 
+      val corsHandler = new HandlerWrapper {
+        override def handle(target: String, baseRequest: Request, request: HttpServletRequest, response: HttpServletResponse): Unit = {
+          response.addHeader("Access-Control-Allow-Origin", "*")
+          _handler.handle(target, baseRequest, request, response)
+        }
+      }
+
+      corsHandler.setHandler(resourceHandler)
+
       val rootHandler = new AbstractHandler {
         def handle(target: String,
                    baseRequest: Request,
@@ -72,7 +81,7 @@ trait StandaloneShardServer
                    response: HttpServletResponse): Unit = {
           if (target == "/") {
             val requestedHost = Option(request.getHeader("Host")).map(_.toLowerCase.split(':').head).getOrElse("localhost")
-            response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false&useJsonp=true".format(requestedHost, serverPort, rootKey, quirrelPort))
+            response.sendRedirect("http://%1$s:%2$d/index.html?apiKey=%3$s&analyticsService=http://%1$s:%4$d/&version=false".format(requestedHost, serverPort, rootKey, quirrelPort))
           }
         }
       }
@@ -80,7 +89,9 @@ trait StandaloneShardServer
       val handlers = new HandlerList
 
       handlers.setHandlers(Array[Handler](rootHandler, resourceHandler, new DefaultHandler))
-      server.setHandler(handlers)
+      corsHandler.setHandler(handlers)
+
+      server.setHandler(corsHandler)
       server.start()
 
       Future(server)(executionContext)
