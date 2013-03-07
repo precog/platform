@@ -42,6 +42,7 @@ class Service(object):
         url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.account)
         #args = ['curl', '-v', '-s', '-G',
         args = ['curl', '-s', '-G',
+                #'-H', 'Accept-Encoding: gzip',
                 '--data-urlencode', "q=" + query,
                 '--data-urlencode', 'apiKey=' + self.apikey, url]
         call(args)
