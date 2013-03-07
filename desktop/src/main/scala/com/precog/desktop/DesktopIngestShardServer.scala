@@ -69,16 +69,12 @@ object DesktopIngestShardServer
       throw new Exception("Timeout waiting for ZK port to open")
     }
 
-    val (kafkaLocal, kafkaCentral) = startKafkaStandalone(rootConfig)
+    val kafka = startKafkaStandalone(rootConfig)
 
     logger.debug("Waiting for Kafka startup")
 
-    if (!waitForPortOpen(rootConfig[Int]("kafka.local.port"), 60)) {
-      throw new Exception("Time out waiting on kafka local port to open")
-    }
-
-    if (!waitForPortOpen(rootConfig[Int]("kafka.central.port"), 60)) {
-      throw new Exception("Time out waiting on kafka central port to open")
+    if (!waitForPortOpen(rootConfig[Int]("kafka.port"), 60)) {
+      throw new Exception("Time out waiting on kafka port to open")
     }
 
     println("Configuration at configure shard state=%s".format(config))
@@ -105,13 +101,24 @@ object DesktopIngestShardServer
       logger.info("Skipping browser open on non-desktop system")
     }
 
-    val stoppable = Stoppable.fromFuture {
-      platform.shutdown.map { _ =>
+    Runtime.getRuntime.addShutdownHook(new Thread {
+      override def run() = {
+        logger.info("Shutting down embedded kafka instances")
+        kafka.shutdown
+        kafka.awaitShutdown
+
+        logger.info("Kafka shutdown complete, stopping ZK")
         zookeeper.stop
-        kafkaLocal.shutdown
-        kafkaCentral.shutdown
-        kafkaLocal.awaitShutdown
-        kafkaCentral.awaitShutdown
+        logger.info("ZK shutdown complete")
+      }
+    })
+
+    val stoppable = Stoppable.fromFuture {
+      platform.shutdown.onComplete { _ =>
+        logger.info("Platform shutdown complete")
+      }.onFailure {
+        case t: Throwable =>
+          logger.erroR("Failure during platform shutdown", t)
       }
     }
 
@@ -140,7 +147,7 @@ object DesktopIngestShardServer
     false
   }
 
-  def startKafkaStandalone(config: Configuration): (KafkaServerStartable, KafkaServerStartable) = {
+  def startKafkaStandalone(config: Configuration): KafkaServerStartable = {
     val defaultProps = new Properties
     defaultProps.setProperty("brokerid", "0")
     defaultProps.setProperty("num.threads", "8")
@@ -158,24 +165,19 @@ object DesktopIngestShardServer
 
     defaultProps.setProperty("zk.connect", "localhost:" + config[String]("zookeeper.port"))
 
-    val localProps = defaultProps.clone.asInstanceOf[Properties]
-    localProps.putAll(config.detach("kafka.local").data.asJava)
-
     val centralProps = defaultProps.clone.asInstanceOf[Properties]
-    centralProps.putAll(config.detach("kafka.central").data.asJava)
+    centralProps.putAll(config.detach("kafka").data.asJava)
     centralProps.setProperty("enable.zookeeper", "true")
 
-    val local = new KafkaServerStartable(new KafkaConfig(localProps))
     val central = new KafkaServerStartable(new KafkaConfig(centralProps))
 
     (new Thread {
       override def run() = {
-        local.startup
         central.startup
       }
     }).start()
 
-    (local, central)
+    central
   }
 
   class EmbeddedZK extends ZooKeeperServerMain {
