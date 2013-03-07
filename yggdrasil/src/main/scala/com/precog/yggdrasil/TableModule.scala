@@ -227,6 +227,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
     
     // for debugging only!!
     def toJson: M[Iterable[JValue]]
+
+    def printer(prelude: String = "", flag: String = ""): Table
     
     def metrics: TableMetrics
   }
