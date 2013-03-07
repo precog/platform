@@ -149,33 +149,6 @@ function exists {
     return 1
 }
 
-## Check for prereqs first
-#ARTIFACTDIR="$BASEDIR/standaloneArtifacts"
-#
-#echo "Using artifacts in $ARTIFACTDIR"
-#
-#[ -d "$ARTIFACTDIR" ] || mkdir "$ARTIFACTDIR"
-#
-#(exists "$ARTIFACTDIR"/zookeeper* && echo "  ZooKeeper exists") || {
-#    echo "Downloading current ZooKeeper artifact"
-#    pushd "$ARTIFACTDIR" > /dev/null
-#    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || {
-#        echo "Failed to download zookeeper" >&2
-#        exit 3
-#    }
-#    popd > /dev/null
-#}
-#
-#(exists "$ARTIFACTDIR"/kafka* && echo "  Kafka exists") || {
-#    echo "Downloading current Kafka artifact"
-#    pushd "$ARTIFACTDIR" > /dev/null
-#    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || {
-#        echo "Failed to download kafka" >&2
-#        exit 3
-#    }
-#    popd > /dev/null
-#}
-
 unset REBEL_OPTS
 if [ -e "$REBEL_HOME" ]; then
     REBEL_OPTS="-noverify -javaagent:$REBEL_HOME/jrebel.jar -Dplatform.root=`dirname $0`"
@@ -222,99 +195,16 @@ function on_exit() {
         wait $SHARDPID
     fi
 
-#    if is_running $KFGLOBALPID; then
-#        echo "Stopping kafka..."
-#        # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches
-#        # the Java process, leaving it running. Instead, we kill all child processes
-#        for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
-#        wait $KFGLOBALPID
-#    fi
-#
-#    if is_running $KFLOCALPID; then
-#        for pid in `ps -o pid,ppid | awk -v PID=$KFLOCALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
-#        wait $KFLOCALPID
-#    fi
-#
-#    echo "Stopping zookeeper..."
-#    cd $ZKBASE/bin
-#    ./zkServer.sh stop
-#
-#    if [ -z "$DONTCLEAN" ]; then
-#        echo "Cleaning up temp work dir"
-#        rm -rf "$WORKDIR"
-#    fi
-
     echo "Shutdown complete"
 }
 
 trap on_exit EXIT
 
-# Get zookeeper up and running first
-#pushd $ZKBASE > /dev/null
-#tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
-#    echo "Failed to unpack zookeeper" >&2
-#    exit 3
-#}
-#popd > /dev/null
-#
 
 # Copy in a simple config
 ZOOKEEPER_PORT=$(random_port "Zookeeper")
-#echo "# the directory where the snapshot is stored." >> $ZKBASE/conf/zoo.cfg
-#echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
-#echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
-#echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
-#
-## Set up logging for zookeeper
-#cat > $ZKBASE/bin/log4j.properties <<EOF
-#log4j.rootLogger=INFO, file
-#log4j.appender.file=org.apache.log4j.RollingFileAppender
-#log4j.appender.file.File=$WORKDIR/logs/zookeeper.log
-#log4j.appender.file.MaxFileSize=1MB
-#log4j.appender.file.MaxBackupIndex=1
-#log4j.appender.file.layout=org.apache.log4j.PatternLayout
-#log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
-#EOF
-
-## Start it up!
-#echo "Starting zookeeper on port $ZOOKEEPER_PORT"
-#cd $ZKBASE/bin
-#./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
-#
-#wait_until_port_open $ZOOKEEPER_PORT
-#
-## Now, start global and local kafkas
-#cd "$WORKDIR"
-#unzip "$ARTIFACTDIR"/kafka* > /dev/null || {
-#    echo "Failed to unpack kafka" >&2
-#    exit 3
-#}
-
-## Transform the provided config into global and local configs, and start services
-#cd "$WORKDIR"/kafka/config
-#chmod +x $KFBASE/bin/kafka-server-start.sh
-#
 KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
-#sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
-#$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
-#KFGLOBALPID=$!
-#
-#wait_until_port_open $KAFKA_GLOBAL_PORT
-#
 KAFKA_LOCAL_PORT=$(random_port "Kafka local")
-#sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
-#$KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
-#KFLOCALPID=$!
-#
-#wait_until_port_open $KAFKA_LOCAL_PORT
-#
-#echo "Kafka Global = $KFGLOBALPID on port=$KAFKA_GLOBAL_PORT"
-#echo "Kafka Local = $KFLOCALPID on port=$KAFKA_LOCAL_PORT"
-
-# FIXME: There's a potential for collisions here because we're
-# assigning before actually starting services, but proper ordering
-# would make things a bit more complicated and with bash's RNG this is
-# low-risk
 SHARD_PORT=$(random_port "Shard")
 
 if [ -z "$LABCOAT_PORT" ]; then
@@ -325,15 +215,6 @@ sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
 cd "$BASEDIR"
-
-## Prior to ingest startup, we need to set an initial checkpoint if it's not already there
-#if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-#    $JAVA $REBEL_OPTS -jar $RATATOSKR_ASSEMBLY zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-desktop/shard/checkpoint/`hostname`:{\"offset\":0, \"messageClock\":[]}" &> $WORKDIR/logs/checkpoint_init.stdout || {
-#        echo "Couldn't set initial checkpoint!" >&2
-#        exit 3
-#    }
-#    touch "$WORKDIR"/initial_checkpoint.json
-#fi
 
 echo "Starting desktop service"
 $JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.DesktopIngestShardServer --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
