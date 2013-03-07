@@ -207,7 +207,7 @@ trait ShardService extends
   }
 
 
-  lazy val analyticsService = this.service("quirrel", "1.0") {
+  lazy val analyticsService = this.service("analytics", "2.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
