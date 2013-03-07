@@ -183,6 +183,7 @@ trait ShardService extends
     }
   }
 
+
   lazy val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
@@ -192,8 +193,11 @@ trait ShardService extends
         } ->
         request { state =>
           import CORSHeaderHandler.allowOrigin
-          allowOrigin("*") {
-            asyncHandler(state) ~ syncHandler(state)
+          implicit val compression = CompressService.defaultCompressions
+          compress {
+            allowOrigin("*") {
+              asyncHandler(state) ~ syncHandler(state)
+            }
           }
         } ->
         stop { state: ShardState =>
