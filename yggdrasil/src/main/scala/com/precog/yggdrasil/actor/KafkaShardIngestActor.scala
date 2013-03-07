@@ -28,7 +28,6 @@ import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.common.security._
 import ColumnMetadata.monoid
-import APIKeyFinder._
 
 import akka.actor.Actor
 import akka.actor.ActorRef

@@ -263,7 +263,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
 
 
   def simpleMultiKeyData = {
-    val JArray(elements) = JParser.parse("""[
+    val JArray(elements) = JParser.parseUnsafe("""[
       { "key": [0], "value": {"a": 12, "b": 7} },
       { "key": [1], "value": {"a": 42} },
       { "key": [2], "value": {"a": 11, "c": true} },
@@ -500,7 +500,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     
     resultJson must haveSize(5)
     
-    val JArray(expected) = JParser.parse("""[
+    val JArray(expected) = JParser.parseUnsafe("""[
       [{"tic_b": 7}, 2], 
       [{"tic_b": 15}, 1], 
       [{"tic_b": -1}, 1], 
@@ -790,7 +790,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
     import trans._
     import constants._
 
-    val JArray(foo0) = JParser.parse("""[
+    val JArray(foo0) = JParser.parseUnsafe("""[
       { "a":42.0, "b":12.0 }, 
       { "a":42.0 },
       { "a":77.0 },
@@ -807,7 +807,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       { "a":42.0, "b":12.0 }
     ]""")
 
-    val JArray(bar0) = JParser.parse("""[
+    val JArray(bar0) = JParser.parseUnsafe("""[
       { "a":42.0 },
       { "a":42.0 },
       { "a":77.0 },
@@ -824,7 +824,7 @@ trait GrouperSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification wit
       { "a":42.0 }
     ]""")
 
-    val JArray(baz0) = JParser.parse("""[
+    val JArray(baz0) = JParser.parseUnsafe("""[
       { "b":12.0 },
       { "b":6.0 },
       { "a":42.0 },

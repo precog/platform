@@ -29,15 +29,14 @@ import com.weiglewilczek.slf4s.Logging
 import org.streum.configrity.Configuration
 
 import scalaz.Monad
+import scalaz.syntax.monad._
 
 import com.precog.common.security._
 
-class StaticAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Future] with Logging {
+class StaticAccountFinder[M[+_]: Monad](accountId: AccountId) extends AccountFinder[M] with Logging {
   logger.debug("Constructed new static account manager. All queries resolve to \"%s\"".format(accountId))
 
-  implicit val M: Monad[Future] = new FutureMonad(executor)
+  def findAccountByAPIKey(apiKey: APIKey) = Some(accountId).point[M]
 
-  def findAccountByAPIKey(apiKey: APIKey) : Future[Option[AccountId]] = Promise.successful(Some(accountId))
-
-  def findAccountDetailsById(accountId: AccountId): Future[Option[AccountDetails]] = Promise.successful(None)
+  def findAccountDetailsById(accountId: AccountId) = None.point[M]
 }

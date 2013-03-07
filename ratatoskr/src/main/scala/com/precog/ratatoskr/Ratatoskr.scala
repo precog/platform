@@ -563,9 +563,11 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
+      val accountFinder = new StaticAccountFinder[Future]("")
       val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+      val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), apiKeyFinder)))
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
     }
 
     import shardModule._

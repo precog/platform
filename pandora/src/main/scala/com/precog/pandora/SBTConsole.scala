@@ -123,14 +123,16 @@ object SBTConsole {
 
     val storageTimeout = yggConfig.storageTimeout
 
+    val accountFinder = new StaticAccountFinder[Future]("")
     val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future](Clock.System)
     val accessControl = new DirectAPIKeyFinder(rawAPIKeyFinder)
+    val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
 
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-    val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
+    val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) with IdSourceScannerModule {

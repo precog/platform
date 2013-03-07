@@ -52,6 +52,7 @@ import scalaz.std.list._
 import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.syntax.std.boolean._
+
 import scalaz.syntax.std.list._
 import scalaz.syntax.traverse._
 
@@ -85,9 +86,11 @@ class NIHDBProjectionsActor(
     chef: ActorRef,
     cookThreshold: Int,
     storageTimeout: Timeout,
-    apiKeyFinder: APIKeyFinder[Future],
+    permissionsFinder: PermissionsFinder[Future],
     txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
     ) extends Actor with Logging {
+
+  import permissionsFinder.apiKeyFinder
 
   implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
 
@@ -255,18 +258,18 @@ class NIHDBProjectionsActor(
   def findChildren(path: Path, apiKey: APIKey): Future[Set[Path]] = {
     implicit val ctx = context.dispatcher
     for {
-      permissions <- APIKeyFinder.listPermissions(apiKeyFinder, apiKey, path)
+      allowedPaths <- permissionsFinder.findBrowsableChildren(apiKey, path)
     } yield {
-      val writtenBy = permissions collect {
-        case perm @ WrittenByPermission(p0, _) if p0.isEqualOrParent(path) => perm
-      }
+      val pathRoot = pathDir(activeDir, path)
 
-      // FIXME: Not comprehensive/exhaustive in terms of finding all possible data you could read
-      val allowedPaths = writtenBy.map(_.path)
-
-      Option(pathDir(activeDir, path).listFiles(pathFileFilter)).map { files =>
+      logger.debug("Checking for children of path %s in dir %s among %s".format(path, pathRoot, allowedPaths))
+      Option(pathRoot.listFiles(pathFileFilter)).map { files =>
+        logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
         files.filter(_.isDirectory).map { dir => path / Path(dir.getName) }.filter { p => allowedPaths.exists(_.isEqualOrParent(p)) }.toSet
-      }.getOrElse(Set.empty)
+      } getOrElse {
+        logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
+        Set.empty
+      }
     }
   }
 

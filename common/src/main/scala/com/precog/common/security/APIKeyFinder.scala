@@ -64,14 +64,6 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
   }
 }
 
-object APIKeyFinder {
-  def listPermissions[M[+_]](apiKeyFinder: APIKeyFinder[M], apiKey: APIKey, pathPrefix: Path)(implicit M: Functor[M]): M[Set[Permission]] = {
-    apiKeyFinder.findAPIKey(apiKey, None) map { details =>
-      details.toSet.flatMap(_.grants).flatMap(_.permissions) filter { perm => pathPrefix isEqualOrParent perm.path }
-    }
-  }
-}
-
 class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging {
   val grantDetails: Grant => v1.GrantDetails = {
     case Grant(gid, gname, gdesc, _, _, perms, createdAt, exp) => v1.GrantDetails(gid, gname, gdesc, perms, createdAt, exp)
