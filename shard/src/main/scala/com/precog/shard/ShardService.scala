@@ -236,7 +236,6 @@ trait ShardService extends
     }
   }
 
-  implicit val compression = CompressService.defaultCompressions
 
   lazy val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
@@ -246,6 +245,7 @@ trait ShardService extends
           configureShardState(context.config)
         } ->
         request { state =>
+          implicit val compression = CompressService.defaultCompressions
           compress { 
             asyncHandler(state) ~ syncHandler(state) 
           }

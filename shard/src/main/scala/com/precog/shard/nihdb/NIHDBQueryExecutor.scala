@@ -140,8 +140,8 @@ trait NIHDBQueryExecutorComponent  {
       val jobManager = extJobManager
       val metadataClient = new StorageMetadataClient[Future](this)
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, accessControl)))
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
 
       val shardActors @ ShardActors(ingestSupervisor, _) =
         initShardActors(permissionsFinder, projectionsActor)

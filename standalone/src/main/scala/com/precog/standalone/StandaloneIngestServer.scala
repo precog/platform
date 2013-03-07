@@ -48,7 +48,7 @@ object StandaloneIngestServer
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
     val apiKeyFinder0 = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    val accountFinder0 = new StaticAccountFinder(config[String]("security.masterAccount.accountId"))
+    val accountFinder0 = new StaticAccountFinder[Future](config[String]("security.masterAccount.accountId"))
     val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, clock.instant())
     val (eventStore0, stoppable) = KafkaEventStore(config, permissionsFinder) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
