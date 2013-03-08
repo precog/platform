@@ -80,7 +80,7 @@ final class KafkaRelayAgent(
       try {
         ingestBatch(offset, 0, 0, 0)
       } catch {
-        case ex: Exception => logger.error("Error in kafka consumer.", ex)
+        case ex: Exception => logger.error("Error in kafka relay consumer.", ex)
       }
 
       Thread.sleep(retryDelay)
