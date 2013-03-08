@@ -210,7 +210,8 @@ object LaunchLabcoat{
         if (waitForPorts) {
           java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
         } else {
-          println(" Timeout waiting for server to start, retrying...")
+          println("Timeout waiting for server to start, please check that PrecogService has been launched")
+          println("Retrying...")
           launchBrowser()
         }
       }
