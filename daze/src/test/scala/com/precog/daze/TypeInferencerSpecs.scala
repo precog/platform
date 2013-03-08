@@ -459,7 +459,6 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val expected = Map(
         "/file" -> Map(
-          JPath.Identity -> cLiterals,
           JPath("column0") -> cLiterals,
           JPath("column0.column1") -> Set(CLong, CDouble, CNum),
           JPath("column2") -> Set(CLong, CDouble, CNum)
@@ -605,6 +604,16 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
         Join(DerefObject, CrossLeftSort,
           split,
           Const(CString("foo"))(line))(line)
+
+      /*
+       clicks := //clicks
+
+       split := solve 'time
+         clicks' := (clicks where clicks.time = 'time)
+         { "foo": clicks' }
+
+       split.foo
+       */
       
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       

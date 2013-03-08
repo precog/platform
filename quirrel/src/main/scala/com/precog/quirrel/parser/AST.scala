@@ -42,7 +42,7 @@ trait AST extends Phases {
   
   type Provenance
   type ProvConstraint
-  
+
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
     case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Sub(_, left, right) => "%s(-\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))

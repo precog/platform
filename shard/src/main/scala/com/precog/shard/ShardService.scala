@@ -53,7 +53,7 @@ import blueeyes.json.JValue
 import DefaultBijections._
 
 import java.nio.{ CharBuffer, ByteBuffer }
-import java.nio.charset.Charset
+import java.nio.charset.{ Charset, CoderResult }
 
 import org.streum.configrity.Configuration
 
@@ -112,13 +112,43 @@ trait ShardService extends
   def configureShardState(config: Configuration, rootConfig: Configuration): Future[ShardState]
 
   val utf8 = Charset.forName("UTF-8")
+  val BufferSize = 64 * 1024
 
   def optionsResponse = OptionHeaders.apply[ByteChunk, Future](M)
 
+  private def bufferOutput(stream0: StreamT[Future, CharBuffer]) = {
+    val encoder = utf8.newEncoder()
+
+    def loop(stream: StreamT[Future, CharBuffer], buf: ByteBuffer): StreamT[Future, ByteBuffer] = {
+      StreamT(stream.uncons map {
+        case Some((cbuf, tail)) =>
+          val result = encoder.encode(cbuf, buf, false)
+          if (result == CoderResult.OVERFLOW) {
+            buf.flip()
+            StreamT.Yield(buf, loop(cbuf :: tail, ByteBuffer.allocate(BufferSize)))
+          } else {
+            StreamT.Skip(loop(tail, buf))
+          }
+
+        case None =>
+          val result = encoder.encode(CharBuffer.wrap(""), buf, true)
+          buf.flip()
+
+          if (result == CoderResult.OVERFLOW) {
+            StreamT.Yield(buf, loop(stream, ByteBuffer.allocate(BufferSize)))
+          } else {
+            StreamT.Yield(buf, StreamT.empty)
+          }
+      })
+    }
+
+    loop(stream0, ByteBuffer.allocate(BufferSize))
+  }
+
   private val queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
-      case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes))
-      case Right(stream) => Right(stream.map(cb => utf8.encode(cb)))
+      case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+      case Right(stream) => Right(bufferOutput(stream))
     }
   }
 
@@ -203,7 +233,7 @@ trait ShardService extends
   }
 
 
-  lazy val analyticsService = this.service("quirrel", "1.0") {
+  lazy val analyticsService = this.service("analytics", "2.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {

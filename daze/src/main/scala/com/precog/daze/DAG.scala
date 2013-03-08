@@ -1024,7 +1024,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(parent: DepGraph, jtpe: JType = JType.JUnfixedT)(val loc: Line) extends DepGraph with StagingPoint {
+    case class LoadLocal(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = parent match {
         case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
         case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))

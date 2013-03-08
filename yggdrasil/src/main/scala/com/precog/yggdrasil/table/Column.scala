@@ -341,8 +341,19 @@ case class MmixPrng(_seed: Long) {
 
 object Column {
   def rowOrder(col: Column): Order[Int] = new Order[Int] {
-    def compare(i: Int, j: Int): Int = col.rowCompare(i, j)
-    def eqv(i: Int, j: Int): Boolean = col.rowEq(i, j)
+    def compare(i: Int, j: Int): Int = {
+      if (col.isDefinedAt(i)) {
+        if (col.isDefinedAt(j)) {
+          col.rowCompare(i, j)
+        } else 1
+      } else if (col.isDefinedAt(j)) -1 else 0
+    }
+
+    def eqv(i: Int, j: Int): Boolean = {
+      if (col.isDefinedAt(i)) {
+        if (col.isDefinedAt(j)) col.rowEq(i, j) else false
+      } else !col.isDefinedAt(j)
+    }
   }
   @inline def const(cv: CValue): Column = cv match {
     case CBoolean(v)  => const(v)
