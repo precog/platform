@@ -20,7 +20,7 @@ object Run {
 
     val queries = List(
       """
-      foo := (//foo).a
+      foo := //foo where (//foo).a
       solve 'b
         foo' := foo where foo.b = 'b
         foo'.c
