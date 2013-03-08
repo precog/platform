@@ -136,8 +136,7 @@ ZKBASE="$WORKDIR"/zookeeper
 ZKDATA="$WORKDIR"/zookeeper-data
 
 KFBASE="$WORKDIR"/kafka
-KFGLOBALDATA="$WORKDIR"/kafka-global
-KFLOCALDATA="$WORKDIR"/kafka-local
+KFDATA="$WORKDIR"/kafka-data
 
 rm -rf $ZKBASE $KFBASE
 mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
@@ -164,18 +163,20 @@ function on_exit() {
 
 trap on_exit EXIT
 
-
-# Copy in a simple config
 ZOOKEEPER_PORT=$(random_port "Zookeeper")
-KAFKA_GLOBAL_PORT=$(random_port "Kafka global")
-KAFKA_LOCAL_PORT=$(random_port "Kafka local")
+KAFKA_PORT=$(random_port "Kafka global")
+
+# FIXME: There's a potential for collisions here because we're
+# assigning before actually starting services, but proper ordering
+# would make things a bit more complicated and with bash's RNG this is
+# low-risk
 SHARD_PORT=$(random_port "Shard")
 
 if [ -z "$LABCOAT_PORT" ]; then
     LABCOAT_PORT=$(random_port "Labcoat")
 fi
 
-sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9092/$KAFKA_GLOBAL_PORT/; s/9082/$KAFKA_LOCAL_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka/local#$KFLOCALDATA#; s#/var/kafka/central#$KFGLOBALDATA#; s#/var/zookeeper#$ZKDATA#" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9082/$KAFKA_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka#$KFDATA#; s#/var/zookeeper#$ZKDATA#" < "$BASEDIR"/desktop/configs/test/shard-v1.conf > "$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v1.logging.xml > "$WORKDIR"/configs/shard-v1.logging.xml
 
 cd "$BASEDIR"
@@ -188,8 +189,7 @@ SHARDPID=$!
 wait_until_port_open $SHARD_PORT
 
 cat > $WORKDIR/ports.txt <<EOF
-KAFKA_LOCAL_PORT=$KAFKA_LOCAL_PORT
-KAFKA_GLOBAL_PORT=$KAFKA_GLOBAL_PORT
+KAFKA_PORT=$KAFKA_PORT
 ZOOKEEPER_PORT=$ZOOKEEPER_PORT
 SHARD_PORT=$SHARD_PORT
 LABCOAT_PORT=$LABCOAT_PORT
@@ -200,8 +200,7 @@ echo "Startup complete, running in $WORKDIR"
 echo "============================================================"
 echo "Base path: $WORKDIR"
 cat <<EOF
-KAFKA_LOCAL_PORT:  $KAFKA_LOCAL_PORT
-KAFKA_GLOBAL_PORT: $KAFKA_GLOBAL_PORT
+KAFKA_PORT:        $KAFKA_PORT
 ZOOKEEPER_PORT:    $ZOOKEEPER_PORT
 SHARD_PORT:        $SHARD_PORT
 LABCOAT_PORT:      $LABCOAT_PORT
