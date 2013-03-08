@@ -83,11 +83,11 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       
       implicit val monoid = CountMonoid
 
-      val tpe = UnaryOperationType(JType.JUnfixedT, JNumberT)
+      val tpe = UnaryOperationType(JType.JUniverseT, JNumberT)
       
       def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range) = {
-          val cx = schema.columns(JType.JUnfixedT).toArray
+          val cx = schema.columns(JType.JUniverseT).toArray
           var count = 0L
           RangeUtil.loop(range) { i =>
             if (Column.isDefinedAt(cx, i)) count += 1L

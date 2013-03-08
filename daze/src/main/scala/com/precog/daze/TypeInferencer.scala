@@ -37,21 +37,21 @@ trait TypeInferencer extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
 
     def collectTypes(universe: JType, graph: DepGraph): Map[DepGraph, Set[JType]] = {
-      def collectSpecTypes(jtpe: Option[JType], typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
+      def collectSpecTypes(typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
         case UnionBucketSpec(left, right) =>
-          collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
+          collectSpecTypes(collectSpecTypes(typing, left), right) 
         
         case IntersectBucketSpec(left, right) =>
-          collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
+          collectSpecTypes(collectSpecTypes(typing, left), right) 
         
         case Group(id, target, child) =>
-          collectSpecTypes(jtpe, inner(None, typing, target), child)
+          collectSpecTypes(inner(None, typing, target), child)
         
         case UnfixedSolution(id, target) =>
-          inner(jtpe, typing, target)
+          inner(Some(universe), typing, target)
         
         case Extra(target) =>
-          inner(jtpe, typing, target)
+          inner(Some(universe), typing, target)
       }
     
       def inner(jtpe: Option[JType], typing: Map[DepGraph, Set[JType]], graph: DepGraph): Map[DepGraph, Set[JType]] = {
@@ -74,9 +74,8 @@ trait TypeInferencer extends DAG {
     
           case Reduce(red, parent) => inner(Some(red.tpe.arg), typing, parent)
 
-          // TODO: this is correct, but could be more precise
-          // we should use the trans specs to narrow the possible types of parent
-          case MegaReduce(_, parent) => inner(Some(JType.JUnfixedT), typing, parent)
+          case MegaReduce(_, _) =>
+            sys.error("Cannot infer type of MegaReduce. MegaReduce optimization must come after inferTypes.")
     
           case Morph1(m, parent) => inner(Some(m.tpe.arg), typing, parent)
     
@@ -133,7 +132,7 @@ trait TypeInferencer extends DAG {
           case Distinct(parent) => inner(jtpe, typing, parent)
     
           case s @ Split(spec, child) =>
-            inner(jtpe, collectSpecTypes(Some(universe), typing, spec), child)
+            inner(jtpe, collectSpecTypes(typing, spec), child)
           
           // not using extractors due to bug
           case s: SplitGroup => {

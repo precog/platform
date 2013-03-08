@@ -121,7 +121,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       composeOptimizations(optimize, List[DepGraph => DepGraph](
         // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
         //predicatePullups(_, ctx),
-        inferTypes(JType.JUnfixedT),
+        inferTypes(JType.JUniverseT),
         { g => megaReduce(g, findReductions(g, ctx)) },
         pushDownSorts,
         memoize

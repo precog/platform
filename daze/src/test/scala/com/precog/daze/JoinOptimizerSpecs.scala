@@ -26,7 +26,7 @@ import common.Path
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
-import com.precog.bytecode.JType.JUnfixedT
+import com.precog.bytecode.JType.JUniverseT
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
@@ -65,8 +65,8 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
         
       val line = Line(1, 1, "")
-      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
-      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
+      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUniverseT)(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUniverseT)(line)
       val height = Const(CString("height"))(line)
       val name = Const(CString("name"))(line)
       val userId = Const(CString("userId"))(line)
@@ -131,8 +131,8 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   [b.height, a.name] where a.userId = b.userId """.stripMargin
         
       val line = Line(1, 1, "")
-      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUnfixedT)(line)
-      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUnfixedT)(line)
+      val users = dag.LoadLocal(Const(CString("/hom/users"))(line), JUniverseT)(line)
+      val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line), JUniverseT)(line)
       val height = Const(CString("height"))(line)
       val name = Const(CString("name"))(line)
       val userId = Const(CString("userId"))(line)
