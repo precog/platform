@@ -88,23 +88,6 @@ object DesktopIngestShardServer
     val jobManager = new InMemoryJobManager
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
 
-    // Fire up a thread to wait on Jetty and spawn the desktop browser window if we can
-    import java.awt.Desktop
-
-    if (Desktop.isDesktopSupported) {
-      logger.info("Opening browser for standalone")
-      (new Thread() {
-        override def run() = {
-          val jettyPort = rootConfig[Int]("services.quirrel.v1.labcoat.port")
-          if (waitForPortOpen(jettyPort, 60)) {
-            java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
-          }
-        }
-      }).start()
-    } else {
-      logger.info("Skipping browser open on non-desktop system")
-    }
-
     val stoppable = Stoppable.fromFuture {
       platform.shutdown.map { _ =>
         zookeeper.stop
@@ -195,5 +178,33 @@ object DesktopIngestShardServer
     }).start()
 
     server
+  }
+}
+
+object LaunchLabcoat{
+  def main(args:Array[String]){
+
+    if(args.size != 1 || !args(0).startsWith("--configFile=") ){
+      sys.error("Wrong parameters. Usage: --configFile=<configuration>")
+    } else {
+      // Fire up a thread to wait on Jetty and spawn the desktop browser window if we can
+      import java.awt.Desktop
+
+      val configFile=args(0).replaceFirst("--configFile=","")
+      val config = Configuration.load( configFile )
+      val jettyPort = config[Int]("services.quirrel.v1.labcoat.port")
+
+      if (Desktop.isDesktopSupported) {
+        (new Thread() {
+          override def run() = {
+            if (DesktopIngestShardServer.waitForPortOpen(jettyPort, 60)) {
+              java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
+            }
+          }
+        }).start()
+      } else {
+        sys.error("Browser open on non-desktop system")
+      }
+    }
   }
 }

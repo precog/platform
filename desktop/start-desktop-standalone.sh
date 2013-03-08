@@ -106,42 +106,6 @@ GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPaci
 
 JAVA="java $GC_OPTS"
 
-# pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
-MISSING_ARTIFACTS=""
-for ASM in "$DESKTOP_ASSEMBLY"; do
-    if [ ! -f "$ASM" ]; then
-        if [ -n "$BUILDMISSING" ]; then
-            # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
-            BUILDTARGETBASE=$(basename "$ASM")
-            BUILDTARGET="${BUILDTARGETBASE%%-*}/assembly"
-            echo "Building $BUILDTARGET"
-            pushd .. > /dev/null
-            sbt "$BUILDTARGET" || {
-                echo "Failed to build $BUILDTARGET!" >&2
-                exit 1
-            }
-            popd > /dev/null
-        else
-            MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
-        fi
-    fi
-done
-
-
-if [ -n "$MISSING_ARTIFACTS" ]; then
-    echo "Up-to-date desktop assembly is required before running. Please build and re-run, or run with the -b flag." >&2
-    for ASM in $MISSING_ARTIFACTS; do
-        echo "  missing `basename $ASM`" >&2
-    done
-    exit 1
-fi
-
-# Make sure we have the tools we need on OSX
-if [ `uname` == "Darwin" ]; then
-    echo "Running on OSX"
-    alias tar="/usr/bin/gnutar"
-fi
-
 function exists {
     for fl in "$@"; do
         if [ -f "$fl" ]; then return 0; fi
