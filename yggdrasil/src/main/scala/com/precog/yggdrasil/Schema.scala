@@ -22,7 +22,6 @@ object Schema {
     case JTextT => Set(CString)
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
-
     case JDateT => Set(CDate)
     case JPeriodT => Set(CPeriod)
     case _ => Set.empty
@@ -120,6 +119,7 @@ object Schema {
     case CArrayType(elemType) => fromCValueType(elemType) map (JArrayHomogeneousT(_))
     case CDate => Some(JDateT)
     case CPeriod => Some(JPeriodT)
+    case _ => None
   }
 
   
@@ -174,7 +174,7 @@ object Schema {
     }
 
     def combineFixedResults(results: Seq[Int => Boolean]): Int => Boolean = {
-      (row: Int) => results.foldLeft(true) { case (bool, fcn) => bool && fcn(row) } 
+      (row: Int) => results.foldLeft(true) { case (bool, fcn) => bool && fcn(row) }
     }
 
     jtpe match {
