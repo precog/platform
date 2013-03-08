@@ -452,7 +452,7 @@ class IngestServiceHandler(
             } yield {
               ingestResult.fold(
                 { message =>
-                  logger.warn("Internal error during ingest: " + message)
+                  logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
                   HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
                 {
                   case NotIngested(reason) =>
