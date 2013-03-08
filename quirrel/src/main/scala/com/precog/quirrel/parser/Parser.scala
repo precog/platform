@@ -36,7 +36,8 @@ import com.codecommit.util.UniversalCharSet
 trait Parser extends RegexParsers with Filters with AST {
   import ast._
   
-  def parse(str: String): Set[Expr] = parse(LineStream(str))
+  def parse(str: String): Set[Expr] =
+    parse(LineStream(str))
   
   def parse(input: LineStream): Set[Expr] = {
     val results = expr(input)
@@ -196,11 +197,14 @@ trait Parser extends RegexParsers with Filters with AST {
     | """"([^"\\]|\\.)+"""".r ^^ canonicalizeStr        //"
   )
   
-  private lazy val pathLiteral = ("""/(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+""".r preferred) ^^ canonicalizePath 
+  private[quirrel] lazy val pathLiteralRegex = """/(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+""".r
+  private lazy val pathLiteral = (pathLiteralRegex preferred) ^^ canonicalizePath 
   
-  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  //"
+  private[quirrel] lazy val strLiteralRegex = """"([^\n\r\\"]|\\.)*"""".r //"
+  private lazy val strLiteral = strLiteralRegex ^^ canonicalizeStr
   
-  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r 
+  private[quirrel] lazy val numLiteralRegex = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  private lazy val numLiteral = numLiteralRegex
   
   private lazy val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true
@@ -267,7 +271,7 @@ trait Parser extends RegexParsers with Filters with AST {
     builders.foldRight(e) { _(_) }
   }
   
-  private def canonicalizeStr(str: String): String = {
+  private[quirrel] def canonicalizeStr(str: String): String = {
     val (back, _) = str.foldLeft(("", false)) {
       case ((acc, false), '\\') => (acc, true)
       case ((acc, false), c) => (acc + c, false)
@@ -284,7 +288,7 @@ trait Parser extends RegexParsers with Filters with AST {
     back.substring(1, back.length - 1)
   }
   
-  private def canonicalizePath(str: String): String = str substring 1
+  private[quirrel] def canonicalizePath(str: String): String = str substring 1
   
   private def canonicalizePropertyName(str: String): String = {
     val (back, _) = str.substring(1, str.length - 1).foldLeft(("", false)) {

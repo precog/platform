@@ -178,10 +178,9 @@ class SyncQueryServiceHandler(
               case Some((buffer, tail)) =>
                 M.point(Some((buffer, Some(tail))))
               case None =>
-                for {
-                  warnings <- jobManager.listMessages(jobId, channels.Warning, None)
-                  errors <- jobManager.listMessages(jobId, channels.Error, None)
-                } yield {
+                val warningsM = jobManager.listMessages(jobId, channels.Warning, None)
+                val errorsM = jobManager.listMessages(jobId, channels.Error, None)
+                (warningsM |@| errorsM) { (warnings, errors) =>
                   val suffix = """, "errors": %s, "warnings": %s }""" format (
                     JArray(errors.toList map (_.value)).renderCompact,
                     JArray(warnings.toList map (_.value)).renderCompact

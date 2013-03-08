@@ -1364,15 +1364,15 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       lazy val buildJType: PartialFunction[(CPath, CType), JType] = {
         case (CPath(CPathField(f), xs @ _*), ctype) => 
           if (Random.nextBoolean) JObjectFixedT(Map(f -> buildJType((CPath(xs: _*), ctype))))
-          else JObjectFixedT(Map(f -> JType.JUnfixedT))
+          else JObjectFixedT(Map(f -> JType.JUniverseT))
 
         case (CPath(CPathIndex(i), xs @ _*), ctype) => 
           if (Random.nextBoolean) JArrayFixedT(Map(i -> buildJType((CPath(xs: _*), ctype))))
-          else JArrayFixedT(Map(i -> JType.JUnfixedT))
+          else JArrayFixedT(Map(i -> JType.JUniverseT))
 
         case (CPath.Identity, ctype) => 
           if (Random.nextBoolean) {
-            JType.JUnfixedT
+            JType.JUniverseT
           } else {
             ctype match {
               case CString => JTextT
@@ -1407,7 +1407,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
                 case unchanged => unchanged
               })
 
-            case (field, JType.JUnfixedT) => 
+            case (field, JType.JUniverseT) => 
               JObject(fields.filter {
                 case JField(`field`, _) => false
                 case _ => true
@@ -1462,7 +1462,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
                 case (v, _) => v
               })
 
-            case (index, JType.JUnfixedT) => JArray(elements.updated(index, JUndefined)) 
+            case (index, JType.JUniverseT) => JArray(elements.updated(index, JUndefined)) 
             case (index, JNumberT) => JArray(elements.updated(index, JUndefined))
             case (index, JTextT) => JArray(elements.updated(index, JUndefined))
             case (index, JBooleanT) => JArray(elements.updated(index, JUndefined))

@@ -71,7 +71,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
   def eventOptionsResponse = OptionHeaders.apply[JValue, Future](M)
 
-  val eventService = this.service("ingest", "1.0") {
+  val eventService = this.service("ingest", "2.0") {
     requestLogging {
       healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {

@@ -45,7 +45,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package com.precog.common
+package com.precog.util
 
 import scala.collection.IndexedSeqLike
 import scala.collection.generic.CanBuildFrom
