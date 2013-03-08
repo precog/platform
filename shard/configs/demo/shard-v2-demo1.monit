@@ -1,0 +1,20 @@
+check process shard-v2-demo1 with pidfile /var/run/precog/shard-v2-demo1.pid
+  start program = "/usr/sbin/service shard-v2-demo1 start" with timeout 30 seconds
+  stop program  = "/usr/sbin/service shard-v2-demo1 stop"
+  if failed port 30150 protocol http and request '/blueeyes/services/analytics/v2/health' with timeout 15 seconds for 3 cycles 
+     then exec "/opt/precog/threaddump.sh shard-v2-demo1"
+  if failed port 30150 protocol http and request '/blueeyes/services/analytics/v2/health' with timeout 15 seconds for 8 cycles 
+     then restart
+  if 3 restarts within 10 cycles then timeout
+  group shard-v2-demo1
+
+# Watch server log for issues
+check file shard-v2-demo1.server.log with path /var/log/precog/shard-v2-demo1.server.log
+  # This is technically an error, but usually transient. Nagios will catch anything permanently failing
+  ignore match "Promise already completed"
+  # This error should go away once BlueEyes is updated to master (bug in netty handling)
+  ignore match "java.nio.channels.ClosedChannelException: null"
+  if match "Exception" for 1 cycles then alert
+  if match "Error" for 1 cycles then alert
+  depends on shard-v2-demo1
+  group shard-v2-demo1
