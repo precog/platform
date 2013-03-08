@@ -41,11 +41,11 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
     case None => Promise.successful(Set.empty[CPath])(asyncContext)
   }
 
-  def findStructure(path: Path, selector: CPath): Future[PathStructure] = {
+  def findStructure(path: Path, ref: ColumnRef): Future[PathStructure] = {
     OptionT(findProjection(path)) flatMapF (_.getSnapshot()) flatMapF { snapshot =>
-      val childrenM = M.point { snapshot.structure map (_._1) }
+      val childrenM = M.point { snapshot.structure map { case ColumnRef(path, _) => path } }
       // val countM = M.point { snapshot.count(Some(Set(selector))) }
-      val typesM = M.point { snapshot.reduce(Reductions.count, selector) }
+      val typesM = M.point { snapshot.reduce(Reductions.count, ref) }
       (childrenM /*|@| countM*/ |@| typesM) { (children/*, count*/, types) =>
         PathStructure(types, children)
       }

@@ -232,14 +232,18 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       // double-check the data
       val cpa = CPath(".a")
       val cpb = CPath(".b")
+
+      val cta = CNum
+      val ctb = CNum
+
       val bs = new BitSet()
       range.foreach(i => bs.set(i))
       
-      val sa = ArraySegment(blockid, cpa, CNum, bs.copy, range.map(i => BigDecimal(i * 2)).toArray)
-      val sb = ArraySegment(blockid, cpb, CNum, bs.copy, range.map(i => BigDecimal(i * 3)).toArray)
+      val sa = ArraySegment(blockid, cpa, cta, bs.copy, range.map(i => BigDecimal(i * 2)).toArray)
+      val sb = ArraySegment(blockid, cpb, ctb, bs.copy, range.map(i => BigDecimal(i * 3)).toArray)
 
-      h.snapshot(Some(Set(cpa))).segments must contain(sa)
-      h.snapshot(Some(Set(cpb))).segments must contain(sb)
+      h.snapshot(Some(Set(ColumnRef(cpa, cta)))).segments must contain(sa)
+      h.snapshot(Some(Set(ColumnRef(cpb, ctb)))).segments must contain(sb)
     }
 
     val tmp9 = tempfile()
@@ -248,48 +252,51 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val cpa = CPath(".a")
       val cpb = CPath(".b")
 
+      val cta = CString
+      val ctb = CString
+
       val struct1 = h.structure
       struct1.toSet must_== Set()
 
       val snap1 = h.snapshot(None).segments
       snap1.toSet must_== Set()
 
-      val a1 = h.snapshot(Some(Set(cpa))).segments
+      val a1 = h.snapshot(Some(Set(ColumnRef(cpa, cta)))).segments
       a1.toSet must_== Set()
 
       h.write(16, json("""{"a": "foo"} {"a": "bar"}"""))
 
       val struct2 = h.structure
       struct1.toSet must_== Set()
-      struct2.toSet must_== Set((cpa, CString))
+      struct2.toSet must_== Set(ColumnRef(cpa, cta))
 
       val snap2 = h.snapshot(None).segments
       snap1.toSet must_== Set()
-      snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+      snap2.toSet must_== Set(ArraySegment(blockid, cpa, cta, bitset(0, 1), Array("foo", "bar")))
 
-      val a2 = h.snapshot(Some(Set(cpa))).segments
+      val a2 = h.snapshot(Some(Set(ColumnRef(cpa, cta)))).segments
       a1.toSet must_== Set()
-      a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+      a2.toSet must_== Set(ArraySegment(blockid, cpa, cta, bitset(0, 1), Array("foo", "bar")))
 
       h.write(17, json("""{"a": "qux", "b": "xyz"} {"a": "baz", "b": "bla"}"""))
 
       val struct3 = h.structure
       struct1.toSet must_== Set()
-      struct2.toSet must_== Set((cpa, CString))
-      struct3.toSet must_== Set((cpa, CString), (cpb, CString))
+      struct2.toSet must_== Set(ColumnRef(cpa, cta))
+      struct3.toSet must_== Set(ColumnRef(cpa, cta), ColumnRef(cpb, ctb))
 
       val snap3 = h.snapshot(None).segments
       snap1.toSet must_== Set()
-      snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+      snap2.toSet must_== Set(ArraySegment(blockid, cpa, cta, bitset(0, 1), Array("foo", "bar")))
       snap3.toSet must_== Set(
-        ArraySegment(blockid, cpa, CString, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")),
-        ArraySegment(blockid, cpb, CString, bitset(2, 3), Array(null, null, "xyz", "bla"))
+        ArraySegment(blockid, cpa, cta, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")),
+        ArraySegment(blockid, cpb, ctb, bitset(2, 3), Array(null, null, "xyz", "bla"))
       )
 
-      val a3 = h.snapshot(Some(Set(cpa))).segments
+      val a3 = h.snapshot(Some(Set(ColumnRef(cpa, cta)))).segments
       a1.toSet must_== Set()
-      a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
-      a3.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")))
+      a2.toSet must_== Set(ArraySegment(blockid, cpa, cta, bitset(0, 1), Array("foo", "bar")))
+      a3.toSet must_== Set(ArraySegment(blockid, cpa, ctb, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")))
     }
   }
 } 

@@ -30,7 +30,7 @@ trait StorageMetadata[M[+_]] { self =>
 
   def findSelectors(path: Path): M[Set[CPath]]
   def findSize(path: Path): M[Long]
-  def findStructure(path: Path, selector: CPath): M[PathStructure]
+  def findStructure(path: Path, ref: ColumnRef): M[PathStructure]
 //  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
 //  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
 //
@@ -58,7 +58,7 @@ trait StorageMetadata[M[+_]] { self =>
     def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
     def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
     def findSize(path: Path) = self.findSize(path).liftM[T]
-    def findStructure(path: Path, selector: CPath) = self.findStructure(path, selector).liftM[T]
+    def findStructure(path: Path, ref: ColumnRef) = self.findStructure(path, ref).liftM[T]
 
 //    def findProjections(path: Path, selector: CPath) = self.findProjections(path, selector).liftM[T]
 //    def findPathMetadata(path: Path, selector: CPath) = self.findPathMetadata(path, selector).liftM

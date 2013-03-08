@@ -74,10 +74,10 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
     (actor ? GetSnapshot).mapTo[NIHDBSnapshot]
 
   // TODO: We should require an `Option[Set[(CPath, CType)]]`.
-  def getBlockAfter(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
+  def getBlockAfter(id: Option[Long], cols: Option[Set[ColumnRef]]): Future[Option[Block]] =
     getSnapshot().map(_.getBlockAfter(id, cols))
 
-  def getBlock(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
+  def getBlock(id: Option[Long], cols: Option[Set[ColumnRef]]): Future[Option[Block]] =
     getSnapshot().map(_.getBlock(id, cols))
 
   def length: Future[Long] =
@@ -86,7 +86,7 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
   def status: Future[Status] =
     (actor ? GetStatus).mapTo[Status]
 
-  def structure: Future[Set[(CPath, CType)]] =
+  def structure: Future[Set[ColumnRef]] =
     getSnapshot().map(_.structure)
 
   /**
@@ -95,7 +95,7 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
    * block. Instead we count the number of rows that have at least one defined
    * value at each path (and their children).
    */
-  def count(paths0: Option[Set[CPath]]): Future[Long] =
+  def count(paths0: Option[Set[ColumnRef]]): Future[Long] =
     getSnapshot().map(_.count(paths0))
 
   def close(implicit actorSystem: ActorSystem): Future[PrecogUnit] =
