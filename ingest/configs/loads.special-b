@@ -1,0 +1,6 @@
+/etc/precog/ingest-v2-b.conf=special-b/ingest-v2.conf
+default=special-b/ingest-v2.default
+init=special-b/ingest-v2.init
+/etc/monit/conf.d/ingest-v2-b.monit=special-b/ingest-v2.monit
+/etc/precog/ingest-v2-b.logging.xml=special-b/ingest-v2.logging.xml
+postinstall=special-b/postinstall.sh
