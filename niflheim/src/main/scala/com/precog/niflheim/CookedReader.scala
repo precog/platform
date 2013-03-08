@@ -51,9 +51,9 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
   def id: Long = metadata.valueOr(throw _).blockid
   def length: Int = metadata.valueOr(throw _).length
 
-  def snapshot(pathConstraint: Option[Set[CPath]]): Block = {
-    val segments: Seq[Segment] = pathConstraint map { paths =>
-      load(paths.toList).map({ segs =>
+  def snapshot(pathConstraint: Option[Set[ColumnRef]]): Block = {
+    val segments: Seq[Segment] = pathConstraint map { refs =>
+      load(refs.toList).map({ segs =>
         segs flatMap (_._2)
       }).valueOr { nel => throw nel.head }
     } getOrElse {
@@ -67,8 +67,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     Block(id, segments, isStable)
   }
 
-  def structure: Iterable[(CPath, CType)] = metadata.valueOr(throw _).segments map {
-    case (segId, _) => (segId.cpath, segId.ctype)
+  def structure: Iterable[ColumnRef] = metadata.valueOr(throw _).segments map {
+    case (segId, _) => ColumnRef(segId.cpath, segId.ctype)
   }
 
   def metadata: Validation[IOException, CookedBlockMetadata] = {
@@ -87,22 +87,22 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     }
   }
 
-  private def segmentsByCPath: Validation[IOException, Map[CPath, List[File]]] = metadata map { md =>
-    md.segments.groupBy(_._1.cpath).map { case (cpath, segs) =>
-      (cpath, segs.map(_._2).toList)
+  private def segmentsByCPath: Validation[IOException, Map[ColumnRef, List[File]]] = metadata map { md =>
+    md.segments.groupBy( s => ColumnRef(s._1.cpath, s._1.ctype)).map { case (info, segs) =>
+      (info, segs.map(_._2).toList)
     }.toMap
   }
 
-  def load(paths: List[CPath]): ValidationNEL[IOException, List[(CPath, List[Segment])]] = {
-    segmentsByCPath.toValidationNEL flatMap { (segsByPath: Map[CPath, List[File]]) =>
-      paths.map { path =>
-        val v: ValidationNEL[IOException, List[Segment]] = segsByPath.getOrElse(path, Nil).map { file =>
+  def load(refs: List[ColumnRef]): ValidationNEL[IOException, List[(ColumnRef, List[Segment])]] = {
+    segmentsByCPath.toValidationNEL flatMap { (segsByPath: Map[ColumnRef, List[File]]) =>
+      refs.map { case ref =>
+        val v: ValidationNEL[IOException, List[Segment]] = segsByPath.getOrElse(ref, Nil).map { file =>
           read(file) { channel =>
             segmentFormat.reader.readSegment(channel).toValidationNEL
           }
         }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, Segment]
-        v map (path -> _)
-      }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (CPath, List[Segment])]
+        v map (ref -> _)
+      }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (ColumnRef, List[Segment])]
     }
   }
 }

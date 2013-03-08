@@ -64,8 +64,7 @@ class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) e
 
   def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
     // FIXME: We probably want to change this semantic throughout Yggdrasil
-    val constraint = columns.map(_.map(_.selector))
-    db.getBlockAfter(id0, constraint) map { block =>
+    db.getBlockAfter(id0, columns) map { block =>
       block map { case Block(id, segs, stable) =>
         BlockProjectionData[Long, Slice](id, id, SegmentsWrapper(segs, projectionId, id))
       }
@@ -83,11 +82,7 @@ class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) e
 
   def length: Future[Long] = db.length
 
-  def structure: Future[Set[ColumnRef]] = {
-    db.structure map (_.map { case (cpath, ctype) =>
-      ColumnRef(cpath, ctype)
-    })
-  }
+  def structure: Future[Set[ColumnRef]] = db.structure
 
   def status: Future[Status] = db.status
 

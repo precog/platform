@@ -4,8 +4,8 @@ import com.precog.common._
 import com.precog.util._
 
 trait StorageReader {
-  def snapshot(pathConstraints: Option[Set[CPath]]): Block
-  def structure: Iterable[(CPath, CType)]
+  def snapshot(pathConstraints: Option[Set[ColumnRef]]): Block
+  def structure: Iterable[ColumnRef]
 
   def isStable: Boolean
 

@@ -32,7 +32,10 @@ private[nihdb] class NIHDBAggregateProjection (underlying: NonEmptyList[NIHDBSna
         if (index >= readers.length) {
           None
         } else {
-          val slice = SegmentsWrapper(readers(index).snapshot(columns.map(_.map(_.selector))).segments, projectionId, index)
+          val slice = SegmentsWrapper(
+            readers(index).snapshot(columns).segments, 
+            projectionId,
+            index)
           Some(BlockProjectionData(index, index, slice))
         }
       } catch {
@@ -48,7 +51,7 @@ private[nihdb] class NIHDBAggregateProjection (underlying: NonEmptyList[NIHDBSna
 
   def length: Future[Long] = M.point(readers.map(_.length.toLong).sum)
 
-  def structure: Future[Set[ColumnRef]] = M.point(readers.map(_.structure.map { case (s, t) => ColumnRef(s, t) }).toSet.flatten)
+  def structure: Future[Set[ColumnRef]] = M.point(readers.map(_.structure).toSet.flatten)
 
   def status: Future[Status] = sys.error("Status unsupported in aggregate")
 

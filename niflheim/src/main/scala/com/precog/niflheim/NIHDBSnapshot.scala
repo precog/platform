@@ -43,18 +43,21 @@ trait NIHDBSnapshot extends Logging {
     if (j >= blockIds.length) None else Some(readers(j))
   }
 
-  def getBlock(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
+  def getBlock(id0: Option[Long], cols: Option[Set[ColumnRef]]): Option[Block] =
     findReader(id0).map(_.snapshot(cols))
 
-  def getBlockAfter(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
+  def getBlockAfter(id0: Option[Long], cols: Option[Set[ColumnRef]]): Option[Block] =
     findReaderAfter(id0).map(_.snapshot(cols))
 
-  def structure: Set[(CPath, CType)] =
+  def structure: Set[ColumnRef] =
     readers.map(_.structure.toSet).toSet.flatten
 
-  def getConstraints(columns: Iterable[(CPath, CType)], cpaths: Set[CPath]) = {
+  def getConstraints(columns: Iterable[ColumnRef], cpaths: Set[ColumnRef]) = {
     columns.collect {
-      case (cpath, _) if cpaths.exists(cpath.hasPrefix(_)) => cpath
+      case ColumnRef(cpath, ctype)
+        if cpaths exists {
+          case ColumnRef(p, t) => cpath.hasPrefix(p) && ctype == t
+        } => ColumnRef(cpath, ctype)
     }
   }
 
@@ -64,15 +67,15 @@ trait NIHDBSnapshot extends Logging {
    * block. Instead we count the number of rows that have at least one defined
    * value at each path (and their children).
    */
-  def count(id: Option[Long], paths0: Option[Set[CPath]]): Option[Long] = {
+  def count(id: Option[Long], refs0: Option[Set[ColumnRef]]): Option[Long] = {
     def countSegments(segs: Seq[Segment]): Long = segs.foldLeft(new BitSet) { (acc, seg) =>
       acc.or(seg.defined)
       acc
     }.cardinality
 
     findReader(id).map { reader =>
-      paths0 map { paths =>
-        val constraints = getConstraints(reader.structure, paths)
+      refs0 map { refs =>
+        val constraints = getConstraints(reader.structure, refs)
         val Block(_, cols, _) = reader.snapshot(Some(constraints.toSet))
         countSegments(cols)
       } getOrElse {
@@ -81,15 +84,15 @@ trait NIHDBSnapshot extends Logging {
     }
   }
 
-  def count(paths0: Option[Set[CPath]] = None): Long = {
+  def count(refs0: Option[Set[ColumnRef]] = None): Long = {
     blockIds.foldLeft(0L) { (total, id) =>
-      count(Some(id), paths0).getOrElse(0L)
+      count(Some(id), refs0).getOrElse(0L)
     }
   }
 
-  def reduce[A](reduction: Reduction[A], path: CPath): Map[CType, A] = {
+  def reduce[A](reduction: Reduction[A], ref: ColumnRef): Map[CType, A] = {
     blockIds.foldLeft(Map.empty[CType, A]) { (acc, id) =>
-      getBlock(Some(id), Some(Set(path))) map { case Block(_, segments, _) =>
+      getBlock(Some(id), Some(Set(ref))) map { case Block(_, segments, _) =>
         segments.foldLeft(acc) { (acc, segment) =>
           reduction.reduce(segment, None) map { a =>
             val key = segment.ctype

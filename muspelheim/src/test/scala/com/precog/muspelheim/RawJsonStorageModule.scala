@@ -91,11 +91,11 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
     def findDirectChildren(path: Path) = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
     def findSize(path: Path) = M.point(projections.get(path).map(_.size.toLong).getOrElse(0L))
     def findSelectors(path: Path) = M.point(structures.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-    def findStructure(path: Path, selector: CPath) = M.point {
+    def findStructure(path: Path, ref: ColumnRef) = M.point {
       val structs = structures.getOrElse(path, Set.empty[ColumnRef])
       val types : Map[CType, Long] = structs.collect {
         // FIXME: This should use real counts
-        case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+        case ColumnRef(selector, ctype) if selector.hasPrefix(ref.selector) && ctype == ref.ctype => (ctype, 0L)
       }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
 
       PathStructure(types, structs.map(_.selector))

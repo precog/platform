@@ -36,14 +36,14 @@ class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Lo
 
   def findSize(path: Path) = M.point(0L)
   def findSelectors(path: Path) = M.point(projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]).keySet.map(_.selector))
-  def findStructure(path: Path, selector: CPath) = M.point {
+  def findStructure(path: Path, ref: ColumnRef) = M.point {
     val types: Map[CType, Long] = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) collect {
-      case (ColumnRef(`selector`, ctype), count) => (ctype, count)
+      case (ref, count) => (ref.ctype, count)
     }
 
     val children = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) flatMap {
-      case t @ (ColumnRef(s, ctype), count) => 
-        if (s.hasPrefix(selector)) s.take(selector.length + 1) else None
+      case (ColumnRef(s, t), _) => 
+        if (s.hasPrefix(ref.selector) && t == ref.ctype) s.take(ref.selector.length + 1) else None
     }
 
     PathStructure(types, children.toSet)
