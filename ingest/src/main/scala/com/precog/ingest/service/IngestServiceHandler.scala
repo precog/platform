@@ -432,8 +432,9 @@ class IngestServiceHandler(
             import Validation._
 
             val parseDirectives = getParseDirectives(request)
-            val batchMode = request.parameters.get('mode) exists (_ equalsIgnoreCase "batch")
-            // assign new job ID for batch-mode queries only
+            val batchMode = request.parameters.get('mode).exists(_ equalsIgnoreCase "batch") || 
+                            request.parameters.get('sync).exists(_ equalsIgnoreCase "sync")
+
             for {
               batchJob <- batchMode.option(createJob.run).sequence
               ingestResult <- (batchJob map {

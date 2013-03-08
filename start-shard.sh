@@ -444,9 +444,9 @@ sed -e "s/port = 30060/port = $INGEST_PORT/; \
 	s/port = 9082/port = $KAFKA_LOCAL_PORT/; \
 	s/port = 9092/port = $KAFKA_GLOBAL_PORT/; \
 	s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/" < \
-	"$BASEDIR"/ingest/configs/dev/dev-ingest-v1.conf > \
-	"$WORKDIR"/configs/ingest-v1.conf || echo "Failed to update ingest config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/dev-ingest-v1.logging.xml > "$WORKDIR"/configs/ingest-v1.logging.xml
+	"$BASEDIR"/ingest/configs/dev/ingest-v2.conf > \
+	"$WORKDIR"/configs/ingest-v2.conf || echo "Failed to update ingest config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/ingest-v2.logging.xml > "$WORKDIR"/configs/ingest-v2.logging.xml
 
 sed -e "s#port = 30070#port = $SHARD_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
@@ -460,11 +460,11 @@ sed -e "s#port = 30070#port = $SHARD_PORT#; \
 	s#/jobs/v1/#/#; \
 	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
-	"$BASEDIR"/shard/configs/dev/shard-v1.conf > \
-	"$WORKDIR"/configs/shard-v1.conf || echo "Failed to update shard config"
+	"$BASEDIR"/shard/configs/dev/shard-v2.conf > \
+	"$WORKDIR"/configs/shard-v2.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
-	"$BASEDIR"/shard/configs/dev/shard-v1.logging.xml > \
-	"$WORKDIR"/configs/shard-v1.logging.xml
+	"$BASEDIR"/shard/configs/dev/shard-v2.logging.xml > \
+	"$WORKDIR"/configs/shard-v2.logging.xml
 
 cd "$BASEDIR"
 
@@ -515,11 +515,11 @@ else
 fi
 
 echo "Starting ingest service"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v1.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v1.conf &> $WORKDIR/logs/ingest-v1.stdout &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v2.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v2.conf &> $WORKDIR/logs/ingest-v2.stdout &
 INGESTPID=$!
 
 echo "Starting shard service"
-$JAVA $REBEL_OPTS $SHARD_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v1.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v1.conf &> $WORKDIR/logs/shard-v1.stdout &
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
