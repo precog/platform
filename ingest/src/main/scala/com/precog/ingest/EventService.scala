@@ -20,7 +20,6 @@
 package com.precog.ingest
 
 import service._
-import com.precog.common.OptionHeaders
 import com.precog.common.accounts._
 import com.precog.common.client._
 import com.precog.common.jobs._
@@ -69,7 +68,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
   def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)
 
-  def eventOptionsResponse = OptionHeaders.apply[JValue, Future](M)
+  def eventOptionsResponse = CORSHeaders.apply[JValue, Future](M)
 
   val eventService = this.service("ingest", "2.0") {
     requestLogging {

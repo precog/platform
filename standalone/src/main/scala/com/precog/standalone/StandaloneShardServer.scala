@@ -58,7 +58,7 @@ trait StandaloneShardServer
   val jettyService = this.service("labcoat", "1.0") { context =>
     startup {
       val rootConfig = context.rootConfig
-      val config = rootConfig.detach("services.quirrel.v1")
+      val config = rootConfig.detach("services.analytics.v2")
       val serverPort = config[Int]("labcoat.port", 8000)
       val quirrelPort = rootConfig[Int]("server.port", 8888)
       val rootKey = config[String]("security.masterAccount.apiKey")

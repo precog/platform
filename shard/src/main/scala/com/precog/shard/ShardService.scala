@@ -22,7 +22,7 @@ package com.precog.shard
 import com.precog.util.PrecogUnit
 import com.precog.muspelheim._
 
-import com.precog.common.{OptionHeaders, Path}
+import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobManager
@@ -114,7 +114,7 @@ trait ShardService extends
   val utf8 = Charset.forName("UTF-8")
   val BufferSize = 64 * 1024
 
-  def optionsResponse = OptionHeaders.apply[ByteChunk, Future](M)
+  def optionsResponse = CORSHeaders.apply[ByteChunk, Future](M)
 
   private def bufferOutput(stream0: StreamT[Future, CharBuffer]) = {
     val encoder = utf8.newEncoder()
