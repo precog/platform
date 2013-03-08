@@ -22,7 +22,8 @@ package table
 
 import com.precog.common._
 import com.precog.common.json._
-import com.precog.common.{Path, VectorCase}
+import com.precog.common.Path
+import com.precog.util.VectorCase
 import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -354,18 +355,49 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
           }
 
         case InnerObjectConcat(objects @ _*) =>
+          /**
+           * This test is for special casing object concats when we know we
+           * won't have any unions, or funky behaviour arising from empty
+           * objects.
+           */
+          def isDisjoint(s1: Slice, s2: Slice): Boolean = {
+            false // TODO: We really want to optimize the case where
+                  // we are constructing a simple object from some
+                  // other object where usually the definedness is equal
+                  // on both sides, so we can just ++ the columns. But,
+                  // we need to be a bit smarter about checking for equal
+                  // definedness.
+
+            // def containsEmptyObject(slice: Slice): Boolean =
+            //   slice.columns.exists(_._1.ctype == CEmptyObject)
+
+            // if (containsEmptyObject(s1) || containsEmptyObject(s2))
+            //   return false
+
+            // val keys = s1.columns.map(_._1.selector).toSet
+            // !s2.columns.map(_._1.selector).exists(keys)
+          }
+
           if (objects.size == 1) {
             val typed = Typed(objects.head, JObjectUnfixedT)
             composeSliceTransform2(typed) 
           } else {
             objects map composeSliceTransform2 reduceLeft { (l0, r0) =>
-              l0.zip(r0) { (sl, sr) =>
+              l0.zip(r0) { (sl0, sr0) =>
+                val sl = sl0.typed(JObjectUnfixedT) // Help out the special cases.
+                val sr = sr0.typed(JObjectUnfixedT)
+
                 new Slice {
                   val size = sl.size
 
                   val columns: Map[ColumnRef, Column] = {
                     if (sl.columns.isEmpty || sr.columns.isEmpty) {
                       Map.empty[ColumnRef, Column]
+                    } else if (isDisjoint(sl, sr)) {
+                      // If we know sl & sr are disjoint, which is often the
+                      // case for queries where objects are constructed
+                      // manually, then we can do a lot less work.
+                      sl.columns ++ sr.columns
                     } else {
                       val (leftObjectBits, leftEmptyBits) = buildFilters(sl.columns, sl.size, filterObjects, filterEmptyObjects)
                       val (rightObjectBits, rightEmptyBits) = buildFilters(sr.columns, sr.size, filterObjects, filterEmptyObjects)

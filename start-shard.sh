@@ -108,9 +108,12 @@ JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
 SHARD_ASSEMBLY="$BASEDIR"/shard/target/shard-assembly-$VERSION.jar
 RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
-GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+#GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+GC_OPTS=""
 
 JAVA="java $GC_OPTS"
+
+SHARD_OPTS=""
 
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
@@ -555,6 +558,13 @@ JOBS_PORT:         $JOBS_PORT
 SHARD_PORT:        $SHARD_PORT
 EOF
 echo "============================================================"
+
+cat > shard.out <<EOF
+id $ACCOUNTID
+token $ACCOUNTTOKEN
+ingest $INGEST_PORT
+shard $SHARD_PORT
+EOF
 
 function query() {
     curl -s -G \

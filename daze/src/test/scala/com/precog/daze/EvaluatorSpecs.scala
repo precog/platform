@@ -149,8 +149,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
   val testAPIKey = "testAPIKey"
 
-  def testEval(graph: DepGraph, path: Path = Path.Root)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, path, true) match {
+  def testEval(graph: DepGraph, path: Path = Path.Root, optimize: Boolean = true)(test: Set[SEvent] => Result): Result = {
+    (consumeEval(testAPIKey, graph, path, optimize) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })/* and 
@@ -436,7 +436,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         joinDeref(mega, 0, 0, line),
         joinDeref(mega, 0, 1, line))(line)
         
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
 
         val result2 = result collect {
@@ -461,7 +462,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         List((weight, mean), (height, max)),
         parent)
 
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
 
         val result2 = result collect {
@@ -490,7 +492,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         joinDeref(mega, 0, 0, line),
         joinDeref(mega, 1, 0, line))(line)
 
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
 
         val result2 = result collect {
@@ -514,7 +517,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           joinDeref(mega, 0, 1, line),
           joinDeref(mega, 0, 2, line))(line))(line)
 
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
 
         val result2 = result collect {
@@ -1516,7 +1520,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val parent = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       val input = dag.MegaReduce(List((trans.Leaf(trans.Source), List(Count, Sum))), parent)
 
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
 
         val result2 = result collect {
@@ -1536,7 +1541,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val mega = dag.MegaReduce(List((trans.Leaf(trans.Source), List(red))), parent)
       val input = Join(DerefArray, CrossLeftSort, Join(DerefArray, CrossLeftSort, mega, Const(CLong(0))(line))(line), Const(CLong(0))(line))(line)
         
-      testEval(input) { result =>
+      // We don't optimize since MegaReduce can only be created through an optimization.
+      testEval(input, optimize = false) { result =>
         result must haveSize(1)
         
         val result2 = result collect {
@@ -2800,7 +2806,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
                 Const(CString("/sign-up.html"))(line))(line)),
             UnfixedSolution(0, 
               Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line)))),
-        MegaReduce(List((trans.TransSpec1.Id, List(Count))), SplitGroup(1, clicks.identities)(input)(line)))(line)
+        dag.Reduce(Count, SplitGroup(1, clicks.identities)(input)(line))(line))(line)
         
       testEval(input) { results =>
         results must not(beEmpty)

@@ -20,7 +20,7 @@
 package com.precog.pandora
 
 import com.precog.common.Path
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 import com.precog.common.accounts._
 import com.precog.common.kafka._
 import com.precog.common.security._

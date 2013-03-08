@@ -469,4 +469,3 @@ object BlockAlignSpec extends TableModuleSpec[YId] with BlockAlignSpec[YId] with
     "produce the same results irrespective of input order" in testAlignSymmetry(2)
   }
 }
-// vim: set ts=4 sw=4 et:

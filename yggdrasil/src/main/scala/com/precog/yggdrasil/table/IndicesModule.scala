@@ -145,16 +145,22 @@ trait IndicesModule[M[+_]]
      */
     def createFromTable(table: Table, groupKeys: Seq[TransSpec1], valueSpec: TransSpec1): M[TableIndex] = {
 
+      def accumulate(buf: mutable.ListBuffer[SliceIndex], stream: StreamT[M, SliceIndex]): M[TableIndex] =
+        stream.uncons.flatMap {
+          case None => M.point(new TableIndex(buf.toList))
+          case Some((si, tail)) => { buf += si; accumulate(buf, tail) }
+        }
+
       // We are given TransSpec1s; to apply these to slices we need to
       // create SliceTransforms from them.
       val sts = groupKeys.map(composeSliceTransform).toArray
       val vt = composeSliceTransform(valueSpec)
 
-      // Given this table, build a table index from the slice indices.
-      table.slices.toStream.map { stream =>
-        val lst = stream.toList
-        new TableIndex(lst.map(SliceIndex.createFromSlice(_, sts, vt)))
+      val indices = table.slices.map { slice =>
+        SliceIndex.createFromSlice(slice, sts, vt)
       }
+
+      accumulate(mutable.ListBuffer.empty[SliceIndex], indices)
     }
 
     /**
