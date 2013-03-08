@@ -27,8 +27,7 @@ data and develop Quirrel queries.
 
 How to run...
 -------------------
-Once the program is sucessfully installed, a launcher icon will be available in your menu.
-The launcher will start all the required Precog services and launch Labcoat in your default browser (bookmark it!).
+Once the program is sucessfully installed, Precog services will start in background and a launcher icon for Labcoat will be available in your menu. 
 
 Analyze Data!
 ---------------------
