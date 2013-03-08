@@ -101,7 +101,7 @@ object DesktopIngestShardServer
         logger.info("Platform shutdown complete")
       }.onFailure {
         case t: Throwable =>
-          logger.erroR("Failure during platform shutdown", t)
+          logger.error("Failure during platform shutdown", t)
       }
     }
 
@@ -195,18 +195,32 @@ object LaunchLabcoat{
       val configFile=args(0).replaceFirst("--configFile=","")
       val config = Configuration.load( configFile )
       val jettyPort = config[Int]("services.quirrel.v1.labcoat.port")
+      val shardPort = config[Int]("server.port")
+      val zkPort = config[Int]("zookeeper.port")
+      val kafkaPort = config[Int]("kafka.port")
 
-      if (Desktop.isDesktopSupported) {
-        (new Thread() {
-          override def run() = {
-            if (DesktopIngestShardServer.waitForPortOpen(jettyPort, 60)) {
-              java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
-            }
-          }
-        }).start()
+      def waitForPorts=
+        DesktopIngestShardServer.waitForPortOpen(jettyPort, 60) &&
+        DesktopIngestShardServer.waitForPortOpen(shardPort, 60) &&
+        DesktopIngestShardServer.waitForPortOpen(zkPort, 60) &&
+        DesktopIngestShardServer.waitForPortOpen(kafkaPort, 60)
+
+      @tailrec
+      def launchBrowser(){
+        if (waitForPorts) {
+          java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
+        } else {
+          println(" Timeout waiting for server to start, retrying...")
+          launchBrowser()
+        }
+      }
+
+      if (Desktop.isDesktopSupported){
+        launchBrowser()
       } else {
         sys.error("Browser open on non-desktop system")
       }
     }
+    System.exit(0)
   }
 }

@@ -207,6 +207,8 @@ LABCOAT_PORT:      $LABCOAT_PORT
 EOF
 echo "============================================================"
 
+java -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.LaunchLabcoat --configFile="$WORKDIR"/configs/shard-v1.conf
+
 function query() {
     curl -s -G \
       --data-urlencode "q=$1" \
