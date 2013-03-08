@@ -118,7 +118,7 @@ object DesktopIngestShardServer
         logger.info("Platform shutdown complete")
       }.onFailure {
         case t: Throwable =>
-          logger.erroR("Failure during platform shutdown", t)
+          logger.error("Failure during platform shutdown", t)
       }
     }
 
