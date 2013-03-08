@@ -51,15 +51,15 @@ import org.slf4j.LoggerFactory
 import scalaz._
 
 class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport with FutureMatchers {
-  
+
   override def mongoStartupPause = Some(0l)
   val timeout = Duration(10, "seconds")
 
   lazy val logger = LoggerFactory.getLogger("com.precog.common.security.MongoAPIKeyManagerSpec")
 
   "mongo API key manager" should {
-    
-    "find API key present" in new TestAPIKeyManager { 
+
+    "find API key present" in new TestAPIKeyManager {
       val result = Await.result(apiKeyManager.findAPIKey(rootAPIKey), timeout)
 
       result must beLike {
@@ -76,30 +76,30 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     "error if a root API key cannot be found and creation isn't requested" in new TestAPIKeyManager {
       Await.result(MongoAPIKeyManager.findRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys + "_empty"), timeout) must throwAn[Exception]
     }
-    
-    "not find missing API key" in new TestAPIKeyManager { 
+
+    "not find missing API key" in new TestAPIKeyManager {
       val result = Await.result(apiKeyManager.findAPIKey(notFoundAPIKeyID), timeout)
       result must beNone
     }
-    
-    "issue new API key" in new TestAPIKeyManager { 
+
+    "issue new API key" in new TestAPIKeyManager {
       val name = "newAPIKey"
       val fResult = apiKeyManager.newAPIKey(Some(name), None, rootAPIKey, Set.empty)
 
       val result = Await.result(fResult, timeout)
 
       result must beLike {
-        case APIKeyRecord(_, n, _, _, g, _) => 
-          n must beSome(name) 
+        case APIKeyRecord(_, n, _, _, g, _) =>
+          n must beSome(name)
           g must beEmpty
       }
     }
-    
-    "move API key to deleted pool on deletion" in new TestAPIKeyManager { 
+
+    "move API key to deleted pool on deletion" in new TestAPIKeyManager {
 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
-      val fut: Future[Results] = for { 
+      val fut: Future[Results] = for {
         before <- apiKeyManager.findAPIKey(child2.apiKey)
         deleted <- apiKeyManager.deleteAPIKey(before.get.apiKey)
         after <- apiKeyManager.findAPIKey(child2.apiKey)
@@ -111,16 +111,16 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       val result = Await.result(fut, timeout)
 
       result must beLike {
-        case (Some(t1), Some(t2), None, Some(t3)) => 
+        case (Some(t1), Some(t2), None, Some(t3)) =>
           t1 must_== t2
           t1 must_== t3
       }
     }
-    
-    "no failure on deleting API key that is already deleted" in new TestAPIKeyManager { 
+
+    "no failure on deleting API key that is already deleted" in new TestAPIKeyManager {
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])
 
-      val fut: Future[Results] = for { 
+      val fut: Future[Results] = for {
         before <- apiKeyManager.findAPIKey(child2.apiKey)
         deleted1 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
         deleted2 <- apiKeyManager.deleteAPIKey(before.get.apiKey)
@@ -133,7 +133,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       val result = Await.result(fut, timeout)
 
       result must beLike {
-        case (Some(t1), Some(t2), None, None, Some(t4)) => 
+        case (Some(t1), Some(t2), None, None, Some(t4)) =>
           t1 must_== t2
           t1 must_== t4
       }
@@ -156,7 +156,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     implicit val queryTimeout: Timeout = to
 
     val rootAPIKeyOrig = Await.result(MongoAPIKeyManager.createRootAPIKey(testDB, MongoAPIKeyManagerSettings.defaults.apiKeys, MongoAPIKeyManagerSettings.defaults.grants), to)
-  
+
     val apiKeyManager = new MongoAPIKeyManager(mongo, testDB, MongoAPIKeyManagerSettings.defaults.copy(rootKeyId = rootAPIKeyOrig.apiKey))
 
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
@@ -187,7 +187,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       logger.debug("Cleaning up run for " + dbName)
       // Wipe the DB out
       realMongo.dropDatabase(dbName)
-      defaultActorSystem.shutdown 
+      defaultActorSystem.shutdown
     }
   }
 }
