@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <install4j version="5.1.5" transformSequenceNumber="4">
-  <directoryPresets config="./installer_files/icons" />
+  <directoryPresets config="./installer_files/shard-v1.logging.xml" />
   <application name="Precog Labcoat desktop" distributionSourceDir="" applicationId="1594-7033-8032-8358" mediaDir="../../installer" mediaFilePattern="${compiler:sys.shortName}_${compiler:sys.platform}_${compiler:sys.version}_${compiler:sys.withJre}" compression="9" lzmaCompression="true" pack200Compression="false" excludeSignedFromPacking="true" commonExternalFiles="false" createMd5Sums="true" shrinkRuntime="true" shortName="PrecogLabcoat" publisher="Precog" publisherWeb="www.precog.com" version="1.0" allPathsRelative="true" backupOnSave="false" autoSave="true" convertDotsToUnderscores="true" macSignature="????" installerName="" javaMinVersion="1.6" javaMaxVersion="" allowBetaVM="false" jdkMode="runtimeJre" jdkName="">
     <languages skipLanguageSelection="false" languageSelectionInPrincipalLanguage="false">
       <principalLanguage id="en" customLocalizationFile="" />
@@ -17,14 +17,16 @@
   </application>
   <files keepModificationTimes="false" missingFilesStrategy="warn" globalExcludeSuffixes="" defaultOverwriteMode="4" defaultUninstallMode="0" launcherOverwriteMode="3" defaultFileMode="644" defaultDirMode="755">
     <filesets />
-    <roots />
+    <roots>
+      <root id="519" fileset="" location="${installer:myRootDir}" />
+    </roots>
     <mountPoints>
       <mountPoint id="315" root="" location="config" mode="755" />
       <mountPoint id="22" root="" location="" mode="755" />
     </mountPoints>
     <entries>
-      <fileEntry mountPoint="315" file="./installer_files/shard-v1.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="315" file="./installer_files/shard-v1.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="315" file="./installer_files/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="315" file="./installer_files/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
       <fileEntry mountPoint="22" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
       <fileEntry mountPoint="22" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
     </entries>
@@ -32,7 +34,7 @@
   </files>
   <launchers>
     <launcher name="Precoc services" id="306" customizedId="" external="false" excludeFromMenu="false" unixMode="755" menuName="" icnsFile="" customMacBundleIdentifier="false" macBundleIdentifier="" swtApp="false" fileset="" macBundleBinary="JavaApplicationStub" addMacEntitlements="false" macEntitlementsFile="">
-      <executable name="PrecogServer" type="1" iconSet="true" iconFile="" executableDir="." redirectStderr="false" stderrFile="error.log" stderrMode="append" redirectStdout="false" stdoutFile="output.log" stdoutMode="append" failOnStderrOutput="true" executableMode="2" changeWorkingDirectory="false" workingDirectory="." singleInstance="true" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="true" globalSingleInstance="false">
+      <executable name="PrecogServer" type="1" iconSet="true" iconFile="" executableDir="" redirectStderr="false" stderrFile="error.log" stderrMode="append" redirectStdout="false" stdoutFile="output.log" stdoutMode="append" failOnStderrOutput="true" executableMode="2" changeWorkingDirectory="false" workingDirectory="." singleInstance="true" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="true" globalSingleInstance="false">
         <versionInfo include="false" fileVersion="" fileDescription="" legalCopyright="" internalName="" productName="" />
       </executable>
       <splashScreen show="false" autoOff="true" alwaysOnTop="true" width="0" height="0" bitmapFile="./platform/desktop/installer_files/icons/logo-precog.png" java6SplashScreen="false">
@@ -41,7 +43,7 @@
           <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
         </text>
       </splashScreen>
-      <java mainClass="com.precog.shard.desktop.DesktopIngestShardServer" vmParameters="-Dlogback.configurationFile=${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v1.logging.xml" arguments="--configFile ${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v1.conf" allowVMPassthroughParameters="true" preferredVM="server" bundleRuntime="true">
+      <java mainClass="com.precog.shard.desktop.DesktopIngestShardServer" vmParameters="-Dlogback.configurationFile=${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.logging.xml" arguments="--configFile ${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="server" bundleRuntime="true">
         <classPath>
           <archive location="precog-desktop.jar" failOnError="false" />
         </classPath>
@@ -72,7 +74,7 @@
           <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
         </text>
       </splashScreen>
-      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="" arguments="--configFile=${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v1.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
+      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="" arguments="--configFile=${installer:sys.installationDir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
         <classPath>
           <archive location="precog-desktop.jar" failOnError="false" />
         </classPath>
@@ -652,12 +654,12 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                         <array class="java.io.File" length="2">
                           <void index="0">
                             <object class="java.io.File">
-                              <string>config/shard-v1.conf</string>
+                              <string>config/shard-v2.conf</string>
                             </object>
                           </void>
                           <void index="1">
                             <object class="java.io.File">
-                              <string>config/shard-v1.logging.xml</string>
+                              <string>config/shard-v2.logging.xml</string>
                             </object>
                           </void>
                         </array>
@@ -731,6 +733,26 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                   </java>
                 </serializedBean>
                 <condition>context.getBooleanVariable("executeLauncherAction") &amp;&amp; (!context.isUnattended())</condition>
+              </action>
+              <action name="" id="520" customizedId="" beanClass="com.install4j.runtime.beans.actions.desktop.AddStartupItemAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+                <serializedBean>
+                  <java class="java.beans.XMLDecoder">
+                    <object class="com.install4j.runtime.beans.actions.desktop.AddStartupItemAction">
+                      <void property="allUsers">
+                        <boolean>true</boolean>
+                      </void>
+                      <void property="executable">
+                        <object class="java.io.File">
+                          <string>PrecogServer</string>
+                        </object>
+                      </void>
+                      <void property="name">
+                        <string>PrecogServer</string>
+                      </void>
+                    </object>
+                  </java>
+                </serializedBean>
+                <condition />
               </action>
             </actions>
             <formComponents>
@@ -1042,6 +1064,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
     </windows>
   </mediaSets>
   <buildIds buildAll="false">
+    <mediaSet refId="25" />
     <mediaSet refId="419" />
   </buildIds>
   <buildOptions verbose="false" faster="false" disableSigning="false" debug="false" />

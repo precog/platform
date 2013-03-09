@@ -1,5 +1,5 @@
 <configuration scan="true">
-  <property name="SERVICE" value="shard-v1" />
+  <property name="SERVICE" value="shard-v2" />
   <property name="LOG_DIR" value="${installer:log_dir}" />
 
   <appender name="SERVERLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -18,8 +18,6 @@
 
   <logger name="blueeyes.core.http" level="info" />
   <logger name="com.precog.yggdrasil.actor.KafkaShardIngestActor" level="debug" />
-  <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="debug" />
-  <logger name="com.precog.yggdrasil.jdbm3.JDBMProjection" level="debug" />
 
   <root level="trace">
     <appender-ref ref="SERVERLOG" />

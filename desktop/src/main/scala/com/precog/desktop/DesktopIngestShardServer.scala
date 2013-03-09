@@ -194,24 +194,26 @@ object LaunchLabcoat{
 
       val configFile=args(0).replaceFirst("--configFile=","")
       val config = Configuration.load( configFile )
-      val jettyPort = config[Int]("services.quirrel.v1.labcoat.port")
+      val jettyPort = config[Int]("services.analytics.v2.labcoat.port")
       val shardPort = config[Int]("server.port")
       val zkPort = config[Int]("zookeeper.port")
       val kafkaPort = config[Int]("kafka.port")
 
       def waitForPorts=
-        DesktopIngestShardServer.waitForPortOpen(jettyPort, 60) &&
-        DesktopIngestShardServer.waitForPortOpen(shardPort, 60) &&
-        DesktopIngestShardServer.waitForPortOpen(zkPort, 60) &&
-        DesktopIngestShardServer.waitForPortOpen(kafkaPort, 60)
+        DesktopIngestShardServer.waitForPortOpen(jettyPort, 15) &&
+        DesktopIngestShardServer.waitForPortOpen(shardPort, 15) &&
+        DesktopIngestShardServer.waitForPortOpen(zkPort, 15) &&
+        DesktopIngestShardServer.waitForPortOpen(kafkaPort, 15)
 
       @tailrec
       def launchBrowser(){
         if (waitForPorts) {
           java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
         } else {
-          println("Timeout waiting for server to start, please check that PrecogService has been launched")
-          println("Retrying...")
+           import javax.swing.JOptionPane
+           JOptionPane.showMessageDialog(null, 
+             "Waiting for server to start.\nPlease check that PrecogService has been launched\nRetrying...",
+             "Labcoat launcher", JOptionPane.WARNING_MESSAGE)
           launchBrowser()
         }
       }
