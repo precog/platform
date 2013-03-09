@@ -69,7 +69,7 @@ object KafkaRelayAgent extends Logging {
     val consumerPort = localConfig[String]("broker.port", "9082").toInt
     val consumer = new SimpleConsumer(consumerHost, consumerPort, 5000, 64 * 1024)
 
-    val relayAgent = new KafkaRelayAgent(permissionsFinder, eventIdSeq, consumer, localTopic, producer, centralTopic) 
+    val relayAgent = new KafkaRelayAgent(permissionsFinder, eventIdSeq, consumer, localTopic, producer, centralTopic)
     val stoppable = Stoppable.fromFuture(relayAgent.stop map { _ => consumer.close; producer.close })
 
     new Thread(relayAgent).start()
@@ -80,10 +80,12 @@ object KafkaRelayAgent extends Logging {
   * augment them with record identities, then send them with the specified producer. */
 final class KafkaRelayAgent(
     permissionsFinder: PermissionsFinder[Future], eventIdSeq: EventIdSequence,
-    consumer: SimpleConsumer, localTopic: String, 
-    producer: Producer[String, EventMessage], centralTopic: String, 
+    consumer: SimpleConsumer, localTopic: String,
+    producer: Producer[String, EventMessage], centralTopic: String,
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
+
+  logger.info("Allocating KafkaRelayAgent, hash = " + hashCode)
 
   @volatile private var runnable = true;
   private val stopPromise = Promise[PrecogUnit]()
@@ -140,14 +142,30 @@ final class KafkaRelayAgent(
     }
   }
 
+  private case class Authorized(event: Event, offset: Long, authorities: Option[Authorities])
+
   private def forwardAll(messages: List[MessageAndOffset]) = {
-    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg =>
-      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) }
+    val outgoing: List[Validation[Error, Future[Authorized]]] = messages map { msg =>
+      EventEncoding.read(msg.message.payload) map { ev => deriveAuthority(ev).map { Authorized(ev, msg.offset, _) } }
     }
 
-    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
-      Future.sequence(messageFutures) map { messages =>
-        producer.send(new ProducerData[String, EventMessage](centralTopic, messages))
+    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Authorized]] map { messageFutures =>
+      Future.sequence(messageFutures) map { messages: List[Authorized] =>
+        val identified: List[EventMessage] = messages.map {
+          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp), offset, Some(authorities)) =>
+            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
+            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+
+          case Authorized(event: Ingest, _, None) =>
+            // cannot relay event without a resolved owner account ID; fail loudly.
+            // this will abort the future, ensuring that state doesn't get corrupted
+            sys.error("Unable to establish owner account ID for ingest of event " + event)
+
+          case Authorized(archive @ Archive(apiKey, path, jobId, timestamp), offset, _) =>
+            ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp)
+        }
+
+        producer.send(new ProducerData[String, EventMessage](centralTopic, identified))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
       } onSuccess {
@@ -158,23 +176,29 @@ final class KafkaRelayAgent(
     }
   }
 
-  private def identify(event: Event, offset: Long): Future[EventMessage] = {
-    event match {
-      case Ingest(apiKey, path, writeAs, data, jobId, timestamp) =>
-        writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))) map {
-          case Some(authorities) =>
-            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+  private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
+    case Ingest(apiKey, path, writeAs, _, _, timestamp) =>
+      writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp)))
 
-          case None =>
-            // cannot relay event without a resolved owner account ID; fail loudly.
-            // this will abort the future, ensuring that state doesn't get corrupted
-            sys.error("Unable to establish owner account ID for ingest of event " + event)
-        } 
-
-      case archive @ Archive(apiKey, path, jobId, timestamp) =>
-        Promise.successful(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp))
-    }
+    case _ => Promise.successful(None)
   }
-}
 
+//  private def identify(event: Event, offset: Long, authorities: Option[Authorities]): Future[EventMessage] = {
+//    event match {
+//      case Ingest(apiKey, path, writeAs, data, jobId, timestamp) =>
+//        writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))) map {
+//          case Some(authorities) =>
+//            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
+//            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+//
+//          case None =>
+//            // cannot relay event without a resolved owner account ID; fail loudly.
+//            // this will abort the future, ensuring that state doesn't get corrupted
+//            sys.error("Unable to establish owner account ID for ingest of event " + event)
+//        }
+//
+//      case archive @ Archive(apiKey, path, jobId, timestamp) =>
+//        Promise.successful(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp))
+//    }
+//  }
+}

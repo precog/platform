@@ -150,7 +150,7 @@ for f in $@; do
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 
-    TRIES_LEFT=15
+    TRIES_LEFT=30
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     while [[ $TRIES_LEFT != 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
@@ -161,7 +161,8 @@ for f in $@; do
     done
 
     [ "$TRIES_LEFT" != "0" ] || {
-        echo "Exceeded maximum ingest count attempts for $TABLE. Failure!"
+        echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
+	sleep 86400 # Maybe excessive
         exit 1
     }
 
