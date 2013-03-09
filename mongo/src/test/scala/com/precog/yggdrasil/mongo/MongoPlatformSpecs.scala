@@ -45,6 +45,7 @@ import com.precog.util.PrecogUnit
 import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
+import java.util.concurrent.{Executors, TimeUnit}
 
 import org.specs2.specification.{Fragments, Step}
 
@@ -55,6 +56,8 @@ object MongoPlatformSpecEngine extends Logging {
 
   private[this] var engine: RealMongoSpecSupport = _
   private[this] var refcount = 0
+
+  private[this] val scheduler = Executors.newScheduledThreadPool(1)
 
   Runtime.getRuntime.addShutdownHook(new Thread() {
     override def run() { if (engine != null) engine.shutdown() }
@@ -80,14 +83,23 @@ object MongoPlatformSpecEngine extends Logging {
     refcount -= 1
 
     if (refcount == 0) {
-      logger.debug("Running shutdown after final Mongo release")
-      val current = engine
-      engine = null
-      current.shutdown()
-      logger.debug("Mongo shutdown complete")
+      scheduler.schedule(checkUnused, 5, TimeUnit.SECONDS)
     }
 
     logger.debug("Mongo released, refcount = " + refcount)
+  }
+
+  private val checkUnused = new Runnable {
+    def run = lock.synchronized {
+      logger.debug("Checking for unused MongoPlatformSpecEngine. Count = " + refcount)
+      if (refcount == 0) {
+        logger.debug("Running shutdown after final Mongo release")
+        val current = engine
+        engine = null
+        current.shutdown()
+        logger.debug("Mongo shutdown complete")
+      }
+    }
   }
 
   def runLoads(): Unit = {
@@ -107,7 +119,7 @@ object MongoPlatformSpecEngine extends Logging {
 
     def loadFile(path : String, file: File) {
       if (file.isDirectory) {
-        file.listFiles.foreach { f => 
+        file.listFiles.foreach { f =>
           logger.debug("Found child: " + f)
           loadFile(path + file.getName + "_", f)
         }
@@ -154,7 +166,9 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
       with BlockStoreColumnarTableModuleConfig
       with MongoColumnarTableModuleConfig
 
-  object yggConfig extends YggConfig
+  object yggConfig extends YggConfig {
+    override val maxSliceSize = 1000 // 10 was waaaaay too small, and we have other specs that cover that case
+  }
 
   override def controlTimeout = Duration(10, "minutes")      // it's just unreasonable to run tests longer than this
 
@@ -167,7 +181,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   val report = new LoggingQueryLogger[Future, instructions.Line]
       with ExceptionQueryLogger[Future, instructions.Line]
       with TimingQueryLogger[Future, instructions.Line] {
-    
+
     implicit def M = self.M
   }
 
@@ -209,17 +223,17 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   override def map (fs: => Fragments): Fragments = (Step { startup() }) ^ fs ^ (Step { shutdown() })
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line]
           with ExceptionQueryLogger[N, instructions.Line]
           with TimingQueryLogger[N, instructions.Line] {
-            
+
         val M = N0
       }
       class YggConfig extends EvaluatorConfig {
         val idSource = new FreshAtomicIdSource
-        val maxSliceSize = 10
+        val maxSliceSize = 1000 // 10 was waaaaay too small, and we have other specs that cover that case
       }
       val yggConfig = new YggConfig
     }
@@ -245,7 +259,7 @@ class MongoIdFieldSpecs extends MongoPlatformSpecs {
   "Mongo's _id field" should {
     "be included in results when configured" in {
       val input = """
-          | campaigns := //campaigns 
+          | campaigns := //campaigns
           | campaigns._id""".stripMargin
 
       val results = evalE(input)
@@ -254,4 +268,3 @@ class MongoIdFieldSpecs extends MongoPlatformSpecs {
     }
   }
 }
-
