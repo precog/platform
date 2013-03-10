@@ -409,6 +409,15 @@ abstract class KafkaShardIngestActor(shardId: String,
                 }
             }
 
+            val eventIds: List[(Long, Seq[EventId])] = updatedMessages.map { case (offset, message) =>
+                (offset, message.fold(_.data.map(_.eventId).toSeq, a => Seq(a.eventId)))
+            }
+
+            assert(eventIds.forall { case (_, ids) => ids.sortBy(_.sequenceId) == ids }, "sequenceIds out of order")
+            val sortByOffset = eventIds.map { case (o, s) => (o, s.map(_.sequenceId).min) }.sortBy(_._1)
+
+            assert(sortByOffset == sortByOffset.sortBy(_._2), "offset order doesn't match sequence order")
+
             buildBatch(updatedMessages, Vector.empty, fromCheckpoint)
           }
         }
