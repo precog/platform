@@ -94,43 +94,56 @@ final class KafkaRelayAgent(
   def stop: Future[PrecogUnit] = Future({ runnable = false }) flatMap { _ => stopPromise }
 
   override def run() {
-    while (runnable) {
+    if (runnable) {
       val offset = eventIdSeq.getLastOffset()
       logger.debug("Kafka consumer starting from offset: " + offset)
-
-      try {
-        ingestBatch(offset, 0, 0, 0)
-      } catch {
-        case ex: Exception => logger.error("Error in kafka consumer.", ex)
-      }
-
-      Thread.sleep(retryDelay)
+      ingestBatch(offset, 0, 0, 0)
     }
-
-    stopPromise.success(PrecogUnit)
   }
 
-  @tailrec
-  private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
-    if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-    val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
+  private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long, retries: Int = 5): Unit = {
+    if (runnable) {
+      try {
+        if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
+        val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
 
-    val messages = consumer.fetch(fetchRequest)
-    forwardAll(messages.toList)
+        val messages = consumer.fetch(fetchRequest) // try/catch is for this line. Okay to wrap in a future & flatMap instead?
+        forwardAll(messages.toList) onSuccess { 
+          case _ =>
+            val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
-    val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
+            val (newOffset, newWaitCount) = if(messages.size > 0) {
+              val o: Long = messages.last.offset
+              logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
+              (o, 0L)
+            } else {
+              (offset, waitCount + 1)
+            }
 
-    val (newOffset, newWaitCount) = if(messages.size > 0) {
-      val o: Long = messages.last.offset
-      logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
-      (o, 0L)
+            Thread.sleep(newDelay)
+
+            ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
+        } onFailure {
+          case error =>
+            logger.error("Batch ingest failed at offset %d batch %d; retrying. Data transfer to central queue halted pending manual intervention.".format(offset, batch), error)
+            runnable = false
+            stopPromise.success(PrecogUnit)
+        }
+      } catch {
+        case ex =>
+          if (retries > 0) {
+            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Retrying from offset %d batch %d.".format(offset, batch), ex)
+            ingestBatch(offset, batch, delay, waitCount, retries - 1)
+          } else {
+            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Halting at offset %d batch %d.".format(offset, batch), ex)
+            runnable = false
+            stopPromise.success(PrecogUnit)
+          }
+      }
     } else {
-      (offset, waitCount + 1)
+      logger.info("Kafka relay agent shutdown request detected. Halting at offset %d batch %d.".format(offset, batch))
+      stopPromise.success(PrecogUnit)
     }
-
-    Thread.sleep(newDelay)
-
-    ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
   }
 
   private def delayStrategy(messageBytes: Int, currentDelay: Long, waitCount: Long): Long = {
@@ -172,7 +185,9 @@ final class KafkaRelayAgent(
         case _ => if (messages.nonEmpty) eventIdSeq.saveState(messages.last.offset)
       }
     } valueOr { error =>
-      logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
+      Promise successful { 
+        logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
+      }
     }
   }
 
