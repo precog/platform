@@ -107,6 +107,8 @@ class NIHDBProjectionsActor(
 
   private var projections = Map.empty[Path, Map[Authorities, NIHDBActorProjection]]
 
+  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
   case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
 
   override def preStart() = {
@@ -117,9 +119,10 @@ class NIHDBProjectionsActor(
     logger.info("Initiating shutdown of %d projections".format(projections.size))
     Await.result(projections.values.toList.map (_.values.toList.map(_.close(context.system))).flatten.sequence, storageTimeout.duration)
     logger.info("Projection shutdown complete")
+    logger.info("Shutting down TX log scheduler")
+    txLogScheduler.shutdown()
+    logger.info("TX log scheduler shutdown complete")
   }
-
-  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
   /**
     * Computes the stable path for a given vfs path relative to the given base dir
