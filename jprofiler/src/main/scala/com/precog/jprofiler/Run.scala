@@ -34,16 +34,19 @@ object Run {
       case _ => "jprofiler/jprofiler.db"
     }
 
-    val args2 = args.toList ++ List("--root-dir", db)
+    val args2 = args.toList// ++ List("--root-dir", db)
     val config = RunConfig.fromCommandLine(args2) | sys.error("invalid arguments!")
 
     val queries = List(
-      """
-      foo := //foo where (//foo).a
-      solve 'b
-        foo' := foo where foo.b = 'b
-        foo'.c
-      """
+"""              medals := //summer_games/london_medals
+
+                        h := medals.HeightIncm where std::type::isNumber(medals.HeightIncm)
+                                  w := medals.Weight where std::type::isNumber(medals.Weight)
+
+                                            clustering := std::stats::kMedians({ HeightIncm: h, Weight: w }, 4)
+
+                                                      std::stats::assignClusters(medals, clustering)
+                                                      """
 //      """
 //import std::stats::*
 //import std::time::*
