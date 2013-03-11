@@ -181,6 +181,31 @@ class IngestServiceHandler(
       if (nextRow == null || batch.size >= batchSize) batch else readBatch(reader, batch :+ nextRow)
     }
 
+    /**
+     * Normalize headers by turning them into `JPath`s. Normally, a field will
+     * be mapped to a `JPath` simply by wrapping it in a `JPathField`. However,
+     * in the case of duplicate headers, we turn that field into an array. So,
+     * the header a,a,a will create objects of the form `{a:[_, _, _]}`.
+     */
+    def normalizeHeaders(headers: Array[String]): Array[JPath] = {
+      val positions = headers.zipWithIndex.foldLeft(Map.empty[String, List[Int]]) {
+        case (hdrs, (h, i)) =>
+          val pos = i :: hdrs.getOrElse(h, Nil)
+            hdrs + (h -> pos)
+      }
+
+      positions.toList.flatMap {
+        case (h, Nil) =>
+          Nil
+        case (h, pos :: Nil) =>
+          (pos -> JPath(JPathField(h))) :: Nil
+        case (h, ps) => 
+          ps.reverse.zipWithIndex map { case (pos, i) =>
+            (pos -> JPath(JPathField(h), JPathIndex(i)))
+          }
+      }.sortBy(_._1).map(_._2).toArray
+    }
+
     def ingestSync(reader: CSVReader, jobId: JobId): Future[IngestResult] = {
       def readBatches(paths: Array[JPath], reader: CSVReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
         // TODO: handle errors in readBatch
@@ -208,7 +233,7 @@ class IngestServiceHandler(
         if (header == null) {
           M.point(NotIngested("No CSV data was found in the request content."))
         } else {
-          readBatches(header.map(JPath(_)), reader, 0, 0, Vector())
+          readBatches(normalizeHeaders(header), reader, 0, 0, Vector())
         }
       }
     }
@@ -452,7 +477,7 @@ class IngestServiceHandler(
             } yield {
               ingestResult.fold(
                 { message =>
-                  logger.warn("Internal error during ingest: " + message)
+                  logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
                   HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
                 {
                   case NotIngested(reason) =>

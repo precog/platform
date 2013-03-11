@@ -102,7 +102,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
       }.toSet.flatten
 
       case JObjectFixedT(fields)                      => fields.map {
-        case (name, childType) => 
+        case (name, childType) =>
           val newPaths = if (current.nonEmpty) {
             current.map { s => s + "." + name }
           } else {
@@ -129,22 +129,22 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
         paths <- pathsM(table)
       } yield {
         Table(
-          StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) { 
-            case InLoad(cursorGen, skip, remaining) => 
-              logger.trace("Running InLoad")
+          StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) {
+            case InLoad(cursorGen, skip, remaining) =>
               M.point {
                 val (slice, nextSkip) = makeSlice(cursorGen, skip)
+                logger.trace("Running InLoad: fetched %d rows, next skip = %s".format(slice.size, nextSkip))
                 Some(slice, nextSkip.map(InLoad(cursorGen, _, remaining)).getOrElse(InitialLoad(remaining)))
               }
 
-            case InitialLoad(path :: xs) => 
+            case InitialLoad(path :: xs) =>
               path.elements.toList match {
                 case dbName :: collectionName :: Nil =>
                   logger.trace("Running InitialLoad")
                   M.point {
                     for {
                       db <- safeOp("Database " + dbName + " does not exist")(mongo.getDB(dbName)).flatMap { d =>
-                        if (! d.isAuthenticated && dbAuthParams.contains(dbName)) {                          
+                        if (! d.isAuthenticated && dbAuthParams.contains(dbName)) {
                           logger.trace("Running auth setup for " + dbName)
                           dbAuthParams.get(dbName).map(_.split(':')) flatMap {
                             case Array(user, password) =>
@@ -181,7 +181,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
                     } yield slice
                   }
 
-                case err => 
+                case err =>
                   sys.error("MongoDB path " + path.path + " does not have the form /dbName/collectionName; rollups not yet supported.")
               }
 

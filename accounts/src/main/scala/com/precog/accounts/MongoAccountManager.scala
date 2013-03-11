@@ -82,6 +82,11 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   private implicit val impTimeout = settings.timeout
 
+  // Ensure indices for account lookup on apiKey, accountId, or email
+  database(ensureIndex("apiKey_index").on(".apiKey").in(settings.accounts))
+  database(ensureIndex("accountId_index").on(".accountId").in(settings.accounts))
+  database(ensureIndex("email_index").on(".email").in(settings.accounts))
+
   def newAccountId: Future[String]
 
   def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {

@@ -336,7 +336,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
           chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
         }
       } else {
-        logger.debug("Skipping previously seen ID = %d:%d".format(pid, sid))
+        logger.debug("Skipping previously seen ID = %d:%d (%d rows)".format(pid, sid, values.size))
       }
       sender ! ()
 

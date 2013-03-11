@@ -96,7 +96,7 @@ if [ -z "$SKIPSETUP" ]; then
 
     [ -z "$SKIPCLEAN" ] && find . -type d -name target -prune -exec rm -fr {} \;
     [ -z "$SKIPCLEAN" ] && run_sbt clean
-    
+
     run_sbt "${SCCT}compile"
 
     run_sbt "${SCCTTEST}test:compile"
@@ -115,7 +115,9 @@ then
 fi
 
 if [ -z "$SKIPTEST" ]; then
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard pandora mongo jdbc; do
+    # desktop, jdbc, and mongo are not in this list because the functionality they require is already tested in other modules
+    # Their specs are run directly when needed for packaging
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard pandora; do
 	run_sbt "$PROJECT/${SCCT}test"
     done
     if [ -n "$COVERAGE" ]; then
@@ -130,7 +132,7 @@ fi
 
 if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
     echo "Running full shard test"
-    shard/test.sh 
+    shard/test.sh
     SUCCESS=$(($SUCCESS || $?))
 fi
 
