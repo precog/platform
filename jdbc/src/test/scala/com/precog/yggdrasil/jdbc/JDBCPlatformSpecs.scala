@@ -22,6 +22,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 import java.sql.DriverManager
+import java.util.concurrent.{Executors, TimeUnit}
 
 import org.specs2.specification.{Fragments, Step}
 
@@ -43,6 +44,8 @@ object JDBCPlatformSpecEngine extends Logging {
   private[this] val lock = new Object
 
   private[this] var refcount = 0
+
+  private[this] val scheduler = Executors.newScheduledThreadPool(1)
 
   // This creates an in-memory DB that stays open forever
   val dbURL = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
@@ -69,12 +72,21 @@ object JDBCPlatformSpecEngine extends Logging {
     refcount -= 1
 
     if (refcount == 0) {
-      logger.debug("Shutting down DB after final release")
-      shutdown()
-      logger.debug("DB shutdown complete")
+      scheduler.schedule(checkUnused, 5, TimeUnit.SECONDS)
     }
 
     logger.debug("DB released, refcount = " + refcount)
+  }
+
+  val checkUnused = new Runnable {
+    def run = lock.synchronized {
+      logger.debug("Checking for unused JDBCPlatformSpecEngine. Count = " + refcount)
+      if (refcount == 0) {
+        logger.debug("Shutting down DB after final release")
+        shutdown()
+        logger.debug("DB shutdown complete")
+      }
+    }
   }
 
   def runLoads(): Unit = {
@@ -94,7 +106,7 @@ object JDBCPlatformSpecEngine extends Logging {
 
     def loadFile(path : String, file: File) {
       if (file.isDirectory) {
-        file.listFiles.foreach { f => 
+        file.listFiles.foreach { f =>
           logger.debug("Found child: " + f)
           loadFile(path + file.getName + "_", f)
         }
@@ -106,7 +118,7 @@ object JDBCPlatformSpecEngine extends Logging {
 
             JParser.parseManyFromFile(file) match {
               case Success(data) =>
-                val rows: Seq[Vector[(String, (String, String))]] = data.map { jv => 
+                val rows: Seq[Vector[(String, (String, String))]] = data.map { jv =>
                   jv.flattenWithPath.map { case (p, v) => (JDBCColumnarTableModule.escapePath(p.toString.drop(1)), jvToSQL(v)) }
                 }
 
@@ -128,7 +140,7 @@ object JDBCPlatformSpecEngine extends Logging {
 
 
                   rows.foreach {
-                    properties => 
+                    properties =>
                     val columns = properties.map(_._1).mkString(", ")
                     val values = properties.map(_._2._2).mkString(", ")
 
@@ -200,7 +212,7 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
   val report = new LoggingQueryLogger[Future, instructions.Line]
       with ExceptionQueryLogger[Future, instructions.Line]
       with TimingQueryLogger[Future, instructions.Line] {
-        
+
     implicit def M = self.M
   }
 
@@ -240,12 +252,12 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   override def map (fs: => Fragments): Fragments = Step { startup() } ^ fs ^ Step { shutdown() }
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line]
           with ExceptionQueryLogger[N, instructions.Line]
           with TimingQueryLogger[N, instructions.Line] {
-            
+
         val M = N0
       }
       class YggConfig extends EvaluatorConfig {
@@ -275,14 +287,14 @@ class JDBCRenderStackSpecs extends RenderStackSpecs with JDBCPlatformSpecs
 
 class JDBCUndefinedLiteralSpecs extends UndefinedLiteralSpecs with JDBCPlatformSpecs
 */
- 
-class JDBMLoadSpecs extends EvalStackSpecs with JDBCPlatformSpecs {
+
+class JDBCLoadSpecs extends EvalStackSpecs with JDBCPlatformSpecs {
   "JDBC stack support" should {
     "count a filtered clicks dataset" in {
       val input = """
         | clicks := //clicks
         | count(clicks where clicks.time > 0)""".stripMargin
-        
+
       eval(input) mustEqual Set(SDecimal(100))
     }
 
@@ -290,19 +302,19 @@ class JDBMLoadSpecs extends EvalStackSpecs with JDBCPlatformSpecs {
       "<root>" >> {
         eval("count(//campaigns)") mustEqual Set(SDecimal(100))
       }
-      
+
       "gender" >> {
         eval("count((//campaigns).gender)") mustEqual Set(SDecimal(100))
       }
-      
+
       "platform" >> {
         eval("count((//campaigns).platform)") mustEqual Set(SDecimal(100))
       }
-      
+
       "campaign" >> {
         eval("count((//campaigns).campaign)") mustEqual Set(SDecimal(100))
       }
-      
+
       "cpm" >> {
         eval("count((//campaigns).cpm)") mustEqual Set(SDecimal(100))
       }
