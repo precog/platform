@@ -152,7 +152,7 @@ trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
           // case FatalQueryException(Line(3, 2, " assert false a"), "Assertion failed") => ok
         }
       }
-    }.pendingUntilFixed
+    }
 
     "correctly evaluate forall" in {
       eval("forall(true union false)") mustEqual Set(SBoolean(false))
