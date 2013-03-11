@@ -1063,9 +1063,9 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <includedDownloadableComponents />
     </windows>
   </mediaSets>
-  <buildIds buildAll="false">
+  <buildIds buildAll="true">
     <mediaSet refId="25" />
   </buildIds>
-  <buildOptions verbose="false" faster="true" disableSigning="false" debug="false" />
+  <buildOptions verbose="false" faster="false" disableSigning="false" debug="false" />
 </install4j>
 
