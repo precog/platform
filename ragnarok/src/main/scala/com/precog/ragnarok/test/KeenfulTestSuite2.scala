@@ -41,5 +41,8 @@ solve 'day
     total: count(data'.action.verb),
     sets: count(distinct(data'.action.set_id where data'.action.verb = "recommend"))
   }
+--41644 ms (1/1) before
+--8152 ms (1/1) after
+--6707 ms (6/3)
     """)
 }
