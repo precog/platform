@@ -28,9 +28,8 @@ object DateTimeUtil {
   private val fullParser = ISODateTimeFormat.dateTimeParser
   private val basicParser = ISODateTimeFormat.basicDateTime
 
-
   //2013-02-04T18:07:39.608835
-  private val dateTimeRegex = Pattern.compile("^[0-9]{4}-?[0-9]{2}-?[0-9]{2}[T ][0-9]{2}:?[0-9]{2}.*$")
+  private val dateTimeRegex = Pattern.compile("^[0-9]{4}-?[0-9]{2}-?[0-9]{2}.*$")
 
   def looksLikeIso8601(s: String): Boolean = dateTimeRegex.matcher(s).matches
 
