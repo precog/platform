@@ -158,15 +158,10 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
       stream map { chars =>
         val buffer = encoder.encode(chars)
         chars.flip()
-        try {
-          buffer.array()
-        } catch {
-          case (_: ReadOnlyBufferException) | (_: UnsupportedOperationException) =>
-            // This won't happen normally, but should handled in any case.
-            val bytes = new Array[Byte](buffer.remaining())
-            buffer.get(bytes)
-            bytes
-        }
+
+        val bytes = new Array[Byte](buffer.remaining())
+        buffer.get(bytes)
+        bytes
       }
     }
 
