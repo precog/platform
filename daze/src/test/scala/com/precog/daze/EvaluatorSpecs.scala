@@ -1701,7 +1701,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
       } must throwA[FatalQueryException]
-    }.pendingUntilFixed
+    }
     
     "fail an assertion according to forall semantics" in {
       val line = Line(1, 1, "")
@@ -1716,7 +1716,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(100)
       } must throwA[FatalQueryException]
-    }.pendingUntilFixed
+    }
 
     "compute the set difference of two sets" in {
       val line = Line(1, 1, "")
