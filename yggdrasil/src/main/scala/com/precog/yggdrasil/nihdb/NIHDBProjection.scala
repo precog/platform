@@ -91,12 +91,9 @@ class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) e
     }
   }
 
-  def insert(v : Seq[IngestRecord])(implicit M: Monad[Future]): Future[PrecogUnit] = {
-    // TODO: Check # of identities.
-    v.groupBy(_.eventId.producerId).map {
-      case (p, events) =>
-        val maxSeq = events.map(_.eventId.sequenceId).max
-        db.insert(EventId(p, maxSeq).uid, events.map(_.value))
+  def insert(batches : Seq[(Long, Seq[IngestRecord])])(implicit M: Monad[Future]): Future[PrecogUnit] = {
+    batches.map { case (offset, records) =>
+      db.insert(offset, records map (_.value))
     }.toList.sequence map { _ => PrecogUnit }
   }
 

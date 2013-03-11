@@ -111,7 +111,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val toInsert = (0L to 2L).toSeq.map { i =>
-        IngestRecord(EventId.fromLong(i), JNum(i))
+        (i, Seq(IngestRecord(EventId.fromLong(i), JNum(i))))
       }
 
       val results =
@@ -135,9 +135,9 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
-      projection.insert((0L to 2L).toSeq.map { i =>
+      projection.insert(Seq(0L -> (0L to 2L).toSeq.map { i =>
         IngestRecord(EventId.fromLong(i), JNum(i))
-      })
+      }))
 
       val result = for {
         _ <- projection.close(actorSystem)
@@ -167,7 +167,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       (0L to 1950L).map {
         i => IngestRecord(EventId.fromLong(i), JNum(i))
-      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(values) }
+      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(Seq(id.toLong -> values)) }
 
       var waits = 10
 

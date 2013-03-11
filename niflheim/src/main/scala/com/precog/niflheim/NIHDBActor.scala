@@ -222,31 +222,31 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
 
   private[this] var blockState: BlockState = {
     // We'll need to update our current thresholds based on what we read out of any raw logs we open
-    var thresholds = currentState.producerThresholds
+    var maxOffset = currentState.maxOffset
 
     val currentRawFile = rawFileFor(txLog.currentBlockId)
-    val (currentLog, rawLogThresholds) = if (currentRawFile.exists) {
-      val (handler, events, ok) = RawHandler.load(txLog.currentBlockId, currentRawFile)
+    val (currentLog, rawLogOffsets) = if (currentRawFile.exists) {
+      val (handler, offsets, ok) = RawHandler.load(txLog.currentBlockId, currentRawFile)
       if (!ok) {
         logger.warn("Corruption detected and recovery performed on " + currentRawFile)
       }
-      (handler, events)
+      (handler, offsets)
     } else {
       (RawHandler.empty(txLog.currentBlockId, currentRawFile), Seq.empty[Long])
     }
 
-    thresholds = updatedThresholds(thresholds, rawLogThresholds)
+    maxOffset = math.max(maxOffset, rawLogOffsets.max)
 
     val pendingCooks = txLog.pendingCookIds.map { id =>
-      val (reader, eIds, ok) = RawHandler.load(id, rawFileFor(id))
+      val (reader, offsets, ok) = RawHandler.load(id, rawFileFor(id))
       if (!ok) {
         logger.warn("Corruption detected and recovery performed on " + currentRawFile)
       }
-      thresholds = updatedThresholds(thresholds, eIds)
+      maxOffset = math.max(maxOffset, offsets.max)
       (id, reader)
     }.toMap
 
-    currentState = currentState.copy(producerThresholds = thresholds)
+    currentState = currentState.copy(maxOffset = maxOffset)
 
     // Restore the cooked map
     val cooked = currentState.readers(cookedDir)
@@ -315,18 +315,16 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
       ProjectionState.toFile(currentState, descriptorFile).unsafePerformIO
       txLog.completeCook(id)
 
-    case Insert(eventId, values) =>
-      val pid = EventId.producerId(eventId)
-      val sid = EventId.sequenceId(eventId)
-      if (!currentState.producerThresholds.contains(pid) || sid > currentState.producerThresholds(pid)) {
-        logger.debug("Inserting %d rows for %d:%d at %s".format(values.length, pid, sid, baseDir.getCanonicalPath))
-        blockState.rawLog.write(eventId, values)
+    case Insert(offset, values) =>
+      if (offset > currentState.maxOffset) {
+        logger.debug("Inserting %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
+        blockState.rawLog.write(offset, values)
 
         // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
-        currentState = currentState.copy(producerThresholds = updatedThresholds(currentState.producerThresholds, Seq(eventId)))
+        currentState = currentState.copy(maxOffset = offset)
 
         if (blockState.rawLog.length >= cookThreshold) {
-          logger.debug("Starting cook after threshold exceeded")
+          logger.debug("Starting cook on %s after threshold exceeded".format(baseDir.getCanonicalPath))
           blockState.rawLog.close
           val toCook = blockState.rawLog
           val newRaw = RawHandler.empty(toCook.id + 1, rawFileFor(toCook.id + 1))
@@ -335,8 +333,9 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
           txLog.startCook(toCook.id)
           chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
         }
+        logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
       } else {
-        logger.debug("Skipping previously seen ID = %d:%d (%d rows)".format(pid, sid, values.size))
+        logger.debug("Skipping %d existing rows at offset %d".format(values.size, offset))
       }
       sender ! ()
 
@@ -348,7 +347,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
   }
 }
 
-case class ProjectionState(producerThresholds: Map[Int, Int], cookedMap: Map[Long, String], authorities: Authorities) {
+case class ProjectionState(maxOffset: Long, cookedMap: Map[Long, String], authorities: Authorities) {
   def readers(baseDir: File): List[CookedReader] =
     cookedMap.map {
       case (id, metadataFile) =>
@@ -359,12 +358,12 @@ case class ProjectionState(producerThresholds: Map[Int, Int], cookedMap: Map[Lon
 object ProjectionState {
   import Extractor.Error
 
-  def empty(authorities: Authorities) = ProjectionState(Map.empty, Map.empty, authorities)
+  def empty(authorities: Authorities) = ProjectionState(-1L, Map.empty, authorities)
 
   implicit val projectionStateIso = Iso.hlist(ProjectionState.apply _, ProjectionState.unapply _)
 
   // FIXME: Add version for this format
-  val v1Schema = "producerThresholds" :: "cookedMap" :: "authorities" :: HNil
+  val v1Schema = "maxOffset" :: "cookedMap" :: "authorities" :: HNil
 
   implicit val stateDecomposer = decomposer[ProjectionState](v1Schema)
   implicit val stateExtractor  = extractor[ProjectionState](v1Schema)

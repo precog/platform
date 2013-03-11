@@ -120,7 +120,7 @@ class StressTest {
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
-        projection.insert(results.map(v => IngestRecord(eventidobj, v)))
+        projection.insert(Seq((eventid, results.map(v => IngestRecord(eventidobj, v)))))
         eventid += 1L
         bb.flip()
         if (n >= 0) loop(parser)

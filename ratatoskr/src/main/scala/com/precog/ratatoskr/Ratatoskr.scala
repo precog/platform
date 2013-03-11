@@ -593,7 +593,7 @@ object ImportTools extends Command with Logging {
           if (!errors.isEmpty) sys.error("errors: %s" format errors)
           val eventidobj = EventId(pid, sid.getAndIncrement)
           val records = results.map(v => IngestRecord(eventidobj, v))
-          val update = ProjectionInsert(Path(db), records, Authorities(config.accountId))
+          val update = ProjectionInsert(Path(db), Seq(eventidobj.uid -> records), Authorities(config.accountId))
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           bb.flip()
           if (n >= 0) loop(parser)

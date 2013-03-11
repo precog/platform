@@ -73,7 +73,7 @@ sealed trait ProjectionUpdate {
   def path: Path
 }
 
-case class ProjectionInsert(path: Path, values: Seq[IngestRecord], writeAs: Authorities) extends ProjectionUpdate
+case class ProjectionInsert(path: Path, values: Seq[(Long, Seq[IngestRecord])], writeAs: Authorities) extends ProjectionUpdate
 
 case class ProjectionArchive(path: Path, archiveBy: APIKey, id: EventId) extends ProjectionUpdate
 
@@ -404,19 +404,5 @@ class NIHDBProjectionsActor(
       }.onFailure {
         case t: Throwable => logger.error("Failure during archive of " + path, t)
       }
-
-// Not used anywhere
-//    case ProjectionGetBlock(path, id, columns) =>
-//      val requestor = sender
-//      try {
-//        projections.get(path) match {
-//          case Some(p) => p.getBlockAfter(id, columns).pipeTo(requestor)
-//          case None => findBaseDir(path).map {
-//            _ => openProjection(path).unsafePerformIO.map(_.getBlockAfter(id, columns)).getOrElse(Promise.successful(None)) pipeTo requestor
-//          }
-//        }
-//      } catch {
-//        case t: Throwable => logger.error("Failure during getBlockAfter:", t)
-//      }
   }
 }
