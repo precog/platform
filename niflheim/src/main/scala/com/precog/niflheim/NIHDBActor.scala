@@ -321,7 +321,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
       if (batch.isEmpty) {
         logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
       } else {
-        val (skipValues, keepValues) = batch.partition(_._1 < currentState.maxOffset)
+        val (skipValues, keepValues) = batch.partition(_._1 <= currentState.maxOffset)
         val values = keepValues.flatMap(_._2)
         val offset = keepValues.map(_._1).max
 
