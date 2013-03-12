@@ -76,10 +76,12 @@ function finished {
     echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
     kill $RUN_LOCAL_PID
     wait $RUN_LOCAL_PID
-    if [ -z "$DONTCLEAN" ]; then
+    if [ -z "$DONTCLEAN" -a "$EXIT_CODE" = "0" ]; then
         echo "Cleaning"
         rm -rf $WORKDIR
         rm -f results.json 2>/dev/null
+    else
+        echo "Skipping clean of $WORKDIR"
     fi
 }
 
@@ -163,6 +165,7 @@ for f in $@; do
     [ "$TRIES_LEFT" != "0" ] || {
         echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
 	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
+        EXIT_CODE=1
         exit 1
     }
 
