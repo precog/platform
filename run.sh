@@ -146,7 +146,7 @@ for f in $@; do
     DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 
@@ -162,7 +162,7 @@ for f in $@; do
 
     [ "$TRIES_LEFT" != "0" ] || {
         echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
-	sleep 86400 # Maybe excessive
+	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
         exit 1
     }
 
@@ -201,14 +201,14 @@ else
     for TABLE in $ALLTABLES; do
         echo "  deleting $TABLE..."
         ARCHIVE_RESULT=$(curl -s -S -X DELETE "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
-        
+
         [ -n "$DEBUG" ] && echo $ARCHIVE_RESULT
     done
 
     # Give the shard some time to actually process the archives
     TRIES=18
     while [[ $TRIES -gt 0 ]]; do
-        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then 
+        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then
             [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
             [ -n "$DEBUG" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json
             TRIES=$(( $TRIES - 1 ))
