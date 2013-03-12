@@ -54,7 +54,8 @@ sealed trait ProjectionUpdate {
   def path: Path
 }
 
-case class ProjectionInsert(path: Path, values: Seq[IngestRecord], writeAs: Authorities) extends ProjectionUpdate
+// Collects a sequnce of sequential batches into a single insert
+case class ProjectionInsert(path: Path, batches: Seq[(Long, Seq[IngestRecord])], writeAs: Authorities) extends ProjectionUpdate
 
 case class ProjectionArchive(path: Path, archiveBy: APIKey, id: EventId) extends ProjectionUpdate
 
@@ -363,10 +364,10 @@ class NIHDBProjectionsActor(
       logger.debug("Accessing projections at " + path + " => " + projectionsDir(activeDir, path))
       aggregateProjections(path, Some(apiKey)) pipeTo sender
 
-    case ProjectionInsert(path, records, authorities) =>
+    case ProjectionInsert(path, batches, authorities) =>
       val requestor = sender
       createProjection(path, authorities).map {
-        _.insert(records) map { _ =>
+        _.insert(batches) map { _ =>
           requestor ! InsertComplete(path)
         }
       }.except {
@@ -382,19 +383,5 @@ class NIHDBProjectionsActor(
       }.onFailure {
         case t: Throwable => logger.error("Failure during archive of " + path, t)
       }
-
-// Not used anywhere
-//    case ProjectionGetBlock(path, id, columns) =>
-//      val requestor = sender
-//      try {
-//        projections.get(path) match {
-//          case Some(p) => p.getBlockAfter(id, columns).pipeTo(requestor)
-//          case None => findBaseDir(path).map {
-//            _ => openProjection(path).unsafePerformIO.map(_.getBlockAfter(id, columns)).getOrElse(Promise.successful(None)) pipeTo requestor
-//          }
-//        }
-//      } catch {
-//        case t: Throwable => logger.error("Failure during getBlockAfter:", t)
-//      }
   }
 }
