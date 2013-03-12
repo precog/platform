@@ -83,7 +83,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) => 
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
           values must contain(testValue).only
       }
     }
@@ -91,11 +91,11 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     "track asynchronous event with valid API key" in {
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
         chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
-      } 
-      
+      }
+
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => content.validated[Long]("content-length") must_== Success(37L)
-      } 
+      }
     }
 
     "track synchronous batch event with bad row" in {
@@ -112,7 +112,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("178234#!!@#$\n", """{ "testing": 321 }""")
-      } 
+      }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
@@ -120,11 +120,11 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
           events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
       }
     }
-    
+
     "track CSV batch ingest with valid API key" in {
       val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("a,b,c\n1,2,3\n4, ,a", "\n6,7,8")
-      } 
+      }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
@@ -159,53 +159,53 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
           )
       }
     }
-    
+
     "reject track request when API key not found" in {
-      val result = track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok
       }
     }
-    
+
     "reject track request when no API key provided" in {
-      val result = track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
+        case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok
       }
     }
-    
+
     "reject track request when grant is expired" in {
-      val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok
       }
     }
-    
+
     "reject track request when path is not accessible by API key" in {
-      val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue)
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok
       }
     }
 
-    "reject track request for json values that flatten to more than 250 primitive values" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = false) { 
-        genObject(251).sample.get: JValue 
+    "reject track request for json values that flatten to more than 1024 (default) primitive values" in {
+      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = false) {
+        genObject(1025).sample.get: JValue
       }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _), _) =>
-          msg must startWith("Cannot ingest values with more than 250 primitive fields.")
+          msg must startWith("Cannot ingest values with more than 1024 primitive fields.")
       }
     }
-    
+
     // not sure if this restriction still makes sense
     "cap errors at 100" in {
       val data = chunk(List.fill(500)("!@#$") mkString "\n")
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true, sync = true)(data) 
+      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true, sync = true)(data)
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
           msg \ "total" must_== JNum(500)
