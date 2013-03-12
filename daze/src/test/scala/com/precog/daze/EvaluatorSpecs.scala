@@ -3412,6 +3412,39 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       testEval(input) { _ must haveSize(1) }
     }
+    
+    "evaluate as a transspec a cond on a single source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(true),
+          "b" -> CNum(1),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("b"))(line))(line),
+        IdentitySort,
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
