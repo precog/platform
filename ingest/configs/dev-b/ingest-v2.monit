@@ -8,6 +8,7 @@ check process ingest-v2-b with pidfile /var/run/precog/ingest-v2-b.pid
   if 3 restarts within 10 cycles then timeout
   group ingest-v2-b
 
+
 # Watch server logs for issues
 check file ingest-v2-b.server.log with path /var/log/precog/ingest-v2-b.server.log
   if match "Exception" for 1 cycles then alert
@@ -18,10 +19,6 @@ check file ingest-v2-b.server.log with path /var/log/precog/ingest-v2-b.server.l
 check file ingest-v2-b.stdout.log with path /var/log/precog/ingest-v2-b.stdout.log
   if match "Exception" for 1 cycles then alert
   if match "Error" for 1 cycles then alert
-  if match "Too many open files" for 1 cycles
-      then exec "/usr/bin/lsof -p $(cat /var/run/precog/ingest-v2-b.pid) > /tmp/lsof-dump-$(date '+%s').txt"
-  if match "Too many open files" for 1 cycles then alert
-  alert derek-cell@chen-becker.org on { content }
   depends on ingest-v2-b
   group ingest-v2-b
 
