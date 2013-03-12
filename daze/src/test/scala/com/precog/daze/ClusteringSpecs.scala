@@ -309,6 +309,27 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
         points)(line))(line)
   }
 
+  def testCluster(model: Map[String, SValue], clusterMap: Map[String, RValue], assignments: Map[RValue, String], point: RValue) = {
+    model.keySet mustEqual Set("ClusterId", "ClusterCenter")
+
+    model("ClusterId") must beLike { case SString(clusterId) =>
+      clusterId must_== assignments(point)
+    }
+
+    model("ClusterCenter") must beLike { case SArray(arr0) =>
+      val arr = arr0 collect { case SDecimal(d) => d } 
+
+      val rvalue = clusterMap((model("ClusterId"): @unchecked) match {
+        case SString(s) => s
+      })
+      val res = (rvalue: @unchecked) match {
+        case RArray(values) => values collect { case CNum(x) => x }
+      }
+
+      arr must_== res
+    }
+  }
+
   "assign clusters" should {
     "assign correctly with a single schema" in {
       val size = 3000
@@ -338,24 +359,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
             val point = obj("point")
 
             obj("Model1") must beLike { case SObject(model) =>
-              model.keySet mustEqual Set("ClusterId", "ClusterCenter")
-
-              model("ClusterId") must beLike { case SString(clusterId) =>
-                clusterId must_== assignments(point.toRValue)
-              }
-
-              model("ClusterCenter") must beLike { case SArray(arr0) =>
-                val arr = arr0 collect { case SDecimal(d) => d } 
-
-                val rvalue = clusterMap((model("ClusterId"): @unchecked) match {
-                  case SString(s) => s
-                })
-                val res = (rvalue: @unchecked) match {
-                  case RArray(values) => values collect { case CNum(x) => x }
-                }
-
-                arr must_== res
-              }
+              testCluster(model, clusterMap, assignments, point.toRValue)
             }
           }
         }
@@ -405,46 +409,12 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
             }
 
             obj("Model1") must beLike { case SObject(model) =>
-              model.keySet mustEqual Set("ClusterId", "ClusterCenter")
-
-              model("ClusterId") must beLike { case SString(clusterId) =>
-                clusterId must_== assignmentsA(point.toRValue)
-              }
-
-              model("ClusterCenter") must beLike { case SArray(arr0) =>
-                val arr = arr0 collect { case SDecimal(d) => d } 
-
-                val rvalue = clusterMapA((model("ClusterId"): @unchecked) match {
-                  case SString(s) => s
-                })
-                val res = (rvalue: @unchecked) match {
-                  case RArray(values) => values collect { case CNum(x) => x }
-                }
-                
-                arr must_== res
-              }
+              testCluster(model, clusterMapA, assignmentsA, point.toRValue)
             }
 
             if (obj.contains("Model2")) {
               obj("Model2") must beLike { case SObject(model) =>
-                model.keySet mustEqual Set("ClusterId", "ClusterCenter")
-
-                model("ClusterId") must beLike { case SString(clusterId) =>
-                  clusterId must_== assignmentsB(point.toRValue)
-                }
-
-                model("ClusterCenter") must beLike { case SArray(arr0) =>
-                  val arr = arr0 collect { case SDecimal(d) => d } 
-
-                  val rvalue = clusterMapB((model("ClusterId"): @unchecked) match {
-                    case SString(s) => s
-                  })
-                  val res = (rvalue: @unchecked) match {
-                    case RArray(values) => values collect { case CNum(x) => x }
-                  }
-                  
-                  arr must_== res
-                }
+                testCluster(model, clusterMapB, assignmentsB, point.toRValue)
               }
             } else {
               ok
@@ -489,24 +459,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
             val point = obj("point")
 
             obj("Model1") must beLike { case SObject(model) =>
-              model.keySet mustEqual Set("ClusterId", "ClusterCenter")
-
-              model("ClusterId") must beLike { case SString(clusterId) =>
-                clusterId must_== assignments(point.toRValue)
-              }
-
-              model("ClusterCenter") must beLike { case SArray(arr0) =>
-                val arr = arr0 collect { case SDecimal(d) => d } 
-
-                val rvalue = clusterMap((model("ClusterId"): @unchecked) match {
-                  case SString(s) => s
-                })
-                val res = (rvalue: @unchecked) match {
-                  case RArray(values) => values collect { case CNum(x) => x }
-                }
-                
-                arr must_== res
-              }
+              testCluster(model, clusterMap, assignments, point.toRValue)
             }
           }
         }
