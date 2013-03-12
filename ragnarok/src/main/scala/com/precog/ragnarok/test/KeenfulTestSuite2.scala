@@ -17,35 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package ragnarok
+package test
 
-import com.precog.common.Path
+object KeenfulTestSuite2 extends PerfTestSuite {
+  query(
+    """
+import std::time::*
+data := //keenful
 
-import org.scalacheck.{Arbitrary, Gen}
+range := data where
+  getMillis (data.action.created_date) > getMillis ("2013-03-03") &
+  getMillis (data.action.created_date) < getMillis ("2013-03-10")
 
-import org.specs2.ScalaCheck
-import org.specs2.mutable.Specification
-
-class NIHDBActorSpecs extends Specification with ScalaCheck {
-  import Gen._
-
-  val hasSuffixGen: Gen[String] = resultOf[String, String] {
-    case prefix => prefix + NIHDBActor.escapeSuffix
-  }(Arbitrary(alphaStr))
-
-  val componentGen: Gen[String] = Gen.oneOf(Gen.oneOf(NIHDBActor.internalDirs.toSeq), hasSuffixGen, alphaStr)
-
-  implicit val pathGen: Arbitrary[Path] =
-    Arbitrary(for {
-      componentCount <- chooseNum(0, 200)
-      components     <- listOfN(componentCount, componentGen)
-    } yield Path(components))
-
-  "NIHDBActor path escaping" should {
-    import NIHDBActor._
-
-    "Handle arbitrary paths with components needing escaping" in check {
-      (p: Path) => unescapePath(escapePath(p, Set("/"))) mustEqual p
-    }
+solve 'day
+  data' := range where
+    dateHour(range.action.created_date) = 'day
+  { day: 'day,
+    views: count(data'.action.verb where data'.action.verb = "view"),
+    clicks: count(data'.action.verb where data'.action.verb = "click"),
+    recommendations: count(data'.action.verb where data'.action.verb = "recommend"),
+    total: count(data'.action.verb),
+    sets: count(distinct(data'.action.set_id where data'.action.verb = "recommend"))
   }
+--41644 ms (1/1) before
+--8152 ms (1/1) after
+--6707 ms (6/3)
+    """)
 }

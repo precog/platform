@@ -117,7 +117,41 @@ case class Segments(id: Long, var length: Int, t: CTree, a: ArrayBuffer[Segment]
     }
   }
 
+  def detectDateTime(s: String): DateTime = {
+    if (!DateTimeUtil.looksLikeIso8601(s)) return null
+    try {
+      DateTimeUtil.parseDateTime(s, true)
+    } catch {
+      case e: IllegalArgumentException => null
+    }
+  }
+
   def addString(row: Int, tree: CTree, s: String) {
+    val dateTime = detectDateTime(s)
+    if (dateTime == null) {
+      addRealString(row, tree, s)
+    } else {
+      addRealDateTime(row, tree, dateTime)
+    }
+  }
+
+  def addRealDateTime(row: Int, tree: CTree, s: DateTime) {
+    val n = tree.getType(CDate)
+    if (n >= 0) {
+      val seg = a(n).asInstanceOf[ArraySegment[DateTime]]
+      seg.defined.set(row)
+      seg.values(row) = s
+    } else {
+      tree.setType(CDate, a.length)
+      val d = new BitSet()
+      d.set(row)
+      val v = new Array[DateTime](length)
+      v(row) = s
+      a.append(ArraySegment[DateTime](id, tree.path, CDate, d, v))
+    }
+  }
+
+  def addRealString(row: Int, tree: CTree, s: String) {
     val n = tree.getType(CString)
     if (n >= 0) {
       val seg = a(n).asInstanceOf[ArraySegment[String]]
