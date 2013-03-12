@@ -595,8 +595,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             } yield PendingTable(result, graph, TransSpec1.Id)
             
           case c @ dag.Cond(pred, left, _, right, _) =>
-            println(">>>> here!")
-            evalNotTransSpecable(c.peer)     // TODO
+            evalNotTransSpecable(c.peer)
           
           case IUI(union, left, right) => 
             for {

@@ -74,7 +74,20 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               case child2 => Operate(op, child2)(graph.loc)
             }
           }
-
+          
+          case graph @ Cond(pred, left, leftJoin, right, rightJoin) => {
+            val pred2 = recurse(pred)
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+            
+            pred2 match {
+              case Const(CBoolean(true)) => left2
+              case Const(CBoolean(false)) => right2
+              case Const(_) => Undefined(graph.loc)
+              case _ => Cond(pred2, left2, leftJoin, right2, rightJoin)(graph.loc)
+            }
+          }
+          
           // Array operations
           case graph @ Join(JoinArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
             val left2 = recurse(left)
