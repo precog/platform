@@ -18,17 +18,18 @@
   <files keepModificationTimes="false" missingFilesStrategy="warn" globalExcludeSuffixes="" defaultOverwriteMode="4" defaultUninstallMode="0" launcherOverwriteMode="3" defaultFileMode="644" defaultDirMode="755">
     <filesets />
     <roots>
-      <root id="593" fileset="" location="${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config" />
+      <root id="593" fileset="" location="${installer:base_dir}" />
     </roots>
     <mountPoints>
       <mountPoint id="22" root="" location="" mode="755" />
+      <mountPoint id="665" root="593" location="config" mode="755" />
       <mountPoint id="594" root="593" location="" mode="755" />
     </mountPoints>
     <entries>
       <fileEntry mountPoint="22" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="22" file="./installer_files/README.html" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="594" file="./installer_files/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="594" file="./installer_files/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="665" file="./installer_files/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="665" file="./installer_files/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="594" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
     </entries>
     <components />
   </files>
@@ -43,7 +44,7 @@
           <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
         </text>
       </splashScreen>
-      <java mainClass="com.precog.shard.desktop.DesktopIngestShardServer" vmParameters="-Dlogback.configurationFile=${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.logging.xml" arguments="--configFile ${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="server" bundleRuntime="true">
+      <java mainClass="com.precog.shard.desktop.DesktopIngestShardServer" vmParameters="-Dlogback.configurationFile=${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.logging.xml" arguments="--configFile ${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="server" bundleRuntime="true">
         <classPath>
           <archive location="precog-desktop.jar" failOnError="false" />
         </classPath>
@@ -74,7 +75,7 @@
           <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
         </text>
       </splashScreen>
-      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="" arguments="--configFile=${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
+      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="" arguments="--configFile=${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
         <classPath>
           <archive location="precog-desktop.jar" failOnError="false" />
         </classPath>
@@ -116,7 +117,13 @@
           </java>
         </serializedBean>
         <launcherIds />
-        <variables />
+        <variables>
+          <variable name="config_dir" value="${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
+          <variable name="zookeeper_dir" value="${installer:base_dir}${installer:sys.fileSeparator}zookeeper${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
+          <variable name="kafka_dir" value="${installer:base_dir}${installer:sys.fileSeparator}kafka${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
+          <variable name="log_dir" value="${installer:base_dir}${installer:sys.fileSeparator}logs${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
+          <variable name="data_dir" value="${installer:base_dir}${installer:sys.fileSeparator}data${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
+        </variables>
         <startup>
           <screen name="" id="1" customizedId="" beanClass="com.install4j.runtime.beans.screens.StartupScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
@@ -141,6 +148,37 @@
                       </void>
                       <void property="obtainIfNormalWin">
                         <boolean>true</boolean>
+                      </void>
+                    </object>
+                  </java>
+                </serializedBean>
+                <condition />
+              </action>
+              <action name="" id="664" customizedId="" beanClass="com.install4j.runtime.beans.actions.control.SetVariableAction" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+                <serializedBean>
+                  <java class="java.beans.XMLDecoder">
+                    <object class="com.install4j.runtime.beans.actions.control.SetVariableAction">
+                      <void property="script">
+                        <object class="com.install4j.api.beans.ScriptProperty">
+                          <void property="value">
+                            <string>/*
+Windows: C:\Users\&lt;user&gt;\AppData\Local\Labcoat
+Unix/Linux: ~/.labcoat
+MacOS X: ~/Library/Application Support/Labcoat
+*/
+String platform=context.getCompilerVariable("sys.platform");
+if (platform.startsWith("windows")){
+    return context.getVariable("sys.userHome")+"\\AppData\\Local\\Labcoat\\";
+} else if (platform.startsWith("macos")){
+    return context.getVariable("sys.userHome")+"/Library/Application Support/Labcoat/";
+} else { //unix
+    return context.getVariable("sys.userHome")+"/.labcoat/";
+}</string>
+                          </void>
+                        </object>
+                      </void>
+                      <void property="variableName">
+                        <string>base_dir</string>
                       </void>
                     </object>
                   </java>
@@ -257,6 +295,52 @@
             <actions />
             <formComponents />
           </screen>
+          <screen name="" id="317" customizedId="" beanClass="com.install4j.runtime.beans.screens.FormScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
+            <serializedBean>
+              <java class="java.beans.XMLDecoder">
+                <object class="com.install4j.runtime.beans.screens.FormScreen">
+                  <void property="subTitle">
+                    <string>Select the base directory for Labocat work files</string>
+                  </void>
+                  <void property="title">
+                    <string>Directory selection</string>
+                  </void>
+                </object>
+              </java>
+            </serializedBean>
+            <condition />
+            <validation />
+            <preActivation />
+            <postActivation />
+            <actions />
+            <formComponents>
+              <formComponent name="Data dir" id="318" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+                <serializedBean>
+                  <java class="java.beans.XMLDecoder">
+                    <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
+                      <void property="allowNewFolderCreation">
+                        <boolean>true</boolean>
+                      </void>
+                      <void property="allowSpacesOnUnix">
+                        <boolean>false</boolean>
+                      </void>
+                      <void property="initialFile">
+                        <string>${installer:base_dir}</string>
+                      </void>
+                      <void property="labelText">
+                        <string>Base dir for work files</string>
+                      </void>
+                      <void property="variableName">
+                        <string>base_dir</string>
+                      </void>
+                    </object>
+                  </java>
+                </serializedBean>
+                <initScript />
+                <visibilityScript />
+              </formComponent>
+            </formComponents>
+          </screen>
           <screen name="" id="8" customizedId="" beanClass="com.install4j.runtime.beans.screens.InstallationScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="true" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
@@ -302,127 +386,6 @@
               </action>
             </actions>
             <formComponents />
-          </screen>
-          <screen name="" id="317" customizedId="" beanClass="com.install4j.runtime.beans.screens.FormScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
-            <serializedBean>
-              <java class="java.beans.XMLDecoder">
-                <object class="com.install4j.runtime.beans.screens.FormScreen">
-                  <void property="subTitle">
-                    <string>Select work directories for Labocat components</string>
-                  </void>
-                  <void property="title">
-                    <string>Directory selection</string>
-                  </void>
-                </object>
-              </java>
-            </serializedBean>
-            <condition />
-            <validation />
-            <preActivation />
-            <postActivation />
-            <actions />
-            <formComponents>
-              <formComponent name="Data dir" id="318" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
-                      <void property="allowNewFolderCreation">
-                        <boolean>true</boolean>
-                      </void>
-                      <void property="allowSpacesOnUnix">
-                        <boolean>false</boolean>
-                      </void>
-                      <void property="initialFile">
-                        <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}data</string>
-                      </void>
-                      <void property="labelText">
-                        <string>Data dir</string>
-                      </void>
-                      <void property="variableName">
-                        <string>data_dir</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <initScript />
-                <visibilityScript />
-              </formComponent>
-              <formComponent name="Logs dir" id="319" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
-                      <void property="allowNewFolderCreation">
-                        <boolean>true</boolean>
-                      </void>
-                      <void property="allowSpacesOnUnix">
-                        <boolean>false</boolean>
-                      </void>
-                      <void property="initialFile">
-                        <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}logs</string>
-                      </void>
-                      <void property="labelText">
-                        <string>Logs dir</string>
-                      </void>
-                      <void property="variableName">
-                        <string>log_dir</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <initScript />
-                <visibilityScript />
-              </formComponent>
-              <formComponent name="Zookeeper dir" id="320" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
-                      <void property="allowNewFolderCreation">
-                        <boolean>true</boolean>
-                      </void>
-                      <void property="allowSpacesOnUnix">
-                        <boolean>false</boolean>
-                      </void>
-                      <void property="initialFile">
-                        <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}zookeeper</string>
-                      </void>
-                      <void property="labelText">
-                        <string>Zookeeper data dir</string>
-                      </void>
-                      <void property="variableName">
-                        <string>zookeeper_dir</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <initScript />
-                <visibilityScript />
-              </formComponent>
-              <formComponent name="Kafka dir" id="322" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
-                      <void property="allowNewFolderCreation">
-                        <boolean>true</boolean>
-                      </void>
-                      <void property="allowSpacesOnUnix">
-                        <boolean>false</boolean>
-                      </void>
-                      <void property="initialFile">
-                        <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}kafka</string>
-                      </void>
-                      <void property="labelText">
-                        <string>Kafka data dir</string>
-                      </void>
-                      <void property="variableName">
-                        <string>kafka_dir</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <initScript />
-                <visibilityScript />
-              </formComponent>
-            </formComponents>
           </screen>
           <screen name="Port selection" id="308" customizedId="" beanClass="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
@@ -654,12 +617,12 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                         <array class="java.io.File" length="2">
                           <void index="0">
                             <object class="java.io.File">
-                              <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config/shard-v2.conf</string>
+                              <string>${installer:config_dir}shard-v2.conf</string>
                             </object>
                           </void>
                           <void index="1">
                             <object class="java.io.File">
-                              <string>${installer:sys.userHome}${installer:sys.fileSeparator}Precog-Labcoat${installer:sys.fileSeparator}config/shard-v2.logging.xml</string>
+                              <string>${installer:config_dir}shard-v2.logging.xml</string>
                             </object>
                           </void>
                         </array>
@@ -696,13 +659,31 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition />
               </action>
+              <action name="" id="666" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.FixCrLfAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+                <serializedBean>
+                  <java class="java.beans.XMLDecoder">
+                    <object class="com.install4j.runtime.beans.actions.text.FixCrLfAction">
+                      <void property="files">
+                        <array class="java.io.File" length="1">
+                          <void index="0">
+                            <object class="java.io.File">
+                              <string>${installer:base_dir}/README.txt</string>
+                            </object>
+                          </void>
+                        </array>
+                      </void>
+                    </object>
+                  </java>
+                </serializedBean>
+                <condition />
+              </action>
               <action name="" id="268" customizedId="" beanClass="com.install4j.runtime.beans.actions.finish.ShowFileAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.finish.ShowFileAction">
                       <void property="file">
                         <object class="java.io.File">
-                          <string>README.html</string>
+                          <string>${installer:base_dir}/README.txt</string>
                         </object>
                       </void>
                     </object>
@@ -900,7 +881,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
     </applications>
   </installerGui>
   <mediaSets>
-    <windows name="Windows" id="25" customizedId="" mediaFileName="" installDir="Precog-Labcoat" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
+    <windows name="Windows" id="25" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
       <excludedLaunchers>
         <launcher id="328" />
       </excludedLaunchers>
@@ -1008,7 +989,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
         <content />
       </postUninstallScript>
     </linuxRPM>
-    <macos name="Mac OS X Single Bundle" id="402" customizedId="" mediaFileName="" installDir="Precog-Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false" launcherId="391">
+    <macos name="Mac OS X Single Bundle" id="402" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false" launcherId="391">
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
       <exclude />
@@ -1063,9 +1044,10 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <includedDownloadableComponents />
     </windows>
   </mediaSets>
-  <buildIds buildAll="true">
+  <buildIds buildAll="false">
     <mediaSet refId="25" />
+    <mediaSet refId="33" />
   </buildIds>
-  <buildOptions verbose="false" faster="false" disableSigning="false" debug="false" />
+  <buildOptions verbose="false" faster="true" disableSigning="false" debug="false" />
 </install4j>
 
