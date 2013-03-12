@@ -3445,6 +3445,66 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         results.head mustEqual SDecimal(1)
       }
     }
+    
+    "evaluate as a transspec a cond on a const left source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(true),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        dag.Const(CNum(1))(line),
+        CrossLeftSort,
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
+    }
+    
+    "evaluate as a transspec a cond on a const right source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(false),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort,
+        dag.Const(CNum(1))(line),
+        CrossLeftSort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
