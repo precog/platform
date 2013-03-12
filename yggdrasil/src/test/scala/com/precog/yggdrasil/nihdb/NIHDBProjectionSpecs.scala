@@ -139,6 +139,11 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
         IngestRecord(EventId.fromLong(i), JNum(i))
       }))
 
+      // Ensure we handle skips properly
+      projection.insert(Seq(0L -> (0L to 2L).toSeq.map { i =>
+        IngestRecord(EventId.fromLong(i), JNum(i))
+      }))
+
       val result = for {
         _ <- projection.close(actorSystem)
         _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)

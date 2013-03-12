@@ -584,23 +584,23 @@ object ImportTools extends Command with Logging {
         val f = new File(input)
         val ch = new FileInputStream(f).getChannel
         val bb = ByteBuffer.allocate(bufSize)
-  
+
         @tailrec def loop(p: AsyncParser) {
           val n = ch.read(bb)
           bb.flip()
-  
+
           val input = if (n >= 0) Some(bb) else None
           val (AsyncParse(errors, results), parser) = p(input)
           if (!errors.isEmpty) sys.error("errors: %s" format errors)
           val eventidobj = EventId(pid, sid.getAndIncrement)
           val records = results.map(v => IngestRecord(eventidobj, v))
-          val update = ProjectionInsert(Path(db), Seq(eventidobj.uid -> records), Authorities(config.accountId))
+          val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
           bb.flip()
           if (n >= 0) loop(parser)
         }
-  
+
         try {
           loop(AsyncParser())
         } finally {

@@ -73,7 +73,8 @@ sealed trait ProjectionUpdate {
   def path: Path
 }
 
-case class ProjectionInsert(path: Path, values: Seq[(Long, Seq[IngestRecord])], writeAs: Authorities) extends ProjectionUpdate
+// Collects a sequnce of sequential batches into a single insert
+case class ProjectionInsert(path: Path, batches: Seq[(Long, Seq[IngestRecord])], writeAs: Authorities) extends ProjectionUpdate
 
 case class ProjectionArchive(path: Path, archiveBy: APIKey, id: EventId) extends ProjectionUpdate
 
@@ -382,10 +383,10 @@ class NIHDBProjectionsActor(
       logger.debug("Accessing projections at " + path + " => " + projectionsDir(activeDir, path))
       aggregateProjections(path, Some(apiKey)) pipeTo sender
 
-    case ProjectionInsert(path, records, authorities) =>
+    case ProjectionInsert(path, batches, authorities) =>
       val requestor = sender
       createProjection(path, authorities).map {
-        _.insert(records) map { _ =>
+        _.insert(batches) map { _ =>
           requestor ! InsertComplete(path)
         }
       }.except {
