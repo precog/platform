@@ -90,17 +90,24 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
               } groupBy { _._1 }
             }
 
-            val modelsByCluster = modelTuples map { case (modelId, models) => (modelId, models.groupBy(_._2)) }
+            val modelsByCluster = modelTuples map { case (modelId, models) =>
+              (modelId, models.groupBy(_._2))
+            }
 
             { (i: Int) =>
               val models0 = modelsByCluster.map { case (modelId, clusters) =>
 
                 val modelClusters0: Array[ModelCluster] = clusters.map { case (clusterId, colInfo) =>
-                  val featureValues = colInfo.collect { case (_, _, cpath, col) if col.isDefinedAt(i) => cpath -> col(i) }.toMap
+                  val featureValues = colInfo.collect { case (_, _, cpath, col) if col.isDefinedAt(i) =>
+                    cpath -> col(i)
+                  }.toMap
+
                   ModelCluster(clusterId, featureValues)
                 }.toArray
 
-                val modelClusters = modelClusters0 filter { case ModelCluster(_, featureValues) => !featureValues.isEmpty }
+                val modelClusters = modelClusters0 filter { case ModelCluster(_, featureValues) =>
+                  !featureValues.isEmpty
+                }
 
                 Model(modelId, modelClusters)
               }.toSet
@@ -205,7 +212,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
 
                 def transposeResults(values: Array[Array[Double]]) = {
                   var k = 0
-                  val acc = scala.collection.mutable.Seq.fill(centerPaths.length)(Array.empty[Double])
+                  val acc = Array.fill(centerPaths.length)(Array.empty[Double])
 
                   while (k < values.length) {
                     var i = 0
@@ -217,7 +224,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
                     }
                     k += 1
                   }
-                  acc.toArray
+                  acc
                 }
 
                 val transposed = transposeResults(clusterCenters)
@@ -233,11 +240,15 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
                 assert(colsByPath.length == centerPaths.length)
                 val zipped: Array[(Column, CPath)] = colsByPath zip centerPaths
 
-                val centers: Map[ColumnRef, Column] = zipped.map { case (col, path) =>
-                  ColumnRef(CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterCenter")) \ path.dropPrefix(CPath(TableModule.paths.Value)).get, CDouble) -> col
+                val pref = CPath(TableModule.paths.Value)
+
+                val centers: Map[ColumnRef, Column] = zipped.collect { case (col, path) if path.hasPrefix(pref) =>
+                  val path0 = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterCenter"))
+                  ColumnRef(path0 \ path.dropPrefix(pref).get, CDouble) -> col
                 }.toMap
 
-                val centerId = Map(ColumnRef(CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterId")), CString) -> ArrayStrColumn(definedModel, resultArray))
+                val idPath = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterId"))
+                val centerId = Map(ColumnRef(idPath, CString) -> ArrayStrColumn(definedModel, resultArray))
 
                 centers ++ centerId
               }
@@ -273,11 +284,17 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
 
         def apply(table: Table, ctx: EvaluationContext): M[Table] = {
-          val scanners: Seq[TransSpec1] = models map { model => WrapArray(Scan(TransSpec1.Id, scanner(model))) }
-          val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
+          val scanners: Seq[TransSpec1] = models map { model =>
+            WrapArray(Scan(TransSpec1.Id, scanner(model)))
+          }
+          val spec: TransSpec1 = scanners reduceOption { (s1, s2) =>
+            InnerArrayConcat(s1, s2)
+          } getOrElse TransSpec1.Id
 
           val forcedTable = table.transform(spec).force
-          val tables0 = (0 until scanners.size) map { i => forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i)))) }
+          val tables0 = (0 until scanners.size) map { i =>
+            forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i))))
+          }
           val tables: M[Seq[Table]] = (tables0.toList).sequence
 
           tables.map(_.reduceOption { _ concat _ } getOrElse Table.empty)
