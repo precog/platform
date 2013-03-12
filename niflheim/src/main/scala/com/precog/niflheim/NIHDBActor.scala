@@ -56,7 +56,7 @@ import scala.collection.JavaConverters._
 
 import shapeless._
 
-case class Insert(id: Long, values: Seq[JValue])
+case class Insert(batch: Seq[(Long, Seq[JValue])])
 
 case object GetSnapshot
 
@@ -86,8 +86,8 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
   def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
 
-  def insert(id: Long, values: Seq[JValue]): Future[PrecogUnit] =
-    (actor ? Insert(id, values)) map { _ => PrecogUnit }
+  def insert(batch: Seq[(Long, Seq[JValue])]): Future[PrecogUnit] =
+    (actor ? Insert(batch)) map { _ => PrecogUnit }
 
   def getSnapshot(): Future[NIHDBSnapshot] =
     (actor ? GetSnapshot).mapTo[NIHDBSnapshot]
@@ -235,7 +235,9 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
       (RawHandler.empty(txLog.currentBlockId, currentRawFile), Seq.empty[Long])
     }
 
-    maxOffset = math.max(maxOffset, rawLogOffsets.max)
+    rawLogOffsets.sortBy(- _).headOption.foreach { newMaxOffset =>
+      maxOffset = maxOffset max newMaxOffset
+    }
 
     val pendingCooks = txLog.pendingCookIds.map { id =>
       val (reader, offsets, ok) = RawHandler.load(id, rawFileFor(id))
@@ -315,27 +317,35 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
       ProjectionState.toFile(currentState, descriptorFile).unsafePerformIO
       txLog.completeCook(id)
 
-    case Insert(offset, values) =>
-      if (offset > currentState.maxOffset) {
-        logger.debug("Inserting %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
-        blockState.rawLog.write(offset, values)
-
-        // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
-        currentState = currentState.copy(maxOffset = offset)
-
-        if (blockState.rawLog.length >= cookThreshold) {
-          logger.debug("Starting cook on %s after threshold exceeded".format(baseDir.getCanonicalPath))
-          blockState.rawLog.close
-          val toCook = blockState.rawLog
-          val newRaw = RawHandler.empty(toCook.id + 1, rawFileFor(toCook.id + 1))
-
-          blockState = blockState.copy(pending = blockState.pending + (toCook.id -> toCook), rawLog = newRaw)
-          txLog.startCook(toCook.id)
-          chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
-        }
-        logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
+    case Insert(batch) =>
+      if (batch.isEmpty) {
+        logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
       } else {
-        logger.debug("Skipping %d existing rows at offset %d".format(values.size, offset))
+        val (skipValues, keepValues) = batch.partition(_._1 <= currentState.maxOffset)
+        val values = keepValues.flatMap(_._2)
+        val offset = keepValues.map(_._1).max
+
+        if (offset > currentState.maxOffset) {
+          logger.debug("Inserting %d rows, skipping %d rows at offset %d for %s".format(values.length, skipValues.length, offset, baseDir.getCanonicalPath))
+          blockState.rawLog.write(offset, values)
+
+          // Update the producer thresholds for the rows. We know that ids only has one element due to the initial check
+          currentState = currentState.copy(maxOffset = offset)
+
+          if (blockState.rawLog.length >= cookThreshold) {
+            logger.debug("Starting cook on %s after threshold exceeded".format(baseDir.getCanonicalPath))
+            blockState.rawLog.close
+            val toCook = blockState.rawLog
+            val newRaw = RawHandler.empty(toCook.id + 1, rawFileFor(toCook.id + 1))
+
+            blockState = blockState.copy(pending = blockState.pending + (toCook.id -> toCook), rawLog = newRaw)
+            txLog.startCook(toCook.id)
+            chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
+          }
+          logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
+        } else {
+          logger.debug("Skipping %d existing rows at offset %d".format(values.size, offset))
+        }
       }
       sender ! ()
 

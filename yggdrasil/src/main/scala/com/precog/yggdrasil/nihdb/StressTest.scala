@@ -121,6 +121,8 @@ class StressTest {
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
         projection.insert(Seq((eventid, results.map(v => IngestRecord(eventidobj, v)))))
+
+
         eventid += 1L
         bb.flip()
         if (n >= 0) loop(parser)

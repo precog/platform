@@ -91,10 +91,8 @@ class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) e
     }
   }
 
-  def insert(batches : Seq[(Long, Seq[IngestRecord])])(implicit M: Monad[Future]): Future[PrecogUnit] = {
-    batches.map { case (offset, records) =>
-      db.insert(offset, records map (_.value))
-    }.toList.sequence map { _ => PrecogUnit }
+  def insert(batches: Seq[(Long, Seq[IngestRecord])])(implicit M: Monad[Future]): Future[PrecogUnit] = {
+    db.insert(batches.map { case (offset, records) => (offset, records.map(_.value)) })
   }
 
   def length: Future[Long] = db.length
