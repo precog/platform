@@ -170,8 +170,9 @@ class SyncQueryServiceHandler(
         val result: StreamT[Future, CharBuffer] = (prefix :: data) ++ (CharBuffer.wrap("}") :: StreamT.empty[Future, CharBuffer])
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
 
-      case (Right(Detailed), Some(jobId), data) =>
+      case (Right(Detailed), Some(jobId), data0) =>
         val prefix = CharBuffer.wrap("""{ "data" : """)
+        val data = silenceShardQueryExceptions(data0)
         val result = StreamT.unfoldM(some(prefix :: data)) {
           case Some(stream) =>
             stream.uncons flatMap {
@@ -194,6 +195,27 @@ class SyncQueryServiceHandler(
         }
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
     }
+  }
+
+  /**
+   * This will catch ShardQuery-specific exceptions in a Future (ie.
+   * QueryCancelledException and QueryExpiredException) and recover the Future
+   * by simply terminating the stream normally.
+   */
+  private def silenceShardQueryExceptions(stream0: StreamT[Future, CharBuffer]): StreamT[Future, CharBuffer] = {
+    def loop(stream: StreamT[Future, CharBuffer]): StreamT[Future, CharBuffer] = {
+      StreamT(stream.uncons map {
+        case Some((s, tail)) => StreamT.Yield(s, loop(tail))
+        case None => StreamT.Done
+      } recover {
+        case _: QueryCancelledException =>
+          StreamT.Done
+        case _: QueryExpiredException =>
+          StreamT.Done
+      })
+    }
+
+    loop(stream0)
   }
 }
 
