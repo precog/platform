@@ -78,17 +78,34 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
   private object Offset extends NonNegativeLong
   private object Millis extends NonNegativeLong
 
-  // XYZ
   private def getOutputType(request: HttpRequest[_]): QueryOutput = {
     import MimeTypes._
     import HttpHeaders.Accept
 
     val JSON = application/json
     val CSV = text/csv
-    request.headers.header[Accept].map(_.mimeTypes).getOrElse(Nil).collect {
-      case JSON => JsonOutput
-      case CSV => CsvOutput
-    }.headOption.getOrElse(JsonOutput)
+
+    val requestParamType = for {
+      headerString <- request.parameters.get('headers)
+      _ = logger.debug("headerString: " + headerString)
+      headerJson <- JParser.parseFromString(headerString).toOption
+      _ = logger.debug("headerJson: " + headerJson)
+      headerMap <- headerJson.validated[Map[String, String]].toOption
+      _ = logger.debug("headerMap: " + headerMap)
+      contentTypeString <- headerMap.get("Accept")
+      _ = logger.debug("contentTypeString: " + contentTypeString)
+      accept <- Accept.parse(contentTypeString)
+      _ = logger.debug("accept: " + accept)
+      mimeType <- accept.mimeTypes.headOption
+      _ = logger.debug("mimeType: " + mimeType)
+    } yield mimeType
+
+    (request.headers.header[Accept].toSeq.flatMap(_.mimeTypes) ++ requestParamType).collectFirst {
+      case JSON => JSONOutput
+      case CSV => CSVOutput
+    } getOrElse {
+      JSONOutput
+    }
   }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
