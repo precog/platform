@@ -205,6 +205,24 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Undefined(line)
       }
     }
+    
+    "detect and resove union with identical left/right" in {
+      val line = Line(1, 1, "")
+      
+      val side = Const(CString("j"))(line)
+      val input = IUI(true, side, side)(line)
+      
+      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+    }
+    
+    "detect and resove intersect with identical left/right" in {
+      val line = Line(1, 1, "")
+      
+      val side = Const(CString("j"))(line)
+      val input = IUI(false, side, side)(line)
+      
+      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+    }
   }
 }
 

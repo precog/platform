@@ -88,6 +88,16 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
             }
           }
           
+          case graph @ IUI(union, left, right) => {
+            val left2 = recurse(left)
+            val right2 = recurse(right)
+            
+            if (left2 == right2)
+              left2
+            else
+              IUI(union, left2, right2)(graph.loc)
+          }
+          
           // Array operations
           case graph @ Join(JoinArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
             val left2 = recurse(left)
