@@ -235,7 +235,9 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
       (RawHandler.empty(txLog.currentBlockId, currentRawFile), Seq.empty[Long])
     }
 
-    maxOffset = math.max(maxOffset, rawLogOffsets.max)
+    rawLogOffsets.sortBy(- _).headOption.foreach { newMaxOffset =>
+      maxOffset = maxOffset max newMaxOffset
+    }
 
     val pendingCooks = txLog.pendingCookIds.map { id =>
       val (reader, offsets, ok) = RawHandler.load(id, rawFileFor(id))
