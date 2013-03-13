@@ -70,9 +70,28 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
   def id: Long = metadata.valueOr(throw _).blockid
   def length: Int = metadata.valueOr(throw _).length
 
-  def snapshot(pathConstraint: Option[Set[CPath]]): Block = {
-    val segments: Seq[Segment] = pathConstraint map { paths =>
-      load(paths.toList).map({ segs =>
+  def snapshot(pathConstraints: Option[Set[CPath]]): Block = {
+    val refConstraints = pathConstraints map {
+      _.flatMap { path =>
+        val groupedPaths = metadata.valueOr(throw _).segments.groupBy {
+          case (segId, _) => segId.cpath
+        }
+        val tpes = groupedPaths.get(path) map {
+          _.map { case (segId, _) => segId.ctype }
+        } getOrElse {
+          Array.empty[CType]
+        }
+
+        tpes.map { tpe => ColumnRef(path, tpe) }.toSet
+      }
+    }
+
+    snapshotRef(refConstraints)
+  }
+
+  def snapshotRef(refConstraints: Option[Set[ColumnRef]]): Block = {
+    val segments: Seq[Segment] = refConstraints map { refs =>
+      load(refs.toList).map({ segs =>
         segs flatMap (_._2)
       }).valueOr { nel => throw nel.head }
     } getOrElse {
@@ -84,11 +103,6 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     }
 
     Block(id, segments, isStable)
-  }
-
-  def snapshotRef(refConstraints: Option[Set[ColumnRef]]): Block = {
-    val pathConstraints = refConstraints map { _.map { case ColumnRef(path, _) => path } }
-    snapshot(pathConstraints)
   }
 
   def structure: Iterable[(CPath, CType)] = metadata.valueOr(throw _).segments map {
@@ -111,22 +125,22 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     }
   }
 
-  private def segmentsByCPath: Validation[IOException, Map[CPath, List[File]]] = metadata map { md =>
-    md.segments.groupBy(_._1.cpath).map { case (cpath, segs) =>
-      (cpath, segs.map(_._2).toList)
+  private def segmentsByRef: Validation[IOException, Map[ColumnRef, List[File]]] = metadata map { md =>
+    md.segments.groupBy(s => (s._1.cpath, s._1.ctype)).map { case ((cpath, ctype), segs) =>
+      (ColumnRef(cpath, ctype), segs.map(_._2).toList)
     }.toMap
   }
 
-  def load(paths: List[CPath]): ValidationNEL[IOException, List[(CPath, List[Segment])]] = {
-    segmentsByCPath.toValidationNEL flatMap { (segsByPath: Map[CPath, List[File]]) =>
+  def load(paths: List[ColumnRef]): ValidationNEL[IOException, List[(ColumnRef, List[Segment])]] = {
+    segmentsByRef.toValidationNEL flatMap { (segsByRef: Map[ColumnRef, List[File]]) =>
       paths.map { path =>
-        val v: ValidationNEL[IOException, List[Segment]] = segsByPath.getOrElse(path, Nil).map { file =>
+        val v: ValidationNEL[IOException, List[Segment]] = segsByRef.getOrElse(path, Nil).map { file =>
           read(file) { channel =>
             segmentFormat.reader.readSegment(channel).toValidationNEL
           }
         }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, Segment]
         v map (path -> _)
-      }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (CPath, List[Segment])]
+      }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (ColumnRef, List[Segment])]
     }
   }
 }
