@@ -17,35 +17,24 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package ragnarok
+package test
 
-import com.precog.common.Path
+object KeenfulTestSuite1 extends PerfTestSuite {
+  query(
+    """
+import std::time::*
 
-import org.scalacheck.{Arbitrary, Gen}
+data := //keenful
 
-import org.specs2.ScalaCheck
-import org.specs2.mutable.Specification
+data' := data where
+  getMillis (data.action.created_date) > getMillis("2013-03-03") &
+  getMillis (data.action.created_date) < getMillis("2013-03-10")
 
-class NIHDBActorSpecs extends Specification with ScalaCheck {
-  import Gen._
-
-  val hasSuffixGen: Gen[String] = resultOf[String, String] {
-    case prefix => prefix + NIHDBActor.escapeSuffix
-  }(Arbitrary(alphaStr))
-
-  val componentGen: Gen[String] = Gen.oneOf(Gen.oneOf(NIHDBActor.internalDirs.toSeq), hasSuffixGen, alphaStr)
-
-  implicit val pathGen: Arbitrary[Path] =
-    Arbitrary(for {
-      componentCount <- chooseNum(0, 200)
-      components     <- listOfN(componentCount, componentGen)
-    } yield Path(components))
-
-  "NIHDBActor path escaping" should {
-    import NIHDBActor._
-
-    "Handle arbitrary paths with components needing escaping" in check {
-      (p: Path) => unescapePath(escapePath(p, Set("/"))) mustEqual p
-    }
-  }
+count(distinct(data'.visitor.id))
+--26136 ms
+--2971 ms (1/1)
+--3113 ms (6/3)
+    """)
 }

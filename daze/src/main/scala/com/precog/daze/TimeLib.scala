@@ -139,8 +139,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     object ParseDateTimeFuzzy extends Op1F1(TimeNamespace, "parseDateTimeFuzzy") {
-      val tpe = UnaryOperationType(JTextT, JDateT)
+      val tpe = UnaryOperationType(textAndDate, JDateT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTimeFuzzy") {
+        case (c: DateColumn) => c
+
         case (c: StrColumn) => new DateColumn {
           def isDefinedAt(row: Int): Boolean = if (!c.isDefinedAt(row)) {
             false
