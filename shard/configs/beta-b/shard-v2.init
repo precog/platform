@@ -1,0 +1,33 @@
+# shard-v2-beta-b - ReportGrid beta shard service (v2/backup)
+#
+#
+
+description "shard-v2-beta-b - ReportGrid beta shard service (v2/backup)"
+
+start on runlevel [2345]
+stop on runlevel [06]
+
+limit nofile 200000 200000
+limit nproc 40000 40000
+
+respawn
+
+pre-start script
+  [ -d /var/run/precog ] || install -m 755 -o precog -g precog -d /var/run/precog
+end script
+
+script
+  if [ -f /etc/default/shard-v2-beta-b ]; then . /etc/default/shard-v2-beta-b; fi
+  ulimit -n 200000
+  ulimit -u 40000
+  LOGCONF=/etc/precog/shard-v2-beta-b.logging.xml
+  if [ -f /etc/precog/shard-v2-beta-b.logging.debug.xml ]; then 
+    LOGCONF=/etc/precog/shard-v2-beta-b.logging.debug.xml
+  fi
+  sudo -u precog /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=$LOGCONF -jar /usr/share/java/shard-v2-beta-b.jar --configFile /etc/precog/shard-v2-beta-b.conf >> /var/log/precog/shard-v2-beta-b.stdout.log 2>&1
+end script
+
+post-start script
+  echo `status shard-v2-beta-b | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/shard-v2-beta-b.pid
+end script
+
