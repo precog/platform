@@ -67,54 +67,60 @@ object DesktopIngestShardServer
   def configureShardState(config: Configuration, rootConfig: Configuration) = Future {
     val guiNotifier = if (rootConfig[Boolean]("appwindow.enabled", false)) {
       logger.info("Starting gui window")
-      // Set some useful OS X props (just in case)
-      System.setProperty("apple.laf.useScreenMenuBar", "true")
-      System.setProperty("apple.awt.graphics.UseQuartz", "true")
-      System.setProperty("apple.awt.textantialiasing", "true")
-      System.setProperty("apple.awt.antialiasing", "true")
       // Add a window with a menu for shutdown
-      val precogMenu = new JMenu("Precog for Desktop")
-      val quitItem = new JMenuItem("Quit", KeyEvent.VK_Q)
-      quitItem.addActionListener(new ActionListener {
-        def actionPerformed(ev: ActionEvent) = {
-          System.exit(0)
-        }
-      })
-
-      precogMenu.add(quitItem)
-
-      val labcoatMenu = new JMenu("Labcoat")
-      val launchItem = new JMenuItem("Launch", KeyEvent.VK_L)
-      launchItem.addActionListener(new ActionListener {
-        def actionPerformed(ev: ActionEvent) = {
-          LaunchLabcoat.launchBrowser(rootConfig)
-        }
-      })
-
-      labcoatMenu.add(launchItem)
-
-      val menubar = new JMenuBar
-      menubar.add(precogMenu)
-      menubar.add(labcoatMenu)
-
-      val appFrame = new JFrame("Precog for Desktop")
-      appFrame.setJMenuBar(menubar)
-
-      appFrame.addWindowListener(new WindowAdapter {
-        override def windowClosed(ev: WindowEvent) = {
-          System.exit(0)
-        }
-      })
-
       val notifyArea = new JTextArea(25, 80)
-      notifyArea.setEditable(false)
-      appFrame.add(notifyArea)
+      
+      EventQueue.invokeLater(new Runnable {
+        def run() {
+          val precogMenu = new JMenu("Precog for Desktop")
+          val quitItem = new JMenuItem("Quit", KeyEvent.VK_Q)
+          quitItem.addActionListener(new ActionListener {
+            def actionPerformed(ev: ActionEvent) = {
+              System.exit(0)
+            }
+          })
 
-      appFrame.pack()
+          precogMenu.add(quitItem)
 
-      appFrame.setVisible(true)
+          val labcoatMenu = new JMenu("Labcoat")
+          val launchItem = new JMenuItem("Launch", KeyEvent.VK_L)
+          launchItem.addActionListener(new ActionListener {
+            def actionPerformed(ev: ActionEvent) = {
+              LaunchLabcoat.launchBrowser(rootConfig)
+            }
+          })
 
-      Some({ (msg: String) => notifyArea.append(msg + "\n") })
+          labcoatMenu.add(launchItem)
+
+          val menubar = new JMenuBar
+          menubar.add(precogMenu)
+          menubar.add(labcoatMenu)
+
+          val appFrame = new JFrame("Precog for Desktop")
+          appFrame.setJMenuBar(menubar)
+
+          appFrame.addWindowListener(new WindowAdapter {
+            override def windowClosed(ev: WindowEvent) = {
+              System.exit(0)
+            }
+          })
+
+          notifyArea.setEditable(false)
+          appFrame.add(notifyArea)
+
+          appFrame.pack()
+
+          appFrame.setVisible(true)
+        }
+      })
+
+      Some({ (msg: String) => 
+        EventQueue.invokeLater(new Runnable {
+          def run() {
+            notifyArea.append(msg + "\n")
+          }
+        })
+      })
     } else {
       logger.info("Skipping gui window")
       None
@@ -251,6 +257,11 @@ object DesktopIngestShardServer
 
 object LaunchLabcoat{
   def main(args:Array[String]){
+    // Set some useful OS X props (just in case)
+    System.setProperty("apple.laf.useScreenMenuBar", "true")
+    System.setProperty("apple.awt.graphics.UseQuartz", "true")
+    System.setProperty("apple.awt.textantialiasing", "true")
+    System.setProperty("apple.awt.antialiasing", "true")
 
     if(args.size != 1 || !args(0).startsWith("--configFile=") ){
       sys.error("Wrong parameters. Usage: --configFile=<configuration>")
