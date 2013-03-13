@@ -82,10 +82,11 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
             val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
             val ingestBatchSize = config[Int]("ingest.batch_size", 500)
+            val ingestMaxFields = config[Int]("ingest.max_fields", 1024) // Because tixxit says so
 
             val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
 
-            val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize)
+            val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
             val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, Clock.System, deleteTimeout)
 
             EventServiceState(deps.apiKeyFinder, ingestHandler, archiveHandler, stoppable)

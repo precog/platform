@@ -29,6 +29,7 @@ import com.precog.common.ingest._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.actor.IngestErrors
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
 import akka.dispatch.ExecutionContext
@@ -69,12 +70,13 @@ import scalaz.syntax.std.boolean._
 import scala.annotation.tailrec
 
 class IngestServiceHandler(
-    permissionsFinder: PermissionsFinder[Future],
-    jobManager: JobManager[Response],
-    clock: Clock,
-    eventStore: EventStore[Future],
-    ingestTimeout: Timeout,
-    batchSize: Int)(implicit M: Monad[Future], executor: ExecutionContext)
+  permissionsFinder: PermissionsFinder[Future],
+  jobManager: JobManager[Response],
+  clock: Clock,
+  eventStore: EventStore[Future],
+  ingestTimeout: Timeout,
+  batchSize: Int,
+  maxFields: Int)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
     with Logging {
 
@@ -95,7 +97,7 @@ class IngestServiceHandler(
   case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult
   case class NotIngested(reason: String) extends IngestResult
 
-  private val excessiveFieldsError = "Cannot ingest values with more than 250 primitive fields. This limitiation will be lifted in a future release. Thank you for your patience."
+  private val excessiveFieldsError = "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields)
 
   trait BatchIngest {
     def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult]
@@ -119,7 +121,7 @@ class IngestServiceHandler(
             M.point(BatchSyncResult(total, ingested, errors))
           } else {
             val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {
-              case ((i, values, errors), Success(value)) if value.flattenWithPath.size < 250 =>
+              case ((i, values, errors), Success(value)) if value.flattenWithPath.size < maxFields =>
                 (i + 1, values :+ value, errors)
               case ((i, values, errors), Success(value)) =>
                 (i + 1, values, errors :+ (i, Extractor.Invalid(excessiveFieldsError)))
@@ -181,6 +183,31 @@ class IngestServiceHandler(
       if (nextRow == null || batch.size >= batchSize) batch else readBatch(reader, batch :+ nextRow)
     }
 
+    /**
+     * Normalize headers by turning them into `JPath`s. Normally, a field will
+     * be mapped to a `JPath` simply by wrapping it in a `JPathField`. However,
+     * in the case of duplicate headers, we turn that field into an array. So,
+     * the header a,a,a will create objects of the form `{a:[_, _, _]}`.
+     */
+    def normalizeHeaders(headers: Array[String]): Array[JPath] = {
+      val positions = headers.zipWithIndex.foldLeft(Map.empty[String, List[Int]]) {
+        case (hdrs, (h, i)) =>
+          val pos = i :: hdrs.getOrElse(h, Nil)
+            hdrs + (h -> pos)
+      }
+
+      positions.toList.flatMap {
+        case (h, Nil) =>
+          Nil
+        case (h, pos :: Nil) =>
+          (pos -> JPath(JPathField(h))) :: Nil
+        case (h, ps) =>
+          ps.reverse.zipWithIndex map { case (pos, i) =>
+            (pos -> JPath(JPathField(h), JPathIndex(i)))
+          }
+      }.sortBy(_._1).map(_._2).toArray
+    }
+
     def ingestSync(reader: CSVReader, jobId: JobId): Future[IngestResult] = {
       def readBatches(paths: Array[JPath], reader: CSVReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
         // TODO: handle errors in readBatch
@@ -208,7 +235,7 @@ class IngestServiceHandler(
         if (header == null) {
           M.point(NotIngested("No CSV data was found in the request content."))
         } else {
-          readBatches(header.map(JPath(_)), reader, 0, 0, Vector())
+          readBatches(normalizeHeaders(header), reader, 0, 0, Vector())
         }
       }
     }
@@ -363,7 +390,7 @@ class IngestServiceHandler(
           else if (line.trim.isEmpty) read(reader, ingested)
           else {
             JParser.parseFromString(line) map { jvalue =>
-              if (jvalue.flattenWithPath.size > 250) {
+              if (jvalue.flattenWithPath.size > maxFields) {
                 Promise successful StreamingSyncResult(ingested, Some(excessiveFieldsError))
               } else {
                 ingest(apiKey, path, authorities, Vector(jvalue), None) flatMap { _ => read(reader, ingested + 1) }
@@ -385,7 +412,7 @@ class IngestServiceHandler(
         ensureByteBufferSanity(buf)
         val readableLength = buf.remaining
         JParser.parseManyFromByteBuffer(buf) map { jvalues =>
-          if (jvalues.exists(_.flattenWithPath.size > 250)) {
+          if (jvalues.exists(_.flattenWithPath.size > maxFields)) {
             Promise successful NotIngested(excessiveFieldsError)
           } else {
             ingest(apiKey, path, authorities, jvalues, None) map { _ => StreamingSyncResult(jvalues.length, None) }
@@ -415,15 +442,15 @@ class IngestServiceHandler(
       def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)) map { _.id }
 
       val requestAuthorities = for {
-        paramIds <- request.parameters.get('ownerAccountId) 
-        auths <- paramIds.split("""\s*,\s*""") |> { ids => if (ids.isEmpty) None else Authorities.ifPresent(ids.toSet) } 
+        paramIds <- request.parameters.get('ownerAccountId)
+        auths <- paramIds.split("""\s*,\s*""") |> { ids => if (ids.isEmpty) None else Authorities.ifPresent(ids.toSet) }
       } yield auths
 
       // FIXME: Provisionally accept data for ingest if one of the permissions-checking services is unavailable
-      requestAuthorities map { authorities => 
+      requestAuthorities map { authorities =>
         permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, timestamp.toInstant) map { _.option(authorities) }
       } getOrElse {
-        permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp.toInstant)) 
+        permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp.toInstant))
       } flatMap {
         case Some(authorities) =>
           logger.debug("Write permission granted for " + authorities + " to " + path)
@@ -432,27 +459,27 @@ class IngestServiceHandler(
             import Validation._
 
             val parseDirectives = getParseDirectives(request)
-            val batchMode = request.parameters.get('mode).exists(_ equalsIgnoreCase "batch") || 
+            val batchMode = request.parameters.get('mode).exists(_ equalsIgnoreCase "batch") ||
                             request.parameters.get('sync).exists(_ equalsIgnoreCase "sync")
 
             for {
               batchJob <- batchMode.option(createJob.run).sequence
               ingestResult <- (batchJob map {
-                                _ map { jobId =>
-                                  val sync = request.parameters.get('receipt) match {
-                                    case Some(v) => v equalsIgnoreCase "true"
-                                    case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
-                                  }
+                _ map { jobId =>
+                  val sync = request.parameters.get('receipt) match {
+                    case Some(v) => v equalsIgnoreCase "true"
+                    case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
+                  }
 
-                                  ingestBatch(apiKey, path, authorities, content, parseDirectives, jobId, sync)
-                                }
-                              } getOrElse {
-                                right(ingestStreaming(apiKey, path, authorities, content, parseDirectives))
-                              }).sequence
+                  ingestBatch(apiKey, path, authorities, content, parseDirectives, jobId, sync)
+                }
+              } getOrElse {
+                right(ingestStreaming(apiKey, path, authorities, content, parseDirectives))
+              }).map { f => f.recover { case t: Throwable => NotIngested(t.getMessage) } }.sequence
             } yield {
               ingestResult.fold(
                 { message =>
-                  logger.warn("Internal error during ingest: " + message)
+                  logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
                   HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
                 {
                   case NotIngested(reason) =>

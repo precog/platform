@@ -85,6 +85,8 @@ final class KafkaRelayAgent(
     bufferSize: Int = 1024 * 1024, retryDelay: Long = 5000L,
     maxDelay: Double = 100.0, waitCountFactor: Int = 25)(implicit executor: ExecutionContext) extends Runnable with Logging {
 
+  logger.info("Allocating KafkaRelayAgent, hash = " + hashCode)
+
   @volatile private var runnable = true;
   private val stopPromise = Promise[PrecogUnit]()
   private implicit val M: Monad[Future] = new FutureMonad(executor)
@@ -92,43 +94,56 @@ final class KafkaRelayAgent(
   def stop: Future[PrecogUnit] = Future({ runnable = false }) flatMap { _ => stopPromise }
 
   override def run() {
-    while (runnable) {
+    if (runnable) {
       val offset = eventIdSeq.getLastOffset()
       logger.debug("Kafka consumer starting from offset: " + offset)
-
-      try {
-        ingestBatch(offset, 0, 0, 0)
-      } catch {
-        case ex: Exception => logger.error("Error in kafka relay consumer.", ex)
-      }
-
-      Thread.sleep(retryDelay)
+      ingestBatch(offset, 0, 0, 0)
     }
-
-    stopPromise.success(PrecogUnit)
   }
 
-  @tailrec
-  private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
-    if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-    val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
+  private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long, retries: Int = 5): Unit = {
+    if (runnable) {
+      try {
+        if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
+        val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
 
-    val messages = consumer.fetch(fetchRequest)
-    forwardAll(messages.toList)
+        val messages = consumer.fetch(fetchRequest) // try/catch is for this line. Okay to wrap in a future & flatMap instead?
+        forwardAll(messages.toList) onSuccess {
+          case _ =>
+            val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
-    val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
+            val (newOffset, newWaitCount) = if(messages.size > 0) {
+              val o: Long = messages.last.offset
+              logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
+              (o, 0L)
+            } else {
+              (offset, waitCount + 1)
+            }
 
-    val (newOffset, newWaitCount) = if(messages.size > 0) {
-      val o: Long = messages.last.offset
-      logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
-      (o, 0L)
+            Thread.sleep(newDelay)
+
+            ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
+        } onFailure {
+          case error =>
+            logger.error("Batch ingest failed at offset %d batch %d; retrying. Data transfer to central queue halted pending manual intervention.".format(offset, batch), error)
+            runnable = false
+            stopPromise.success(PrecogUnit)
+        }
+      } catch {
+        case ex =>
+          if (retries > 0) {
+            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Retrying from offset %d batch %d.".format(offset, batch), ex)
+            ingestBatch(offset, batch, delay, waitCount, retries - 1)
+          } else {
+            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Halting at offset %d batch %d.".format(offset, batch), ex)
+            runnable = false
+            stopPromise.success(PrecogUnit)
+          }
+      }
     } else {
-      (offset, waitCount + 1)
+      logger.info("Kafka relay agent shutdown request detected. Halting at offset %d batch %d.".format(offset, batch))
+      stopPromise.success(PrecogUnit)
     }
-
-    Thread.sleep(newDelay)
-
-    ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
   }
 
   private def delayStrategy(messageBytes: Int, currentDelay: Long, waitCount: Long): Long = {
@@ -140,40 +155,65 @@ final class KafkaRelayAgent(
     }
   }
 
+  private case class Authorized(event: Event, offset: Long, authorities: Option[Authorities])
+
   private def forwardAll(messages: List[MessageAndOffset]) = {
-    val outgoing: List[Validation[Error, Future[EventMessage]]] = messages map { msg =>
-      EventEncoding.read(msg.message.payload) map { identify(_, msg.offset) }
+    val outgoing: List[Validation[Error, Future[Authorized]]] = messages map { msg =>
+      EventEncoding.read(msg.message.payload) map { ev => deriveAuthority(ev).map { Authorized(ev, msg.offset, _) } }
     }
 
-    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[EventMessage]] map { messageFutures =>
-      Future.sequence(messageFutures) map { messages =>
-        producer.send(new ProducerData[String, EventMessage](centralTopic, messages))
+    outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Authorized]] map { messageFutures =>
+      Future.sequence(messageFutures) map { messages: List[Authorized] =>
+        val identified: List[EventMessage] = messages.map {
+          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp), offset, Some(authorities)) =>
+            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
+            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+
+          case Authorized(event: Ingest, _, None) =>
+            // cannot relay event without a resolved owner account ID; fail loudly.
+            // this will abort the future, ensuring that state doesn't get corrupted
+            sys.error("Unable to establish owner account ID for ingest of event " + event)
+
+          case Authorized(archive @ Archive(apiKey, path, jobId, timestamp), offset, _) =>
+            ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp)
+        }
+
+        producer.send(new ProducerData[String, EventMessage](centralTopic, identified))
       } onFailure {
         case ex => logger.error("An error occurred forwarding messages from the local queue to central.", ex)
       } onSuccess {
         case _ => if (messages.nonEmpty) eventIdSeq.saveState(messages.last.offset)
       }
     } valueOr { error =>
-      logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
+      Promise successful {
+        logger.error("Deserialization errors occurred reading events from Kafka: " + error.message)
+      }
     }
   }
 
-  private def identify(event: Event, offset: Long): Future[EventMessage] = {
-    event match {
-      case Ingest(apiKey, path, writeAs, data, jobId, timestamp) =>
-        writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))) map {
-          case Some(authorities) =>
-            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+  private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
+    case Ingest(apiKey, path, writeAs, _, _, timestamp) =>
+      writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp)))
 
-          case None =>
-            // cannot relay event without a resolved owner account ID; fail loudly.
-            // this will abort the future, ensuring that state doesn't get corrupted
-            sys.error("Unable to establish owner account ID for ingest of event " + event)
-        }
-
-      case archive @ Archive(apiKey, path, jobId, timestamp) =>
-        Promise.successful(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp))
-    }
+    case _ => Promise.successful(None)
   }
+
+//  private def identify(event: Event, offset: Long, authorities: Option[Authorities]): Future[EventMessage] = {
+//    event match {
+//      case Ingest(apiKey, path, writeAs, data, jobId, timestamp) =>
+//        writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))) map {
+//          case Some(authorities) =>
+//            val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
+//            IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)
+//
+//          case None =>
+//            // cannot relay event without a resolved owner account ID; fail loudly.
+//            // this will abort the future, ensuring that state doesn't get corrupted
+//            sys.error("Unable to establish owner account ID for ingest of event " + event)
+//        }
+//
+//      case archive @ Archive(apiKey, path, jobId, timestamp) =>
+//        Promise.successful(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp))
+//    }
+//  }
 }

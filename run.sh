@@ -76,10 +76,12 @@ function finished {
     echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
     kill $RUN_LOCAL_PID
     wait $RUN_LOCAL_PID
-    if [ -z "$DONTCLEAN" ]; then
+    if [ -z "$DONTCLEAN" -a "$EXIT_CODE" = "0" ]; then
         echo "Cleaning"
         rm -rf $WORKDIR
         rm -f results.json 2>/dev/null
+    else
+        echo "Skipping clean of $WORKDIR"
     fi
 }
 
@@ -146,11 +148,11 @@ for f in $@; do
     DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 
-    TRIES_LEFT=15
+    TRIES_LEFT=30
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
     while [[ $TRIES_LEFT != 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
@@ -161,7 +163,9 @@ for f in $@; do
     done
 
     [ "$TRIES_LEFT" != "0" ] || {
-        echo "Exceeded maximum ingest count attempts for $TABLE. Failure!"
+        echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
+	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
+        EXIT_CODE=1
         exit 1
     }
 
@@ -200,14 +204,14 @@ else
     for TABLE in $ALLTABLES; do
         echo "  deleting $TABLE..."
         ARCHIVE_RESULT=$(curl -s -S -X DELETE "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
-        
+
         [ -n "$DEBUG" ] && echo $ARCHIVE_RESULT
     done
 
     # Give the shard some time to actually process the archives
     TRIES=18
     while [[ $TRIES -gt 0 ]]; do
-        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then 
+        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then
             [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
             [ -n "$DEBUG" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json
             TRIES=$(( $TRIES - 1 ))

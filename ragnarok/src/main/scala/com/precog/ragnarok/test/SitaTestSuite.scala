@@ -17,35 +17,35 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package ragnarok
+package test
 
-import com.precog.common.Path
+object SitaTestSuite extends PerfTestSuite {
+  query(
+    """
+import std::time::*
 
-import org.scalacheck.{Arbitrary, Gen}
+locations := //sita
 
-import org.specs2.ScalaCheck
-import org.specs2.mutable.Specification
+locations' := locations with {millis : getMillis(locations.captureTimestamp)}
 
-class NIHDBActorSpecs extends Specification with ScalaCheck {
-  import Gen._
+binSize := 1000*60*5
+bins(data, sizeOfBins) := std::math::floor(data.millis / sizeOfBins)
+locations'' := locations' with { bins: bins(locations', binSize) * binSize }
 
-  val hasSuffixGen: Gen[String] = resultOf[String, String] {
-    case prefix => prefix + NIHDBActor.escapeSuffix
-  }(Arbitrary(alphaStr))
+r := locations'' with {timestampBin: millisToISO(locations''.bins, "+00:00")}
 
-  val componentGen: Gen[String] = Gen.oneOf(Gen.oneOf(NIHDBActor.internalDirs.toSeq), hasSuffixGen, alphaStr)
+r' := {x: r.x, y: r.y, timestampBin: r.timestampBin, binMillis: r.bins, deviceId: r.deviceId}
 
-  implicit val pathGen: Arbitrary[Path] =
-    Arbitrary(for {
-      componentCount <- chooseNum(0, 200)
-      components     <- listOfN(componentCount, componentGen)
-    } yield Path(components))
-
-  "NIHDBActor path escaping" should {
-    import NIHDBActor._
-
-    "Handle arbitrary paths with components needing escaping" in check {
-      (p: Path) => unescapePath(escapePath(p, Set("/"))) mustEqual p
-    }
+solve 'bin, 'id
+  r'' := r' where r'.timestampBin = 'bin & r'.deviceId = 'id
+  
+  {
+  bin: 'bin,
+  deviceId: 'id,
+   x: r''.x where r''.binMillis = max(r''.binMillis), 
+   y: r''.y where r''.binMillis = max(r''.binMillis)
   }
+    """)
 }
