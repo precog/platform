@@ -71,11 +71,12 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
   def length: Int = metadata.valueOr(throw _).length
 
   def snapshot(pathConstraints: Option[Set[CPath]]): Block = {
+    val groupedPaths = metadata.valueOr(throw _).segments.groupBy {
+      case (segId, _) => segId.cpath
+    }
+
     val refConstraints = pathConstraints map {
       _.flatMap { path =>
-        val groupedPaths = metadata.valueOr(throw _).segments.groupBy {
-          case (segId, _) => segId.cpath
-        }
         val tpes = groupedPaths.get(path) map {
           _.map { case (segId, _) => segId.ctype }
         } getOrElse {
