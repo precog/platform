@@ -342,7 +342,7 @@ if (platform.startsWith("windows")){
             <preActivation />
             <postActivation />
             <actions>
-              <action name="" id="9" customizedId="" beanClass="com.install4j.runtime.beans.actions.InstallFilesAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="2" errorMessage="${i18n:FileCorrupted}">
+              <action name="" id="9" customizedId="" beanClass="com.install4j.runtime.beans.actions.InstallFilesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="2" errorMessage="${i18n:FileCorrupted}">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.InstallFilesAction" />
@@ -611,7 +611,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
             <preActivation />
             <postActivation />
             <actions>
-              <action name="" id="313" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="4" errorMessage="Failed to update the configuration files">
+              <action name="" id="313" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="4" errorMessage="Failed to update the configuration files.">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction">
@@ -631,6 +631,9 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                             </object>
                           </void>
                         </array>
+                      </void>
+                      <void property="ignoreMissing">
+                        <boolean>false</boolean>
                       </void>
                     </object>
                   </java>
@@ -972,10 +975,41 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <excludedComponents />
       <includedDownloadableComponents />
     </windows>
+    <macosFolder name="Mac OS X Folder" id="858" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false">
+      <excludedLaunchers />
+      <excludedBeans />
+      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
+      <exclude />
+      <variables />
+      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
+        <commentFiles />
+        <customAttributes />
+      </autoUpdate>
+      <excludedComponents />
+      <includedDownloadableComponents />
+    </macosFolder>
+    <macosFolder name="Mac OS X Folder (with JRE)" id="859" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="macosx-amd64-1.7.0_17" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false">
+      <excludedLaunchers />
+      <excludedBeans />
+      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
+      <exclude />
+      <variables />
+      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
+        <commentFiles />
+        <customAttributes />
+      </autoUpdate>
+      <excludedComponents />
+      <includedDownloadableComponents />
+    </macosFolder>
   </mediaSets>
   <buildIds buildAll="false">
     <mediaSet refId="25" />
     <mediaSet refId="33" />
+    <mediaSet refId="213" />
+    <mediaSet refId="419" />
+    <mediaSet refId="472" />
+    <mediaSet refId="858" />
+    <mediaSet refId="859" />
   </buildIds>
   <buildOptions verbose="false" faster="true" disableSigning="false" debug="false" />
 </install4j>
