@@ -80,12 +80,13 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       h.length must_== 0
 
       h.snapshot(None).segments.length must_== 0
+      h.snapshotRef(None).segments.length must_== 0
 
       h.write(16, json("""
-{"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
-{"a": 9999.0, "b": "xyz", "arr": [1,2,3]}
-{"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
-"""))
+        {"a": 123, "b": true, "c": false, "d": null, "e": "cat", "f": {"aa": 11.0, "bb": 22.0}}
+        {"a": 9999.0, "b": "xyz", "arr": [1,2,3]}
+        {"a": 0, "b": false, "c": 0.0, "y": [], "z": {}}
+        """))
 
       h.length must_== 3
 
@@ -93,20 +94,25 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       segs1 must contain(ArraySegment(blockid, CPath(".a"), CNum, bitset(0, 1, 2), decs(123, 9999.0, 0)))
       segs1 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2), bitset(0), 3))
 
+      val segs1R = h.snapshotRef(None).segments
+      segs1R mustEqual segs1
+
       h.write(17, json("""
-999
-123.0
-"cat"
-[1,2,3.0, "four"]
-{"b": true}
-"""))
+        999
+        123.0
+        "cat"
+        [1,2,3.0, "four"]
+        {"b": true}
+        """))
 
       h.length must_== 8
 
       val segs2 = h.snapshot(None).segments
       segs2 must contain(BooleanSegment(blockid, CPath(".b"), bitset(0, 2, 7), bitset(0, 7), 8))
-    }
 
+      val segs2R = h.snapshotRef(None).segments
+      segs2R mustEqual segs2
+    }
 
     /**
      * Test log file writing/reading.
@@ -127,15 +133,18 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       h1.write(18, json(js))
       val s1 = h1.snapshot(None).segments
+      val s1R = h1.snapshotRef(None).segments
       h1.close()
 
       val (h2, events, true) = RawHandler.load(blockid, tmp2)
       val s2 = h2.snapshot(None).segments
+      val s2R = h2.snapshotRef(None).segments
 
       implicit val ord: Ordering[Segment] = Ordering.by[Segment, String](_.toString)
 
       events.toSet must_== Set(18)
       s2.sorted must_== s1.sorted
+      s2R.sorted must_== s1R.sorted
     }
 
 
@@ -251,6 +260,10 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       // double-check the data
       val cpa = CPath(".a")
       val cpb = CPath(".b")
+
+      val cpaR = ColumnRef(cpa, CNum)
+      val cpbR = ColumnRef(cpb, CNum)
+
       val bs = new BitSet()
       range.foreach(i => bs.set(i))
       
@@ -259,6 +272,12 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       h.snapshot(Some(Set(cpa))).segments must contain(sa)
       h.snapshot(Some(Set(cpb))).segments must contain(sb)
+
+      h.snapshotRef(Some(Set(cpaR))).segments must contain(sa)
+      h.snapshotRef(Some(Set(cpbR))).segments must contain(sb)
+
+      h.snapshotRef(Some(Set(ColumnRef(cpa, CString)))).segments must beEmpty
+      h.snapshotRef(Some(Set(ColumnRef(cpb, CString)))).segments must beEmpty
     }
 
     val tmp9 = tempfile()
@@ -273,8 +292,14 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       val snap1 = h.snapshot(None).segments
       snap1.toSet must_== Set()
 
+      val snap1R = h.snapshotRef(None).segments
+      snap1R.toSet must_== Set()
+
       val a1 = h.snapshot(Some(Set(cpa))).segments
       a1.toSet must_== Set()
+
+      val a1R = h.snapshotRef(Some(Set(ColumnRef(cpa, CString)))).segments
+      a1R.toSet must_== Set()
 
       h.write(16, json("""{"a": "foo"} {"a": "bar"}"""))
 
@@ -286,9 +311,20 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       snap1.toSet must_== Set()
       snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
 
+      val snap2R = h.snapshotRef(None).segments
+      snap1R.toSet must_== Set()
+      snap2R.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+
       val a2 = h.snapshot(Some(Set(cpa))).segments
       a1.toSet must_== Set()
       a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+
+      val a2R = h.snapshotRef(Some(Set(ColumnRef(cpa, CString)))).segments
+      a1R.toSet must_== Set()
+      a2R.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
+
+      val a2REmpty = h.snapshotRef(Some(Set(ColumnRef(cpa, CNum)))).segments
+      a2REmpty.toSet must_== Set()
 
       h.write(17, json("""{"a": "qux", "b": "xyz"} {"a": "baz", "b": "bla"}"""))
 
@@ -298,17 +334,25 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
       struct3.toSet must_== Set((cpa, CString), (cpb, CString))
 
       val snap3 = h.snapshot(None).segments
+      val snap3R = h.snapshotRef(None).segments
+
       snap1.toSet must_== Set()
       snap2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
       snap3.toSet must_== Set(
         ArraySegment(blockid, cpa, CString, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")),
-        ArraySegment(blockid, cpb, CString, bitset(2, 3), Array(null, null, "xyz", "bla"))
-      )
+        ArraySegment(blockid, cpb, CString, bitset(2, 3), Array(null, null, "xyz", "bla")))
+      snap3 mustEqual snap3R
 
       val a3 = h.snapshot(Some(Set(cpa))).segments
+      val a3R = h.snapshotRef(Some(Set(ColumnRef(cpa, CString)))).segments
+      val a3REmpty = h.snapshotRef(Some(Set(ColumnRef(cpa, CNum)))).segments
+
       a1.toSet must_== Set()
       a2.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1), Array("foo", "bar")))
       a3.toSet must_== Set(ArraySegment(blockid, cpa, CString, bitset(0, 1, 2, 3), Array("foo", "bar", "qux", "baz")))
+      a3 mustEqual a3R
+
+      a3REmpty.toSet must_== Set()
     }
   }
 } 

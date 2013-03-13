@@ -86,6 +86,11 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     Block(id, segments, isStable)
   }
 
+  def snapshotRef(refConstraints: Option[Set[ColumnRef]]): Block = {
+    val pathConstraints = refConstraints map { _.map { case ColumnRef(path, _) => path } }
+    snapshot(pathConstraints)
+  }
+
   def structure: Iterable[(CPath, CType)] = metadata.valueOr(throw _).segments map {
     case (segId, _) => (segId.cpath, segId.ctype)
   }
