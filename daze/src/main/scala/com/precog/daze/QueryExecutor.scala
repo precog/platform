@@ -45,15 +45,15 @@ object EvaluationError {
 }
 
 sealed trait QueryOutput
-case object JsonOutput extends QueryOutput
-case object CsvOutput extends QueryOutput
+case object JSONOutput extends QueryOutput
+case object CSVOutput extends QueryOutput
 
 case class QueryOptions(
   page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
   timeout: Option[Duration] = None,
-  output: QueryOutput = JsonOutput
+  output: QueryOutput = JSONOutput
 )
 
 trait QueryExecutor[M[+_], +A] { self =>
