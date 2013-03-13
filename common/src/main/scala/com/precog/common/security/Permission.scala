@@ -134,7 +134,7 @@ object Permission {
 
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
-      obj.validated[String]("accessType").map(_.toLowerCase) flatMap {
+      obj.validated[String]("accessType").map(_.toLowerCase.trim) flatMap {
         case "write" =>  
           (obj \? "ownerAccountIds") map { ids => 
             (pathV |@| ids.validated[Set[AccountId]]) { (path, accountIds) => WritePermission(path, WriteAs(accountIds)) }
@@ -162,7 +162,7 @@ object Permission {
 
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
-      obj.validated[String]("type").map(_.toLowerCase) flatMap {
+      obj.validated[String]("type").map(_.toLowerCase.trim) flatMap {
         case "write" =>  
           obj.validated[Option[String]]("ownerAccountId") flatMap { opt => 
             opt map { id =>
