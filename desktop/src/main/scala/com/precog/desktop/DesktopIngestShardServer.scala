@@ -35,6 +35,10 @@ import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
 import com.precog.ingest.kafka.KafkaEventStore
 
+import java.awt._
+import java.awt.event._
+import javax.swing._
+
 import java.io.IOException
 import java.net.{InetAddress, Socket}
 import java.util.Properties
@@ -61,6 +65,62 @@ object DesktopIngestShardServer
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   def configureShardState(config: Configuration, rootConfig: Configuration) = Future {
+    val guiNotifier = if (rootConfig[Boolean]("appwindow.enabled", false)) {
+      logger.info("Starting gui window")
+      // Set some useful OS X props (just in case)
+      System.setProperty("apple.laf.useScreenMenuBar", "true")
+      System.setProperty("apple.awt.graphics.UseQuartz", "true")
+      System.setProperty("apple.awt.textantialiasing", "true")
+      System.setProperty("apple.awt.antialiasing", "true")
+      // Add a window with a menu for shutdown
+      val precogMenu = new JMenu("Precog for Desktop")
+      val quitItem = new JMenuItem("Quit", KeyEvent.VK_Q)
+      quitItem.addActionListener(new ActionListener {
+        def actionPerformed(ev: ActionEvent) = {
+          System.exit(0)
+        }
+      })
+
+      precogMenu.add(quitItem)
+
+      val labcoatMenu = new JMenu("Labcoat")
+      val launchItem = new JMenuItem("Launch", KeyEvent.VK_L)
+      launchItem.addActionListener(new ActionListener {
+        def actionPerformed(ev: ActionEvent) = {
+          LaunchLabcoat.launchBrowser(rootConfig)
+        }
+      })
+
+      labcoatMenu.add(launchItem)
+
+      val menubar = new JMenuBar
+      menubar.add(precogMenu)
+      menubar.add(labcoatMenu)
+
+      val appFrame = new JFrame("Precog for Desktop")
+      appFrame.setJMenuBar(menubar)
+
+      appFrame.addWindowListener(new WindowAdapter {
+        override def windowClosed(ev: WindowEvent) = {
+          System.exit(0)
+        }
+      })
+
+      val notifyArea = new JTextArea(25, 80)
+      notifyArea.setEditable(false)
+      appFrame.add(notifyArea)
+
+      appFrame.pack()
+
+      appFrame.setVisible(true)
+
+      Some({ (msg: String) => notifyArea.append(msg + "\n") })
+    } else {
+      logger.info("Skipping gui window")
+      None
+    }
+
+    guiNotifier.foreach(_("Starting internal services"))
     val zookeeper = startZookeeperStandalone(rootConfig.detach("zookeeper"))
 
     logger.debug("Waiting for ZK startup")
@@ -76,6 +136,8 @@ object DesktopIngestShardServer
     if (!waitForPortOpen(rootConfig[Int]("kafka.port"), 60)) {
       throw new Exception("Time out waiting on kafka port to open")
     }
+
+    guiNotifier.foreach(_("Internal services started, bringing up Precog"))
 
     println("Configuration at configure shard state=%s".format(config))
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
@@ -105,7 +167,10 @@ object DesktopIngestShardServer
       }
     }
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
+    val state = ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
+    guiNotifier.foreach(_("Precog startup complete"))
+    logger.debug("Startup config complete. Returning " + state)
+    state
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")
@@ -127,6 +192,7 @@ object DesktopIngestShardServer
       }
     }
 
+    logger.error("Port %d did not open in %d tries".format(port, tries))
     false
   }
 
@@ -189,41 +255,48 @@ object LaunchLabcoat{
     if(args.size != 1 || !args(0).startsWith("--configFile=") ){
       sys.error("Wrong parameters. Usage: --configFile=<configuration>")
     } else {
-      // Fire up a thread to wait on Jetty and spawn the desktop browser window if we can
       import java.awt.Desktop
 
       val configFile=args(0).replaceFirst("--configFile=","")
       val config = Configuration.load( configFile )
-      val jettyPort = config[Int]("services.analytics.v2.labcoat.port")
-      val shardPort = config[Int]("server.port")
-      val zkPort = config[Int]("zookeeper.port")
-      val kafkaPort = config[Int]("kafka.port")
+      launchBrowser(config)
+      System.exit(0)
+    }
+  }
 
-      def waitForPorts=
-        DesktopIngestShardServer.waitForPortOpen(jettyPort, 15) &&
+  def launchBrowser(config: Configuration): Unit = {
+    val jettyPort = config[Int]("services.analytics.v2.labcoat.port")
+    val shardPort = config[Int]("server.port")
+    val zkPort = config[Int]("zookeeper.port")
+    val kafkaPort = config[Int]("kafka.port")
+
+    launchBrowser(jettyPort, shardPort, zkPort, kafkaPort)
+  }
+
+  def launchBrowser(jettyPort: Int, shardPort: Int, zkPort: Int, kafkaPort: Int): Unit = {
+    def waitForPorts=
+      DesktopIngestShardServer.waitForPortOpen(jettyPort, 15) &&
         DesktopIngestShardServer.waitForPortOpen(shardPort, 15) &&
         DesktopIngestShardServer.waitForPortOpen(zkPort, 15) &&
         DesktopIngestShardServer.waitForPortOpen(kafkaPort, 15)
 
-      @tailrec
-      def launchBrowser(){
-        if (waitForPorts) {
-          java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
-        } else {
-           import javax.swing.JOptionPane
-           JOptionPane.showMessageDialog(null, 
-             "Waiting for server to start.\nPlease check that PrecogService has been launched\nRetrying...",
-             "Labcoat launcher", JOptionPane.WARNING_MESSAGE)
-          launchBrowser()
-        }
-      }
-
-      if (Desktop.isDesktopSupported){
-        launchBrowser()
+    @tailrec
+    def doLaunch(){
+      if (waitForPorts) {
+        java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
       } else {
-        sys.error("Browser open on non-desktop system")
+        import javax.swing.JOptionPane
+        JOptionPane.showMessageDialog(null,
+          "Waiting for server to start.\nPlease check that PrecogService has been launched\nRetrying...",
+          "Labcoat launcher", JOptionPane.WARNING_MESSAGE)
+        doLaunch()
       }
     }
-    System.exit(0)
+
+    if (Desktop.isDesktopSupported){
+      doLaunch()
+    } else {
+      sys.error("Browser open on non-desktop system")
+    }
   }
 }
