@@ -136,8 +136,8 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
     (json \ "apiKey").deserialize[String]
   }
 
-  def deleteAPIKey(authAPIKey: String, apiKey: String) {
-    val req = (security / apiKey).DELETE.addQueryParameter("apiKey", authAPIKey)
+  def deleteAPIKey(apiKey: String) {
+    val req = (security / apiKey).DELETE
     val res = Http(req OK as.String)
     res()
   }
@@ -181,47 +181,26 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
       apiKeys must haveTheSameElementsAs(List(k1, k2, k3))
     }
 
-    "delete owned API keys" in {
+    "delete API key" in {
+      val account = createAccount
+
+      deleteAPIKey(account.apiKey) must not(throwA[StatusCode])
+      deriveAPIKey(account) must throwA[Exception]
+    }
+
+    "deleted child API keys are removed from API key listing" in {
       val account = createAccount
       val k1 = deriveAPIKey(account)
       val k2 = deriveAPIKey(account)
       val k3 = deriveAPIKey(account)
 
-      deleteAPIKey(account.apiKey, k2)
+      deleteAPIKey(k2)
 
       val req = (security / "").addQueryParameter("apiKey", account.apiKey)
       val res = Http(req OK as.String)
       val json = JParser.parseFromString(res()).valueOr(throw _)
       val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
       apiKeys must haveTheSameElementsAs(List(k1, k3))
-    }
-
-    "forbid deletion of authorizing API key" in {
-      val account = createAccount
-      val req = (security / account.apiKey).DELETE.addQueryParameter("apiKey", account.apiKey)
-      val res = Http(req > (_.getStatusCode))
-      res() must_== 403 // Forbidden.
-
-      deriveAPIKey(account) must not(throwA[Throwable])
-    }
-
-    "forbid deletion of unrelated API key" in {
-      val account1 = createAccount
-      val childOf1 = deriveAPIKey(account1)
-
-      val account2 = createAccount
-
-      deleteAPIKey(account2.apiKey, childOf1) must throwA[StatusCode]
-      deleteAPIKey(account2.apiKey, account1.apiKey) must throwA[StatusCode]
-
-      deriveAPIKey(account1) must not(throwA[StatusCode])
-    }
-
-    "forbid deletion of parent API key" in {
-      val account1 = createAccount
-      val childOf1 = deriveAPIKey(account1)
-
-      deleteAPIKey(childOf1, account1.apiKey) must throwA[StatusCode]
     }
   }
 }
