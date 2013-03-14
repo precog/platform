@@ -19,9 +19,27 @@
 ## 
 #!/bin/bash
 
+# Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
+function path-canonical-simple() {
+    local dst="${1}"
+    cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
+}
+
+BASEDIR=$(path-canonical-simple `dirname $0`)/..
+
+echo "Using base: $BASEDIR"
+
+CONFIGFILE="$BASEDIR"/desktop/configs/test/shard-v2.conf
+DESCRIPTION="service"
+
 # Parse opts to determine settings
-while getopts ":d:lbZYRL:" opt; do
+while getopts ":ad:lbZYRL:" opt; do
     case $opt in
+        a)
+            echo "Using app (GUI) config"
+            DESCRIPTION="app"
+            CONFIGFILE="$BASEDIR"/desktop/configs/test/shard-v2-app.conf
+            ;;
         d)
             WORKDIR=$(cd $OPTARG; pwd)
             ;;
@@ -48,7 +66,8 @@ while getopts ":d:lbZYRL:" opt; do
             exit ${PIPESTATUS[0]}
             ;;
         \?)
-            echo "Usage: `basename $0` [-blRZ] [-d <work directory>] [-L <port>]"
+            echo "Usage: `basename $0` [-ablRZ] [-d <work directory>] [-L <port>]"
+            echo "  -a: Use the app (GUI) config"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -L: Use the provided port for labcoat"
             echo "  -d: Use the provided workdir"
@@ -63,12 +82,6 @@ done
 
 [ -n "$TESTQUIT" ] && echo ";;; starting service for test-quit"
 [ -n "$TESTRESUME" ] && echo ";;; starting service for test-resume"
-
-# Taken from http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
-function path-canonical-simple() {
-    local dst="${1}"
-    cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")" | sed 's#/\.##'
-}
 
 function random_port() {
     # We'll try 100 times until we find an unused port, at which point we give up
@@ -95,9 +108,6 @@ function wait_until_port_open () {
     done
 }
 
-BASEDIR=$(path-canonical-simple `dirname $0`)/..
-
-echo "Using base: $BASEDIR"
 
 VERSION=`git describe`
 DESKTOP_ASSEMBLY="$BASEDIR"/desktop/target/desktop-assembly-$VERSION.jar
@@ -143,14 +153,13 @@ mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,logs,shard-data/data,shard-
 
 echo "Running standalone shard under $WORKDIR"
 
+function is_running() {
+    [ ! -z "$1" ] && kill -0 "$1" &> /dev/null
+}
+
 # Set shutdown hook
 function on_exit() {
     echo "========== Shutting down system =========="
-
-    function is_running() {
-        [ ! -z "$1" ] && kill -0 "$1" &> /dev/null
-    }
-
 
     if is_running $SHARDPID; then
         echo "Stopping shard..."
@@ -176,13 +185,18 @@ if [ -z "$LABCOAT_PORT" ]; then
     LABCOAT_PORT=$(random_port "Labcoat")
 fi
 
-sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9082/$KAFKA_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 30064/port = $ACCOUNTS_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka#$KFDATA#; s#/var/zookeeper#$ZKDATA#" < "$BASEDIR"/desktop/configs/test/shard-v2.conf > "$WORKDIR"/configs/shard-v2.conf || echo "Failed to update shard config"
+sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9082/$KAFKA_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka#$KFDATA#; s#/var/zookeeper#$ZKDATA#" < $CONFIGFILE > "$WORKDIR"/configs/shard-v2.conf || echo "Failed to update shard config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v2.logging.xml > "$WORKDIR"/configs/shard-v2.logging.xml
 
 cd "$BASEDIR"
 
-echo "Starting desktop service"
-$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.DesktopIngestShardServer --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
+echo "Starting desktop $DESCRIPTION"
+
+if [ "$DESCRIPTION" = "app" ]; then
+    cd $WORKDIR # Since the app version is .-relative for config
+fi
+
+$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.LaunchLabcoat --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
 SHARDPID=$!
 
 # Let the ingest/shard services startup in parallel
@@ -207,50 +221,5 @@ LABCOAT_PORT:      $LABCOAT_PORT
 EOF
 echo "============================================================"
 
-java -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.LaunchLabcoat --configFile="$WORKDIR"/configs/shard-v2.conf
-
-function query() {
-    curl -s -G \
-      --data-urlencode "q=$1" \
-      --data-urlencode "apiKey=$ACCOUNTTOKEN" \
-      "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
-}
-
-function count() {
-    query "count(//xyz)" | tr -d "[]"
-}
-
-function wait_til_nonzero() {
-    wait_til_n_rows 1 $1
-    return $?
-}
-
-function now() {
-    date "+%s"
-}
-
-function check_time() {
-    expr `now` '>' $1
-}
-
-function wait_til_n_rows() {
-    N=$1
-    LIMIT=$( expr `now` '+' $2 )
-    RESULT=$( count )
-    echo "!!! count returned $RESULT"
-    while [ -z "$RESULT" ] || [ "$RESULT" -lt "$N" ]; do
-        sleep 0.05
-        [ `check_time $LIMIT` -eq 1 ] && return 1
-        RESULT=$( count )
-        echo "!!! count returned $RESULT"
-    done
-    return 0
-}
-
-function count_lines() {
-    wc -l $1 | awk '{print $1}'
-}
-
-
-# Wait forever until the user Ctrl-C's the system
-while true; do sleep 30; done
+# Wait forever until the user exits the system
+while is_running $SHARDPID; do sleep 1; done
