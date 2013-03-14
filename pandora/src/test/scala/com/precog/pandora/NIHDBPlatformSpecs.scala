@@ -114,7 +114,7 @@ object NIHDBPlatformActor extends Logging {
           def copoint[A](f: Future[A]) = Await.result(f, storageTimeout.duration)
         }
 
-        val accountFinder = new StaticAccountFinder[Future]("")
+        val accountFinder = new StaticAccountFinder[Future]("", "")
         val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
         val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
