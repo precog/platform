@@ -146,8 +146,7 @@ abstract class Task(settings: Settings) {
                         "ownerAccountId" -> account.accountId)
                 << data)
 
-    println(req.url)
-    println(Http(req OK as.String)())
+    Http(req OK as.String)()
   }
 }
 

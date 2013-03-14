@@ -35,9 +35,12 @@ import scalaz._
 
 class MetadataTask(settings: Settings) extends Task(settings: Settings) with Specification {
 
-  def metadataFor(apiKey: String, tpe: Option[String] = None)(f: Req => Req): JValue = {
-    val params0 = List("apiKey" -> apiKey)
-    val params = tpe map { t => ("type" -> t) :: params0 } getOrElse params0
+  def metadataFor(apiKey: String, tpe: Option[String] = None, prop: Option[String] = None)(f: Req => Req): JValue = {
+    val params = List(
+      Some("apiKey" -> apiKey),
+      tpe map ("type" -> _),
+      prop map ("property" -> _)
+    ).flatten
     val req = f(metadata / "fs") <<? params
     val res = Http(req OK as.String)
     val json = JParser.parseFromString(res()).valueOr(throw _)
@@ -69,6 +72,17 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
+    "count a property correctly" in {
+      val account = createAccount
+      ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val json = metadataFor(account.apiKey, Some("structure"), Some("a"))(_ / account.bareRootPath / "")
+        val types = json \ "structure" \ "types"
+        (types \ "Number").deserialize[Long] must_== 5L
+      }
+    }
+
     "return children for subpaths" in {
       val account = createAccount
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "foo" / "")
@@ -78,13 +92,13 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       EventuallyResults.eventually(10, 1.second) {
         val json = metadataFor(account.apiKey)(_ / account.bareRootPath / "")
         val subpaths = (json \ "children").children map (_.deserialize[String])
-        subpaths must haveTheSameElementsAs(List("/foo/", "/bar/"))
+        subpaths must haveTheSameElementsAs(List("foo/", "bar/"))
       }
 
       EventuallyResults.eventually(10, 1.second) {
         val json = metadataFor(account.apiKey)(_ / account.bareRootPath / "foo" / "")
         val subpaths = (json \ "children").children map (_.deserialize[String])
-        subpaths must haveTheSameElementsAs(List("/foo/bar/"))
+        subpaths must haveTheSameElementsAs(List("bar/"))
       }
     }
   }
