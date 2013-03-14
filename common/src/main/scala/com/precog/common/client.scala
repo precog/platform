@@ -33,7 +33,7 @@ package object client {
 
   type Response[+A] = ResponseM[Future, A]
 
-  implicit def ResponseMonad(implicit M: Monad[Future]): Monad[Response] = scalaz.eitherT.eitherTMonad[Future, String]
+  def ResponseMonad(implicit M: Monad[Future]): Monad[Response] = scalaz.EitherT.eitherTMonad[Future, String]
 
   case class ClientException(message: String) extends Exception(message)
 
