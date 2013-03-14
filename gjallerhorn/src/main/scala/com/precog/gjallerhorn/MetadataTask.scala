@@ -44,6 +44,9 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
   """
 
   "metadata web service" should {
+
+    // A user just set up an account and ingested some data, and wants to see
+    // what the metadata looks like. It should not be surprising.
     "retrieve full metadata of simple path" in {
 
       // 1. Create an account.
@@ -64,6 +67,8 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
+    // The user wants to see how many "numbers" are at the property .a. They
+    // should be able to drill down and get this number using the metadata API.
     "count a numeric property correctly" in {
 
       // 1. Create an account.
@@ -81,6 +86,10 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
+    // User attempts to determine the structure of paths they have access to.
+    // They may query the root path, and several sub-paths. This kind of
+    // exploration should be possible. They also should see anyone elses paths
+    // while doing this, even if they exist in the same parent path.
     "return children for subpaths" in {
 
       // 1. Create an account.
@@ -97,6 +106,19 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "bar" / "")
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "foo" / "bar" / "")
 
+      val account2 = createAccount
+      ingestString(account2, simpleData, "application/json")(_ / account2.bareRootPath / "")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val json = metadataFor(account.apiKey)(_ / "")
+        val subpaths = (json \ "children").children map (_.deserialize[String])
+        subpaths must haveTheSameElementsAs(List(account.bareRootPath + "/"))
+
+        val json2 = metadataFor(account2.apiKey)(_ / "")
+        val subpaths2 = (json2 \ "children").children map (_.deserialize[String])
+        subpaths2 must haveTheSameElementsAs(List(account2.bareRootPath + "/"))
+      }
+
       EventuallyResults.eventually(10, 1.second) {
         val json = metadataFor(account.apiKey)(_ / account.bareRootPath / "")
         val subpaths = (json \ "children").children map (_.deserialize[String])
@@ -110,6 +132,9 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
+    // User tries to retrieve metadata of a path they don't have permissions to
+    // access. They should get a valid response from the server, but it should
+    // look as if the path is empty.
     "forbid retrieval of metadata from unrelated API key" in {
 
       // 1. Create account Adam.
@@ -133,6 +158,8 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
+    // User ingests some data, deletes it, then checks metadata of deleted path.
+    // After the data is deleted, the path metadata should look empty again.
     "metadata respects deleted data" in {
 
       // 1. Create an account.
