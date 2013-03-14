@@ -26,6 +26,7 @@ import akka.dispatch.{ExecutionContext, Future, Promise}
 import blueeyes.bkka.{FutureMonad, Stoppable}
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
+import blueeyes.util.CommandLineArguments
 
 import com.precog.common.jobs.InMemoryJobManager
 import com.precog.common.accounts.StaticAccountFinder
@@ -34,13 +35,14 @@ import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
 import com.precog.ingest.kafka.KafkaEventStore
+import com.precog.util.PrecogUnit
 
 import java.awt._
 import java.awt.event._
 import javax.swing._
 
 import java.io.IOException
-import java.net.{InetAddress, Socket}
+import java.net.{InetAddress, Socket, URL}
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, KafkaServerStartable}
@@ -64,12 +66,12 @@ object DesktopIngestShardServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def runGUI(config: Configuration) = {
+  def runGUI(config: Configuration): Option[Future[PrecogUnit]] = {
     val guiNotifier = if (config[Boolean]("appwindow.enabled", false)) {
       logger.info("Starting gui window")
       // Add a window with a menu for shutdown
       val notifyArea = new JTextArea(25, 80)
-      
+
       EventQueue.invokeLater(new Runnable {
         def run() {
           val precogMenu = new JMenu("Precog for Desktop")
@@ -110,11 +112,15 @@ object DesktopIngestShardServer
 
           appFrame.pack()
 
+          val iconUrl = ClassLoader.getSystemClassLoader.getResource("LargeIcon.png")
+          logger.debug("Loaded icon: " + iconUrl)
+          appFrame.setIconImage(Toolkit.getDefaultToolkit.getImage(iconUrl))
+
           appFrame.setVisible(true)
         }
       })
 
-      Some({ (msg: String) => 
+      Some({ (msg: String) =>
         EventQueue.invokeLater(new Runnable {
           def run() {
             notifyArea.append(msg + "\n")
@@ -157,10 +163,10 @@ object DesktopIngestShardServer
 
     guiNotifier.foreach(_("Internal services started, bringing up Precog"))
 
-    this.run(config) foreach {
-      _ onSuccess { case (runningState, stoppable) =>
+    this.run(config) map {
+      _.onSuccess { case (runningState, stoppable) =>
         guiNotifier.foreach(_("Precog startup complete"))
-      }
+      }.map { _ => PrecogUnit }
     }
   }
 
@@ -271,17 +277,27 @@ object LaunchLabcoat{
     System.setProperty("apple.awt.textantialiasing", "true")
     System.setProperty("apple.awt.antialiasing", "true")
 
-    if(args.size != 1 || !args(0).startsWith("--configFile=") ){
-      sys.error("Wrong parameters. Usage: --configFile=<configuration>")
-    } else {
-      import java.awt.Desktop
+    import java.awt.Desktop
 
-      val configFile=args(0).replaceFirst("--configFile=","")
+    val params = CommandLineArguments(args: _*).parameters
+
+    params.get("configFile").map { configFile =>
       val config = Configuration.load( configFile )
 
-      DesktopIngestShardServer.runGUI(config)
-      launchBrowser(config)
-      //System.exit(0)
+      // Check for launch first
+      if (params.contains("launch")) {
+        launchBrowser(config)
+        sys.exit(0)
+      } else {
+        DesktopIngestShardServer.runGUI(config).map {
+          _.map { _ => launchBrowser(config); println("Launch complete") }
+        }.getOrElse {
+          sys.error("Failed to start shard!")
+        }
+      }
+    }.getOrElse {
+      System.err.println("Usage: LaunchLabcoat --configFile <config file>")
+      sys.exit(1)
     }
   }
 

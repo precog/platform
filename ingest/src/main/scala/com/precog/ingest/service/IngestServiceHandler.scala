@@ -475,7 +475,7 @@ class IngestServiceHandler(
                 }
               } getOrElse {
                 right(ingestStreaming(apiKey, path, authorities, content, parseDirectives))
-              }).map { f => f.recover { case t: Throwable => NotIngested(t.getMessage) } }.sequence
+              }).map { f => f.recover { case t: Throwable => logger.error("Error during ingest", t); NotIngested(t.getMessage) } }.sequence
             } yield {
               ingestResult.fold(
                 { message =>
