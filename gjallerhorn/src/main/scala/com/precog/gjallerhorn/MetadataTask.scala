@@ -35,18 +35,6 @@ import scalaz._
 
 class MetadataTask(settings: Settings) extends Task(settings: Settings) with Specification {
 
-  def metadataFor(apiKey: String, tpe: Option[String] = None, prop: Option[String] = None)(f: Req => Req): JValue = {
-    val params = List(
-      Some("apiKey" -> apiKey),
-      tpe map ("type" -> _),
-      prop map ("property" -> _)
-    ).flatten
-    val req = f(metadata / "fs") <<? params
-    val res = Http(req OK as.String)
-    val json = JParser.parseFromString(res()).valueOr(throw _)
-    json
-  }
-
   val simpleData = """
     {"a":1,"b":"Tom"}
     {"a":2,"b":3}
@@ -55,10 +43,14 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
     {"a":5,"c":"asdf"}
   """
 
-  // Specs2 has or combinator.
-
   "metadata web service" should {
     "retrieve full metadata of simple path" in {
+
+      // 1. Create an account.
+      // 2. Ingest some data.
+      // 3. Wait for data to be ingested.
+      // 4. Ensure metadata returns what we expect.
+
       val account = createAccount
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "foo" / "")
 
@@ -72,7 +64,13 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
       }
     }
 
-    "count a property correctly" in {
+    "count a numeric property correctly" in {
+
+      // 1. Create an account.
+      // 2. Ingest data to root path.
+      // 3. Query structure for the property .a
+      // 4. We should get { "structure": { "types": { "Number": 5 } } } back.
+
       val account = createAccount
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "")
 
@@ -84,6 +82,16 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
     }
 
     "return children for subpaths" in {
+
+      // 1. Create an account.
+      // 2. Ingest data to several paths:
+      //     - /'accountId/foo
+      //     - /'accountId/foo/bar
+      //     - /'accountId/bar
+      // 3. Ensure we can see foo/ and bar/ from /'accountId/
+      // 4. Ensure we can see bar/ from /'accountId/foo/
+      // 5. Ensure we can see 'accountId/ from /
+
       val account = createAccount
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "foo" / "")
       ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "bar" / "")
@@ -103,6 +111,14 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
     }
 
     "forbid retrieval of metadata from unrelated API key" in {
+
+      // 1. Create account Adam.
+      // 2. Create account Eve.
+      // 3. Ingest some data as Adam.
+      // 4. Wait for data to be fully ingested (Adam should see 5 records).
+      // 5. Query metadata as Eve.
+      // 6. No useful data should be returned!
+
       val adam = createAccount
       val eve = createAccount
       ingestString(adam, simpleData, "application/json")(_ / adam.bareRootPath / "")
@@ -114,6 +130,30 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
         val json2 = metadataFor(eve.apiKey)(_ / adam.bareRootPath / "")
         println(json2)
         (json2 \ "size").deserialize[Long] must_== 0
+      }
+    }
+
+    "metadata respects deleted data" in {
+
+      // 1. Create an account.
+      // 2. Ingest some data.
+      // 3. Wait for data to be ingested fully.
+      // 4. Delete the data at the path.
+      // 5. Wait and see if the metadata eventually sees the deletion.
+
+      val account = createAccount
+      ingestString(account, simpleData, "application/json")(_ / account.bareRootPath / "foo" / "")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val json = metadataFor(account.apiKey)(_ / account.bareRootPath / "foo" / "")
+        (json \ "size").deserialize[Long] must_== 5
+      }
+
+      deletePath(account.apiKey)(_ / account.bareRootPath / "foo" / "")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val json = metadataFor(account.apiKey)(_ / account.bareRootPath / "foo" / "")
+        (json \ "size").deserialize[Long] must_== 0
       }
     }
   }

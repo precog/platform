@@ -148,6 +148,23 @@ abstract class Task(settings: Settings) {
 
     Http(req OK as.String)()
   }
+
+  def deletePath(auth: String)(f: Req => Req) {
+    val req = f(ingest / "sync" / "fs").DELETE <<? List("apiKey" -> auth)
+    Http(req OK as.String)()
+  }
+
+  def metadataFor(apiKey: String, tpe: Option[String] = None, prop: Option[String] = None)(f: Req => Req): JValue = {
+    val params = List(
+      Some("apiKey" -> apiKey),
+      tpe map ("type" -> _),
+      prop map ("property" -> _)
+    ).flatten
+    val req = f(metadata / "fs") <<? params
+    val res = Http(req OK as.String)
+    val json = JParser.parseFromString(res()).valueOr(throw _)
+    json
+  }
 }
 
 class AccountsTask(settings: Settings) extends Task(settings: Settings) with Specification {
