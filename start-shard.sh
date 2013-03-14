@@ -562,7 +562,10 @@ echo "============================================================"
 cat > shard.out <<EOF
 id $ACCOUNTID
 token $ACCOUNTTOKEN
+accounts $ACCOUNTS_PORT
+auth $AUTH_PORT
 ingest $INGEST_PORT
+jobs $JOBS_PORT
 shard $SHARD_PORT
 EOF
 

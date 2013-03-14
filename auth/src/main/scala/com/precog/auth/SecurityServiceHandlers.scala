@@ -118,6 +118,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     val service = (request: HttpRequest[Future[JValue]]) => Success {
       // since having an api key means you can see the details, we don't check perms.
       request.parameters.get('apikey).map { apiKey =>
+        // The authkey is intentionally undocumented and only used internally.
         apiKeyFinder.findAPIKey(apiKey, request.parameters.get('authkey)).map { k =>
           if (k.isDefined) ok(k) else notFound("Unable to find API key "+apiKey)
         }
