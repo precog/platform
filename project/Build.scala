@@ -189,6 +189,9 @@ object PlatformBuild extends Build {
   lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
+  lazy val gjallerhorn = Project(id = "gjallerhorn", base = file("gjallerhorn")).
+    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
+
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard, logging % "test->test")
 
