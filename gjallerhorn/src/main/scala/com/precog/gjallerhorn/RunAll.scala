@@ -126,6 +126,22 @@ class AccountsTask(settings: Settings) extends Task(settings: Settings) with Spe
 }
 
 class SecurityTask(settings: Settings) extends Task(settings: Settings) with Specification {
+  def deriveAPIKey(parent: Account, subPath: String = ""): String = {
+    val body = """{"grants":[{"permissions":[{"accessType":"read","path":"%s","ownerAccountIds":["%s"]}]}]}"""
+    val req = (security / "").addQueryParameter("apiKey", parent.apiKey) << {
+      body.format(parent.rootPath + subPath, parent.accountId)
+    }
+    val result = Http(req OK as.String)
+    val json = JParser.parseFromString(result()).valueOr(throw _)
+    (json \ "apiKey").deserialize[String]
+  }
+
+  def deleteAPIKey(authAPIKey: String, apiKey: String) {
+    val req = (security / apiKey).DELETE.addQueryParameter("apiKey", authAPIKey)
+    val res = Http(req OK as.String)
+    res()
+  }
+
   "security web service" should {
     "create derivative apikeys" in {
       val Account(user, pass, accountId, apiKey, rootPath) = createAccount
@@ -151,6 +167,61 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
       val perms = (json \ "grants").children.flatMap(o => (o \ "permissions").children)
       perms.map(_ \ "accessType") must_== List(JString("write"))
       perms.map(_ \ "path") must_== List(JString("%sfoo/" format rootPath))
+    }
+
+    "list API keys" in {
+      val account = createAccount
+      val k1 = deriveAPIKey(account)
+      val k2 = deriveAPIKey(account)
+      val k3 = deriveAPIKey(account)
+      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
+      val res = Http(req OK as.String)
+      val json = JParser.parseFromString(res()).valueOr(throw _)
+      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
+      apiKeys must haveTheSameElementsAs(List(k1, k2, k3))
+    }
+
+    "delete owned API keys" in {
+      val account = createAccount
+      val k1 = deriveAPIKey(account)
+      val k2 = deriveAPIKey(account)
+      val k3 = deriveAPIKey(account)
+
+      deleteAPIKey(account.apiKey, k2)
+
+      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
+      val res = Http(req OK as.String)
+      val json = JParser.parseFromString(res()).valueOr(throw _)
+      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
+      apiKeys must haveTheSameElementsAs(List(k1, k3))
+    }
+
+    "forbid deletion of authorizing API key" in {
+      val account = createAccount
+      val req = (security / account.apiKey).DELETE.addQueryParameter("apiKey", account.apiKey)
+      val res = Http(req > (_.getStatusCode))
+      res() must_== 403 // Forbidden.
+
+      deriveAPIKey(account) must not(throwA[Throwable])
+    }
+
+    "forbid deletion of unrelated API key" in {
+      val account1 = createAccount
+      val childOf1 = deriveAPIKey(account1)
+
+      val account2 = createAccount
+
+      deleteAPIKey(account2.apiKey, childOf1) must throwA[StatusCode]
+      deleteAPIKey(account2.apiKey, account1.apiKey) must throwA[StatusCode]
+
+      deriveAPIKey(account1) must not(throwA[StatusCode])
+    }
+
+    "forbid deletion of parent API key" in {
+      val account1 = createAccount
+      val childOf1 = deriveAPIKey(account1)
+
+      deleteAPIKey(childOf1, account1.apiKey) must throwA[StatusCode]
     }
   }
 }
