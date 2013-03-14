@@ -33,6 +33,8 @@ package object client {
 
   type Response[+A] = ResponseM[Future, A]
 
+  def ResponseMonad(implicit M: Monad[Future]): Monad[Response] = scalaz.EitherT.eitherTMonad[Future, String]
+
   case class ClientException(message: String) extends Exception(message)
 
   /**
@@ -48,10 +50,7 @@ package object client {
       case ClientException(msg) => M.point(\/.left[String, A](msg))
     })
   }
-  
+
   implicit def FutureStreamAsResponseStream(implicit M: Monad[Future]) = implicitly[Hoist[StreamT]].hoist(FutureAsResponse)
   implicit def ResponseStreamAsFutureStream(implicit MF: Monad[Future], MR: Monad[Response]) = implicitly[Hoist[StreamT]].hoist(ResponseAsFuture)
 }
-
-
-
