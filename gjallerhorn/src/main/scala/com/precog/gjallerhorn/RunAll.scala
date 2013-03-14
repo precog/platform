@@ -77,7 +77,9 @@ object Settings {
 
 case class Settings(host: String, id: String, token: String, accountsPort: Int, authPort: Int, ingestPort: Int, jobsPort: Int, shardPort: Int)
 
-case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String)
+case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String) {
+  def bareRootPath = rootPath.substring(1, rootPath.length - 1)
+}
 
 abstract class Task(settings: Settings) {
   val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
@@ -89,6 +91,10 @@ abstract class Task(settings: Settings) {
   def accounts = host(serviceHost, accountsPort) / "accounts"
 
   def security = host(serviceHost, authPort) / "apikeys"
+
+  def metadata = host(serviceHost, shardPort) / "meta"
+
+  def ingest = host(serviceHost, ingestPort)
 
   def createAccount: Account = {
     val (user, pass) = generateUserAndPassword
@@ -106,6 +112,42 @@ abstract class Task(settings: Settings) {
     val rootPath = (json2 \ "rootPath").deserialize[String]
 
     Account(user, pass, accountId, apiKey, rootPath)
+  }
+
+  def deriveAPIKey(parent: Account, subPath: String = ""): String = {
+    val body = """{"grants":[{"permissions":[{"accessType":"read","path":"%s","ownerAccountIds":["%s"]}]}]}"""
+    val req = (security / "").addQueryParameter("apiKey", parent.apiKey) << {
+      body.format(parent.rootPath + subPath, parent.accountId)
+    }
+    val result = Http(req OK as.String)
+    val json = JParser.parseFromString(result()).valueOr(throw _)
+    (json \ "apiKey").deserialize[String]
+  }
+
+  def deleteAPIKey(apiKey: String) {
+    val req = (security / apiKey).DELETE
+    val res = Http(req OK as.String)
+    res()
+  }
+
+  def ingestFile(account: Account, path: String, file: File, contentType: String) {
+    val req = ((ingest / "sync" / "fs" / path).POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> account.apiKey,
+                        "ownerAccountId" -> account.accountId)
+                <<< file)
+    Http(req OK as.String)()
+  }
+
+  def ingestString(account: Account, data: String, contentType: String)(f: Req => Req) {
+    val req = (f(ingest / "sync" / "fs").POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> account.apiKey,
+                        "ownerAccountId" -> account.accountId)
+                << data)
+
+    println(req.url)
+    println(Http(req OK as.String)())
   }
 }
 
@@ -126,22 +168,6 @@ class AccountsTask(settings: Settings) extends Task(settings: Settings) with Spe
 }
 
 class SecurityTask(settings: Settings) extends Task(settings: Settings) with Specification {
-  def deriveAPIKey(parent: Account, subPath: String = ""): String = {
-    val body = """{"grants":[{"permissions":[{"accessType":"read","path":"%s","ownerAccountIds":["%s"]}]}]}"""
-    val req = (security / "").addQueryParameter("apiKey", parent.apiKey) << {
-      body.format(parent.rootPath + subPath, parent.accountId)
-    }
-    val result = Http(req OK as.String)
-    val json = JParser.parseFromString(result()).valueOr(throw _)
-    (json \ "apiKey").deserialize[String]
-  }
-
-  def deleteAPIKey(apiKey: String) {
-    val req = (security / apiKey).DELETE
-    val res = Http(req OK as.String)
-    res()
-  }
-
   "security web service" should {
     "create derivative apikeys" in {
       val Account(user, pass, accountId, apiKey, rootPath) = createAccount
@@ -210,7 +236,8 @@ object RunAll {
     val settings = Settings.fromFile(new java.io.File("shard.out"))
     run(
       new AccountsTask(settings),
-      new SecurityTask(settings)
+      new SecurityTask(settings),
+      new MetadataTask(settings)
     )
   }
 }
