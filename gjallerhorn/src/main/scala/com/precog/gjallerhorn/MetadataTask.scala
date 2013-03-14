@@ -101,6 +101,20 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
         subpaths must haveTheSameElementsAs(List("bar/"))
       }
     }
+
+    "forbid retrieval of metadata from unrelated API key" in {
+      val adam = createAccount
+      val eve = createAccount
+      ingestString(adam, simpleData, "application/json")(_ / adam.bareRootPath / "")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val json1 = metadataFor(adam.apiKey)(_ / adam.bareRootPath / "")
+        (json1 \ "size").deserialize[Long] must_== 5
+
+        val json2 = metadataFor(eve.apiKey)(_ / adam.bareRootPath / "")
+        println(json2)
+        (json2 \ "size").deserialize[Long] must_== 0
+      }
+    }
   }
 }
-

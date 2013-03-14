@@ -338,34 +338,28 @@ class NIHDBProjectionsActor(
 
   def findProjections(path: Path, apiKey: Option[APIKey]): Future[Option[List[NIHDBProjection]]] = {
     import Permission._
-    projections.get(path) match {
-      case Some(projs) =>
-        Promise.successful(Some(projs.values.toList))(context.dispatcher)
-
+    openProjections(path).map(_.unsafePerformIO) match {
       case None =>
-        openProjections(path).map(_.unsafePerformIO) match {
-          case None =>
-            logger.warn("No projections found at " + path)
-            Promise.successful(None)(context.dispatcher)
+        logger.warn("No projections found at " + path)
+        Promise.successful(None)(context.dispatcher)
 
-          case Some(foundProjections) =>
-            logger.debug("Checking found projections at " + path + " for access")
-            foundProjections.map { proj =>
-              apiKey.map { key =>
-                proj.authorities.flatMap { authorities =>
-                  // must have at a minimum a reduce permission from each authority
-                  // TODO: get a Clock in here
-                  authorities.accountIds.map({ id =>
-                    apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
-                  }).sequence.map({
-                    _.forall(_ == true).option(proj)
-                  })
-                }
-              }.getOrElse {
-                Promise.successful(Some(proj))(context.dispatcher)
-              }
-            }.sequence.map { accessible: List[Option[NIHDBProjection]] => Some(accessible.flatten) }
-        }
+      case Some(foundProjections) =>
+        logger.debug("Checking found projections at " + path + " for access")
+        foundProjections.map { proj =>
+          apiKey.map { key =>
+            proj.authorities.flatMap { authorities =>
+              // must have at a minimum a reduce permission from each authority
+              // TODO: get a Clock in here
+              authorities.accountIds.map({ id =>
+                apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
+              }).sequence.map({
+                _.forall(_ == true).option(proj)
+              })
+            }
+          }.getOrElse {
+            Promise.successful(Some(proj))(context.dispatcher)
+          }
+        }.sequence.map { accessible: List[Option[NIHDBProjection]] => Some(accessible.flatten) }
     }
   }
 
