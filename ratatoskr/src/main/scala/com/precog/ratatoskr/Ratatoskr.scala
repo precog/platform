@@ -544,6 +544,8 @@ object ImportTools extends Command with Logging {
     config.storageRoot.mkdirs
     config.archiveRoot.mkdirs
 
+    val ratatoskrConfig = config
+
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
@@ -563,7 +565,7 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accountFinder = new StaticAccountFinder[Future]("")
+      val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
       val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
