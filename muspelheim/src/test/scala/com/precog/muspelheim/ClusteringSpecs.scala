@@ -11,6 +11,17 @@ trait ClusteringSpecs extends EvalStackSpecs {
     case _ => sys.error("malformed SObject")
   }
 
+  def testModel(model: Map[String, SValue], validClusters: Set[String]) = {
+    model.keys mustEqual Set("ClusterId", "ClusterCenter")
+
+    model("ClusterId") must beLike {
+      case SString(c1) => validClusters must contain(c1)
+    }
+    model("ClusterCenter") must beLike {
+      case SObject(v) => v.keys mustEqual Set("HeightIncm", "Weight")
+    }
+  }
+  
   "clustering" should {
     "return correctly structured results in simple case" in {
       val input = """
@@ -71,7 +82,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems.keys mustEqual Set("Model1")
 
           elems("Model1") must beLike {
-            case SString(c1) => validClusters must contain(c1)
+            case SObject(model) => testModel(model, validClusters)
           }
       }
     }
@@ -96,8 +107,9 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems("cluster") must beLike {
             case SObject(obj) =>
               obj.keys mustEqual Set("Model1")
+
               obj("Model1") must beLike {
-                case SString(clusterId) => validClusters must contain(clusterId)
+                case SObject(model) => testModel(model, validClusters)
               }
           }
       }
@@ -204,8 +216,9 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems("cluster") must beLike {
             case SObject(obj) =>
               obj.keys mustEqual Set("Model1")
+
               obj("Model1") must beLike {
-                case SString(clusterId) => validClusters must contain(clusterId)
+                case SObject(model) => testModel(model, validClusters)
               }
           }
       }
@@ -241,7 +254,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
             case SDecimal(d) => d must be_>=(BigDecimal(1))
           }
           elems("clusterId") must beLike {
-            case SString(clusterId) => validClusters must contain(clusterId)
+            case SObject(model) => testModel(model, validClusters)
           }
       }
     }
