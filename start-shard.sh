@@ -22,8 +22,11 @@
 MAX_PORT_OPEN_TRIES=60
 
 # Parse opts to determine settings
-while getopts ":d:lbZYR" opt; do
+while getopts ":a:d:lbZYR" opt; do
     case $opt in
+        a)
+            REBUILD="$OPTARG"
+            ;;
         d) 
             WORKDIR=$(cd $OPTARG; pwd)
             ;;
@@ -50,6 +53,7 @@ while getopts ":d:lbZYR" opt; do
             echo "Usage: `basename $0` [-l] [-d <work directory>]"
             echo "  -l: If a temp workdir is used, don't clean up afterward"
             echo "  -d: Use the provided workdir"
+            echo "  -a abc,...: Unconditionally build assemblies for abc, ..."
             echo "  -b: Build missing artifacts prior to run (depends on sbt in path)"
             echo "  -Y: Run ingest consistency check"
             echo "  -Z: (private to -Y) first pass to be interrupted"
@@ -118,26 +122,35 @@ SHARD_OPTS=""
 # pre-flight checks to make sure we have everything we need, and to make sure there aren't any conflicting daemons running
 MISSING_ARTIFACTS=""
 for ASM in "$INGEST_ASSEMBLY" "$SHARD_ASSEMBLY" "$RATATOSKR_ASSEMBLY" "$AUTH_ASSEMBLY" "$ACCOUNTS_ASSEMBLY" "$JOBS_ASSEMBLY"; do
-    if [ ! -f "$ASM" ]; then
-        if [ -n "$BUILDMISSING" ]; then
-            # Darn you, bash! zsh can do this in one go, a la ${$(basename $ASM)%%-*}
-            BUILDTARGETBASE=$(basename "$ASM")
-            BUILDTARGET="${BUILDTARGETBASE%%-*}/assembly"
-            echo "Building $BUILDTARGET"
-            sbt "$BUILDTARGET" || {
-                echo "Failed to build $BUILDTARGET!" >&2
-                exit 1
-            }
-        else
-            MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
-        fi
+    NEED_REBUILD=""
+    BUILDTARGETBASE=$(basename "$ASM")
+    NAME="${BUILDTARGETBASE%%-*}"
+    BUILDTARGET="$NAME/assembly"
+    FORCED_REBUILD=`echo "$REBUILD" | awk -v name="$NAME" -v RS='[,\n]' '$0==name{printf(1)}'`
+
+    if [ -n "$FORCED_REBUILD" ]; then
+        NEED_REBUILD="yes"
     else
-        echo "Found good $ASM"
+        if [ ! -f "$ASM" ]; then
+            if [ -n "$BUILDMISSING" ]; then
+                NEED_REBUILD="yes"
+            else
+                MISSING_ARTIFACTS="$MISSING_ARTIFACTS $ASM"
+            fi
+        fi
+    fi
+
+    if [ -n "$NEED_REBUILD" ]; then
+        sbt "$BUILDTARGET" || {
+            echo "Failed to build $BUILDTARGET!" >&2
+            exit 1
+        }
     fi
 done
 
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
+    echo "foo"
     echo "Up-to-date ingest, shard, auth, accounts and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
@@ -281,7 +294,7 @@ function on_exit() {
         echo "Stopping kafka..."
         # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches 
         # the Java process, leaving it running. Instead, we kill all child processes
-        for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
+        for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '$2==PID{print $1}'`; do kill $pid; done
         wait $KFGLOBALPID
     fi
 
@@ -560,6 +573,7 @@ EOF
 echo "============================================================"
 
 cat > shard.out <<EOF
+basedir $WORKDIR
 id $ACCOUNTID
 token $ACCOUNTTOKEN
 accounts $ACCOUNTS_PORT
