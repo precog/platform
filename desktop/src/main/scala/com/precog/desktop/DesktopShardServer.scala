@@ -45,7 +45,7 @@ object DesktopShardServer
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   def platformFor(config: Configuration, jobManager: JobManager[Future]) = {
-    val accountFinder = new StaticAccountFinder("desktop")
+    val accountFinder = new StaticAccountFinder("desktop", "", Some("/"))
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinderFor(config), accountFinder, jobManager)
 
     val stoppable = Stoppable.fromFuture {

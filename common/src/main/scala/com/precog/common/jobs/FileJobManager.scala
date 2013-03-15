@@ -31,10 +31,10 @@ import blueeyes.json.serialization.Extractor._
 
 import com.google.common.cache.RemovalCause
 
-import com.precog.common.cache.{Cache, SimpleCache}
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.util._
+import com.precog.util.cache.{Cache, SimpleCache}
 
 import com.weiglewilczek.slf4s.Logging
 
