@@ -21,11 +21,13 @@ package com.precog.gjallerhorn
 
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
+import com.ning.http.client.RequestBuilder
 import dispatch._
 import java.io._
 import org.specs2.mutable._
 import scalaz._
 import specs2._
+import org.specs2.execute.EventuallyResults
 
 object Settings {
   private val IdRegex = """^id (.+)$""".r
@@ -91,7 +93,7 @@ abstract class Task(settings: Settings) {
   def accounts = host(serviceHost, accountsPort) / "accounts"
 
   def security = host(serviceHost, authPort) / "apikeys"
-
+  
   def metadata = host(serviceHost, shardPort) / "meta"
 
   def ingest = host(serviceHost, ingestPort)
@@ -147,6 +149,16 @@ abstract class Task(settings: Settings) {
                 << data)
 
     Http(req OK as.String)()
+  }
+
+  def ingestString(authAPIKey: String, ownerAccount: Account, data: String, contentType: String)(f: Req => Req) = {
+    val req = (f(ingest / "sync" / "fs").POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> authAPIKey,
+                        "ownerAccountId" -> ownerAccount.accountId)
+                << data)
+
+    Http(req OK as.String).either()
   }
 
   def deletePath(auth: String)(f: Req => Req) {
@@ -249,11 +261,16 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
 
 object RunAll {
   def main(args: Array[String]) {
+    try {
     val settings = Settings.fromFile(new java.io.File("shard.out"))
-    run(
-      new AccountsTask(settings),
-      new SecurityTask(settings),
-      new MetadataTask(settings)
-    )
+      run(
+        new AccountsTask(settings),
+        new SecurityTask(settings),
+        new MetadataTask(settings),
+        new ScenariosTask(settings)
+      )
+    } finally {
+      Http.shutdown()
+    }
   }
 }
