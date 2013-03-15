@@ -22,6 +22,7 @@ package nihdb
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.security.Authorities
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.niflheim._
@@ -45,6 +46,7 @@ import scalaz.std.list._
 import scalaz.syntax.traverse._
 
 import java.io.{File, FileNotFoundException, IOException}
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
@@ -54,19 +56,25 @@ object NIHDBProjection {
   val projectionIdGen = new AtomicInteger()
 }
 
+trait NIHDBProjection {
+  def authorities: Future[Authorities]
+  def getSnapshot(): Future[NIHDBSnapshot]
+  def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]]
+  def length: Future[Long]
+  def structure: Future[Set[ColumnRef]]
+  def status: Future[Status]
+  def commit: Future[PrecogUnit]
+  def close(implicit actorSystem: ActorSystem): Future[PrecogUnit]
+}
+
 /**
   *  Projection for NIH DB files
   *
   * @param cookThreshold The threshold, in rows, of raw data for cooking a raw store file
   */
-class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThreshold: Int, actorSystem: ActorSystem, actorTimeout: Timeout)
-    extends Logging { projection =>
+class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) extends NIHDBProjection with Logging { projection =>
+  // FIXME: projection IDs must be stable, globally unique, and assigned on creation!
   private[this] val projectionId = NIHDBProjection.projectionIdGen.getAndIncrement
-
-  private implicit val asyncContext: ExecutionContext = actorSystem.dispatcher
-  implicit val M = new FutureMonad(asyncContext)
-
-  private val db = new NIHDB(baseDir, chef, cookThreshold, actorTimeout)(actorSystem)
 
   def authorities = db.authorities
 
@@ -83,13 +91,8 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
     }
   }
 
-  def insert(v : Seq[IngestRecord], ownerAccountId: AccountId): Future[PrecogUnit] = {
-    // TODO: Check # of identities.
-    v.groupBy(_.eventId.producerId).map {
-      case (p, events) => 
-        val maxSeq = events.map(_.eventId.sequenceId).max
-        db.insert(EventId(p, maxSeq).uid, events.map(_.value), ownerAccountId)
-    }.toList.sequence map { _ => PrecogUnit }
+  def insert(batches: Seq[(Long, Seq[IngestRecord])])(implicit M: Monad[Future]): Future[PrecogUnit] = {
+    db.insert(batches.map { case (offset, records) => (offset, records.map(_.value)) })
   }
 
   def length: Future[Long] = db.length
@@ -105,10 +108,5 @@ class NIHDBProjection(val baseDir: File, val path: Path, chef: ActorRef, cookThr
   // NOOP. For now we sync *everything*
   def commit: Future[PrecogUnit] = Promise.successful(PrecogUnit)
 
-  def close() = {
-    logger.debug("Waiting %s for projection close on %s".format(actorTimeout, baseDir))
-    db.close().onComplete { _ =>
-      logger.debug("Projection closed in " + baseDir)
-    }
-  }
+  def close(implicit actorSystem: ActorSystem): Future[PrecogUnit] = db.close
 }

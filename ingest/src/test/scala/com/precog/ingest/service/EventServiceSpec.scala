@@ -83,18 +83,19 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _) :: Nil) => values must contain(testValue).only
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+          values must contain(testValue).only
       }
     }
 
     "track asynchronous event with valid API key" in {
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
         chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
-      } 
-      
+      }
+
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => content.validated[Long]("content-length") must_== Success(37L)
-      } 
+      }
     }
 
     "track synchronous batch event with bad row" in {
@@ -111,7 +112,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("178234#!!@#$\n", """{ "testing": 321 }""")
-      } 
+      }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
@@ -119,11 +120,11 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
           events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
       }
     }
-    
+
     "track CSV batch ingest with valid API key" in {
       val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("a,b,c\n1,2,3\n4, ,a", "\n6,7,8")
-      } 
+      }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
@@ -134,53 +135,77 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
             JParser.parseUnsafe("""{ "a": 6, "b": 7, "c": "8" }"""))
       }
     }
-    
+
+    "handle CSVs with duplicate headers" in {
+      val data = """URL,Title,Status,HubScore,Comments,24 Hours,7 Days,30 Days,Total,24 Hours,Total,Published Date,Edited Date,Featured
+                   |http://alexk2009.hubpages.com/hub/Big-Birds-that-carry-off-children,Eagles carrying off children and babies,Published,91,21,11,98,2352,10856,0,252,11/05/11,12/19/12,yes
+                   |http://alexk2009.hubpages.com/hub/Creating-Spirits,Creating Spirits and magical astral and physical thought forms,Published,88,0,1,15,58,1076,0,0,05/15/09,01/12/13,yes
+                   |http://alexk2009.hubpages.com/hub/The-Illusion-of-Money-part-one,The illusion of money,Published,88,6,0,5,32,708,0,0,04/02/10,01/13/13,yes""".stripMargin
+
+      val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
+        chunk(data)
+      }
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), events) =>
+          events flatMap { _.data.map(v => JParser.parseUnsafe(v.renderCompact)) } must contain(
+            JParser.parseUnsafe("""{
+              "URL": "http://alexk2009.hubpages.com/hub/Big-Birds-that-carry-off-children",
+              "Title": "Eagles carrying off children and babies", "Status": "Published",
+              "24 Hours": [ 11, 0 ], "Total": [ 10856, 252 ],
+              "HubScore": 91, "Comments": 21, "7 Days": 98, "30 Days": 2352,
+              "Published Date": "11/05/11", "Edited Date": "12/19/12", "Featured": "yes"
+            }""")
+          )
+      }
+    }
+
     "reject track request when API key not found" in {
-      val result = track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some("not gonna find it"), testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString("The specified API key does not exist: not gonna find it")), _), _) => ok
       }
     }
-    
+
     "reject track request when no API key provided" in {
-      val result = track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, None, testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok 
+        case (HttpResponse(HttpStatus(BadRequest, _), _, _, _), _) => ok
       }
     }
-    
+
     "reject track request when grant is expired" in {
-      val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some(expiredAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId))(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok
       }
     }
-    
+
     "reject track request when path is not accessible by API key" in {
-      val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue) 
+      val result = track(JSON, Some(testAccount.apiKey), Path("/"), Some(testAccount.accountId))(testValue)
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your API key does not have permissions to write at this location.")), _), _) => ok 
+        case (HttpResponse(HttpStatus(Forbidden, _), _, Some(JString(_)), _), _) => ok
       }
     }
 
-    "reject track request for json values that flatten to more than 250 primitive values" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = false) { 
-        genObject(251).sample.get: JValue 
+    "reject track request for json values that flatten to more than 1024 (default) primitive values" in {
+      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = false) {
+        genObject(1025).sample.get: JValue
       }
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _), _) =>
-          msg must startWith("Cannot ingest values with more than 250 primitive fields.")
+          msg must startWith("Cannot ingest values with more than 1024 primitive fields.")
       }
     }
-    
+
     // not sure if this restriction still makes sense
     "cap errors at 100" in {
       val data = chunk(List.fill(500)("!@#$") mkString "\n")
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true, sync = true)(data) 
+      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true, sync = true)(data)
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), _) =>
           msg \ "total" must_== JNum(500)

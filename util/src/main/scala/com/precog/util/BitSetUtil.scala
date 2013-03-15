@@ -110,6 +110,25 @@ object BitSetUtil {
     bs
   }
 
+  def takeRange(from: Int, to: Int)(bitset: BitSet): BitSet = {
+    val len = bitset.length
+    if (from <= 0) {
+      val bits = bitset.copy()
+      if (to >= len) bits else {
+        bits.clear(to, len)
+        bits
+      }
+    } else {
+      var i = from
+      val bits = new BitSet()
+      while (i < to) {
+        bits(i - from) = bitset(i)
+        i += 1
+      }
+      bits
+    }
+  }
+
   def filteredRange(start: Int, end: Int)(pred: Int => Boolean): BitSet = {
     val bs = new BitSet()
     Loop.range(start, end)(i => if (pred(i)) bs.set(i))

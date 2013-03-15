@@ -39,6 +39,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
+import com.precog.util.FilesystemFileOps
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -56,7 +57,7 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-import com.precog.util.FilesystemFileOps
+import blueeyes.util.Clock
 
 import java.io.{File, PrintStream}
 
@@ -112,39 +113,39 @@ trait REPL extends ParseEvalStack[Future]
   def run = IO {
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
     terminal.init()
-    
+
     val color = new Color(true)       // TODO
-    
+
     val reader = new ConsoleReader
     // val out = new PrintWriter(reader.getTerminal.wrapOutIfNeeded(System.out))
     val out = System.out
-    
+
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
-      
+
       val tree = shakeTree(oldTree)
       val strs = for (error <- tree.errors) yield showError(error)
-      
+
       if (!tree.errors.isEmpty) {
         out.println(color.red(strs mkString "\n"))
       }
-      
+
       if (tree.errors filterNot isWarning isEmpty)
         Some(tree)
       else
         None
     }
-    
+
     def handle(c: Command) = c match {
       case Eval(tree) => {
         val optTree = compile(tree)
-        
+
         for (tree <- optTree) {
           val bytecode = emit(tree)
           val eitherGraph = decorate(bytecode)
-          
+
           // TODO decoration errors
-          
+
           for (graph <- eitherGraph.right) {
             val result = {
               consumeEval(dummyAPIKey, graph, Path.Root) fold (
@@ -152,41 +153,41 @@ trait REPL extends ParseEvalStack[Future]
                 results => JArray(results.toList.map(_._2.toJValue)).renderPretty
               )
             }
-            
+
             out.println()
             out.println(color.cyan(result))
           }
         }
-        
+
         true
       }
-        
+
       case PrintTree(tree) => {
         bindRoot(tree, tree)
         val tree2 = shakeTree(tree)
-        
+
         out.println()
         out.println(prettyPrint(tree2))
-        
+
         true
       }
-        
+
       case Help => {
         printHelp(out)
         true
       }
-        
+
       case Quit => {
         terminal.restore()
         false
       }
     }
-    
+
     def loop() {
       val results = prompt(readNext(reader, color))
       val successes = results collect { case Success(tree, _) => tree }
       val failures = results collect { case f: Failure => f }
-      
+
       if (successes.isEmpty) {
         try {
           handleFailures(failures)
@@ -203,21 +204,21 @@ trait REPL extends ParseEvalStack[Future]
           throw new AssertionError("Fatal error: ambiguous parse results: " + results.mkString(", "))
         else
           successes.head
-        
+
         if (handle(command)) {
           out.println()
           loop()
         }
       }
     }
-    
+
 
     out.println("Welcome to Quirrel early access preview.")       // TODO we should try to get this string from a file
     out.println("Type in expressions to have them evaluated.")
     out.println("Press Ctrl-D on a new line to evaluate an expression.")
     out.println("Type in :help for more information.")
     out.println()
-    
+
     loop()
 
     PrecogUnit
@@ -237,7 +238,7 @@ trait REPL extends ParseEvalStack[Future]
       input.trim
     }
   }
-  
+
   def printHelp(out: PrintStream) {
     val str =
       """Note: command abbreviations are not yet supported!
@@ -246,21 +247,21 @@ trait REPL extends ParseEvalStack[Future]
         |:help         Print this help message
         |:quit         Exit the REPL
         |:tree <expr>  Print the AST for the expression"""
-    
+
     out.println(str stripMargin '|')
   }
-  
+
   // %%
-  
+
   lazy val prompt: Parser[Command] = (
     expr           ^^ { t => Eval(t) }
       | ":tree" ~ expr ^^ { (_, t) => PrintTree(t) }
       | ":help"        ^^^ Help
       | ":quit"        ^^^ Quit
   )
-  
+
   sealed trait Command
-  
+
   case class Eval(tree: Expr) extends Command
   case class PrintTree(tree: Expr) extends Command
   case object Help extends Command
@@ -291,11 +292,12 @@ object Console extends App {
 
         val accountFinder = None
 
-        val accessControl = new UnrestrictedAccessControl[Future]()
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+        val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
+        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
 
         trait TableCompanion extends NIHDBColumnarTableCompanion
 

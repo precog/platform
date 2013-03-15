@@ -79,6 +79,17 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
       HttpResponse[QueryResult](HttpStatus(PreconditionFailed, error))
   }
 
+  private def appendHeaders[A](opts: QueryOptions)(response: HttpResponse[A]): HttpResponse[A] = {
+    import blueeyes.core.http.HttpHeaders._
+    import blueeyes.core.http.DispositionTypes._
+    import blueeyes.core.http.MimeTypes._
+
+    opts.output match {
+      case CSVOutput => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
+      case _ => response
+    }
+  }
+
   lazy val service = (request: HttpRequest[Future[JValue]]) => {
     success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
       case Command("ls", arg) => list(apiKey, Path(arg.trim))
@@ -90,7 +101,9 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
           case Success(executor) =>
             executor.execute(apiKey, query, path, opts) map {
               case Success(result) =>
-                extractResponse(request, result)
+                appendHeaders(opts) {
+                  extractResponse(request, result)
+                }
               case Failure(error) =>
                 handleErrors(qt, error)
             }
@@ -170,18 +183,18 @@ class SyncQueryServiceHandler(
         val result: StreamT[Future, CharBuffer] = (prefix :: data) ++ (CharBuffer.wrap("}") :: StreamT.empty[Future, CharBuffer])
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
 
-      case (Right(Detailed), Some(jobId), data) =>
+      case (Right(Detailed), Some(jobId), data0) =>
         val prefix = CharBuffer.wrap("""{ "data" : """)
+        val data = silenceShardQueryExceptions(data0)
         val result = StreamT.unfoldM(some(prefix :: data)) {
           case Some(stream) =>
             stream.uncons flatMap {
               case Some((buffer, tail)) =>
                 M.point(Some((buffer, Some(tail))))
               case None =>
-                for {
-                  warnings <- jobManager.listMessages(jobId, channels.Warning, None)
-                  errors <- jobManager.listMessages(jobId, channels.Error, None)
-                } yield {
+                val warningsM = jobManager.listMessages(jobId, channels.Warning, None)
+                val errorsM = jobManager.listMessages(jobId, channels.Error, None)
+                (warningsM |@| errorsM) { (warnings, errors) =>
                   val suffix = """, "errors": %s, "warnings": %s }""" format (
                     JArray(errors.toList map (_.value)).renderCompact,
                     JArray(warnings.toList map (_.value)).renderCompact
@@ -196,12 +209,30 @@ class SyncQueryServiceHandler(
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
     }
   }
+
+  /**
+   * This will catch ShardQuery-specific exceptions in a Future (ie.
+   * QueryCancelledException and QueryExpiredException) and recover the Future
+   * by simply terminating the stream normally.
+   */
+  private def silenceShardQueryExceptions(stream0: StreamT[Future, CharBuffer]): StreamT[Future, CharBuffer] = {
+    def loop(stream: StreamT[Future, CharBuffer]): StreamT[Future, CharBuffer] = {
+      StreamT(stream.uncons map {
+        case Some((s, tail)) => StreamT.Yield(s, loop(tail))
+        case None => StreamT.Done
+      } recover {
+        case _: QueryCancelledException =>
+          StreamT.Done
+        case _: QueryExpiredException =>
+          StreamT.Done
+      })
+    }
+
+    loop(stream0)
+  }
 }
 
-class AsyncQueryServiceHandler(
-    val platform: Platform[Future, JobId])(implicit
-    M: Monad[Future]) extends QueryServiceHandler[JobId] {
-
+class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
   def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): HttpResponse[QueryResult] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result)))

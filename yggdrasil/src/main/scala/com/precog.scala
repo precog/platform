@@ -26,7 +26,7 @@ import scalaz.std.anyVal._
 
 import java.io.File
 
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 import com.precog.util.PrecogUnit
 
 package object yggdrasil {

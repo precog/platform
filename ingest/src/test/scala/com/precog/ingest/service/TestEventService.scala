@@ -64,6 +64,8 @@ trait TestEventService extends
   EventService with
   AkkaDefaults {
 
+  import Permission._
+
   val config = """
     security {
       test = true
@@ -75,7 +77,7 @@ trait TestEventService extends
     }
   """
 
-  override val configuration = "services { ingest { v1 { " + config + " } } }"
+  override val configuration = "services { ingest { v2 { " + config + " } } }"
 
   private val to = Duration(5, "seconds")
 
@@ -84,7 +86,7 @@ trait TestEventService extends
     def copoint[A](m: Future[A]) = Await.result(m, to)
   }
 
-  private val apiKeyManager = new InMemoryAPIKeyManager[Future]
+  private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   protected val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   protected val testAccount = TestAccounts.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {
@@ -99,10 +101,9 @@ trait TestEventService extends
 
 
   val accessTest = Set[Permission](
-    ReadPermission(testAccount.rootPath, Set("test")),
-    ReducePermission(testAccount.rootPath, Set("test")),
-    WritePermission(testAccount.rootPath, Set()),
-    DeletePermission(testAccount.rootPath, Set())
+    ReadPermission(Path.Root, WrittenByAccount("test")),
+    WritePermission(testAccount.rootPath, WriteAsAny),
+    DeletePermission(testAccount.rootPath, WrittenByAny)
   )
 
   val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {

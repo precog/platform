@@ -54,6 +54,7 @@ import akka.util.{Duration, Timeout}
 import akka.util.duration._
 
 import org.slf4j.{LoggerFactory, MDC}
+import org.joda.time.Instant
 
 import java.io.File
 import java.nio.CharBuffer
@@ -93,7 +94,7 @@ trait NIHDBQueryExecutorConfig
 trait NIHDBQueryExecutorComponent  {
   import blueeyes.json.serialization.Extractor
 
-  def platformFactory(config0: Configuration, extAccessControl: AccessControl[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
+  def platformFactory(config0: Configuration, extApiKeyFinder: APIKeyFinder[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
     new ManagedPlatform
         with ShardQueryExecutorPlatform[Future]
         with NIHDBColumnarTableModule
@@ -109,6 +110,7 @@ trait NIHDBQueryExecutorComponent  {
 
         val clock = blueeyes.util.Clock.System
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
+        val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
 
         //TODO: Get a producer ID
         val idSource = new FreshAtomicIdSource
@@ -133,15 +135,16 @@ trait NIHDBQueryExecutorComponent  {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = extAccessControl
+      val accessControl = extApiKeyFinder
       val storageTimeout = yggConfig.storageTimeout
       val jobManager = extJobManager
       val metadataClient = new StorageMetadataClient[Future](this)
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, accessControl)))
+      val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
 
       val shardActors @ ShardActors(ingestSupervisor, _) =
-        initShardActors(extAccountFinder, projectionsActor)
+        initShardActors(permissionsFinder, projectionsActor)
 
       trait TableCompanion extends NIHDBColumnarTableCompanion //{
 //        import scalaz.std.anyVal._

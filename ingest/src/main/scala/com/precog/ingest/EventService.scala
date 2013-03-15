@@ -46,6 +46,7 @@ import ByteChunk._
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import org.streum.configrity.Configuration
+import org.joda.time.Instant
 
 import scalaz._
 import scalaz.syntax.monad._
@@ -66,7 +67,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
 
-  val eventService = this.service("ingest", "1.0") {
+  val eventService = this.service("ingest", "2.0") {
     requestLogging {
       healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
@@ -74,14 +75,16 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
             import context._
 
             val (deps, stoppable) = configure(config)
+            val permissionsFinder = new PermissionsFinder(deps.apiKeyFinder, deps.accountFinder, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
 
             val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
             val ingestBatchSize = config[Int]("ingest.batch_size", 500)
+            val ingestMaxFields = config[Int]("ingest.max_fields", 1024) // Because tixxit says so
 
             val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
 
-            val ingestHandler = new IngestServiceHandler(deps.accountFinder, deps.apiKeyFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize)
-            val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, deleteTimeout)
+            val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
+            val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, Clock.System, deleteTimeout)
 
             EventServiceState(deps.apiKeyFinder, ingestHandler, archiveHandler, stoppable)
           }

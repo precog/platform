@@ -23,6 +23,7 @@ package security
 import accounts.AccountId
 import json._
 
+import org.joda.time.Instant
 import org.joda.time.DateTime
 
 import com.weiglewilczek.slf4s.Logging
@@ -31,6 +32,7 @@ import blueeyes.json.{ JValue, JString }
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.serialization.JodaSerializationImplicits.{ InstantExtractor, InstantDecomposer }
 
 import shapeless._
 
@@ -46,6 +48,7 @@ case class Grant(
   issuerKey:      APIKey,
   parentIds:      Set[GrantId],
   permissions:    Set[Permission],
+  createdAt:      Instant,
   expirationDate: Option[DateTime]) {
   
   def isExpired(at: Option[DateTime]) = (expirationDate, at) match {
@@ -70,7 +73,7 @@ case class Grant(
 object Grant extends Logging {
   implicit val grantIso = Iso.hlist(Grant.apply _, Grant.unapply _)
 
-  val schemaV1 =     "grantId" :: "name" :: "description" :: ("issuerKey" ||| "(undefined)") :: "parentIds" :: "permissions" :: "expirationDate" :: HNil
+  val schemaV1 =     "grantId" :: "name" :: "description" :: ("issuerKey" ||| "(undefined)") :: "parentIds" :: "permissions" :: ("createdAt" ||| new Instant(0L)) :: "expirationDate" :: HNil
   
   val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0"))
   val extractorV2: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
@@ -82,16 +85,10 @@ object Grant extends Logging {
       (obj.validated[GrantId]("gid") |@|
        obj.validated[Option[APIKey]]("cid").map(_.getOrElse("(undefined)")) |@|
        obj.validated[Option[GrantId]]("issuer") |@|
-       {
-         (obj \ "permission" \ "type") match {
-           case JString("owner") => Permission.accessTypeExtractor.validated(JString("delete"))
-           case other            => Permission.accessTypeExtractor.validated(other)
-         }
-       } |@|
-       obj.validated[Path]("permission.path") |@|
-       obj.validated[Option[String]]("permission.ownerAccountId") |@|
+       obj.validated[Permission]("permission")(Permission.extractorV0) |@|
        obj.validated[Option[DateTime]]("permission.expirationDate")).apply {
-        (gid, cid, issuer, permBuild, path, ownerId, expiration) => Grant(gid, None, None, cid, issuer.toSet, Set(permBuild.apply(path, ownerId.toSet)), expiration)
+        (gid, cid, issuer, permission, expiration) => 
+          Grant(gid, None, None, cid, issuer.toSet, Set(permission), new Instant(0L), expiration)
       }
     }
   }

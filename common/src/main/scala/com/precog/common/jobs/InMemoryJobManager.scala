@@ -24,7 +24,7 @@ import blueeyes.json._
 import blueeyes.core.http.MimeType
 
 import com.precog.common.security._
-import com.precog.common.cache._
+import com.precog.util.cache._
 
 import akka.util.Duration
 

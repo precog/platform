@@ -45,7 +45,7 @@ class NIHDBActorSpecs extends Specification with ScalaCheck {
     import NIHDBActor._
 
     "Handle arbitrary paths with components needing escaping" in check {
-      (p: Path) => unescapePath(escapePath(p)) mustEqual p
+      (p: Path) => unescapePath(escapePath(p, Set("/"))) mustEqual p
     }
   }
 }

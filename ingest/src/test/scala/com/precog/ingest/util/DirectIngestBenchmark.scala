@@ -33,6 +33,8 @@ import com.precog.ingest.service._
 import java.util.Properties
 import java.io.{File, FileReader}
 
+import org.joda.time.Instant
+
 import _root_.kafka._
 import _root_.kafka.api._
 import _root_.kafka.consumer._
@@ -44,7 +46,7 @@ object DirectKafkaConsumer extends App {
   config.put("enable.zookeeper", "false")
   config.put("broker.list", "0:localhost:9092")
   config.put("autocommit.enable", "false")
-  
+
   val topic = "direct_test_topic"
 
   val simpleConsumer = new SimpleConsumer("localhost", 9092, 5000, 64 * 1024)
@@ -53,7 +55,7 @@ object DirectKafkaConsumer extends App {
   var batch = 0
   var msgs: Long = 0
   val start = System.nanoTime
-  while (true) { 
+  while (true) {
     // create a fetch request for topic “test”, partition 0, current offset, and fetch size of 1MB
     val fetchRequest = new FetchRequest(topic, 0, offset, 1000000)
 
@@ -73,7 +75,7 @@ object DirectKafkaConsumer extends App {
     }
 
     batch += 1
-  } 
+  }
 }
 
 object DirectKafkaProducer extends App {
@@ -81,13 +83,13 @@ object DirectKafkaProducer extends App {
   config.put("broker.list", "0:localhost:9092")
   config.put("enable.zookeeper", "false")
   config.put("serializer.class", "com.precog.ingest.kafka.KafkaIngestMessageCodec")
- 
+
   val producer = new Producer[String, IngestMessage](new ProducerConfig(config))
 
   val topic = "direct_test_topic"
- 
+
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
-  val msg = IngestMessage("test", Path("/test/"), "", Vector(IngestRecord(EventId(0, 0), sample.next._1)), None)
+  val msg = IngestMessage("test", Path("/test/"), Authorities("test"), Vector(IngestRecord(EventId(0, 0), sample.next._1)), None, new Instant())
 
   val total = 1000000
   val start = System.nanoTime

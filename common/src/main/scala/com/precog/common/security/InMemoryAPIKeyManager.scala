@@ -22,6 +22,9 @@ package security
 
 import accounts.AccountId
 import org.joda.time.DateTime
+import org.joda.time.Instant
+
+import blueeyes.util.Clock
 
 import scala.collection.mutable
 
@@ -29,16 +32,21 @@ import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monad._
 
-class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManager[M] {
-  val (rootAPIKeyRecord, grants, apiKeys) = {
-    def mkPerm(p: (Path, Set[AccountId]) => Permission) = p(Path("/"), Set())
+class InMemoryAPIKeyManager[M[+_]](clock: Clock)(implicit val M: Monad[M]) extends APIKeyManager[M] {
+  import Permission._
 
+  val (rootAPIKeyRecord, grants, apiKeys) = {
     val rootAPIKey = APIKeyManager.newAPIKey()
     val rootGrantId = APIKeyManager.newGrantId()
 
     val rootGrant = Grant(
       rootGrantId, some("root-grant"), some("The root grant"), rootAPIKey, Set(),
-      Set(mkPerm(ReadPermission), mkPerm(ReducePermission), mkPerm(WritePermission), mkPerm(DeletePermission)),
+      Set(
+        ReadPermission(Path.Root, WrittenByAny), 
+        WritePermission(Path.Root, WriteAsAny), 
+        DeletePermission(Path.Root, WrittenByAny)
+      ),
+      new Instant(0L),
       None
     )
 
@@ -60,7 +68,7 @@ class InMemoryAPIKeyManager[M[+_]](implicit val M: Monad[M]) extends APIKeyManag
   }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant] = {
-    val newGrant = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, expiration)
+    val newGrant = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, clock.instant(), expiration)
     grants.put(newGrant.grantId, newGrant)
     newGrant.point[M]
   }

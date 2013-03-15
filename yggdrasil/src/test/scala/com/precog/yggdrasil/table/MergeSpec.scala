@@ -131,10 +131,10 @@ trait MergeSpec[M[+_]] extends
         )
   
       def evaluator(key: RValue, partition: GroupId => M[Table]) = {
-        val K0 = RValue.fromJValue(JParser.parse("""{"1":0,"2":4}"""))
-        val K1 = RValue.fromJValue(JParser.parse("""{"1":1,"2":5}"""))
-        val K2 = RValue.fromJValue(JParser.parse("""{"1":2,"2":6}"""))
-        val K3 = RValue.fromJValue(JParser.parse("""{"1":3,"2":7}"""))
+        val K0 = RValue.fromJValue(JParser.parseUnsafe("""{"1":0,"2":4}"""))
+        val K1 = RValue.fromJValue(JParser.parseUnsafe("""{"1":1,"2":5}"""))
+        val K2 = RValue.fromJValue(JParser.parseUnsafe("""{"1":2,"2":6}"""))
+        val K3 = RValue.fromJValue(JParser.parseUnsafe("""{"1":3,"2":7}"""))
         
         val r0Json = """
           | {"key":[5908438637678328470,5908438637678328580],"value":{"b":4,"c":12,"a":0,"fa":{"b":4,"a":0}}}
@@ -247,10 +247,10 @@ trait MergeSpec[M[+_]] extends
         )
 
       def evaluator(key: RValue, partition: GroupId => M[Table]) = {
-        val K0 = RValue.fromJValue(JParser.parse("""{"1":"1996","extra0":true,"extra1":true}"""))
-        val K1 = RValue.fromJValue(JParser.parse("""{"1":"2000","extra0":true,"extra1":true}"""))
-        val K2 = RValue.fromJValue(JParser.parse("""{"1":"2004","extra0":true,"extra1":true}"""))
-        val K3 = RValue.fromJValue(JParser.parse("""{"1":"2008","extra0":true,"extra1":true}"""))
+        val K0 = RValue.fromJValue(JParser.parseUnsafe("""{"1":"1996","extra0":true,"extra1":true}"""))
+        val K1 = RValue.fromJValue(JParser.parseUnsafe("""{"1":"2000","extra0":true,"extra1":true}"""))
+        val K2 = RValue.fromJValue(JParser.parseUnsafe("""{"1":"2004","extra0":true,"extra1":true}"""))
+        val K3 = RValue.fromJValue(JParser.parseUnsafe("""{"1":"2008","extra0":true,"extra1":true}"""))
         
         val r0Json = """
           | {"key":[],"value":{"year":"1996","ratio":139.0}}

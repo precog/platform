@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package serialization
 
 import com.precog.util._
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 import Bijection._
 
 import java.math.BigInteger

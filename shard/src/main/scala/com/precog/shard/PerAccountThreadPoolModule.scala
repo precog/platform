@@ -25,8 +25,12 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 
 import java.util.concurrent.{ ConcurrentHashMap, Executors }
+import java.util.concurrent.{ ThreadPoolExecutor, TimeUnit, LinkedBlockingQueue }
 
+import akka.actor.ActorSystem
 import akka.dispatch.{ Future, ExecutionContext }
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import scalaz._
 
@@ -37,14 +41,24 @@ import scalaz._
 class PerAccountThreadPooling(accountFinder: AccountFinder[Future]) { 
   private val executorCache = new ConcurrentHashMap[AccountId, ExecutionContext]()
 
+  private def threadFactoryFor(accountId: AccountId) =
+    (new ThreadFactoryBuilder().setNameFormat(accountId + "%04d")).build
+
   private def asyncContextFor(accountId: AccountId): ExecutionContext = {
     if (executorCache.contains(accountId)) {
       executorCache.get(accountId)
     } else {
+      val executor = new ThreadPoolExecutor(16, 128,
+        60000, TimeUnit.MILLISECONDS,
+        new LinkedBlockingQueue[Runnable](),
+        threadFactoryFor(accountId))
+      val ec = ExecutionContext.fromExecutor(executor)
+
       // FIXME: Dummy pool for now
-      executorCache.putIfAbsent(accountId, ExecutionContext.fromExecutor(Executors.newCachedThreadPool()))
-      // Fetch whatever value is there for the accountId now
-      executorCache.get(accountId)
+      executorCache.putIfAbsent(accountId, ec) match {
+        case null => ec
+        case ec0 => executor.shutdown(); ec0
+      }
     }
   }
 

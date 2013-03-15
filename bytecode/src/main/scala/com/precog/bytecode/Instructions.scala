@@ -175,7 +175,7 @@ trait Instructions {
     }
 
     trait UnfixedUnaryOperation extends UnaryOperation {
-      val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+      val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
     }
 
     sealed trait BinaryOperation {
@@ -196,11 +196,11 @@ trait Instructions {
     }
 
     trait EqualityOperation extends BinaryOperation {
-      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JBooleanT)
+      val tpe = BinaryOperationType(JType.JUniverseT, JType.JUniverseT, JBooleanT)
     }
     
     trait UnfixedBinaryOperation extends BinaryOperation {
-      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
+      val tpe = BinaryOperationType(JType.JUniverseT, JType.JUniverseT, JType.JUniverseT)
     }
     
     case class BuiltInFunction1Op(op: Op1) extends UnaryOperation {
@@ -246,10 +246,10 @@ trait Instructions {
     case object Neg extends NumericUnaryOperation
     
     case object WrapObject extends BinaryOperation {
-      val tpe = BinaryOperationType(JTextT, JType.JUnfixedT, JObjectUnfixedT)
+      val tpe = BinaryOperationType(JTextT, JType.JUniverseT, JObjectUnfixedT)
     }
     case object WrapArray extends UnaryOperation {
-      val tpe = UnaryOperationType(JType.JUnfixedT, JArrayUnfixedT)
+      val tpe = UnaryOperationType(JType.JUniverseT, JArrayUnfixedT)
     }
     
     case object JoinObject extends BinaryOperation {
@@ -264,11 +264,11 @@ trait Instructions {
     }
 
     case object DerefObject extends BinaryOperation {
-      val tpe = BinaryOperationType(JObjectUnfixedT, JTextT, JType.JUnfixedT)
+      val tpe = BinaryOperationType(JObjectUnfixedT, JTextT, JType.JUniverseT)
     }
     case object DerefMetadata extends UnfixedBinaryOperation
     case object DerefArray extends BinaryOperation {
-      val tpe = BinaryOperationType(JArrayUnfixedT, JNumberT, JType.JUnfixedT)
+      val tpe = BinaryOperationType(JArrayUnfixedT, JNumberT, JType.JUniverseT)
     }
     
     case object Range

@@ -22,7 +22,7 @@ package security
 
 import service.v1
 import accounts.AccountId
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 
 import akka.util.Duration
 

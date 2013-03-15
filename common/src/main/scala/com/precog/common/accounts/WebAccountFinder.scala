@@ -21,7 +21,7 @@ package com.precog.common
 package accounts
 
 import com.precog.common.Path
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.util._
@@ -58,7 +58,8 @@ object WebAccountFinder {
   def apply(config: Configuration)(implicit executor: ExecutionContext): Validation[NonEmptyList[String], AccountFinder[Response]] = {
     val serviceConfig = config.detach("service")
     serviceConfig.get[String]("hardcoded_account") map { accountId =>
-      success(new ConstantAccountFinder(accountId))
+      implicit val M = ResponseMonad(new FutureMonad(executor))
+      success(new StaticAccountFinder[Response](accountId, serviceConfig[String]("hardcoded_rootKey", ""), serviceConfig.get[String]("hardcoded_rootPath")))
     } getOrElse {
       (serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property service.protocol is required")) |@|
        serviceConfig.get[String]("host").toSuccess(NEL("Configuration property service.host is required")) |@|
@@ -141,9 +142,3 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
   }
 }
 
-class ConstantAccountFinder(accountId: AccountId)(implicit executor: ExecutionContext) extends AccountFinder[Response] {
-  import EitherT.{ left => leftT, right => rightT, _ }
-  private implicit val M: Monad[Future] = new FutureMonad(executor)
-  def findAccountByAPIKey(apiKey: APIKey) = rightT(Some(accountId).point[Future])
-  def findAccountDetailsById(accountId: AccountId) = rightT(None.point[Future])
-}

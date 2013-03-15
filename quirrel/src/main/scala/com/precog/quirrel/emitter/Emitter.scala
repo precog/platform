@@ -25,6 +25,8 @@ import parser.AST
 import typer.{Binder, ProvenanceChecker}
 import bytecode.Instructions
 
+import com.precog.util._
+
 import scalaz.{StateT, Id, Bind, Monoid}
 import scalaz.Scalaz._
 
@@ -78,7 +80,7 @@ trait Emitter extends AST
 
   def emit(expr: Expr): Vector[Instruction] = {
     lazy val trace = expr.trace
-    
+
     def insertInstrAtMulti(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
 
@@ -415,7 +417,7 @@ trait Emitter extends AST
             emitInstr(Split) >>
             emitExpr(body, dispatches) >>
             emitInstr(Merge)
-                  
+
         case ast.Import(_, _, child) =>
           emitExpr(child, dispatches)
         

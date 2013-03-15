@@ -21,30 +21,34 @@
 
 cd `dirname $0`
 
-if [[ `ls target/*.jar | wc -l` != 1 ]]; then
-    echo "Missing/too many jars!"
+function usage {
+    echo "Usage: $(basename $0) [-n]"
+    echo "  -n: Skip proguard"
     exit 1
-fi
+}
 
 while getopts ":n" opt; do
     case $opt in
         n)
-            SKIPPG=1
+            SKIPPROGUARD=1
             ;;
         \?)
-            echo "Usage: $(basename $0) [-n]"
-            echo "  -n: Skip proguard"
-            exit 1
+            usage
             ;;
     esac
 done
+
+if [[ `ls target/*.jar | wc -l` != 1 ]]; then
+    echo "Missing/too many jars!"
+    exit 1
+fi
 
 TMPDIR=precog
 
 mkdir -p $TMPDIR
 rm -rf $TMPDIR/*
 
-if [ -z "$SKIPPG" ]; then
+if [ -z "$SKIPPROGUARD" ]; then
     java -Xmx2048m -jar ../tools/lib/proguard.jar @proguard.conf -injars target/mongo-assembly*.jar -outjars $TMPDIR/precog.jar | tee proguard.log
 else
     cp target/mongo-assembly*.jar $TMPDIR/precog.jar

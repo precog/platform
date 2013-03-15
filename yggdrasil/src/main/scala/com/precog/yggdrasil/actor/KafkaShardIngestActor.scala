@@ -45,6 +45,8 @@ import java.io._
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.joda.time.Instant
+
 import _root_.kafka.api.FetchRequest
 import _root_.kafka.consumer.SimpleConsumer
 import _root_.kafka.message.MessageSet
@@ -54,7 +56,7 @@ import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
@@ -62,8 +64,6 @@ import scalaz.syntax.traverse._
 import Validation._
 
 import scala.annotation.tailrec
-import scala.collection.mutable
-import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeMap
 
 import scalaz._
@@ -185,7 +185,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      initialCheckpoint: YggCheckpoint,
                                      consumer: SimpleConsumer,
                                      topic: String,
-                                     accountFinder: AccountFinder[Future],
+                                     permissionsFinder: PermissionsFinder[Future],
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
                                      ingestTimeout: Timeout = 120 seconds,
@@ -245,7 +245,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         logger.info("Retrying failed ingest")
         for (messages <- ingestCache.get(checkpoint)) {
           val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
-          requestor.tell(IngestData(messages.map(_._2)), batchHandler)
+          requestor.tell(IngestData(messages), batchHandler)
         }
       } else {
         //logger.error("Halting ingest due to excessive consecutive failures at Kafka offsets: " + ingestCache.keys.map(_.offset).mkString("[", ", ", "]"))
@@ -279,7 +279,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                 // create a handler for the batch, then reply to the sender with the message set
                 // using that handler reference as the sender to which the ingest system will reply
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
-                requestor.tell(IngestData(messages.map(_._2)), batchHandler)
+                requestor.tell(IngestData(messages), batchHandler)
               } else {
                 logger.trace("No new data found after checkpoint: " + checkpoint)
                 runningBatches.getAndDecrement
@@ -296,6 +296,7 @@ abstract class KafkaShardIngestActor(shardId: String,
               logger.error("Failure during remote message read", t); requestor ! IngestData(Nil)
           }
         } else {
+
           logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(runningBatches.get))
           requestor ! IngestData(Nil)
         }
@@ -320,7 +321,6 @@ abstract class KafkaShardIngestActor(shardId: String,
     @tailrec
     def buildBatch(
         input: List[(Long, EventMessage)],
-        apiKeyMap: Map[APIKey, AccountId],
         batch: Vector[(Long, EventMessage)],
         checkpoint: YggCheckpoint): (Vector[(Long, EventMessage)], YggCheckpoint) = {
 
@@ -328,38 +328,27 @@ abstract class KafkaShardIngestActor(shardId: String,
         case Nil =>
           (batch, checkpoint)
 
-        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _)) :: tail =>
+        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _)) :: tail =>
           val newCheckpoint = records.foldLeft(checkpoint) {
             // TODO: This nested pattern match indicates that checkpoints are too closely
             // coupled to the representation of event IDs.
             case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
           }
 
-          apiKeyMap.get(apiKey) match {
-            case Some(accountId) =>
-              //FIXME: Deserialization need to do this.
-              //val em = event.copy(ownerAccountId = ownerAccountId0.getOrElse(accountId))
-              buildBatch(tail, apiKeyMap, batch :+ (offset, event), newCheckpoint)
+          buildBatch(tail, batch :+ (offset, event), newCheckpoint)
 
-            case None =>
-              // Non-existent account means the account must have been deleted, so we discard the
-              // event here. TODO: This authorization should probably be done downstream instead,
-              // since the archive authorization is not being done here.
-              buildBatch(tail, apiKeyMap, batch, newCheckpoint)
-          }
-
-        case (offset, ArchiveMessage(eventId, _)) :: tail if batch.nonEmpty =>
+        case (offset, ArchiveMessage(_, _, _, eventId, _)) :: tail if batch.nonEmpty =>
           logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, eventId.uid))
           (batch, checkpoint)
 
-        case (offset, ar @ ArchiveMessage(EventId(pid, sid), _)) :: tail =>
+        case (offset, ar @ ArchiveMessage(_, _, _, EventId(pid, sid), _)) :: tail =>
           // TODO: Where is the authorization checking credentials for the archive done?
           logger.debug("Singleton batch of ArchiveMessage at offset/id %d/%d".format(offset, ar.eventId.uid))
           if (failureLog.checkFailed(ar)) {
             // skip the message and continue without deletion.
             // FIXME: This is very dangerous; once we see these errors, we'll have to do a full reingest
             // from before the start of the error range.
-            buildBatch(tail, apiKeyMap, batch, checkpoint.update(offset, pid, sid))
+            buildBatch(tail, batch, checkpoint.update(offset, pid, sid))
           } else {
             // return the archive as a standalone message
             (Vector(offset -> ar), checkpoint.update(offset, pid, sid))
@@ -391,24 +380,37 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
         eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage.EventMessageExtraction)] map { messageSet =>
-          val apiKeys = messageSet collect {
-            case (_, \/-(IngestMessage(apiKey, _, _, _, _))) => apiKey
-            case (_, -\/((apiKey, _))) => apiKey
+          val apiKeys: List[(APIKey, Path)] = messageSet collect {
+            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _))) => (apiKey, path)
+            case (_, -\/((apiKey, path, _))) => (apiKey, path)
           }
 
-          accountFinder.mapAccountIds(apiKeys.toSet) map { apiKeyMap =>
-            // TODO: this is only needed for legacy events without account IDs. Get rid of it when we move to non-legacy events
-            val updatedMessages: List[(Long, EventMessage)] = messageSet.flatMap {
-              case (offset, \/-(message)) => Some((offset, message))
-              case (offset, -\/((apiKey, genMessage))) => apiKeyMap.get(apiKey) match {
-                case Some(account) => Some((offset, genMessage(account)))
-                case None =>
-                  logger.warn("Discarding event with apiKey %s because we could not determine the account".format(apiKey))
-                  None
-              }
+          val authorityCacheFutures = apiKeys.distinct map {
+            case k @ (apiKey, path) =>
+              // infer write authorities without a timestamp here, because we'll only use this for legacy events
+              permissionsFinder.inferWriteAuthorities(apiKey, path, None) map { k -> _ }
+          }
+
+          authorityCacheFutures.sequence map { cached =>
+            val authorityCache = cached.foldLeft(Map.empty[(APIKey, Path), Authorities]) {
+              case (acc, (k, Some(a))) => acc + (k -> a)
+              case (acc, (_, None)) => acc
             }
 
-            buildBatch(updatedMessages, apiKeyMap, Vector.empty, fromCheckpoint)
+            val updatedMessages: List[(Long, EventMessage)] = messageSet.flatMap {
+              case (offset, \/-(message)) =>
+                Some((offset, message))
+
+              case (offset, -\/((apiKey, path, genMessage))) =>
+                authorityCache.get((apiKey, path)) map { authorities =>
+                  Some((offset, genMessage(authorities)))
+                } getOrElse {
+                  logger.warn("Discarding event at offset %d with apiKey %s for path %s because we could not determine the account".format(offset, apiKey, path))
+                  None
+                }
+            }
+
+            buildBatch(updatedMessages, Vector.empty, fromCheckpoint)
           }
         }
 

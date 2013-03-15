@@ -74,4 +74,31 @@ object Timing {
       a
     }
   }
+
+  def timeStreamT[M[+_]: Monad, A](s: String)(stream: => StreamT[M, A]): StreamT[M, A] = {
+    val t0 = System.nanoTime()
+    val end = StreamT((StreamT.Skip {
+      val t = System.nanoTime() - t0
+      System.err.println("%s took %.2fms" format (s, t / m))
+      StreamT.empty[M, A]
+    }).point[M])
+    stream ++ end
+  }
+
+  def timeStreamTElem[M[+_]: Monad, A](s: String)(stream0: => StreamT[M, A]): StreamT[M, A] = {
+    def timeElem(stream: StreamT[M, A]): StreamT[M, A] = {
+      val t0 = System.nanoTime()
+      StreamT(stream.uncons map {
+        case Some((a, tail)) =>
+          val t = System.nanoTime() - t0
+          System.err.println("%s took %.2fms" format (s, t / m))
+          StreamT.Yield(a, timeElem(tail))
+
+        case None =>
+          StreamT.Done
+      })
+    }
+
+    timeElem(stream0)
+  }
 }

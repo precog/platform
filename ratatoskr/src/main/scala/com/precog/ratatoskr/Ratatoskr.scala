@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+import blueeyes.util.Clock
 
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
@@ -278,7 +279,7 @@ object KafkaTools extends Command {
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.buffer) match {
-        case Success(Ingest(apiKey, path, ownerAccountId, data, _)) =>
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
 
@@ -291,7 +292,7 @@ object KafkaTools extends Command {
   case object CentralFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventMessageEncoding.read(msg.message.buffer) match {
-        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _))) =>
+        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _, _))) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
 
@@ -543,6 +544,8 @@ object ImportTools extends Command with Logging {
     config.storageRoot.mkdirs
     config.archiveRoot.mkdirs
 
+    val ratatoskrConfig = config
+
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
@@ -562,9 +565,11 @@ object ImportTools extends Command with Logging {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = new UnrestrictedAccessControl[Future]
+      val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
+      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+      val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), accessControl)))
+      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
     }
 
     import shardModule._
@@ -574,16 +579,34 @@ object ImportTools extends Command with Logging {
     implicit val insertTimeout = Timeout(300 * 1000)
     config.input.foreach {
       case (db, input) =>
+
         logger.info("Inserting batch: %s:%s".format(db, input))
-        val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
-        val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
+        import scala.annotation.tailrec
+        val bufSize = 8 * 1024 * 1024
+        val f = new File(input)
+        val ch = new FileInputStream(f).getChannel
+        val bb = ByteBuffer.allocate(bufSize)
 
-        ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
-          val update = ProjectionInsert(Path(db), records, config.accountId)
+        @tailrec def loop(p: AsyncParser) {
+          val n = ch.read(bb)
+          bb.flip()
 
-          logger.info(records.size + " events to be inserted")
+          val input = if (n >= 0) Some(bb) else None
+          val (AsyncParse(errors, results), parser) = p(input)
+          if (!errors.isEmpty) sys.error("errors: %s" format errors)
+          val eventidobj = EventId(pid, sid.getAndIncrement)
+          val records = results.map(v => IngestRecord(eventidobj, v))
+          val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
+          bb.flip()
+          if (n >= 0) loop(parser)
+        }
+
+        try {
+          loop(AsyncParser())
+        } finally {
+          ch.close()
         }
     }
 

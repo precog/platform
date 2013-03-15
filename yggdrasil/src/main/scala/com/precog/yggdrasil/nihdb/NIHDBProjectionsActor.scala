@@ -20,9 +20,11 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import com.precog.common._
 import com.precog.common.accounts._
-import com.precog.common.cache.Cache
+import com.precog.util.cache.Cache
 import com.precog.common.ingest._
 import com.precog.common.json._
 import com.precog.common.security._
@@ -47,8 +49,15 @@ import org.joda.time.DateTime
 import scalaz._
 import scalaz.effect.IO
 import scalaz.std.list._
+import scalaz.std.option._
+import scalaz.std.set._
+import scalaz.syntax.std.boolean._
+
+import scalaz.syntax.std.list._
+import scalaz.syntax.traverse._
 
 import java.io.{File, FileFilter, IOException}
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 import scala.collection.mutable
 
@@ -64,220 +73,337 @@ sealed trait ProjectionUpdate {
   def path: Path
 }
 
-case class ProjectionInsert(path: Path, values: Seq[IngestRecord], ownerAccountId: AccountId) extends ProjectionUpdate
+// Collects a sequnce of sequential batches into a single insert
+case class ProjectionInsert(path: Path, batches: Seq[(Long, Seq[IngestRecord])], writeAs: Authorities) extends ProjectionUpdate
 
-case class ProjectionArchive(path: Path, id: EventId) extends ProjectionUpdate
+case class ProjectionArchive(path: Path, archiveBy: APIKey, id: EventId) extends ProjectionUpdate
 
-case class ProjectionGetBlock(path: Path, id: Option[Long], columns: Option[Set[ColumnRef]])
+//case class ProjectionGetBlock(path: Path, id: Option[Long], columns: Option[Set[ColumnRef]])
 
 class NIHDBProjectionsActor(
-    baseDir: File,
+    activeDir: File,
     archiveDir: File,
     fileOps: FileOps,
     chef: ActorRef,
     cookThreshold: Int,
     storageTimeout: Timeout,
-    accessControl: AccessControl[Future]
+    permissionsFinder: PermissionsFinder[Future],
+    txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
     ) extends Actor with Logging {
 
-  override def preStart() = {
-    logger.debug("Starting projections actor with base = " + baseDir)
-  }
+  import permissionsFinder.apiKeyFinder
+
+  implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
 
   private final val disallowedPathComponents = Set(".", "..")
 
-  implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
+  private final val perAuthoritySubdir = "perAuthProjections"
+
+  private final val perAuthoritySubdirEscape = Set(perAuthoritySubdir)
+
+  private final val pathFileFilter: FileFilter = {
+    import FileFilterUtils.{notFileFilter => not, _}
+    not(nameFileFilter(perAuthoritySubdir))
+  }
+
+  private var projections = Map.empty[Path, Map[Authorities, NIHDBActorProjection]]
+
+  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
+
+  override def preStart() = {
+    logger.debug("Starting projections actor with base = " + activeDir)
+  }
+
+  override def postStop() = {
+    logger.info("Initiating shutdown of %d projections".format(projections.size))
+    Await.result(projections.values.toList.map (_.values.toList.map(_.close(context.system))).flatten.sequence, storageTimeout.duration)
+    logger.info("Projection shutdown complete")
+    logger.info("Shutting down TX log scheduler")
+    txLogScheduler.shutdown()
+    logger.info("TX log scheduler shutdown complete")
+  }
+
   /**
-    * Computes the stable path for a given descriptor relative to the given base dir
+    * Computes the stable path for a given vfs path relative to the given base dir
     */
-  private def descriptorDir(baseDir: File, path: Path): File = {
+  def pathDir(baseDir: File, path: Path): File = {
     // The path component maps directly to the FS
-    // FIXME: escape user-provided components that match NIHDB internal paths
-    val prefix = NIHDBActor.escapePath(path).elements.filterNot(disallowedPathComponents)
+    val prefix = NIHDBActor.escapePath(path, perAuthoritySubdirEscape).elements.filterNot(disallowedPathComponents)
     new File(baseDir, prefix.mkString(File.separator))
   }
 
+  // For a given path, where is the subdir where per-authority projections are stored
+  def projectionsDir(baseDir: File, path: Path): File =
+    new File(pathDir(baseDir, path), perAuthoritySubdir)
+
+  def descriptorDir(baseDir: File, path: Path, authorities: Authorities): File = {
+    //The projections are stored in the perAuthoritySubdir, relative to the path dir, in a folder based on their authority's hash
+    new File(projectionsDir(baseDir, path), authorities.sha1)
+  }
+
   // Must return a directory
-  def ensureBaseDir(path: Path): IO[File] = IO {
-    val dir = descriptorDir(baseDir, path)
+  def ensureDescriptorDir(path: Path, authorities: Authorities): IO[File] = IO {
+    val dir = descriptorDir(activeDir, path, authorities)
     if (!dir.exists && !dir.mkdirs()) {
       throw new Exception("Failed to create directory for projection: " + dir)
     }
     dir
   }
 
-  def findBaseDir(path: Path): Option[File] = {
-    val dir = descriptorDir(baseDir, path)
-    if (NIHDBActor.hasProjection(dir)) Some(dir) else None
-  }
-
-  // Must return a directory
-  def archiveDir(path: Path): File = {
-    descriptorDir(archiveDir, path)
-  }
-
-  def archive(path: Path): IO[PrecogUnit] = {
-    logger.debug("Archiving " + path)
-
-    findBaseDir(path) match {
-      case None =>
-        IO { logger.warn("Base dir " + path + " doesn't exist, skipping archive"); PrecogUnit }
-
-      case Some(base) => {
-        val archive = archiveDir(path)
-        val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis())
-        val archiveParent = timeStampedArchive.getParentFile
-
-        IO {
-          if (! archiveParent.isDirectory) {
-            // Ensure that the parent dir exists
-            if (! archiveParent.mkdirs()) {
-              throw new IOException("Failed to create archive parent dir for " + timeStampedArchive)
-            }
-          }
-
-          if (! archiveParent.canWrite) {
-            throw new IOException("Invalid permissions on archive directory parent: " + archiveParent)
-          }
-        }.flatMap { _ =>
-          fileOps.rename(base, timeStampedArchive).map { _ =>
-            logger.info("Completed archive on " + path); PrecogUnit
-          }
-        }
-      }
+  def findDescriptorDirs(path: Path): Option[Set[File]] = {
+    // No pathFileFilter needed here, since the projections dir should only contain descriptor dirs
+    Option(projectionsDir(activeDir, path).listFiles).map {
+      _.filter { dir =>
+        dir.isDirectory && NIHDBActor.hasProjection(dir)
+      }.toSet
     }
   }
 
-  private val pathFileFilter: FileFilter = {
-    import FileFilterUtils.{notFileFilter => not, _}
-    import NIHDBActor._
-    not(or(nameFileFilter(cookedSubdir), nameFileFilter(rawSubdir)))
+  def archive(path: Path, authorities: Authorities): IO[PrecogUnit] = {
+    logger.debug("Archiving " + path + " : " + authorities)
+    val current = descriptorDir(activeDir, path, authorities)
+    if (NIHDBActor.hasProjection(current)) {
+      val archive = descriptorDir(archiveDir, path, authorities)
+      val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis())
+      val archiveParent = timeStampedArchive.getParentFile
+
+      IO {
+        if (! archiveParent.isDirectory) {
+          // Ensure that the parent dir exists
+          if (! archiveParent.mkdirs()) {
+            throw new IOException("Failed to create archive parent dir for " + timeStampedArchive)
+          }
+        }
+
+        if (! archiveParent.canWrite) {
+          throw new IOException("Invalid permissions on archive directory parent: " + archiveParent)
+        }
+      }.flatMap { _ =>
+        fileOps.rename(current, timeStampedArchive).map { _ =>
+          logger.info("Completed archive on " + path); PrecogUnit
+        }
+      }
+    } else {
+      IO { logger.warn("Base dir " + path + " doesn't exist, skipping archive"); PrecogUnit }
+    }
+  }
+
+  def archiveByAPIKey(path: Path, apiKey: APIKey): Future[PrecogUnit] = {
+    import Permission._
+
+    def deleteOk(apiKey: APIKey, authorities: Authorities): Future[Boolean] = {
+      authorities.accountIds.map({ accountId =>
+        // TODO: need a Clock in here
+        apiKeyFinder.hasCapability(apiKey, Set(DeletePermission(path, WrittenByAccount(accountId))), Some(new DateTime))
+      }).sequence.map({
+        _.exists(_ == true)
+      })
+    }
+
+    // First, we need to figure out which projections are actually
+    // being archived based on the authorities and perms of the api key
+    val toArchive: Future[List[Authorities]] = projections.get(path) match {
+      case Some(projections) =>
+        projections.toList.map {
+          case (authorities, proj) =>
+            deleteOk(apiKey, authorities).flatMap { canDelete =>
+              logger.debug("Delete allowed for projection at %s:%s with apiKey %s = %s".format(path, authorities, apiKey, canDelete))
+              if (canDelete) {
+                logger.debug("Closing projection %s:%s".format(path, authorities))
+                proj.close(context.system).map(_ => Some(authorities))
+              } else {
+                Promise.successful(None)(context.dispatcher)
+              }
+            }
+        }.sequence.map(_.flatten)
+
+      case None =>
+        // No open projections, so we need to scan the descriptors
+        val authorities = findDescriptorDirs(path).map {
+          _.toList.map { dir =>
+            NIHDBActor.readDescriptor(dir).map {
+              _.map(_.map(_.authorities).valueOr { e => throw new Exception("Error reading projection descriptor for %s from %s: %s".format(path, dir, e.message)) })
+            }
+          }.sequence.unsafePerformIO.flatten
+        }.getOrElse(Nil)
+
+        Promise.successful(authorities)(context.dispatcher)
+      }
+
+    toArchive.map { authorities =>
+      if (authorities.nonEmpty) {
+        logger.debug("Clearing projections for %s:%s from cache".format(path, authorities))
+        projections.get(path).foreach { currentCache =>
+          val newCache = currentCache -- authorities
+          if (newCache.nonEmpty) {
+            projections += (path -> newCache)
+          } else {
+            projections -= path
+          }
+        }
+
+        authorities.map { auth =>
+          archive(path, auth).except {
+            case t: Throwable => IO { logger.error("Failure during archive of projction %s:%s".format(path, auth), t) }
+          }
+        }.sequence.unsafePerformIO
+
+        logger.debug("Processing of archive request complete on " + path)
+      } else {
+        logger.debug("No projections found to archive for %s with %s".format(path, apiKey))
+      }
+
+      PrecogUnit
+    }
   }
 
   def findChildren(path: Path, apiKey: APIKey): Future[Set[Path]] = {
     implicit val ctx = context.dispatcher
-    def descendantHasProjection(dir: File): Boolean = {
-      NIHDBActor.hasProjection(dir) ||
-      (Option(dir.listFiles(pathFileFilter)) exists { _.filter(_.isDirectory) exists descendantHasProjection })
-    }
-
     for {
-      subdirs <- Future {
-        val start = descriptorDir(baseDir, path)
-        Option(start.listFiles(pathFileFilter)).toSet.flatMap((_:Array[File]).toSet)
-      }
-      authorizedPaths <- Future sequence {
-        subdirs collect { 
-          case d if descendantHasProjection(d) => 
-            val path0 = NIHDBActor.unescapePath(path / Path(d.getName))
-            accessControl.hasCapability(apiKey, Set(ReducePermission(path0, Set())), Some(new DateTime)) map { 
-              case true => Some(path0)
-              case false => None
-            }
-        }
-      }
+      allowedPaths <- permissionsFinder.findBrowsableChildren(apiKey, path)
     } yield {
-      authorizedPaths.flatten
-    }
-  }
+      val pathRoot = pathDir(activeDir, path)
 
-  override def postStop() = {
-    import scalaz.syntax.traverse._
-    logger.info("Initiating shutdown of %d projections".format(projections.size))
-    Await.result(projections.values.toList.map (_.close).sequence, storageTimeout.duration)
-    logger.info("Projection shutdown complete")
-  }
-
-  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
-
-  //private val reductionCache = Cache.simple[ReductionId, AnyRef](MaxSize(1024 * 1024))
-
-  private val projections = mutable.Map.empty[Path, NIHDBProjection]
-
-  private def getProjection(path: Path): IO[NIHDBProjection] = {
-    // GET THE AUTHORITIES!
-    projections.get(path).map(IO(_)).getOrElse {
-      ensureBaseDir(path).map { bd =>
-        (new NIHDBProjection(bd, path, chef, cookThreshold, context.system, storageTimeout)).tap { proj =>
-          projections += (path -> proj)
-        }
+      logger.debug("Checking for children of path %s in dir %s among %s".format(path, pathRoot, allowedPaths))
+      Option(pathRoot.listFiles(pathFileFilter)).map { files =>
+        logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
+        files.filter(_.isDirectory).map { dir => path / Path(dir.getName) }.filter { p => allowedPaths.exists(_.isEqualOrParent(p)) }.toSet
+      } getOrElse {
+        logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
+        Set.empty
       }
     }
   }
 
-  def findProjectionWithAPIKey(path: Path, apiKey: APIKey): Future[Option[NIHDBProjection]] = {
-    projections.get(path).orElse(findBaseDir(path).map { _ => getProjection(path).unsafePerformIO }) match {
-      case Some(proj) =>
-        proj.authorities.flatMap { authorities =>
-          accessControl.hasCapability(apiKey, Set(ReducePermission(path, authorities.ownerAccountIds)), Some(new DateTime)) map { canAccess =>
-            logger.debug("Access for projection at " + path + " = " + canAccess)
-            if (canAccess) Some(proj) else None
-          }
+  private def createProjection(path: Path, authorities: Authorities): IO[NIHDBActorProjection] = {
+    projections.get(path).flatMap(_.get(authorities)).map(IO(_)) getOrElse {
+      for {
+        bd <- ensureDescriptorDir(path, authorities)
+        dbv <- NIHDB.create(chef, authorities, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system)
+      } yield {
+        val proj = dbv map { db => new NIHDBActorProjection(db)(context.dispatcher) } valueOr { error =>
+          sys.error("An error occurred in deserialization of projection metadata for " + path + ", " + authorities + ": " + error.message)
         }
+
+        projections += (path -> (projections.getOrElse(path, Map()) + (authorities -> proj)))
+
+        proj
+      }
+    }
+  }
+
+  private def openProjections(path: Path): Option[IO[List[NIHDBProjection]]] = {
+    projections.get(path).map { existing =>
+      logger.debug("Found cached projection for " + path)
+      IO(existing.values.toList)
+    } orElse {
+      logger.debug("Opening new projection for " + path)
+      findDescriptorDirs(path).map { projDirs =>
+        projDirs.toList.map { bd =>
+          NIHDB.open(chef, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system).map { dbov =>
+            dbov.map { dbv =>
+              dbv.map { case (authorities, db) =>
+                val proj = new NIHDBActorProjection(db)(context.dispatcher)
+                projections += (path -> (projections.getOrElse(path, Map()) + (authorities -> proj)))
+
+                logger.debug("Cache for %s updated to %s".format(path, projections.get(path)))
+
+                proj
+              } valueOr { error =>
+                sys.error("An error occurred in deserialization of projection metadata for " + path + ": " + error.message)
+              }
+            }
+          }
+        }.sequence.map(_.flatten)
+      }
+    }
+  }
+
+  def aggregateProjections(path: Path, apiKey: Option[APIKey]): Future[Option[NIHDBProjection]] = {
+    findProjections(path, apiKey).flatMap {
+      case Some(inputs) =>
+        inputs.toNel.map { ps =>
+          if (ps.size == 1) {
+            logger.debug("Aggregate on %s with key %s returns a single projection".format(path, apiKey))
+            Promise.successful(ps.head)(context.dispatcher)
+          } else {
+            logger.debug("Aggregate on %s with key %s returns an aggregate projection".format(path, apiKey))
+            ps.map(_.getSnapshot).sequence.map { snaps => new NIHDBAggregateProjection(snaps) }
+          }
+        }.sequence
+
       case None =>
-        logger.warn("Found no projections at " + path)
+        logger.debug("No projections found for " + path)
         Promise.successful(None)(context.dispatcher)
     }
   }
 
+  def findProjections(path: Path, apiKey: Option[APIKey]): Future[Option[List[NIHDBProjection]]] = {
+    import Permission._
+    projections.get(path) match {
+      case Some(projs) =>
+        Promise.successful(Some(projs.values.toList))(context.dispatcher)
+
+      case None =>
+        openProjections(path).map(_.unsafePerformIO) match {
+          case None =>
+            logger.warn("No projections found at " + path)
+            Promise.successful(None)(context.dispatcher)
+
+          case Some(foundProjections) =>
+            logger.debug("Checking found projections at " + path + " for access")
+            foundProjections.map { proj =>
+              apiKey.map { key =>
+                proj.authorities.flatMap { authorities =>
+                  // must have at a minimum a reduce permission from each authority
+                  // TODO: get a Clock in here
+                  authorities.accountIds.map({ id =>
+                    apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
+                  }).sequence.map({
+                    _.forall(_ == true).option(proj)
+                  })
+                }
+              }.getOrElse {
+                Promise.successful(Some(proj))(context.dispatcher)
+              }
+            }.sequence.map { accessible: List[Option[NIHDBProjection]] => Some(accessible.flatten) }
+        }
+    }
+  }
+
+  // FIXME or OK? Current semantics of returning a "Projection" means that someone could be holding onto a projection that is later archived out from under them
   def receive = {
     // FIXME: Differentiate between "is one there?" and "make it so"
     case FindProjection(path) =>
-      sender ! projections.get(path)
+      aggregateProjections(path, None) pipeTo sender
 
     case FindChildren(path, apiKey) =>
       findChildren(path, apiKey) pipeTo sender
 
     case AccessProjection(path, apiKey) =>
-      logger.debug("Accessing projection at " + path + " => " + findBaseDir(path))
-      findProjectionWithAPIKey(path, apiKey) pipeTo sender
+      logger.debug("Accessing projections at " + path + " => " + projectionsDir(activeDir, path))
+      aggregateProjections(path, Some(apiKey)) pipeTo sender
 
-    case ProjectionInsert(path, records, ownerAccountId) =>
+    case ProjectionInsert(path, batches, authorities) =>
       val requestor = sender
-      getProjection(path).map {
-        _.insert(records, ownerAccountId) map { _ =>
+      createProjection(path, authorities).map {
+        _.insert(batches) map { _ =>
           requestor ! InsertComplete(path)
         }
       }.except {
         case t: Throwable => IO { logger.error("Failure during projection insert", t) }
       }.unsafePerformIO
 
-    case ProjectionArchive(path, _) =>
+    case ProjectionArchive(path, apiKey, _) =>
       val requestor = sender
       logger.debug("Beginning archive of " + path)
 
-      (projections.get(path) match {
-        case Some(proj) =>
-          logger.debug("Closing projection at " + path)
-          proj.close()
-
-        case None => Promise.successful(PrecogUnit)(context.dispatcher)
-      }).map { _ =>
-        logger.debug("Clearing projection from cache")
-        projections -= path
-
-        archive(path).map { _ =>
-          requestor ! ArchiveComplete(path)
-        }.except {
-          case t: Throwable => IO { logger.error("Failure during archive of " + path, t) }
-        }.unsafePerformIO
-
-        logger.debug("Processing of archive request complete on " + path)
+      archiveByAPIKey(path, apiKey).map { _ =>
+        requestor ! ArchiveComplete(path)
       }.onFailure {
         case t: Throwable => logger.error("Failure during archive of " + path, t)
-      }
-
-    case ProjectionGetBlock(path, id, columns) =>
-      val requestor = sender
-      try {
-        projections.get(path) match {
-          case Some(p) => p.getBlockAfter(id, columns).pipeTo(requestor)
-          case None => findBaseDir(path).map {
-            _ => getProjection(path).unsafePerformIO.getBlockAfter(id, columns) pipeTo requestor
-          }
-        }
-      } catch {
-        case t: Throwable => logger.error("Failure during getBlockAfter:", t)
       }
   }
 }

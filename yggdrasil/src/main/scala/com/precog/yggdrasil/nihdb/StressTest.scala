@@ -20,10 +20,13 @@
 package com.precog.yggdrasil
 package nihdb
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import scala.annotation.tailrec
 
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.yggdrasil.table._
 import com.precog.util.IOUtils
@@ -37,10 +40,12 @@ import blueeyes.akka_testing.FutureMatchers
 import blueeyes.bkka.FutureMonad
 import blueeyes.json._
 
+import scalaz.NonEmptyList
 import scalaz.effect.IO
 
 import java.io._
 import java.nio.ByteBuffer
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class StressTest {
   val actorSystem = ActorSystem("NIHDBActorSystem")
@@ -54,7 +59,14 @@ class StressTest {
 
   val chef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-  def newNihProjection(workDir: File, threshold: Int = 1000) = new NIHDBProjection(workDir, null, chef, threshold, actorSystem, Duration(60, "seconds"))
+  val owner: AccountId = "account999"
+
+  val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  def newNihProjection(workDir: File, threshold: Int = 1000) =
+    NIHDB.create(chef, Authorities(NonEmptyList(owner)), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map {
+      db => new NIHDBActorProjection(db)(actorSystem.dispatcher)
+    }.valueOr { e => throw new Exception(e.message) }
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
@@ -66,7 +78,7 @@ class StressTest {
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close())
+    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
 
     def finish() = {
         (for {
@@ -93,7 +105,6 @@ class StressTest {
       }
 
       var eventid: Long = _eventid
-      val owner: AccountId = "account999"
 
       startit()
 
@@ -109,7 +120,9 @@ class StressTest {
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
-        projection.insert(results.map(v => IngestRecord(eventidobj, v)), owner)
+        projection.insert(Seq((eventid, results.map(v => IngestRecord(eventidobj, v)))))
+
+
         eventid += 1L
         bb.flip()
         if (n >= 0) loop(parser)

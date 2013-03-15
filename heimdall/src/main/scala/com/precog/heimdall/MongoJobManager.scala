@@ -86,15 +86,21 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   implicit val M = new FutureMonad(executionContext)
   implicit val queryTimeout = settings.queryTimeout
 
+  // Ensure proper indices for job/message lookup
+  database(ensureIndex("jobs_index").on(".id").in(settings.jobs))
+  database(ensureIndex("apikey_index").on(".apiKey").in(settings.jobs))
+
+  database(ensureIndex("jobid_index").on(".jobId").in(settings.messages))
+
   private def newJobId(): String = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
   def createJob(apiKey: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): Future[Job] = {
-    val start = System.currentTimeMillis
+    val start = System.nanoTime
     val id = newJobId()
     val state = started map (Started(_, NotStarted)) getOrElse NotStarted
     val job = Job(id, apiKey, name, jobType, data, state)
     database(insert(job.serialize.asInstanceOf[JObject]).into(settings.jobs)) map { _ =>
-      logger.trace("Job created in %d ms".format(System.currentTimeMillis - start))
+      logger.info("Job %s created in %f ms".format(id, (System.nanoTime - start) / 1000.0))
       job
     }
   }
@@ -114,9 +120,10 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
   def updateStatus(jobId: JobId, prevStatusId: Option[StatusId],
     msg: String, progress: BigDecimal, unit: String, extra: Option[JValue]): Future[Either[String, Status]] = {
 
+    val start = System.nanoTime
     nextMessageId(jobId) flatMap { statusId =>
       prevStatusId match {
-        case Some(prevId) => 
+        case Some(prevId) =>
           database(selectAndUpdate(settings.jobs)
               .set(JPath("status") set statusId)
               .where("id" === jobId && "status" === prevId)) flatMap {
@@ -124,6 +131,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
               val status = Status(jobId, statusId, msg, progress, unit, extra)
               val message = Status.toMessage(status)
               database(insert(message.serialize.asInstanceOf[JObject]).into(settings.messages)) map { _ =>
+                logger.trace("Job %s updated in %f ms".format(jobId, (System.nanoTime - start) / 1000.0))
                 Right(status)
               }
 
@@ -213,4 +221,3 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
     }
   }
 }
-
