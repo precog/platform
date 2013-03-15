@@ -24,8 +24,6 @@ import blueeyes.json.serialization.DefaultSerialization._
 import com.ning.http.client.RequestBuilder
 import dispatch._
 import java.io._
-import org.specs2.mutable._
-import scalaz._
 import specs2._
 
 object Settings {
@@ -93,7 +91,9 @@ object Settings {
 case class Settings(host: String, id: String, token: String, accountsPort: Int,
   authPort: Int, ingestPort: Int, jobsPort: Int, shardPort: Int)
 
-case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String)
+case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String) {
+  def bareRootPath = rootPath.substring(1, rootPath.length - 1)
+}
 
 abstract class Task(settings: Settings) {
   val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
@@ -105,6 +105,10 @@ abstract class Task(settings: Settings) {
   def accounts = host(serviceHost, accountsPort) / "accounts"
 
   def security = host(serviceHost, authPort) / "apikeys"
+  
+  def metadata = host(serviceHost, shardPort) / "meta"
+
+  def ingest = host(serviceHost, ingestPort)
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
@@ -122,72 +126,7 @@ abstract class Task(settings: Settings) {
 
     Account(user, pass, accountId, apiKey, rootPath)
   }
-}
 
-class AccountsTask(settings: Settings) extends Task(settings: Settings) with Specification {
-  private val DateTimePattern = """[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z""".r
-
-  "accounts web service" should {
-    "create account" in {
-      val (user, pass) = generateUserAndPassword
-
-      val body = """{ "email": "%s", "password": "%s" }""".format(user, pass)
-      val json = getjson((accounts / "") << body)
-
-      (json \ "accountId") must beLike { case JString(_) => ok }
-    }
-
-    "not create the same account twice" in {
-      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
-
-      val body = """{ "email": "%s", "password": "%s" }""".format(user, pass + "xyz")
-      val post = (accounts / "") << body
-      val result = Http(post OK as.String)
-
-      val req = (accounts / accountId).as(user, pass + "xyz")
-      Http(req > (_.getStatusCode))() must_== 401
-    }
-
-    "describe account" in {
-      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
-
-      val json = getjson((accounts / accountId).as(user, pass))
-      (json \ "accountCreationDate") must beLike { case JString(DateTimePattern()) => ok }
-      (json \ "email") must_== JString(user)
-      (json \ "accountId") must_== JString(accountId)
-      (json \ "apiKey") must_== JString(apiKey)
-      (json \ "rootPath") must_== JString(rootPath)
-      (json \ "plan") must_== JObject(Map("type" -> JString("Free")))
-    }
-
-    "describe account fails for non-owners" in {
-      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
-
-      val bad1 = (accounts / accountId).as(user + "zzz", pass)
-      Http(bad1 > (_.getStatusCode))() must_== 401
-
-      val bad2 = (accounts / accountId).as(user, pass + "zzz")
-      Http(bad2 > (_.getStatusCode))() must_== 401
-
-      val Account(user2, pass2, accountId2, apiKey2, rootPath2) = createAccount
-      val bad3 = (accounts / accountId).as(user2, pass2)
-      Http(bad3 > (_.getStatusCode))() must_== 401
-    }
-
-    "add grant to an account" in {
-    }
-
-    "describe account's plan" in {}
-
-    "change account's plan" in {}
-
-    "change account's password" in {}
-
-    "delete account's plan" in {}
-  }
-}
-
-class SecurityTask(settings: Settings) extends Task(settings: Settings) with Specification {
   def deriveAPIKey(parent: Account, subPath: String = ""): String = {
     val body = """{"grants":[{"permissions":[{"accessType":"read","path":"%s","ownerAccountIds":["%s"]}]}]}"""
     val req = (security / "").addQueryParameter("apiKey", parent.apiKey) << {
@@ -204,78 +143,65 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
     res()
   }
 
-  "security web service" should {
-    "create derivative apikeys" in {
-      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
+  def ingestFile(account: Account, path: String, file: File, contentType: String) {
+    val req = ((ingest / "sync" / "fs" / path).POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> account.apiKey,
+                        "ownerAccountId" -> account.accountId)
+                <<< file)
+    Http(req OK as.String)()
+  }
 
-      val req = (security / "").addQueryParameter("apiKey", apiKey) << ("""
-{"name":"MH Test Write",
- "description":"Foo",
- "grants":[
-  {"name":"nameWrite",
-   "description":"descWrite",
-   "permissions":[
-    {"accessType":"write",
-     "path":"%sfoo/",
-     "ownerAccountIds":["%s"]}]}]}
-""" format (rootPath, accountId))
+  def ingestString(account: Account, data: String, contentType: String)(f: Req => Req) {
+    val req = (f(ingest / "sync" / "fs").POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> account.apiKey,
+                        "ownerAccountId" -> account.accountId)
+                << data)
 
-      val result = Http(req OK as.String)
-      val json = JParser.parseFromString(result()).valueOr(throw _)
+    Http(req OK as.String)()
+  }
 
-      (json \ "name").deserialize[String] must_== "MH Test Write"
-      (json \ "description").deserialize[String] must_== "Foo"
-      (json \ "apiKey").deserialize[String] must_!= apiKey
-      val perms = (json \ "grants").children.flatMap(o => (o \ "permissions").children)
-      perms.map(_ \ "accessType") must_== List(JString("write"))
-      perms.map(_ \ "path") must_== List(JString("%sfoo/" format rootPath))
-    }
+  def ingestString(authAPIKey: String, ownerAccount: Account, data: String, contentType: String)(f: Req => Req) = {
+    val req = (f(ingest / "sync" / "fs").POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> authAPIKey,
+                        "ownerAccountId" -> ownerAccount.accountId)
+                << data)
 
-    "list API keys" in {
-      val account = createAccount
-      val k1 = deriveAPIKey(account)
-      val k2 = deriveAPIKey(account)
-      val k3 = deriveAPIKey(account)
-      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
-      val res = Http(req OK as.String)
-      val json = JParser.parseFromString(res()).valueOr(throw _)
-      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
-      apiKeys must haveTheSameElementsAs(List(k1, k2, k3))
-    }
+    Http(req OK as.String).either()
+  }
 
-    "delete API key" in {
-      val account = createAccount
+  def deletePath(auth: String)(f: Req => Req) {
+    val req = f(ingest / "sync" / "fs").DELETE <<? List("apiKey" -> auth)
+    Http(req OK as.String)()
+  }
 
-      deleteAPIKey(account.apiKey) must not(throwA[StatusCode])
-      deriveAPIKey(account) must throwA[Exception]
-    }
-
-    "deleted child API keys are removed from API key listing" in {
-      val account = createAccount
-      val k1 = deriveAPIKey(account)
-      val k2 = deriveAPIKey(account)
-      val k3 = deriveAPIKey(account)
-
-      deleteAPIKey(k2)
-
-      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
-      val res = Http(req OK as.String)
-      val json = JParser.parseFromString(res()).valueOr(throw _)
-      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
-      apiKeys must haveTheSameElementsAs(List(k1, k3))
-    }
+  def metadataFor(apiKey: String, tpe: Option[String] = None, prop: Option[String] = None)(f: Req => Req): JValue = {
+    val params = List(
+      Some("apiKey" -> apiKey),
+      tpe map ("type" -> _),
+      prop map ("property" -> _)
+    ).flatten
+    val req = f(metadata / "fs") <<? params
+    val res = Http(req OK as.String)
+    val json = JParser.parseFromString(res()).valueOr(throw _)
+    json
   }
 }
 
 object RunAll {
   def main(args: Array[String]) {
-    val settings = Settings.fromFile(new File("shard.out"))
-    val tasks = (
-      new AccountsTask(settings) ::
-      //new SecurityTask(settings) ::
-      Nil
-    )
-
-    run(tasks: _*)
+    try {
+    val settings = Settings.fromFile(new java.io.File("shard.out"))
+      run(
+        new AccountsTask(settings),
+        new SecurityTask(settings),
+        new MetadataTask(settings),
+        new ScenariosTask(settings)
+      )
+    } finally {
+      Http.shutdown()
+    }
   }
 }
