@@ -92,8 +92,7 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
   def getSnapshot(): Future[NIHDBSnapshot] =
     (actor ? GetSnapshot).mapTo[NIHDBSnapshot]
 
-  // TODO: We should require an `Option[Set[(CPath, CType)]]`.
-  def getBlockAfter(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
+  def getBlockAfter(id: Option[Long], cols: Option[Set[ColumnRef]]): Future[Option[Block]] =
     getSnapshot().map(_.getBlockAfter(id, cols))
 
   def getBlock(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
