@@ -18,6 +18,7 @@ class SimpleCache[K, V] (private val backing: GCache[K, V]) extends Map[K, V] {
   def -= (key: K) = { backing.invalidate(key); this }
   def get(key: K): Option[V] = Option(backing.getIfPresent(key))
   def iterator: Iterator[(K, V)] = backing.asMap.entrySet.iterator.asScala.map { kv => (kv.getKey, kv.getValue) }
+  def invalidateAll = backing.invalidateAll
 }
 
 class AutoCache[K, V] (private val backing: LoadingCache[K, V]) extends Map[K, V] {
@@ -25,6 +26,7 @@ class AutoCache[K, V] (private val backing: LoadingCache[K, V]) extends Map[K, V
   def -= (key: K) = { backing.invalidate(key); this }
   def get (key: K): Option[V] = getFull(key).toOption
   def iterator: Iterator[(K, V)] = backing.asMap.entrySet.iterator.asScala.map { kv => (kv.getKey, kv.getValue) }
+  def invalidateAll = backing.invalidateAll
 
   def getFull(key: K): Validation[Throwable, V] = Validation.fromTryCatch {
     backing.get(key)
