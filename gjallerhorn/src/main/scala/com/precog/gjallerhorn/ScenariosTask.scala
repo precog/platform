@@ -26,6 +26,7 @@ import dispatch._
 
 import org.specs2.mutable._
 import org.specs2.execute.EventuallyResults
+import specs2._
 
 import scalaz._
 
@@ -151,3 +152,17 @@ class ScenariosTask(settings: Settings) extends Task(settings: Settings) with Sp
     }
   }
 }
+
+object RunScenarios {
+  def main(args: Array[String]) {
+    try {
+      val settings = Settings.fromFile(new java.io.File("shard.out"))
+      run(
+        new ScenariosTask(settings)
+      )
+    } finally {
+      Http.shutdown()
+    }
+  }
+}
+

@@ -21,13 +21,9 @@ package com.precog.gjallerhorn
 
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
-import com.ning.http.client.RequestBuilder
 import dispatch._
 import java.io._
-import org.specs2.mutable._
-import scalaz._
 import specs2._
-import org.specs2.execute.EventuallyResults
 
 object Settings {
   private val IdRegex = """^id (.+)$""".r
@@ -176,86 +172,6 @@ abstract class Task(settings: Settings) {
     val res = Http(req OK as.String)
     val json = JParser.parseFromString(res()).valueOr(throw _)
     json
-  }
-}
-
-class AccountsTask(settings: Settings) extends Task(settings: Settings) with Specification {
-  "accounts web service" should {
-    "create accounts" in {
-      val (user, pass) = generateUserAndPassword
-
-      val post = (accounts / "") << """{ "email": "%s", "password": "%s" }""".format(user, pass)
-      val result = Http(post OK as.String)
-      val json = JParser.parseFromString(result())
-
-      json must beLike {
-        case Success(jobj) => (jobj \ "accountId") must beLike { case JString(_) => ok }
-      }
-    }
-  }
-}
-
-class SecurityTask(settings: Settings) extends Task(settings: Settings) with Specification {
-  "security web service" should {
-    "create derivative apikeys" in {
-      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
-
-      val req = (security / "").addQueryParameter("apiKey", apiKey) << ("""
-{"name":"MH Test Write",
- "description":"Foo",
- "grants":[
-  {"name":"nameWrite",
-   "description":"descWrite",
-   "permissions":[
-    {"accessType":"write",
-     "path":"%sfoo/",
-     "ownerAccountIds":["%s"]}]}]}
-""" format (rootPath, accountId))
-
-      val result = Http(req OK as.String)
-      val json = JParser.parseFromString(result()).valueOr(throw _)
-
-      (json \ "name").deserialize[String] must_== "MH Test Write"
-      (json \ "description").deserialize[String] must_== "Foo"
-      (json \ "apiKey").deserialize[String] must_!= apiKey
-      val perms = (json \ "grants").children.flatMap(o => (o \ "permissions").children)
-      perms.map(_ \ "accessType") must_== List(JString("write"))
-      perms.map(_ \ "path") must_== List(JString("%sfoo/" format rootPath))
-    }
-
-    "list API keys" in {
-      val account = createAccount
-      val k1 = deriveAPIKey(account)
-      val k2 = deriveAPIKey(account)
-      val k3 = deriveAPIKey(account)
-      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
-      val res = Http(req OK as.String)
-      val json = JParser.parseFromString(res()).valueOr(throw _)
-      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
-      apiKeys must haveTheSameElementsAs(List(k1, k2, k3))
-    }
-
-    "delete API key" in {
-      val account = createAccount
-
-      deleteAPIKey(account.apiKey) must not(throwA[StatusCode])
-      deriveAPIKey(account) must throwA[Exception]
-    }
-
-    "deleted child API keys are removed from API key listing" in {
-      val account = createAccount
-      val k1 = deriveAPIKey(account)
-      val k2 = deriveAPIKey(account)
-      val k3 = deriveAPIKey(account)
-
-      deleteAPIKey(k2)
-
-      val req = (security / "").addQueryParameter("apiKey", account.apiKey)
-      val res = Http(req OK as.String)
-      val json = JParser.parseFromString(res()).valueOr(throw _)
-      val apiKeys = json.children map { obj => (obj \ "apiKey").deserialize[String] }
-      apiKeys must haveTheSameElementsAs(List(k1, k3))
-    }
   }
 }
 

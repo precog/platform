@@ -185,3 +185,16 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
     }
   }
 }
+
+object RunMetadata {
+  def main(args: Array[String]) {
+    try {
+      val settings = Settings.fromFile(new java.io.File("shard.out"))
+      run(
+        new MetadataTask(settings)
+      )
+    } finally {
+      Http.shutdown()
+    }
+  }
+}
