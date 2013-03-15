@@ -1,0 +1,6 @@
+/etc/precog/shard-v2-beta-b.conf=beta-b/shard-v2.conf
+default=beta-b/shard-v2.default
+init=beta-b/shard-v2.init
+/etc/monit/conf.d/shard-v2-beta-b.monit=beta-b/shard-v2.monit
+/etc/precog/shard-v2-beta-b.logging.xml=beta-b/shard-v2.logging.xml
+postinstall=beta-b/postinstall.sh

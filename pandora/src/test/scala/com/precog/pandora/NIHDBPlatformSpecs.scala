@@ -1,7 +1,7 @@
 package com.precog.pandora
 
 import com.precog.common.Path
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 import com.precog.common.accounts._
 import com.precog.common.kafka._
 import com.precog.common.security._
@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory
 
 import org.specs2.mutable._
 import org.specs2.specification.Fragments
-  
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.monad._
@@ -86,7 +86,7 @@ object NIHDBPlatformActor extends Logging {
     users.getAndIncrement
 
     if (state.isEmpty) {
-      logger.info("Allocating new projections actor")
+      logger.info("Allocating new projections actor in " + this.hashCode)
       state = {
         val actorSystem = ActorSystem("NIHDBPlatformActor")
         val storageTimeout = Timeout(300 * 1000)
@@ -95,11 +95,13 @@ object NIHDBPlatformActor extends Logging {
           def copoint[A](f: Future[A]) = Await.result(f, storageTimeout.duration)
         }
 
-        val accessControl = new UnrestrictedAccessControl[Future]
+        val accountFinder = new StaticAccountFinder[Future]("", "", Some("/"))
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
+        val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, accessControl)))
+        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
 
         Some(SystemState(projectionsActor, actorSystem))
       }
@@ -112,12 +114,13 @@ object NIHDBPlatformActor extends Logging {
     users.getAndDecrement
 
     // Allow for a grace period
-    state.foreach { case SystemState(_, as) => as.scheduler.scheduleOnce(Duration(60, "seconds")) { checkUnused }}
+    state.foreach { case SystemState(_, as) => as.scheduler.scheduleOnce(Duration(5, "seconds")) { checkUnused }}
   }
 
   def checkUnused = users.synchronized {
+    logger.debug("Checking for unused projectionsActor. Count = " + users.get)
     if (users.get == 0) {
-      state.foreach { 
+      state.foreach {
         case SystemState(projectionsActor, actorSystem) =>
           logger.info("Culling unused projections actor")
           Await.result(gracefulStop(projectionsActor, Duration(5, "minutes"))(actorSystem), Duration(3, "minutes"))
@@ -128,13 +131,13 @@ object NIHDBPlatformActor extends Logging {
   }
 }
 
-trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future] 
+trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
     with LongIdMemoryDatasetConsumer[Future]
-    with NIHDBColumnarTableModule 
+    with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource { self =>
-      
+
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-      
+
   lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
@@ -155,7 +158,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val accountFinder = None
 
-  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) = 
+  def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
@@ -182,7 +185,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   object Table extends TableCompanion
 
   def startup() { }
-  
+
   def shutdown() {
     NIHDBPlatformActor.release
   }

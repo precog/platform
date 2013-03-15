@@ -1,0 +1,6 @@
+/etc/precog/auth-v1-b.conf=dev-b/dev-auth-v1.conf
+default=dev-b/dev-auth-v1.default
+init=dev-b/dev-auth-v1.init
+/etc/monit/conf.d/auth-v1-b.monit=dev-b/dev-auth-v1.monit
+/etc/precog/auth-v1-b.logging.xml=dev-b/dev-auth-v1.logging.xml
+postinstall=dev-b/postinstall.sh

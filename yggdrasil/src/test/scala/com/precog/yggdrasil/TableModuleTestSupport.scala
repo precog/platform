@@ -1,7 +1,7 @@
 package com.precog.yggdrasil
 
 import table._
-import com.precog.common.VectorCase
+import com.precog.util.VectorCase
 
 import akka.dispatch.Future
 import blueeyes.json._

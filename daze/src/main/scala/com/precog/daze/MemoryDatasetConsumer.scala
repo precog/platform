@@ -1,6 +1,7 @@
 package com.precog.daze
 
-import com.precog.common.{ Path, VectorCase }
+import com.precog.common.Path
+import com.precog.util.VectorCase
 import com.precog.common.security._
 
 import com.precog.yggdrasil._

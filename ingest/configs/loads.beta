@@ -1,6 +1,6 @@
-/etc/precog/ingest-v1-beta.conf=beta/ingest-v1-beta.conf
-default=beta/ingest-v1-beta.default
-init=beta/ingest-v1-beta.init
-/etc/monit/conf.d/ingest-v1-beta.monit=beta/ingest-v1-beta.monit
-/etc/precog/ingest-v1-beta.logging.xml=beta/ingest-v1-beta.logging.xml
+/etc/precog/ingest-v2-beta.conf=beta/ingest-v2.conf
+default=beta/ingest-v2.default
+init=beta/ingest-v2.init
+/etc/monit/conf.d/ingest-v2-beta.monit=beta/ingest-v2.monit
+/etc/precog/ingest-v2-beta.logging.xml=beta/ingest-v2.logging.xml
 postinstall=beta/postinstall.sh

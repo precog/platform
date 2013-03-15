@@ -4,6 +4,7 @@ package daze
 import scala.collection.mutable
 
 import com.precog.util.IdGen
+import com.precog.util.Timing
 import com.precog.common._
 
 trait JoinOptimizer extends DAGTransform {
@@ -30,6 +31,8 @@ trait JoinOptimizer extends DAGTransform {
           merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
 
         case Filter(IdentitySort, body, _) => determinedByAux(body, determiner)
+
+        case Operate(_, body) => determinedByAux(body, determiner)
         
         case Memoize(parent, _) => determinedByAux(parent, determiner)
     
