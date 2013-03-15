@@ -387,5 +387,27 @@ trait ClusteringSpecs extends EvalStackSpecs {
           }
       }
     }
+    
+    "evaluate an invalid clustering query without exploding" in {
+      val input = """
+        | locations := //devices
+        | 
+        | model := std::stats::kMedians({x: locations.x, y: locations.y }, 5)
+        | std::stats::assignClusters(model, locations)
+        | """.stripMargin
+        
+      eval(input) must beEmpty
+    }
+    
+    "evaluate an valid clustering query without exploding" in {
+      val input = """
+        | locations := //devices
+        | 
+        | model := std::stats::kMedians({x: locations.x, y: locations.y }, 5)
+        | std::stats::assignClusters(locations, model)
+        | """.stripMargin
+        
+      eval(input) must not(beEmpty)
+    }
   }
 }

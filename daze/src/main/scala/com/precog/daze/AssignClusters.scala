@@ -116,7 +116,13 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
             }
           }
 
-          range.toList map { i => ModelSet(rowIdentities(i), rowModels(i)) }
+          range.toList flatMap { i =>
+            val models = rowModels(i)
+            if (models.isEmpty)
+              None
+            else
+              Some(ModelSet(rowIdentities(i), models))
+          }
         }
       }
 
