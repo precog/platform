@@ -322,10 +322,12 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
         logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
       } else {
         val (skipValues, keepValues) = batch.partition(_._1 <= currentState.maxOffset)
-        val values = keepValues.flatMap(_._2)
-        val offset = keepValues.map(_._1).max
+        if (keepValues.isEmpty) {
+          logger.debug("Skipping entirely seen batch of %d rows prior to offset %d".format(batch.flatMap(_._2).size, currentState.maxOffset))
+        } else {
+          val values = keepValues.flatMap(_._2)
+          val offset = keepValues.map(_._1).max
 
-        if (offset > currentState.maxOffset) {
           logger.debug("Inserting %d rows, skipping %d rows at offset %d for %s".format(values.length, skipValues.length, offset, baseDir.getCanonicalPath))
           blockState.rawLog.write(offset, values)
 
@@ -343,8 +345,6 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
             chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
           }
           logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
-        } else {
-          logger.debug("Skipping %d existing rows at offset %d".format(values.size, offset))
         }
       }
       sender ! ()
