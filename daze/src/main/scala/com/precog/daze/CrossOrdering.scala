@@ -97,6 +97,9 @@ trait CrossOrdering extends DAG {
         case node @ dag.Assert(pred, child) =>
           dag.Assert(memoized(pred, splits), memoized(child, splits))(node.loc)
         
+        case node @ dag.Cond(pred, left, leftJoin, right, rightJoin) =>
+          dag.Cond(memoized(pred, splits), memoized(left, splits), leftJoin, memoized(right, splits), rightJoin)(node.loc)
+        
         case node @ dag.Observe(data, samples) =>
           dag.Observe(memoized(data, splits), memoized(samples, splits))(node.loc)
         
