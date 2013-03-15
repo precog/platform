@@ -64,6 +64,8 @@ object QueryServiceHandler {
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
+  logger.debug("Created QueryServiceHandler")
+
   def platform: Platform[Future, A]
   def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
 
@@ -80,6 +82,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   }
 
   lazy val service = (request: HttpRequest[Future[JValue]]) => {
+    logger.debug("Servicing " + request)
     success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
       case Command("ls", arg) => list(apiKey, Path(arg.trim))
       case Command("list", arg) => list(apiKey, Path(arg.trim))

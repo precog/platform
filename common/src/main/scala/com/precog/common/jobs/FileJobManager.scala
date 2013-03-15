@@ -31,7 +31,7 @@ import blueeyes.json.serialization.Extractor._
 
 import com.google.common.cache.RemovalCause
 
-import com.precog.common.cache.Cache
+import com.precog.common.cache.{Cache, SimpleCache}
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.util._
@@ -69,7 +69,7 @@ class FileJobManager[M[+_]](workDir: File, monadM: Monad[M])
   val fs = this
 
   import Cache._
-  private[this] val cache: mutable.Map[JobId, FileJobState] = Cache.simple[JobId, FileJobState](
+  private[this] val cache: SimpleCache[JobId, FileJobState] = Cache.simple[JobId, FileJobState](
     ExpireAfterAccess(Duration(5, "minutes")),
     OnRemoval({ (jobId, job, reason) =>
       if (reason != RemovalCause.REPLACED) {
@@ -79,6 +79,8 @@ class FileJobManager[M[+_]](workDir: File, monadM: Monad[M])
       PrecogUnit
     })
   )
+
+  def shutdown = cache.invalidateAll
 
   private[this] def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 

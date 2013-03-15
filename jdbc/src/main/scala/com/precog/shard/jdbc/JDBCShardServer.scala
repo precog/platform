@@ -29,9 +29,8 @@ import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
+import com.precog.common.jobs.JobManager
 import com.precog.standalone.StandaloneShardServer
-
-import com.precog.common.security._
 
 object JDBCShardServer extends StandaloneShardServer {
   val caveatMessage = Some("""
@@ -54,8 +53,7 @@ Please note that path globs are not yet supported in Precog for PostgreSQL
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = M.point {
-    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    BasicShardState(JDBCQueryExecutor(config.detach("queryExecutor")), apiKeyFinder, Stoppable.fromFuture(Future(())))
-  }
+  def platformFor(config: Configuration, jobManager: JobManager[Future]) =
+    (new JDBCQueryExecutor(new JDBCQueryExecutorConfig(config.detach("queryExecutor")), jobManager, actorSystem),
+     Stoppable.fromFuture(Future(())))
 }

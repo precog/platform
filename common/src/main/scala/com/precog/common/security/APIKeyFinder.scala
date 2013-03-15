@@ -70,7 +70,7 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
         val ancestorKeys = ancestors.drop(1).map(_.apiKey) // The first element of ancestors is the key itself, so we drop it
         grantIds.map(underlying.findGrant).sequence map { grants =>
           val divulgedIssuers = rootKey.map { rk => ancestorKeys.reverse.dropWhile(_ != rk).reverse }.getOrElse(Nil)
-          logger.debug("Divulging issuers %s based on root key %s and ancestors %s".format(divulgedIssuers, rootKey, ancestorKeys))
+          logger.debug("Divulging issuers %s for key %s based on root key %s and ancestors %s".format(divulgedIssuers, apiKey, rootKey, ancestorKeys))
           v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails, divulgedIssuers)
         }
       }

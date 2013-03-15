@@ -29,7 +29,7 @@ import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
-import com.precog.common.jobs.InMemoryJobManager
+import com.precog.common.jobs.JobManager
 import com.precog.common.accounts.StaticAccountFinder
 import com.precog.common.security.StaticAPIKeyFinder
 import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
@@ -44,21 +44,14 @@ object DesktopShardServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = Future {
-    val apiKeyFinder = new StaticAPIKeyFinder(config[String]("security.masterAccount.apiKey"))
+  def platformFor(config: Configuration, jobManager: JobManager[Future]) = {
     val accountFinder = new StaticAccountFinder("desktop")
-    val jobManager = new InMemoryJobManager
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinderFor(config), accountFinder, jobManager)
 
     val stoppable = Stoppable.fromFuture {
       platform.shutdown
     }
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
-  } recoverWith {
-    case ex: Throwable =>
-      System.err.println("Could not start NIHDB Shard server!!!")
-      ex.printStackTrace
-      Promise.failed(ex)
+    (platform, stoppable)
   }
 }

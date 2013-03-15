@@ -25,14 +25,15 @@ import blueeyes.json.serialization._
 import DefaultSerialization._
 
 import com.precog.common._
+import com.precog.common.jobs._
 import com.precog.common.json._
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
+import com.precog.standalone._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
@@ -65,40 +66,22 @@ import scalaz.syntax.std.option._
 import scala.collection.JavaConverters._
 
 class JDBCQueryExecutorConfig(val config: Configuration)
-  extends BaseConfig
-  with ColumnarTableModuleConfig
-  with JDBCColumnarTableModuleConfig
-  with BlockStoreColumnarTableModuleConfig
-  with ShardQueryExecutorConfig
-  with IdSourceConfig
-  with ShardConfig {
-    
-  val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
-  val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
-
-  val shardId = "standalone"
+    extends StandaloneQueryExecutorConfig
+    with JDBCColumnarTableModuleConfig {
   val logPrefix = "jdbc"
 
-  val idSource = new FreshAtomicIdSource
-
   val dbMap = config.detach("databases").data
-
-  def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
-
-  val clock = blueeyes.util.Clock.System
-
-  val ingestConfig = None
 }
 
 object JDBCQueryExecutor {
-  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
-    new JDBCQueryExecutor(new JDBCQueryExecutorConfig(config))
-  }  
+  def apply(config: Configuration, jobManager: JobManager[Future], jobActorSystem: ActorSystem)(implicit ec: ExecutionContext, M: Monad[Future]): ManagedPlatform = {
+    new JDBCQueryExecutor(new JDBCQueryExecutorConfig(config), jobManager, jobActorSystem)
+  }
 }
 
-class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, extM: Monad[Future])
-    extends ShardQueryExecutorPlatform[Future] 
-    with JDBCColumnarTableModule 
+class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: JobManager[Future], val jobActorSystem: ActorSystem)(implicit val executionContext: ExecutionContext, val M: Monad[Future])
+    extends StandaloneQueryExecutor
+    with JDBCColumnarTableModule
     with Logging { platform =>
   type YggConfig = JDBCQueryExecutorConfig
 
@@ -113,27 +96,23 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
   lazy val storage = new JDBCStorageMetadataSource(yggConfig.dbMap)
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
-  // to satisfy abstract defines in parent traits
-  val asyncContext = extAsyncContext
-  val M = extM
-
   def startup() = Promise.successful(true)
   def shutdown() = Promise.successful(true)
 
-  implicit val nt = NaturalTransformation.refl[Future]
-  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
-    val M = platform.M
-    type YggConfig = platform.YggConfig
-    val yggConfig = platform.yggConfig
-    val queryReport = LoggingQueryLogger[Future](M)
-  }
-
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(executor))
-  }
-
   val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Promise.successful(Failure("Size not yet supported"))
+    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Future {
+      // TODO: Make this generic. Current code only works for PostgreSQL
+      path.elements.toList match {
+        case Nil =>
+          Success(JNum(0))
+
+        case _ => sys.error("todo")
+      }
+
+    }.onFailure {
+      case t => logger.error("Failure during size", t)
+    }
+
     def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
       Future {
         path.elements.toList match {
@@ -166,6 +145,8 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig)(implicit extAsyn
           case _ =>
             Failure("JDBC paths have the form /databaseName/tableName; longer paths are not supported.")
         }
+      }.onFailure {
+        case t => logger.error("Failure during size", t)
       }
     }
 
