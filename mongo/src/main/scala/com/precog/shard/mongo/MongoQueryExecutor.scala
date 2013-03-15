@@ -141,6 +141,9 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig, val jobManager
             val db = Table.mongo.getDB(dbName)
             Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
+          case dbName :: collectionName :: Nil =>
+            Success(JArray(Nil))
+
           case _ =>
             Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
         }

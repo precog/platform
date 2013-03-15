@@ -101,14 +101,35 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
 
   val metadataClient = new MetadataClient[Future] {
     def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Future {
-      // TODO: Make this generic. Current code only works for PostgreSQL
       path.elements.toList match {
-        case Nil =>
+        case dbName :: tableName :: Nil =>
+          yggConfig.dbMap.get(dbName).toSuccess("DB %s is not configured".format(dbName)) flatMap { url =>
+            Validation.fromTryCatch {
+              val conn = DriverManager.getConnection(url)
+
+              try {
+                // May need refinement to get meaningful results
+                val stmt = conn.createStatement
+
+                val query = "SELECT count(*) as count FROM " + tableName.filterNot(_ == ';')
+                logger.debug("Querying with " + query)
+
+                val result = stmt.executeQuery(query)
+
+                if (result.next) {
+                  JNum(result.getLong("count"))
+                } else {
+                  JNum(0)
+                }
+              } finally {
+                conn.close()
+              }
+            }.bimap({ t => logger.error("Error enumerating tables", t); t.getMessage }, x => x)
+          }
+
+        case _ =>
           Success(JNum(0))
-
-        case _ => sys.error("todo")
       }
-
     }.onFailure {
       case t => logger.error("Failure during size", t)
     }
@@ -141,6 +162,9 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
                 }
               }.bimap({ t => logger.error("Error enumerating tables", t); t.getMessage }, x => x)
             }
+
+          case dbName :: collectionName :: Nil =>
+            Success(JArray(Nil))
 
           case _ =>
             Failure("JDBC paths have the form /databaseName/tableName; longer paths are not supported.")
