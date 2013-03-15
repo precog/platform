@@ -51,7 +51,6 @@ Please note that path globs are not yet supported in Precog for MongoDB
 
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
   implicit val executionContext = actorSystem.dispatcher
-  logger.debug("Starting server with context: " + executionContext)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
   def platformFor(config: Configuration, jobManager: JobManager[Future]) =

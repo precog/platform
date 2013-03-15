@@ -54,14 +54,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
    * than a `StreamT[Future, CharBuffer]`.
    */
   def asynchronous: AsyncPlatform[Future] = {
-    logger.debug("Creating new async platform")
     new AsyncPlatform[Future] {
-      def executorFor(apiKey: APIKey) = {
-        logger.debug("Obtaining async executor")
-        self.asyncExecutorFor(apiKey).tap { executor =>
-          logger.debug("Obtained executor %s for key %s".format(executor, apiKey))
-        }
-      }
+      def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
       def metadataClient = self.metadataClient
     }
   }

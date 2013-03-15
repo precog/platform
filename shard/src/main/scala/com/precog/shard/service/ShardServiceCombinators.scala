@@ -171,7 +171,6 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
           )
 
           query map { q =>
-            logger.debug("Servicing query")
             next.service(request) map { f => (apiKey: APIKey, path: Path) => f(apiKey, path, q, opts) }
           } getOrElse {
             failure(inapplicable)
@@ -188,9 +187,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
       val delegate = query[A, B](next)
       val service = { (request: HttpRequest[A]) =>
-        logger.debug("Servicing async query for " + request)
         val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
-        logger.debug("async query path = " + path)
         delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
           (apiKey: APIKey) => f(apiKey, Path(path))
         }

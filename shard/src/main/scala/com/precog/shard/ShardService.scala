@@ -127,7 +127,6 @@ trait ShardService extends
   }
 
   private def asyncQueryService(state: ShardState) = {
-    logger.debug("Handling new async query with executionContext = " + executionContext)
     state match {
       case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, _, DisableAsyncQueries) =>
         new QueryServiceNotAvailable
