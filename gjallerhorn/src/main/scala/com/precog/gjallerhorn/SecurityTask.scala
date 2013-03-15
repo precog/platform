@@ -89,15 +89,6 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
   }
 }
 
-object RunSecurity {
-  def main(args: Array[String]) {
-    try {
-    val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new SecurityTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunSecurity extends Runner {
+  def tasks(settings: Settings) = new SecurityTask(settings) :: Nil
 }

@@ -24,6 +24,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import com.ning.http.client.RequestBuilder
 import dispatch._
 import java.io._
+import org.specs2.mutable.Specification
 import specs2._
 
 object Settings {
@@ -95,7 +96,7 @@ case class Account(user: String, password: String, accountId: String, apiKey: St
   def bareRootPath = rootPath.substring(1, rootPath.length - 1)
 }
 
-abstract class Task(settings: Settings) {
+abstract class Task(settings: Settings) extends Specification {
   val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
 
   def text(n: Int) = scala.util.Random.alphanumeric.take(12).mkString
@@ -190,18 +191,11 @@ abstract class Task(settings: Settings) {
   }
 }
 
-object RunAll {
-  def main(args: Array[String]) {
-    try {
-    val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new AccountsTask(settings),
-        new SecurityTask(settings),
-        new MetadataTask(settings),
-        new ScenariosTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunAll extends Runner {
+  def tasks(settings: Settings) = List(
+    new AccountsTask(settings),
+    new SecurityTask(settings),
+    new MetadataTask(settings),
+    new ScenariosTask(settings)
+  )
 }

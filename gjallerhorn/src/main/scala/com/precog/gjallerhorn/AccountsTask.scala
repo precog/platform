@@ -88,15 +88,6 @@ class AccountsTask(settings: Settings) extends Task(settings: Settings) with Spe
   }
 }
 
-object RunAccounts {
-  def main(args: Array[String]) {
-    try {
-    val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new AccountsTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunAccounts extends Runner {
+  def tasks(settings: Settings) = new AccountsTask(settings) :: Nil
 }
