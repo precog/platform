@@ -21,6 +21,7 @@ package com.precog.gjallerhorn
 
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
+import com.ning.http.client.RequestBuilder
 import dispatch._
 import java.io._
 import org.specs2.mutable._
@@ -37,12 +38,24 @@ object Settings {
   private val ShardPort = """^shard (\d+)$""".r
 
   def fromFile(f: File): Settings = {
+    if (!f.canRead) sys.error("Can't read %s. Is shard running?" format f)
+
     case class PartialSettings(
       host: Option[String] = None,
       id: Option[String] = None, token: Option[String] = None,
       accountsPort: Option[Int] = None, authPort: Option[Int] = None,
       ingestPort: Option[Int] = None, jobsPort: Option[Int] = None,
       shardPort: Option[Int] = None) {
+
+      def missing: List[String] = {
+        def q(o: Option[_], s: String): List[String] =
+          if (o.isDefined) Nil else s :: Nil
+
+        q(host, "host") ++ q(id, "id") ++ q(token, "token") ++
+        q(accountsPort, "accountsPort") ++ q(authPort, "authPort") ++
+        q(ingestPort, "ingestPort") ++ q(jobsPort, "jobsPort") ++
+        q(shardPort, "shardPort")
+      }
 
       def settings: Option[Settings] = for {
         h <- host
@@ -71,11 +84,14 @@ object Settings {
         case _ => ps
       }
     }
-    ps.settings.getOrElse(sys.error("missing settings in %s: %s" format (f, ps)))
+    ps.settings.getOrElse {
+      sys.error("missing settings in %s:\n  %s" format (f, ps.missing.mkString("\n  ")))
+    }
   }
 }
 
-case class Settings(host: String, id: String, token: String, accountsPort: Int, authPort: Int, ingestPort: Int, jobsPort: Int, shardPort: Int)
+case class Settings(host: String, id: String, token: String, accountsPort: Int,
+  authPort: Int, ingestPort: Int, jobsPort: Int, shardPort: Int)
 
 case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String)
 
@@ -90,18 +106,17 @@ abstract class Task(settings: Settings) {
 
   def security = host(serviceHost, authPort) / "apikeys"
 
+  def getjson(rb: RequestBuilder) =
+    JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
+
   def createAccount: Account = {
     val (user, pass) = generateUserAndPassword
 
-    val post = (accounts / "") << """{ "email": "%s", "password": "%s" }""".format(user, pass)
-
-    val req = Http(post OK as.String)
-    val json = JParser.parseFromString(req()).valueOr(throw _)
+    val body = """{ "email": "%s", "password": "%s" }""".format(user, pass)
+    val json = getjson((accounts / "") << body)
     val accountId = (json \ "accountId").deserialize[String]
 
-    val xyz = (accounts / accountId).as(user, pass)
-    val result: Promise[String] = Http(xyz OK as.String)
-    val json2 = JParser.parseFromString(result()).valueOr(throw _)
+    val json2 = getjson((accounts / accountId).as(user, pass))
     val apiKey = (json2 \ "apiKey").deserialize[String]
     val rootPath = (json2 \ "rootPath").deserialize[String]
 
@@ -110,18 +125,65 @@ abstract class Task(settings: Settings) {
 }
 
 class AccountsTask(settings: Settings) extends Task(settings: Settings) with Specification {
+  private val DateTimePattern = """[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z""".r
+
   "accounts web service" should {
-    "create accounts" in {
+    "create account" in {
       val (user, pass) = generateUserAndPassword
 
-      val post = (accounts / "") << """{ "email": "%s", "password": "%s" }""".format(user, pass)
-      val result = Http(post OK as.String)
-      val json = JParser.parseFromString(result())
+      val body = """{ "email": "%s", "password": "%s" }""".format(user, pass)
+      val json = getjson((accounts / "") << body)
 
-      json must beLike {
-        case Success(jobj) => (jobj \ "accountId") must beLike { case JString(_) => ok }
-      }
+      (json \ "accountId") must beLike { case JString(_) => ok }
     }
+
+    "not create the same account twice" in {
+      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
+
+      val body = """{ "email": "%s", "password": "%s" }""".format(user, pass + "xyz")
+      val post = (accounts / "") << body
+      val result = Http(post OK as.String)
+
+      val req = (accounts / accountId).as(user, pass + "xyz")
+      Http(req > (_.getStatusCode))() must_== 401
+    }
+
+    "describe account" in {
+      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
+
+      val json = getjson((accounts / accountId).as(user, pass))
+      (json \ "accountCreationDate") must beLike { case JString(DateTimePattern()) => ok }
+      (json \ "email") must_== JString(user)
+      (json \ "accountId") must_== JString(accountId)
+      (json \ "apiKey") must_== JString(apiKey)
+      (json \ "rootPath") must_== JString(rootPath)
+      (json \ "plan") must_== JObject(Map("type" -> JString("Free")))
+    }
+
+    "describe account fails for non-owners" in {
+      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
+
+      val bad1 = (accounts / accountId).as(user + "zzz", pass)
+      Http(bad1 > (_.getStatusCode))() must_== 401
+
+      val bad2 = (accounts / accountId).as(user, pass + "zzz")
+      Http(bad2 > (_.getStatusCode))() must_== 401
+
+      val Account(user2, pass2, accountId2, apiKey2, rootPath2) = createAccount
+      val bad3 = (accounts / accountId).as(user2, pass2)
+      Http(bad3 > (_.getStatusCode))() must_== 401
+    }
+
+    "add grant to an account" in {
+    }
+
+    "describe account's plan" in {}
+
+    "change account's plan" in {}
+
+    "change account's password" in {}
+
+    "delete account's plan" in {}
   }
 }
 
@@ -207,10 +269,13 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
 
 object RunAll {
   def main(args: Array[String]) {
-    val settings = Settings.fromFile(new java.io.File("shard.out"))
-    run(
-      new AccountsTask(settings),
-      new SecurityTask(settings)
+    val settings = Settings.fromFile(new File("shard.out"))
+    val tasks = (
+      new AccountsTask(settings) ::
+      //new SecurityTask(settings) ::
+      Nil
     )
+
+    run(tasks: _*)
   }
 }
