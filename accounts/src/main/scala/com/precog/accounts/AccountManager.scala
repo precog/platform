@@ -59,7 +59,8 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
       child.parentId map { id =>
         findAccountById(id) flatMap {
           case None => false.point[M]
-          case Some(parent) => hasAncestor(parent, ancestor)
+          case Some(`child`) => false.point[M] // avoid infinite loops
+          case Some(parent) => hasAncestor(parent, ancestor) 
         }
       } getOrElse {
         false.point[M]
