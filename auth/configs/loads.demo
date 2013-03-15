@@ -1,6 +1,0 @@
-/etc/precog/auth-v1-demo.conf=demo/auth-v1.conf
-default=demo/auth-v1.default
-init=demo/auth-v1.init
-/etc/monit/conf.d/auth-v1-demo.monit=demo/auth-v1.monit
-/etc/precog/auth-v1-demo.logging.xml=demo/auth-v1.logging.xml
-postinstall=demo/postinstall.sh
