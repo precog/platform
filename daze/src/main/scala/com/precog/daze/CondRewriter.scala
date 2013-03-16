@@ -17,22 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package daze
 
-import com.precog.common._
-import com.precog.util._
+trait CondRewriter extends DAG {
+  import instructions._
+  import dag._
 
-trait StorageReader {
-  def snapshot(pathConstraints: Option[Set[CPath]]): Block
-  def snapshotRef(refConstraints: Option[Set[ColumnRef]]): Block
-  def structure: Iterable[(CPath, CType)]
-
-  def isStable: Boolean
-
-  def id: Long
-
-  /**
-   * Returns the total length of the block.
-   */
-  def length: Int
+  def rewriteConditionals(node: DepGraph): DepGraph = {
+    node mapDown { recurse => {
+      case peer @ IUI(true, Filter(leftJoin, left, pred1), Filter(rightJoin, right, Operate(Comp, pred2))) if pred1 == pred2 => 
+        Cond(recurse(pred1), recurse(left), leftJoin, recurse(right), rightJoin)(peer.loc)
+    }}
+  }
 }

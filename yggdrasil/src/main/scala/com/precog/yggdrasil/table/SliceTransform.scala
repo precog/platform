@@ -452,6 +452,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             val typed = Typed(elements.head, JArrayUnfixedT)
             composeSliceTransform2(typed)
           } else {
+            try {
             elements.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
@@ -478,6 +479,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                   }
                 }
               }
+            }
+            } catch {
+              case t: StackOverflowError =>
+                println(spec)
+                throw t
             }
           }
 
@@ -571,6 +577,46 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
           val keyTransform = composeSliceTransform2(definedFor)
 
           sourceTransform.zip(keyTransform) { (s1, s2) => s1.filterDefined(s2, definedness) }
+          
+        case Cond(pred, left, right) => {
+          val predTransform = composeSliceTransform2(pred)
+          val leftTransform = composeSliceTransform2(left)
+          val rightTransform = composeSliceTransform2(right)
+          
+          predTransform.zip2(leftTransform, rightTransform) { (predS, leftS, rightS) =>
+            new Slice {
+              val size = predS.size
+              
+              val columns: Map[ColumnRef, Column] = {
+                predS.columns get ColumnRef(CPath.Identity, CBoolean) map { predC =>
+                  val leftMask = predC.asInstanceOf[BoolColumn].asBitSet(false, size)
+                  
+                  val rightMask = predC.asInstanceOf[BoolColumn].asBitSet(true, size)
+                  rightMask.flip(0, size)
+                  
+                  val grouped = (leftS.columns mapValues { _ :: Nil }) cogroup (rightS.columns mapValues { _ :: Nil })
+                  
+                  val joined: Map[ColumnRef, Column] = grouped.map({
+                    case (ref, Left3(col)) =>
+                      ref -> cf.util.filter(0, size, leftMask)(col).get
+                    
+                    case (ref, Right3(col)) =>
+                      ref -> cf.util.filter(0, size, rightMask)(col).get
+                    
+                    case (ref, Middle3((left :: Nil, right :: Nil))) => {
+                      val left2 = cf.util.filter(0, size, leftMask)(left).get
+                      val right2 = cf.util.filter(0, size, rightMask)(right).get
+                      
+                      ref -> cf.util.MaskedUnion(leftMask)(left2, right2).get    // safe because types are grouped
+                    }
+                  })(collection.breakOut)
+                  
+                  joined
+                } getOrElse Map[ColumnRef, Column]()
+              }
+            }
+          }
+        }
       }
       
       result.withSource(spec)
@@ -608,6 +654,20 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
       )
     }
 
+    def zip2[B, C](t: SliceTransform1[B], t2: SliceTransform1[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform1[(A, B, C)] = {
+      SliceTransform1(
+        (initial, t.initial, t2.initial),
+        { case ((a, b, c), s) =>
+            val (a0, sa) = f(a, s)
+            val (b0, sb) = t.f(b, s)
+            val (c0, sc) = t2.f(c, s)
+            assert(sa.size == sb.size)
+            assert(sb.size == sc.size)
+            ((a0, b0, c0), combine(sa, sb, sc))
+        }
+      )
+    }
+
     def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
       SliceTransform1(
         initial,
@@ -641,6 +701,20 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             val (b0, sb) = t.f(b, sl, sr)
             assert(sa.size == sb.size) 
             ((a0, b0), combine(sa, sb))
+        }
+      )
+    }
+
+    def zip2[B, C](t: SliceTransform2[B], t2: SliceTransform2[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform2[(A, B, C)] = {
+      SliceTransform2(
+        (initial, t.initial, t2.initial),
+        { case ((a, b, c), sl, sr) =>
+            val (a0, sa) = f(a, sl, sr)
+            val (b0, sb) = t.f(b, sl, sr)
+            val (c0, sc) = t2.f(c, sl, sr)
+            assert(sa.size == sb.size)
+            assert(sb.size == sc.size)
+            ((a0, b0, c0), combine(sa, sb, sc))
         }
       )
     }
