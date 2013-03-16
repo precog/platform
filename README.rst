@@ -51,7 +51,7 @@ Getting Started
 Step one: obtain `PaulP's script`_.  At this point, you should be able to run
 ``$ ./build-test.sh`` as a sanity check, but this will take a long time.  Instead,
 run ``$ sbt``.  Once it is up and running, run ``test:compile``.  This should take
-about 5-10 minutes.  After this, run ``yggdrasil/assembly``, followed by ``test``.
+about 5-10 minutes.  After this, run ``ratatoskr/assembly``, followed by ``test``.
 The build should be green once your machine stops burning.
 
 In order to more easily navigate the codebase, it is highly recommended that you

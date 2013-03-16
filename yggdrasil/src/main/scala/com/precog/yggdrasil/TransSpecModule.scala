@@ -110,6 +110,8 @@ trait TransSpecModule extends FNModule {
     case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
 
     case class FilterDefined[+A <: SourceType](source: TransSpec[A], definedFor: TransSpec[A], definedness: Definedness) extends TransSpec[A]
+    
+    case class Cond[+A <: SourceType](pred: TransSpec[A], left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
 
@@ -183,6 +185,8 @@ trait TransSpecModule extends FNModule {
           
           case trans.Equal(left, right) => trans.Equal(mapSources(left)(f), mapSources(right)(f))
           case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(mapSources(source)(f), value, invert)
+          
+          case trans.Cond(pred, left, right) => trans.Cond(mapSources(pred)(f), mapSources(left)(f), mapSources(right)(f))
         }
       }
 
@@ -226,6 +230,8 @@ trait TransSpecModule extends FNModule {
         
         case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
         case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
+        
+        case trans.Cond(pred, left, right) => trans.Cond(deepMap(pred)(f), deepMap(left)(f), deepMap(right)(f))
       }
     }
     
