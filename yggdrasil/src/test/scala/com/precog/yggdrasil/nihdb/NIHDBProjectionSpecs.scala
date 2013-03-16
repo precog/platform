@@ -139,7 +139,11 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
         i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
       })
 
-      // Ensure we handle skips/overlap properly
+      // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
+      projection.insert((0L to 2L).toSeq.map { i =>
+        i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
+      })
+
       projection.insert((0L to 4L).toSeq.map { i =>
         i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
       })
