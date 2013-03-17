@@ -387,8 +387,14 @@ trait ProvenanceChecker extends parser.AST with Binder {
                 }
                 
                 case NotRelated(left, right) => {
+                  //println("\n")
+                  //println("sub(left): " + sub(left))
+                  //println("sub(right): " + sub(right))
                   val left2 = resolveUnifications(relations)(sub(left))
                   val right2 = resolveUnifications(relations)(sub(right))
+                  //println("left2: " + left2)
+                  //println("right2: " + right2)
+                  //println("\n")
                   
                   NotRelated(left2, right2)
                 }
@@ -410,9 +416,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
                 }
                 
                 case NotRelated(left, right) if !left.isParametric && !right.isParametric => {
-                  if (unifyProvenance(relations)(left, right).isDefined) {
+                  if (unifyProvenance(relations)(left, right).isDefined)
                     Some(Left(Error(expr, AlreadyRelatedSets)))
-                  }
                   else
                     None
                 }
@@ -765,13 +770,29 @@ trait ProvenanceChecker extends parser.AST with Binder {
     
     dfs(Set())(from)
   }
+
+  def unifiedContains(prov: UnifiedProvenance, target: Provenance): Boolean = {
+    def loop(p: Provenance): Boolean = p match {
+      case DynamicDerivedProvenance(left, right) => loop(left) || loop(right)
+      case UnifiedProvenance(left, right) => loop(left) || loop(right)
+      case ProductProvenance(left, right) => loop(left) || loop(right)
+      case CoproductProvenance(left, right) => loop(left) || loop(right)
+      case _ => p == target
+    }
+
+    loop(prov)
+  }
   
   def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
     case ParamProvenance(`id`, `let`) => sub
 
+    case ParametricDynamicProvenance(prov @ UnifiedProvenance(_, _), _) if unifiedContains(prov, ParamProvenance(`id`, `let`)) =>
+      DynamicProvenance(currentId.getAndIncrement())
+
     case ParametricDynamicProvenance(prov, _) if prov.possibilities.contains(ParamProvenance(`id`, `let`)) =>
-      substituteParam(id, let, prov, DynamicProvenance(currentId.getAndIncrement()))
-    
+      DynamicProvenance(currentId.getAndIncrement())
+      //substituteParam(id, let, prov, DynamicProvenance(currentId.getAndIncrement()))
+
     case UnifiedProvenance(left, right) =>
       UnifiedProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
     
@@ -804,7 +825,15 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val right2 = resolveUnifications(relations)(right)
       
       val optResult = unifyProvenance(relations)(left2, right2)
-      optResult getOrElse (left2 & right2)
+
+      //println("\n")
+      //println("left3: " + left2)
+      //println("right3: " + right2)
+      //println("optResult: " + optResult)
+      val res = optResult getOrElse (left2 & right2)
+      //println("res: " + res)
+      //println("\n")
+      res
     }
     
     case UnifiedProvenance(left, right) => {
@@ -938,7 +967,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
         case (ParametricDynamicProvenance(_, _), _) => GT
         case (_, ParametricDynamicProvenance(_, _)) => LT
 
-
         case (DynamicDerivedProvenance(left1, right1), DynamicDerivedProvenance(left2, right2)) => (left1 ?|? left2) |+| (right1 ?|? right2)
         case (DynamicDerivedProvenance(_, _), _) => GT
         case (_, DynamicDerivedProvenance(_, _)) => LT
@@ -988,7 +1016,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
   }
   
   case class ParamProvenance(id: Identifier, let: ast.Let) extends Provenance {
-    override val toString = id.id
+    override val toString = "$" + id.id
     
     val isParametric = true
   }
