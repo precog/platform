@@ -163,7 +163,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
       fives must contain(BigDecimal(5)).only
       weightsPlus mustEqual(expectedWeightsPlus)
     }
-    /*
 
     "ensure that two array elements are not switched in a solve" in {
       val input = """
@@ -2608,7 +2607,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
       
       eval(input) must not(beEmpty)
-    }*/
+    }
   }
 }
 

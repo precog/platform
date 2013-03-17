@@ -217,6 +217,10 @@ trait Emitter extends AST
       StateT.apply[Id, Emission, Unit] { e =>
         val leftResolved = e.subResolve(leftProv)
         val rightResolved = e.subResolve(rightProv)
+        //println("leftProv: " + leftProv)
+        //println("rightProv: " + rightProv)
+        //println("leftResolved: " + leftResolved)
+        //println("rightResolved: " + rightResolved)
         
         assert(!leftResolved.isParametric)
         assert(!rightResolved.isParametric)
@@ -360,10 +364,9 @@ trait Emitter extends AST
       val ids = let.params map { Identifier(Vector(), _) }
       val zipped = ids zip (actuals map { _.provenance })
       
-      def sub(target: Provenance): Provenance = {
-        zipped.foldLeft(target) {
-          case (target, (id, sub)) => substituteParam(id, let, target, sub)
-        }
+      def sub(target: Provenance): Provenance = zipped.foldLeft(target) {
+        case (target, (id, sub)) =>
+          substituteParam(id, let, target, sub)
       }
       
       val actualStates = params zip actuals map {
@@ -468,43 +471,92 @@ trait Emitter extends AST
         case ast.ObjectDef(_, Vector()) => emitInstr(PushObject)
         
         case ast.ObjectDef(_, props) => 
-          // props: Vector[(String, Expr)]
-
           def fieldToObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
 
-          val singles = props map { fieldToObjInstr }
+          val provToField = props.groupBy(_._2.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
+          //println("provToField: " + provToField.deep)
+          val provs = provToField map { case (p, _) => p } reverse
 
-          // if `props` has size one, we should not emit a join instruction
-          val (_, joins) = props.tail.foldLeft((props.head._2.provenance.possibilities, Vector.empty[EmitterState])) {
-            case ((provAcc, instrAcc), (_, expr)) =>
+          // TODO: The fields are not in the right order because of the group operation
+          val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
+            case (stateAcc, (provenance, fields)) =>
+              val singles = fields.map(fieldToObjInstr)
 
               val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-                val resolved = e.subResolve(expr.provenance)
+                val resolved = e.subResolve(provenance)
+                emitInstr(if (resolved == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
+              }
+
+              val joins = Vector.fill(singles.length - 1)(joinInstr)
+
+              stateAcc ++ (singles ++ joins)
+          }
+          //println("provs: " + provs.deep)
+          //println("provs.head.poss: " + provs.head.possibilities)
+
+          // if `provs` has size one, we should not emit a join instruction
+          val (_, joins) = provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
+            case ((provAcc, instrAcc), prov) => {
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(prov)
 
                 assert(!resolved.isParametric)
+          //      println("prov: " + prov)
+          //      println("provAcc: " + provAcc)
+          //      println("resolved: " + resolved.possibilities)
 
                 val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+          //      println("itx: " + itx)
   
                 emitInstr(if (itx.isEmpty) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
               }
 
               //todo not quite right, need to resolve first?
-              val resultProv = provAcc ++ expr.provenance.possibilities
+              val resultProv = provAcc ++ prov.possibilities
 
-              (resultProv, joinInstr +: instrAcc)
+              (resultProv, instrAcc :+ joinInstr)
+            }
           }
 
-          reduce(singles ++ joins)
+          reduce(groups ++ joins)
 
         case ast.ArrayDef(_, Vector()) => emitInstr(PushArray)
 
+        //TODO OPTIMIZE BY KEEPING SAME PROV (and matches) TOGETHER!!!!!!!!
+        //two steps:  
+        //(1) group by provenance, emit matches/cross for these
+        //(2) based on provenance of each group emit correct match/cross instr (see `joins` below, all are crosses - use new logic instead of that)
         case ast.ArrayDef(_, values) => 
-          val indexedValues = values.zipWithIndex
+          //def valueToArrayInstr(expr: Expr) = emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray))
+          //val singles = values map { valueToArrayInstr }
 
-          val provToElements = indexedValues.groupBy(_._1.provenance)
+          // if `values` has size one, we should not emit a join instruction
+          //val (_, joins) = values.tail.foldLeft((values.head.provenance.possibilities, Vector.empty[EmitterState])) {
+          //  case ((provAcc, instrAcc), expr) => {
+          //    val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+          //      val resolved = e.subResolve(expr.provenance)
+
+          //      assert(!resolved.isParametric)
+
+          //      val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+
+          //      emitInstr(if (itx.isEmpty) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
+          //    }
+
+          //    val resultProv = provAcc ++ expr.provenance.possibilities
+
+          //    (resultProv, joinInstr +: instrAcc)
+          //  }
+          //}
+
+          //reduce(singles ++ joins)
+          val indexedValues = values.zipWithIndex
+          
+          val provToElements = indexedValues.groupBy(_._1.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
+          val provs = provToElements map { case (p, _) => p } reverse
 
           val (groups, indices) = provToElements.foldLeft((Vector.empty[EmitterState], Vector.empty[Int])) {
-            case ((allStates, allIndices), (provenance, elements)) =>
+            case ((allStates, allIndices), (provenance, elements)) => {
               val singles = elements.map { case (expr, idx) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
               val indices = elements.map(_._2)
 
@@ -516,11 +568,29 @@ trait Emitter extends AST
               val joins = Vector.fill(singles.length - 1)(joinInstr)
 
               (allStates ++ (singles ++ joins), allIndices ++ indices)
+            }
           }
 
-          val joins = Vector.fill(provToElements.size - 1)(emitInstr(Map2Cross(JoinArray)))
+          val (_, joins) = provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
+            case ((provAcc, instrAcc), prov) => {
+              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+                val resolved = e.subResolve(prov)
+
+                assert(!resolved.isParametric)
+
+                val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+
+                emitInstr(if (itx.isEmpty) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
+              }
+
+              val resultProv = provAcc ++ prov.possibilities
+
+              (resultProv, instrAcc :+ joinInstr)
+            }
+          }
 
           val joined = reduce(groups ++ joins)
+          //println("indices.zip: " + indices.zipWithIndex)
 
           def resolve(remap: Map[Int, Int])(i: Int): Int =
             remap get i map resolve(remap) getOrElse i
@@ -533,7 +603,16 @@ trait Emitter extends AST
 
               val i2 = resolve(remap)(i)
 
-              val state2 = (i2 :: j :: i2 :: Nil) map { idx => emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)) } reduce { _ >> _ }
+              val state2 = {
+                if (j == 0) {  //required for correctness
+                  emitInstr(PushNum(i2.toString)) >> emitInstr(Map2Cross(ArraySwap))
+                } else if (i2 == 0) {  //not required for correctness, but nice simplification
+                  emitInstr(PushNum(j.toString)) >> emitInstr(Map2Cross(ArraySwap))
+                } else {
+                  val swps = (i2 :: j :: i2 :: Nil)
+                  swps map { idx => emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)) } reduce { _ >> _ }
+                }
+              }
 
               (remap + (j -> i2), state >> state2)
             }
