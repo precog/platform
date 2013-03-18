@@ -789,7 +789,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case UnifiedProvenance(left, right) => loop(left) || loop(right)
       case ProductProvenance(left, right) => loop(left) || loop(right)
       case CoproductProvenance(left, right) => loop(left) || loop(right)
-      case ParametricDynamicProvenance(prov) => loop(prov)
+      case ParametricDynamicProvenance(prov, _) => loop(prov)
       case _ => p == target
     }
 
