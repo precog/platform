@@ -96,8 +96,28 @@ case class Account(user: String, password: String, accountId: String, apiKey: St
   def bareRootPath = rootPath.substring(1, rootPath.length - 1)
 }
 
+sealed trait ApiResult {
+  def jvalue: JValue = this match {
+    case ApiFailure(code, msg) => sys.error("failure %d: %s" format (code, msg))
+    case ApiBadJson(e) => sys.error("parse error: %s" format e.getMessage)
+    case ApiResponse(j) => j
+  }
+}
+case class ApiFailure(code: Int, msg: String) extends ApiResult
+case class ApiBadJson(e: Throwable) extends ApiResult
+case class ApiResponse(j: JValue) extends ApiResult
+
 abstract class Task(settings: Settings) extends Specification {
   val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
+
+  def http(rb: RequestBuilder): Promise[ApiResult] =
+    Http(rb).map { r =>
+      val s = r.getResponseBody
+      r.getStatusCode match {
+        case 200 => JParser.parseFromString(s).fold(ApiBadJson, ApiResponse)
+        case n => ApiFailure(n, s)
+      }
+    }
 
   def text(n: Int) = scala.util.Random.alphanumeric.take(12).mkString
 
@@ -106,6 +126,8 @@ abstract class Task(settings: Settings) extends Specification {
   def accounts = host(serviceHost, accountsPort) / "accounts"
 
   def security = host(serviceHost, authPort) / "apikeys"
+
+  def grants = host(serviceHost, authPort) / "grants"
   
   def metadata = host(serviceHost, shardPort) / "meta"
 
@@ -188,6 +210,12 @@ abstract class Task(settings: Settings) extends Specification {
     val res = Http(req OK as.String)
     val json = JParser.parseFromString(res()).valueOr(throw _)
     json
+  }
+
+  def listGrantsFor(targetApiKey: String, authApiKey: String): JValue = {
+    val req = (security / targetApiKey / "grants" / "").addQueryParameter("apiKey", authApiKey)
+    val result = Http(req OK as.String)
+    JParser.parseFromString(result()).valueOr(throw _)
   }
 }
 

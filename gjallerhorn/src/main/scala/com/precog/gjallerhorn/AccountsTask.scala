@@ -76,6 +76,15 @@ class AccountsTask(settings: Settings) extends Task(settings: Settings) with Spe
     }
 
     // "add grant to an account" in {
+    //   val Account(user1, pass1, accountId1, apiKey1, rootPath1) = createAccount
+    //   val Account(user2, pass2, accountId2, apiKey2, rootPath2) = createAccount
+    //   //val Account(user3, pass3, accountId3, apiKey3, rootPath3) = createAccount
+
+    //   def grant(id: String, u: String, p: String, n: Int) =
+    //     (accounts / id / "grants" / "").as(u, p) << ("[" + n + "]")
+
+    //   val h1 = Http(grant(accountId2, user1, pass1, 6) OK as.String)
+    //   println(h1())
     // }
 
     // "describe account's plan" in {}
