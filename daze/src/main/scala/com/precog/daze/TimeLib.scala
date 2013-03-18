@@ -122,8 +122,10 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     DateTimeZone.setDefault(DateTimeZone.UTC)
 
     object ParseDateTime extends Op2F2(TimeNamespace, "parseDateTime") {
-      val tpe = BinaryOperationType(JTextT, JTextT, JDateT)
+      val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
+        case (c1: DateColumn, c2: StrColumn) => c1
+
         case (c1: StrColumn, c2: StrColumn) => new DateColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidFormat(c1(row), c2(row))
 
@@ -177,38 +179,22 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
 
     object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
-      def checkDefined(c1: Column, c2: StrColumn, row: Int) =
-        c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidTimeZone(c2(row))
-
       val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
+
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
-        case (c1: StrColumn, c2: StrColumn) =>
-          val dateCol = createDateCol(c1)
+        case (c1: DateColumn, c2: StrColumn) => newColumn(c1, c2)
+        case (c1: StrColumn, c2: StrColumn) => newColumn(createDateCol(c1), c2)
+      }
 
-          new DateColumn {
-            def isDefinedAt(row: Int) = checkDefined(dateCol, c2, row)
+      def newColumn(c1: DateColumn, c2: StrColumn): DateColumn = new DateColumn {
+        def isDefinedAt(row: Int) =
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidTimeZone(c2(row))
 
-            def apply(row: Int) = {
-              val time = dateCol(row)
-              val tz = c2(row)
-
-              val timeZone = DateTimeZone.forID(tz)
-
-              new DateTime(time, timeZone)
-            }
-          }
-
-        case (c1: DateColumn, c2: StrColumn) => new DateColumn {
-          def isDefinedAt(row: Int) = checkDefined(c1, c2, row)
-
-          def apply(row: Int) = {
-            val time = c1(row)
-            val tz = c2(row)
-
-            val timeZone = DateTimeZone.forID(tz)
-
-            new DateTime(time, timeZone)
-          }
+        def apply(row: Int) = {
+          val time = c1(row)
+          val tz = c2(row)
+          val timeZone = DateTimeZone.forID(tz)
+          new DateTime(time, timeZone)
         }
       }
     }
