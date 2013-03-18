@@ -319,7 +319,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           else if (child.provenance.isParametric)
             // We include an identity in ParametricDynamicProvenance so that we can
             // distinguish two `New` nodes that have the same `child`, each assigning
-            // different identities. No two `New` nodes should ever have identical provenance.
+            // different identities.
             // | f(x) :=
             // |   y := new x
             // |   z := new x
@@ -343,8 +343,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
           } else if (from.provenance.isParametric || to.provenance.isParametric) {
             (Set(), Set(NotRelated(from.provenance, to.provenance)))
           } else {
-            if (unified.isDefined && unified != Some(NullProvenance)) {
-              (Set(Error(expr, AlreadyRelatedSets)), Set()) }
+            if (unified.isDefined && unified != Some(NullProvenance))
+              (Set(Error(expr, AlreadyRelatedSets)), Set())
             else
               (Set(), Set())
           }
@@ -392,8 +392,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
               def sub(target: Provenance): Provenance = {
                 zipped.foldLeft(target) {
-                  case (target, (id, sub)) =>
-                    substituteParam(id, let, target, sub)
+                  case (target, (id, sub)) => substituteParam(id, let, target, sub)
                 }
               }
 
@@ -406,14 +405,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
                 }
                 
                 case NotRelated(left, right) => {
-                  //println("\n")
-                  //println("sub(left): " + sub(left))
-                  //println("sub(right): " + sub(right))
                   val left2 = resolveUnifications(relations)(sub(left))
                   val right2 = resolveUnifications(relations)(sub(right))
-                  //println("left2: " + left2)
-                  //println("right2: " + right2)
-                  //println("\n")
                   
                   NotRelated(left2, right2)
                 }
@@ -796,6 +789,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case UnifiedProvenance(left, right) => loop(left) || loop(right)
       case ProductProvenance(left, right) => loop(left) || loop(right)
       case CoproductProvenance(left, right) => loop(left) || loop(right)
+      case ParametricDynamicProvenance(prov) => loop(prov)
       case _ => p == target
     }
 
@@ -810,7 +804,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
     case ParametricDynamicProvenance(prov, _) if prov.possibilities.contains(ParamProvenance(`id`, `let`)) =>
       DynamicProvenance(currentId.getAndIncrement())
-      //substituteParam(id, let, prov, DynamicProvenance(currentId.getAndIncrement()))
 
     case UnifiedProvenance(left, right) =>
       UnifiedProvenance(substituteParam(id, let, left, sub), substituteParam(id, let, right, sub))
@@ -844,15 +837,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val right2 = resolveUnifications(relations)(right)
       
       val optResult = unifyProvenance(relations)(left2, right2)
-
-      //println("\n")
-      //println("left3: " + left2)
-      //println("right3: " + right2)
-      //println("optResult: " + optResult)
-      val res = optResult getOrElse (left2 & right2)
-      //println("res: " + res)
-      //println("\n")
-      res
+      optResult getOrElse (left2 & right2)
     }
     
     case UnifiedProvenance(left, right) => {

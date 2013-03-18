@@ -217,10 +217,6 @@ trait Emitter extends AST
       StateT.apply[Id, Emission, Unit] { e =>
         val leftResolved = e.subResolve(leftProv)
         val rightResolved = e.subResolve(rightProv)
-        //println("leftProv: " + leftProv)
-        //println("rightProv: " + rightProv)
-        //println("leftResolved: " + leftResolved)
-        //println("rightResolved: " + rightResolved)
         
         assert(!leftResolved.isParametric)
         assert(!rightResolved.isParametric)
@@ -356,6 +352,29 @@ trait Emitter extends AST
       
       case Nil => f(dispatches)
     }
+
+    def createJoins(provs: Array[Provenance], op2: BinaryOperation): (Set[Provenance], Vector[EmitterState]) = {
+      // only to be used in cases when provs is nonEmpty
+      assert(!provs.isEmpty)
+
+      // if `provs` has size one, we should not emit a join instruction
+      provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
+        case ((provAcc, instrAcc), prov) => {
+          val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
+            val resolved = e.subResolve(prov)
+
+            assert(!resolved.isParametric)
+
+            val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+
+            emitInstr(if (itx.isEmpty) Map2Cross(op2) else Map2Match(op2))(e)
+          }
+
+          val resultProv = provAcc ++ prov.possibilities
+          (resultProv, instrAcc :+ joinInstr)
+        }
+      }
+    }
     
     def emitDispatch(expr: ast.Dispatch, let: ast.Let, dispatches: Set[ast.Dispatch])(f: Set[ast.Dispatch] => EmitterState): EmitterState = {
       val ast.Dispatch(_, name, actuals) = expr
@@ -364,9 +383,10 @@ trait Emitter extends AST
       val ids = let.params map { Identifier(Vector(), _) }
       val zipped = ids zip (actuals map { _.provenance })
       
-      def sub(target: Provenance): Provenance = zipped.foldLeft(target) {
-        case (target, (id, sub)) =>
-          substituteParam(id, let, target, sub)
+      def sub(target: Provenance): Provenance = {
+        zipped.foldLeft(target) {
+          case (target, (id, sub)) => substituteParam(id, let, target, sub)
+        }
       }
       
       val actualStates = params zip actuals map {
@@ -468,16 +488,16 @@ trait Emitter extends AST
         case ast.UndefinedLit(_) =>
           emitInstr(PushUndefined)
 
-        case ast.ObjectDef(_, Vector()) => emitInstr(PushObject)
+        case ast.ObjectDef(_, Vector()) =>
+          emitInstr(PushObject)
         
-        case ast.ObjectDef(_, props) => 
-          def fieldToObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
+        case ast.ObjectDef(_, props) => {
+          def fieldToObjInstr(t: (String, Expr)) =
+            emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
 
           val provToField = props.groupBy(_._2.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
-          //println("provToField: " + provToField.deep)
           val provs = provToField map { case (p, _) => p } reverse
 
-          // TODO: The fields are not in the right order because of the group operation
           val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
             case (stateAcc, (provenance, fields)) =>
               val singles = fields.map(fieldToObjInstr)
@@ -491,65 +511,16 @@ trait Emitter extends AST
 
               stateAcc ++ (singles ++ joins)
           }
-          //println("provs: " + provs.deep)
-          //println("provs.head.poss: " + provs.head.possibilities)
 
-          // if `provs` has size one, we should not emit a join instruction
-          val (_, joins) = provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
-            case ((provAcc, instrAcc), prov) => {
-              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-                val resolved = e.subResolve(prov)
-
-                assert(!resolved.isParametric)
-          //      println("prov: " + prov)
-          //      println("provAcc: " + provAcc)
-          //      println("resolved: " + resolved.possibilities)
-
-                val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
-          //      println("itx: " + itx)
-  
-                emitInstr(if (itx.isEmpty) Map2Cross(JoinObject) else Map2Match(JoinObject))(e)
-              }
-
-              //todo not quite right, need to resolve first?
-              val resultProv = provAcc ++ prov.possibilities
-
-              (resultProv, instrAcc :+ joinInstr)
-            }
-          }
+          val (_, joins) = createJoins(provs, JoinObject)
 
           reduce(groups ++ joins)
+        }
 
-        case ast.ArrayDef(_, Vector()) => emitInstr(PushArray)
+        case ast.ArrayDef(_, Vector()) =>
+          emitInstr(PushArray)
 
-        //TODO OPTIMIZE BY KEEPING SAME PROV (and matches) TOGETHER!!!!!!!!
-        //two steps:  
-        //(1) group by provenance, emit matches/cross for these
-        //(2) based on provenance of each group emit correct match/cross instr (see `joins` below, all are crosses - use new logic instead of that)
-        case ast.ArrayDef(_, values) => 
-          //def valueToArrayInstr(expr: Expr) = emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray))
-          //val singles = values map { valueToArrayInstr }
-
-          // if `values` has size one, we should not emit a join instruction
-          //val (_, joins) = values.tail.foldLeft((values.head.provenance.possibilities, Vector.empty[EmitterState])) {
-          //  case ((provAcc, instrAcc), expr) => {
-          //    val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-          //      val resolved = e.subResolve(expr.provenance)
-
-          //      assert(!resolved.isParametric)
-
-          //      val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
-
-          //      emitInstr(if (itx.isEmpty) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
-          //    }
-
-          //    val resultProv = provAcc ++ expr.provenance.possibilities
-
-          //    (resultProv, joinInstr +: instrAcc)
-          //  }
-          //}
-
-          //reduce(singles ++ joins)
+        case ast.ArrayDef(_, values) => {
           val indexedValues = values.zipWithIndex
           
           val provToElements = indexedValues.groupBy(_._1.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
@@ -571,26 +542,9 @@ trait Emitter extends AST
             }
           }
 
-          val (_, joins) = provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
-            case ((provAcc, instrAcc), prov) => {
-              val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-                val resolved = e.subResolve(prov)
-
-                assert(!resolved.isParametric)
-
-                val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
-
-                emitInstr(if (itx.isEmpty) Map2Cross(JoinArray) else Map2Match(JoinArray))(e)
-              }
-
-              val resultProv = provAcc ++ prov.possibilities
-
-              (resultProv, instrAcc :+ joinInstr)
-            }
-          }
+          val (_, joins) = createJoins(provs, JoinArray)
 
           val joined = reduce(groups ++ joins)
-          //println("indices.zip: " + indices.zipWithIndex)
 
           def resolve(remap: Map[Int, Int])(i: Int): Int =
             remap get i map resolve(remap) getOrElse i
@@ -621,17 +575,18 @@ trait Emitter extends AST
           }
 
           joined >> swaps
+        }
         
-        case ast.Descent(loc, child, property) => 
+        case ast.Descent(_, child, property) => 
           emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
         
-        case ast.MetaDescent(loc, child, property) => 
+        case ast.MetaDescent(_, child, property) => 
           emitMapState(emitExpr(child, dispatches), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefMetadata)
         
-        case ast.Deref(loc, left, right) => 
+        case ast.Deref(_, left, right) => 
           emitMap(left, right, DerefArray, dispatches)
         
-        case d @ ast.Dispatch(loc, name, actuals) => 
+        case d @ ast.Dispatch(_, name, actuals) => {
           d.binding match {
             case LoadBinding =>
               emitExpr(actuals.head, dispatches) >> emitInstr(LoadLocal)
@@ -664,7 +619,7 @@ trait Emitter extends AST
             case Op2Binding(op) =>
               emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op), dispatches)
 
-            case LetBinding(let @ ast.Let(loc, id, params, left, right)) =>
+            case LetBinding(let @ ast.Let(_, id, params, left, right)) =>
               if (params.length > 0) {
                 emitOrDup(MarkDispatch(let, actuals)) {
                   // Don't let dispatch add marks inside the function - could mark expressions that include formals
@@ -684,8 +639,9 @@ trait Emitter extends AST
             case NullBinding => 
               notImpl(expr)
           }
+        }
 
-        case ast.Cond(loc, pred, left, right) =>
+        case ast.Cond(_, pred, left, right) =>
            // if a then b else c
            // (b where a) union (c where !a)
            emitFilter(left, pred, dispatches) >> emitFilterState(emitExpr(right, dispatches), right.provenance, emitExpr(pred, dispatches) >> emitInstr(Map1(Comp)), pred.provenance) >> emitInstr(IUnion)
@@ -693,67 +649,67 @@ trait Emitter extends AST
         case where @ ast.Where(_, _, _) =>
           emitWhere(where, dispatches)
 
-        case ast.With(loc, left, right) =>
+        case ast.With(_, left, right) =>
           emitMap(left, right, JoinObject, dispatches)
 
-        case ast.Union(loc, left, right) =>
+        case ast.Union(_, left, right) =>
           emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(IUnion)  
 
-        case ast.Intersect(loc, left, right) =>
+        case ast.Intersect(_, left, right) =>
           emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(IIntersect) 
 
-        case ast.Difference(loc, left, right) =>
+        case ast.Difference(_, left, right) =>
           emitExpr(left, dispatches) >> emitExpr(right, dispatches) >> emitInstr(SetDifference) 
 
-        case ast.Add(loc, left, right) => 
+        case ast.Add(_, left, right) => 
           emitMap(left, right, Add, dispatches)
         
-        case ast.Sub(loc, left, right) => 
+        case ast.Sub(_, left, right) => 
           emitMap(left, right, Sub, dispatches)
 
-        case ast.Mul(loc, left, right) => 
+        case ast.Mul(_, left, right) => 
           emitMap(left, right, Mul, dispatches)
         
-        case ast.Div(loc, left, right) => 
+        case ast.Div(_, left, right) => 
           emitMap(left, right, Div, dispatches)
         
-        case ast.Mod(loc, left, right) => 
+        case ast.Mod(_, left, right) => 
           emitMap(left, right, Mod, dispatches)
         
-        case ast.Pow(loc, left, right) =>
+        case ast.Pow(_, left, right) =>
           emitMap(left, right, Pow, dispatches)
 
-        case ast.Lt(loc, left, right) => 
+        case ast.Lt(_, left, right) => 
           emitMap(left, right, Lt, dispatches)
         
-        case ast.LtEq(loc, left, right) => 
+        case ast.LtEq(_, left, right) => 
           emitMap(left, right, LtEq, dispatches)
         
-        case ast.Gt(loc, left, right) => 
+        case ast.Gt(_, left, right) => 
           emitMap(left, right, Gt, dispatches)
         
-        case ast.GtEq(loc, left, right) => 
+        case ast.GtEq(_, left, right) => 
           emitMap(left, right, GtEq, dispatches)
         
-        case ast.Eq(loc, left, right) => 
+        case ast.Eq(_, left, right) => 
           emitMap(left, right, Eq, dispatches)
         
-        case ast.NotEq(loc, left, right) => 
+        case ast.NotEq(_, left, right) => 
           emitMap(left, right, NotEq, dispatches)
         
-        case ast.Or(loc, left, right) => 
+        case ast.Or(_, left, right) => 
           emitMap(left, right, Or, dispatches)
         
-        case ast.And(loc, left, right) =>
+        case ast.And(_, left, right) =>
           emitMap(left, right, And, dispatches)
         
-        case ast.Comp(loc, child) =>
+        case ast.Comp(_, child) =>
           emitExpr(child, dispatches) >> emitInstr(Map1(Comp))
         
-        case ast.Neg(loc, child) => 
+        case ast.Neg(_, child) => 
           emitExpr(child, dispatches) >> emitInstr(Map1(Neg))
         
-        case ast.Paren(loc, child) => 
+        case ast.Paren(_, child) => 
           emitExpr(child, dispatches)
       }) >> emitConstraints(expr, dispatches) >> emitPopLine
     }

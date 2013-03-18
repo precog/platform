@@ -87,8 +87,29 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
-  /*
-    "ensure that" in {
+    "ensure that we can call to `new` multiple times in a function and get fresh ids" in {
+      val input = """
+        | f(x) := new x
+        |
+        | five := f(5)
+        | six := f(6)
+        | 
+        | five ~ six
+        |   five + six
+      """.stripMargin
+
+      val result = evalE(input)
+      
+      result.size mustEqual(1)
+
+      result must haveAllElementsLike {
+        case (ids, SDecimal(d)) =>
+          ids must haveSize(2)
+          d mustEqual(11)
+      }
+    }
+
+    "ensure that we can join after a join with the RHS" in {
       val input = """
         | medals := //summer_games/london_medals
         | five := new 5 
@@ -125,7 +146,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       weightsPlus mustEqual(expectedWeightsPlus)
     }
 
-    "ensure that" in {
+    "ensure that we can join after a join with the LHS" in {
       val input = """
         | medals := //summer_games/london_medals
         | five := new 5 

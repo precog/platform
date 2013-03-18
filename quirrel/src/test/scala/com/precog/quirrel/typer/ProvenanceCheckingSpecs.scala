@@ -429,7 +429,7 @@ object ProvenanceCheckingSpecs extends Specification
       }
       tree.errors must beEmpty
     }
-    
+
     "accept a dispatch to a function wrapping Add with related parameters" in {
       val tree = compileSingle("a(b) := b + //foo a(//foo)")
       tree.provenance mustEqual StaticProvenance("/foo")
