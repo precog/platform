@@ -353,7 +353,7 @@ trait Emitter extends AST
       case Nil => f(dispatches)
     }
 
-    def createJoins(provs: Array[Provenance], op2: BinaryOperation): (Set[Provenance], Vector[EmitterState]) = {
+    def createJoins(provs: List[Provenance], op2: BinaryOperation): (Set[Provenance], Vector[EmitterState]) = {
       // only to be used in cases when provs is nonEmpty
       assert(!provs.isEmpty)
 
@@ -495,7 +495,7 @@ trait Emitter extends AST
           def fieldToObjInstr(t: (String, Expr)) =
             emitInstr(PushString(t._1)) >> emitExpr(t._2, dispatches) >> emitInstr(Map2Cross(WrapObject))
 
-          val provToField = props.groupBy(_._2.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
+          val provToField = props.groupBy(_._2.provenance).toList.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
           val provs = provToField map { case (p, _) => p } reverse
 
           val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
@@ -523,7 +523,7 @@ trait Emitter extends AST
         case ast.ArrayDef(_, values) => {
           val indexedValues = values.zipWithIndex
           
-          val provToElements = indexedValues.groupBy(_._1.provenance).toArray.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
+          val provToElements = indexedValues.groupBy(_._1.provenance).toList.sortBy { case (p, _) => p }(Provenance.order.toScalaOrdering)
           val provs = provToElements map { case (p, _) => p } reverse
 
           val (groups, indices) = provToElements.foldLeft((Vector.empty[EmitterState], Vector.empty[Int])) {

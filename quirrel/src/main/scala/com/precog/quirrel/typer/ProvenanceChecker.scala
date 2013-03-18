@@ -783,26 +783,24 @@ trait ProvenanceChecker extends parser.AST with Binder {
     dfs(Set())(from)
   }
 
-  def unifiedContains(prov: UnifiedProvenance, target: Provenance): Boolean = {
-    def loop(p: Provenance): Boolean = p match {
-      case DynamicDerivedProvenance(left, right) => loop(left) || loop(right)
-      case UnifiedProvenance(left, right) => loop(left) || loop(right)
-      case ProductProvenance(left, right) => loop(left) || loop(right)
-      case CoproductProvenance(left, right) => loop(left) || loop(right)
-      case ParametricDynamicProvenance(prov, _) => loop(prov)
-      case _ => p == target
-    }
+  def components(prov: Provenance, target: Provenance): Boolean = {
+    def recursePair(left: Provenance, right: Provenance) =
+      components(left, target) || components(right, target)
 
-    loop(prov)
+    prov match {
+      case DynamicDerivedProvenance(left, right) => recursePair(left, right)
+      case UnifiedProvenance(left, right) => recursePair(left, right)
+      case ProductProvenance(left, right) => recursePair(left, right)
+      case CoproductProvenance(left, right) => recursePair(left, right)
+      case ParametricDynamicProvenance(p, _) => components(p, target)
+      case _ => prov == target
+    }
   }
   
   def substituteParam(id: Identifier, let: ast.Let, target: Provenance, sub: Provenance): Provenance = target match {
     case ParamProvenance(`id`, `let`) => sub
 
-    case ParametricDynamicProvenance(prov @ UnifiedProvenance(_, _), _) if unifiedContains(prov, ParamProvenance(`id`, `let`)) =>
-      DynamicProvenance(currentId.getAndIncrement())
-
-    case ParametricDynamicProvenance(prov, _) if prov.possibilities.contains(ParamProvenance(`id`, `let`)) =>
+    case ParametricDynamicProvenance(prov, _) if components(prov, ParamProvenance(`id`, `let`)) =>
       DynamicProvenance(currentId.getAndIncrement())
 
     case UnifiedProvenance(left, right) =>
