@@ -7,7 +7,7 @@ from subprocess import call
 import sys
 
 # minutes
-window = 30
+window = 60
 
 if len(sys.argv) != 2:
     print 'Usage: %s <logfile>' % sys.argv[0]
@@ -25,7 +25,7 @@ with open(sys.argv[1]) as input:
         hit = logformat.match(line)
         if hit:
             timestamp = datetime.strptime(hit.group(1), '%Y-%m-%d %H:%M:%S')
-            if abs((now - timestamp).seconds) < 60*window:   # 30 minute window for now
+            if abs((now - timestamp).seconds) < 60*window:   # 60 minute window for now
                 active.add(hit.group(2))
                 #print 'Activity at %s for %s: %s' % (hit.group(1), hit.group(2), hit.group(0))
 
