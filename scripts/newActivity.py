@@ -18,6 +18,7 @@ now = datetime.now()
 logformat = re.compile('(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d).*Created new projection.*?ColumnDescriptor\(/(\d{10})/.*')
 
 active = set()
+filtered = set(['0000000056', '0000000069'])
 
 with open(sys.argv[1]) as input:
     for line in input:
@@ -28,7 +29,9 @@ with open(sys.argv[1]) as input:
                 active.add(hit.group(2))
                 #print 'Activity at %s for %s: %s' % (hit.group(1), hit.group(2), hit.group(0))
 
-if len(active) > 0:
+toReport = sorted(list(active - filtered))
+
+if len(toReport) > 0:
     print 'Active accounts with new columns in the last %d minutes:' % window
 
     conn = MongoClient('localhost', 27017)
@@ -38,7 +41,7 @@ if len(active) > 0:
     for acct in conn['accounts_v1_2_2']['accounts'].find():
         accounts[acct['accountId']] = acct['email']
 
-    for acct in sorted(list(active)):
+    for acct in toReport:
         print '  %s (%s)' % (acct, accounts[acct])
 
     conn.close()
