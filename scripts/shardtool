@@ -37,7 +37,7 @@ class Service(object):
         args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
         call(args)
         print ""
-    
+
     def query(self, query):
         url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.account)
         #args = ['curl', '-v', '-s', '-G',
@@ -48,10 +48,18 @@ class Service(object):
         call(args)
         print ""
 
+    def metadata(self, qpath):
+        url = "http://localhost:%s/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
+        args = ['curl', '-s', '-G',
+                '--data-urlencode', 'apiKey=' + self.apikey, url]
+        call(args)
+        print ""
+
 def usage():
     prog = sys.argv[0]
     print "usage: %s -i FSPATH QPATH   # ingest data" % prog
     print "       %s -e QUERY          # run query" % prog
+    print "       %s -m QPATH          # fetch metadata for path" % prog
     print "       %s -e                # run query from stdin" % prog
     sys.exit(0)
 
@@ -68,5 +76,7 @@ if __name__ == "__main__":
         else:
             q = args[1]
         service.query(q)
+    elif args[0] == '-m':
+        service.metadata(args[1])
     else:
         usage()
