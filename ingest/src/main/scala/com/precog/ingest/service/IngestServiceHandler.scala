@@ -298,7 +298,7 @@ class IngestServiceHandler(
     stream.uncons flatMap {
       case Some((buf, tail)) =>
         val safeBuf = buf.duplicate.rewind.asInstanceOf[ByteBuffer]
-        logger.debug("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
+        //logger.trace("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
         try {
           val written0 = chan.write(safeBuf)
           writeChannel(chan, tail, written + written0)
