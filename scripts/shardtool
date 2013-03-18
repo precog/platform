@@ -28,10 +28,10 @@ class Service(object):
         self.account = account
         self.apikey = apikey
 
-    def ingest(self, fspath, qpath):
+    def ingest(self, fspath, qpath, syncType):
         assert(os.path.exists(fspath))
         assert(not qpath.startswith('/'))
-        url = "http://localhost:%s/sync/fs/%s/%s?apiKey=%s" % (self.ingestport, self.account, qpath, self.apikey)
+        url = "http://localhost:%s/%s/fs/%s/%s?apiKey=%s" % (self.ingestport, syncType, self.account, qpath, self.apikey)
         mime = 'Content-Type: application/json'
         #args = ['curl', '-v', '-H', mime, '--data-bin', "@" + fspath, url]
         args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
@@ -58,6 +58,7 @@ class Service(object):
 def usage():
     prog = sys.argv[0]
     print "usage: %s -i FSPATH QPATH   # ingest data" % prog
+    print "       %s -a FSPATH QPATH   # async ingest data" % prog
     print "       %s -e QUERY          # run query" % prog
     print "       %s -m QPATH          # fetch metadata for path" % prog
     print "       %s -e                # run query from stdin" % prog
@@ -69,7 +70,9 @@ if __name__ == "__main__":
     if not args:
         usage()
     elif args[0] == '-i':
-        service.ingest(args[1], args[2])
+        service.ingest(args[1], args[2], "sync")
+    elif args[0] == '-a':
+        service.ingest(args[1], args[2], "async")
     elif args[0] == '-e':
         if not args[1:]:
             q = sys.stdin.read()
