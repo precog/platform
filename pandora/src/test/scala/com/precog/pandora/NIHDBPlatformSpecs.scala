@@ -67,7 +67,7 @@ import org.specs2.specification.Fragments
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -110,9 +110,7 @@ object NIHDBPlatformActor extends Logging {
         val actorSystem = ActorSystem("NIHDBPlatformActor")
         val storageTimeout = Timeout(300 * 1000)
 
-        implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(actorSystem.dispatcher) with Copointed[Future] {
-          def copoint[A](f: Future[A]) = Await.result(f, storageTimeout.duration)
-        }
+        implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
 
         val accountFinder = new StaticAccountFinder[Future]("")
         val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
@@ -171,9 +169,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   object yggConfig extends YggConfig
 
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-    def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
 
   val accountFinder = None
 

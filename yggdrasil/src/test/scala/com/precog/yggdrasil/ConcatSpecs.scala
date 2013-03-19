@@ -22,7 +22,7 @@ package table
 
 import org.specs2.mutable._
 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import blueeyes.json._
 

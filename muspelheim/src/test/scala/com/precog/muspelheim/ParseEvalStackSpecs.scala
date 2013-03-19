@@ -49,7 +49,6 @@ import java.io.File
 
 import scalaz._
 import scalaz.std.anyVal._
-import scalaz.syntax.copointed._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration

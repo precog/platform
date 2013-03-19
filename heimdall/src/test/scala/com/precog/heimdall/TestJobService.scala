@@ -42,22 +42,21 @@ import org.joda.time.DateTime
 import scalaz._
 
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
-  lazy val executionContext = defaultFutureDispatch
+  type Resource = Unit
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "second"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "seconds"))
+  val validAPIKey = "secret"
+
+  lazy val executionContext = defaultFutureDispatch
+  implicit lazy val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(10, "seconds"))
 
   lazy val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  implicit val M = new FutureMonad(executionContext)
-
   lazy val clock = blueeyes.util.Clock.System
-
-  type Resource = Unit
-
   lazy val jobs = new InMemoryJobManager[Future]
+
   def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), jobs)
 
-  def validAPIKey = "secret"
 
   def authService(config: Configuration): AuthService[Future] = TestAuthService[Future](Set(validAPIKey))
 
@@ -65,15 +64,10 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
 }
 
 class JobServiceSpec extends TestJobService {
-  import scalaz.syntax.copointed._
+  import scalaz.syntax.comonad._
   import DefaultBijections._
   import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
   import JobState._
-
-  implicit val copointedFuture = new Copointed[Future] {
-    def map[A, B](m: Future[A])(f: A => B) = m map f
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(10, "seconds"))
-  }
 
   val JSON = MimeTypes.application / MimeTypes.json
 

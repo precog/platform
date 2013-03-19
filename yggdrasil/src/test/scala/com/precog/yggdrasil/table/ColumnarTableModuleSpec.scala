@@ -36,7 +36,7 @@ import scala.util.Random
 
 import scalaz._
 import scalaz.effect.IO 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
@@ -693,8 +693,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
   }
 }
 
-object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Need] {
+  implicit def M = Need.need
 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {

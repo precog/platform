@@ -46,7 +46,7 @@ import scalaz._
 import scalaz.std.list._
 import scalaz.std.option._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.traverse._
 
 import blueeyes.akka_testing._
@@ -82,9 +82,7 @@ trait TestEventService extends
   private val to = Duration(5, "seconds")
 
   val asyncContext = defaultFutureDispatch
-  implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(asyncContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, to)
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(asyncContext, to)
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 

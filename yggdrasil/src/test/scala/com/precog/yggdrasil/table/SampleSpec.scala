@@ -25,7 +25,7 @@ import blueeyes.json._
 import com.precog.common._
 
 import scalaz.StreamT
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import org.specs2.ScalaCheck
 import org.specs2.mutable._

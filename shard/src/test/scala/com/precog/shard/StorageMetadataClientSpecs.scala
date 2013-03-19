@@ -28,11 +28,11 @@ import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import org.specs2.mutable._
 
-abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with Copointed[M]) extends Specification {
+abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with Comonad[M]) extends Specification {
   def colSizeMetadata(descriptor: ColumnRef, size: Long): ColumnMetadata = Map(
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )

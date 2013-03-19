@@ -35,13 +35,11 @@ import akka.dispatch._
 import org.streum.configrity.Configuration
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 class WebAPIKeyFinderSpec extends APIKeyFinderSpec[Future] with AkkaDefaults { self =>
   implicit lazy val executionContext = defaultFutureDispatch
-  implicit lazy val M: Monad[Future] with Copointed[Future] = new FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-  }
+  implicit lazy val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(5, "seconds"))
 
   def withAPIKeyFinder[A](mgr: APIKeyManager[Future])(f: APIKeyFinder[Future] => A): A = {
     val testService = new TestAPIKeyService {

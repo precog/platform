@@ -33,7 +33,7 @@ import blueeyes.json._
 import scala.annotation.tailrec
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.std.anyVal._
@@ -43,7 +43,7 @@ import TableModule._
 trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
   import trans._
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
   
   private var initialIndices = collection.mutable.Map[Path, Int]()    // if we were doing this for real: j.u.c.HashMap
   private var currentIndex = 0                                        // if we were doing this for real: j.u.c.a.AtomicInteger

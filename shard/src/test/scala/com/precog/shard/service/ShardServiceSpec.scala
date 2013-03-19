@@ -66,6 +66,7 @@ import blueeyes.util.Clock
 import DefaultBijections._
 
 import scalaz._
+import scalaz.syntax.comonad._
 
 import java.nio.CharBuffer
 
@@ -95,9 +96,7 @@ trait TestShardService extends
   private val actorSystem = ActorSystem("shardServiceSpec")
   val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(executionContext, Duration(5, "seconds"))
 
   private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)

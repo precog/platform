@@ -38,7 +38,7 @@ import org.scalacheck.Arbitrary._
 
 import com.precog.bytecode._
 import scala.util.Random
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification with ScalaCheck {
   import CValueGenerators._

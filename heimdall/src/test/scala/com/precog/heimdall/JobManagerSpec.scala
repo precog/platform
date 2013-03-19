@@ -48,7 +48,7 @@ class InMemoryJobManagerSpec extends Specification {
   include(new JobManagerSpec[Id] {
     val validAPIKey = "Anything should work!"
     val jobs = new InMemoryJobManager[Id]
-    val M: Monad[Id] with Copointed[Id] = implicitly
+    val M: Monad[Id] with Comonad[Id] = implicitly
   })
 }
 
@@ -57,9 +57,7 @@ class WebJobManagerSpec extends TestJobService { self =>
     val validAPIKey = self.validAPIKey
 
     implicit val executionContext = self.executionContext
-    implicit val M: Monad[Future] with Copointed[Future] = new FutureMonad(executionContext) with Copointed[Future] {
-      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-    }
+    implicit val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(5, "seconds"))
 
     val jobs = (new WebJobManager {
       val executionContext = self.executionContext
@@ -79,10 +77,7 @@ class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self
 
   include(new JobManagerSpec[Future] {
     val validAPIKey = "Anything should work!"
-    implicit lazy val M: Monad[Future] with Copointed[Future] = new FutureMonad(executionContext) with Copointed[Future] {
-      def copoint[A](f: Future[A]) = Await.result(f, Duration(5, "seconds"))
-    }
-
+    implicit lazy val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(5, "seconds"))
     lazy val jobs = new MongoJobManager(mongo.database("jobs"), MongoJobManagerSettings.default, new InMemoryFileStorage[Future])
   })
 
@@ -94,10 +89,10 @@ class MongoJobManagerSpec extends Specification with RealMongoSpecSupport { self
 trait JobManagerSpec[M[+_]] extends Specification {
   import JobState._
 
-  import scalaz.syntax.copointed._
   import scalaz.syntax.monad._
+  import scalaz.syntax.comonad._
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def validAPIKey: APIKey
 

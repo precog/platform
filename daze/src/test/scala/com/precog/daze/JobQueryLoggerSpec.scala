@@ -29,7 +29,7 @@ import org.specs2.mutable.Specification
 
 import scalaz._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 class JobQueryLoggerSpec extends Specification {
   import JobManager._
