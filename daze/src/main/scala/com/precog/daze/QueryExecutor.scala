@@ -27,8 +27,6 @@ import com.precog.common.security._
 
 import blueeyes.json._
 
-import akka.actor.ActorSystem
-import akka.dispatch.{Future, ExecutionContext}
 import akka.util.Duration
 
 import java.nio.CharBuffer

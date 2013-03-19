@@ -149,7 +149,7 @@ trait ShardService extends
     loop(stream0, ByteBuffer.allocate(BufferSize))
   }
 
-  private val queryResultToByteChunk: QueryResult => ByteChunk = {
+  private def queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
       case Right(stream) => Right(bufferOutput(stream))
@@ -170,7 +170,7 @@ trait ShardService extends
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
-  private val cf = implicitly[ByteChunk => Future[JValue]]
+  private def cf = implicitly[ByteChunk => Future[JValue]]
 
   def shardService[F[+_]](service: HttpService[Future[JValue], F[Future[HttpResponse[QueryResult]]]])(implicit
       F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {
