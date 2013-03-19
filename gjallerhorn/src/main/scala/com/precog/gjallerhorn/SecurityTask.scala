@@ -107,20 +107,29 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
     "create a new grant" in {
       val Account(user, pass, accountId, apiKey, rootPath) = createAccount
 
-      val subPath = rootPath + "qux"
+      val subPath = rootPath + "qux/"
+      val g = createGrant(apiKey, ("read", subPath, accountId :: Nil) :: Nil)
 
-      val body = """{
- "permissions" : [{
-   "accessType": "read",
-   "path": "%s",
-   "ownerAccountIds": ["%s"]
- }]
-}""" format (subPath, accountId)
+      val p = JObject(
+        "schemaVersion" -> JString("1.0"),
+        "path" -> JString(rootPath + "qux/"),
+        "accessType" -> JString("read"),
+        "ownerAccountIds" -> JArray(JString(accountId) :: Nil))
 
-      val result = http((grants / "").POST.addQueryParameter("apiKey", apiKey) << body)
-      val jv = result().jvalue
-      println(jv)
+      val grantId = (g \ "grantId").deserialize[String]
       //TODO: createdAt num => string serialization fix
+      //(g \ "createdAt") must beLike { case DateRe(_) => ok }
+      (g \ "permissions") must_== JArray(p :: Nil)
+    }
+
+    "creating multiple grants works" in {
+      val Account(user, pass, accountId, apiKey, rootPath) = createAccount
+
+      val g1 = createGrant(apiKey, ("read", rootPath + "bar/", accountId :: Nil) :: Nil)
+      val g2 = createGrant(apiKey, ("read", rootPath + "bar/", accountId :: Nil) :: Nil)
+
+      (g1 \ "grantId") must_!= (g2 \ "grantId")
+      (g1 \ "permissions") must_== (g2 \ "permissions")
     }
 
   }

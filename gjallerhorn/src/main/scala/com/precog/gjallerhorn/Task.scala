@@ -137,4 +137,18 @@ abstract class Task(settings: Settings) extends Specification {
     val result = Http(req OK as.String)
     JParser.parseFromString(result()).valueOr(throw _)
   }
+
+  def createGrant(apiKey: String, perms: List[(String, String, List[String])]): JValue = {
+    val body = JObject(
+      "permissions" -> JArray(
+        perms.map { case (accessType, path, owners) =>
+            val ids = JArray(owners.map(JString(_)))
+            JObject(
+              "accessType" -> JString(accessType),
+              "path" -> JString(path),
+              "ownerAccountIds" -> ids)
+        })).renderCompact
+
+    http((grants / "").POST.addQueryParameter("apiKey", apiKey) << body)().jvalue
+  }
 }
