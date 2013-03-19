@@ -25,7 +25,10 @@ import com.precog.common.security.APIKey
 
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
-import blueeyes.json.serialization.DefaultSerialization._
+
+// we want to serialize dates as ISO8601 not as numbers
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+import com.precog.common.security.{TZDateTimeDecomposer, TZDateTimeExtractor}
 
 import org.joda.time.DateTime
 

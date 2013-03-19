@@ -54,7 +54,6 @@ import TableModule.paths._
 trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] 
     with BlockLoadSpec[M]
     with BlockSortSpec[M] 
-    with IntersectSpec[M]
     with BlockAlignSpec[M] 
     { self =>
 
@@ -86,11 +85,6 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
 
       "arbitrary datasets"            in checkSortDense(SortAscending)
       "arbitrary datasets descending" in checkSortDense(SortDescending)      
-    }
-
-    "intersect by identity" >> {
-      "simple data" in testSimpleIntersect
-      "survive a trivial scalacheck" in checkIntersect
     }
   }
 }

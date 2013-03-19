@@ -92,8 +92,7 @@ class NIHDB private (actor: ActorRef, timeout: Timeout)(implicit executor: Execu
   def getSnapshot(): Future[NIHDBSnapshot] =
     (actor ? GetSnapshot).mapTo[NIHDBSnapshot]
 
-  // TODO: We should require an `Option[Set[(CPath, CType)]]`.
-  def getBlockAfter(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
+  def getBlockAfter(id: Option[Long], cols: Option[Set[ColumnRef]]): Future[Option[Block]] =
     getSnapshot().map(_.getBlockAfter(id, cols))
 
   def getBlock(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] =
@@ -322,10 +321,12 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
         logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
       } else {
         val (skipValues, keepValues) = batch.partition(_._1 <= currentState.maxOffset)
-        val values = keepValues.flatMap(_._2)
-        val offset = keepValues.map(_._1).max
+        if (keepValues.isEmpty) {
+          logger.warn("Skipping entirely seen batch of %d rows prior to offset %d".format(batch.flatMap(_._2).size, currentState.maxOffset))
+        } else {
+          val values = keepValues.flatMap(_._2)
+          val offset = keepValues.map(_._1).max
 
-        if (offset > currentState.maxOffset) {
           logger.debug("Inserting %d rows, skipping %d rows at offset %d for %s".format(values.length, skipValues.length, offset, baseDir.getCanonicalPath))
           blockState.rawLog.write(offset, values)
 
@@ -343,8 +344,6 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
             chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
           }
           logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
-        } else {
-          logger.debug("Skipping %d existing rows at offset %d".format(values.size, offset))
         }
       }
       sender ! ()

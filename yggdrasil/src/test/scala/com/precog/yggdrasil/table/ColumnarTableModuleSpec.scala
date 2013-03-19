@@ -435,6 +435,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap
       "replace defined rows with a constant" in checkConst
+      
+      "check cond" in checkCond
     }
 
     "in compact" >> {

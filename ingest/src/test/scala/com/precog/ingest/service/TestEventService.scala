@@ -133,7 +133,7 @@ trait TestEventService extends
     bi: A => Future[JValue],
     t: AsyncHttpTranscoder[A, ByteChunk]
   ): Future[(HttpResponse[JValue], List[Ingest])] = {
-    val svc = client.contentType[A](contentType).query("receipt", sync.toString).query("mode", if (batch) "batch" else "stream").path("/fs/")
+    val svc = client.contentType[A](contentType).query("receipt", sync.toString).query("mode", if (batch) "batch" else "stream").path("/ingest/v2/fs/")
 
     val queries = List(apiKey.map(("apiKey", _)), ownerAccountId.map(("ownerAccountId", _))).sequence
 

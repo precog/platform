@@ -494,6 +494,45 @@ object util {
       }
     )
   }
+  
+  def MaskedUnion(leftMask: BitSet) = CF2P("builtin::ct::maskedUnion") {
+    case (left: BoolColumn, right: BoolColumn) => new UnionColumn(left, right) with BoolColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: LongColumn, right: LongColumn) => new UnionColumn(left, right) with LongColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: DoubleColumn, right: DoubleColumn) => new UnionColumn(left, right) with DoubleColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: NumColumn, right: NumColumn) => new UnionColumn(left, right) with NumColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: StrColumn, right: StrColumn) => new UnionColumn(left, right) with StrColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: DateColumn, right: DateColumn) => new UnionColumn(left, right) with DateColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: PeriodColumn, right: PeriodColumn) => new UnionColumn(left, right) with PeriodColumn {
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row)
+    }
+  
+    case (left: HomogeneousArrayColumn[a], right: HomogeneousArrayColumn[b]) if left.tpe == right.tpe => new UnionColumn(left, right) with HomogeneousArrayColumn[a] {
+      val tpe = left.tpe
+      def apply(row: Int) = if (leftMask.get(row)) left(row) else right(row).asInstanceOf[Array[a]]
+    }
+  
+    case (left: EmptyArrayColumn, right: EmptyArrayColumn) => new UnionColumn(left, right) with EmptyArrayColumn
+    case (left: EmptyObjectColumn, right: EmptyObjectColumn) => new UnionColumn(left, right) with EmptyObjectColumn
+    case (left: NullColumn, right: NullColumn) => new UnionColumn(left, right) with NullColumn
+  }
 }
 
 // vim: set ts=4 sw=4 et:

@@ -18,22 +18,16 @@
  *
  */
 package com.precog
-package auth
+package daze
 
-import common.security._
+trait CondRewriter extends DAG {
+  import instructions._
+  import dag._
 
-import akka.dispatch.Future
-
-import blueeyes.bkka._
-import blueeyes.BlueEyesServer
-
-import org.streum.configrity.Configuration
-
-import scalaz._
-
-object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDefaults {
-  implicit val executionContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(executionContext)
-  def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable) = MongoAPIKeyManager(config)
-  val clock = blueeyes.util.Clock.System
+  def rewriteConditionals(node: DepGraph): DepGraph = {
+    node mapDown { recurse => {
+      case peer @ IUI(true, Filter(leftJoin, left, pred1), Filter(rightJoin, right, Operate(Comp, pred2))) if pred1 == pred2 => 
+        Cond(recurse(pred1), recurse(left), leftJoin, recurse(right), rightJoin)(peer.loc)
+    }}
+  }
 }

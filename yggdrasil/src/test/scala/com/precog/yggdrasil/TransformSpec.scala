@@ -2239,6 +2239,30 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
       results.copoint must_== expected
     }
   }
+  
+  def checkCond = {
+    implicit val gen = sample(_ => Gen.value(Seq(JPath.Identity -> CLong)))
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table transform {
+        Cond(
+          Map1(
+            DerefObjectStatic(Leaf(Source), CPathField("value")), 
+            lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0))),
+          DerefObjectStatic(Leaf(Source), CPathField("value")),
+          ConstLiteral(CBoolean(false), Leaf(Source)))
+      })
+
+      val expected = sample.data flatMap { jv =>
+        (jv \ "value") match { 
+          case jv @ JNum(x) => Some(if (x % 2 == 0) jv else JBool(false))
+          case _ => None
+        }
+      }
+
+      results.copoint must_== expected
+    }.set(minTestsOk -> 200)
+  }
 
   def expectedResult(data: Stream[JValue], included: Map[JPath, Set[CType]], subsumes: Boolean): Stream[JValue] = {
     data map { jv =>

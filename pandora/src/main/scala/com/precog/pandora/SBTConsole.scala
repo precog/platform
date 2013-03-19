@@ -121,7 +121,7 @@ object SBTConsole {
 
     val storageTimeout = yggConfig.storageTimeout
 
-    val accountFinder = new StaticAccountFinder[Future]("")
+    val accountFinder = new StaticAccountFinder[Future]("", "")
     val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future](Clock.System)
     val accessControl = new DirectAPIKeyFinder(rawAPIKeyFinder)
     val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())

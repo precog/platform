@@ -33,7 +33,6 @@ import com.precog.util.IOUtils
 import com.precog.util.IdGen
 import com.precog.bytecode._
 
-import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import java.io._
@@ -3411,6 +3410,99 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Const(RObject("a" -> CNum(1), "b" -> CTrue, "c" -> CString("true")))(line)
 
       testEval(input) { _ must haveSize(1) }
+    }
+    
+    "evaluate as a transspec a cond on a single source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(true),
+          "b" -> CNum(1),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("b"))(line))(line),
+        IdentitySort,
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
+    }
+    
+    "evaluate as a transspec a cond on a const left source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(true),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        dag.Const(CNum(1))(line),
+        CrossLeftSort,
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
+    }
+    
+    "evaluate as a transspec a cond on a const right source" in {
+      val line = Line(1, 1, "")
+      
+      val source = dag.New(
+        dag.Const(RObject(
+          "a" -> CBoolean(false),
+          "c" -> CNum(2)))(line))(line)
+      
+      val input = dag.Cond(
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("a"))(line))(line),
+        Join(DerefObject, CrossLeftSort,
+          source,
+          dag.Const(CString("c"))(line))(line),
+        IdentitySort,
+        dag.Const(CNum(1))(line),
+        CrossLeftSort)(line)
+          
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+        
+        val results = resultsE collect {
+          case (ids, sv) if ids.length == 1 => sv
+        }
+        
+        results.head mustEqual SDecimal(1)
+      }
     }
   }
 

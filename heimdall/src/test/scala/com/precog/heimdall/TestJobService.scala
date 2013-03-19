@@ -71,6 +71,8 @@ class JobServiceSpec extends TestJobService {
 
   val JSON = MimeTypes.application / MimeTypes.json
 
+  val jobsClient = client.contentType[ByteChunk](JSON).path("/jobs/v1/")
+
   val simpleJob: JValue = JObject(List(
     JField("name", JString("abc")),
     JField("type", JString("cba"))
@@ -87,21 +89,21 @@ class JobServiceSpec extends TestJobService {
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
-  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
+  def postJob(job: JValue, apiKey: String = validAPIKey) = jobsClient.query("apiKey", apiKey).post[JValue]("/jobs/")(job)
 
   def postJobAndGetId(job: JValue, apiKey: String = validAPIKey) = for {
-    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
+    res <- jobsClient.query("apiKey", apiKey).post[JValue]("/jobs/")(job)
     Some(JString(jobId)) = res.content map (_ \ "id")
   } yield jobId
 
-  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s".format(jobId))
+  def getJob(jobId: String) = jobsClient.get[JValue]("/jobs/%s".format(jobId))
 
-  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/state".format(jobId))(state)
+  def putState(jobId: String, state: JValue) = jobsClient.put[JValue]("/jobs/%s/state".format(jobId))(state)
 
-  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/state".format(jobId))
+  def getState(jobId: String) = jobsClient.get[JValue]("/jobs/%s/state".format(jobId))
 
   def postMessage(jobId: String, channel: String, msg: JValue) =
-    client.contentType[ByteChunk](JSON).post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
+    jobsClient.post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
 
   def postMessageAndGetId(jobId: String, channel: String, msg: JValue) = for {
     res <- postMessage(jobId, channel, msg)
@@ -109,12 +111,12 @@ class JobServiceSpec extends TestJobService {
   } yield id
 
   def getMessages(jobId: String, channel: String, after: Option[BigDecimal]) = {
-    val client0 = after map { id => client.query("after", id.toInt.toString) } getOrElse client
+    val client0 = after map { id => jobsClient.query("after", id.toInt.toString) } getOrElse jobsClient
     client0.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/messages/%s" format (jobId, channel))
   }
 
   def putStatusRaw(jobId: String, prev: Option[BigDecimal])(obj: JValue) = {
-    val client0 = prev map { id => client.query("prevStatusId", id.toLong.toString) } getOrElse client
+    val client0 = prev map { id => jobsClient.query("prevStatusId", id.toLong.toString) } getOrElse jobsClient
     client0.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/status".format(jobId))(obj)
   }
 
@@ -134,7 +136,7 @@ class JobServiceSpec extends TestJobService {
     } yield id
   }
 
-  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/status".format(jobId))
+  def getStatus(jobId: String) = jobsClient.get[JValue]("/jobs/%s/status".format(jobId))
 
   "job service" should {
     "allow job creation" in {

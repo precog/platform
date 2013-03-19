@@ -161,6 +161,21 @@ trait BoolColumn extends Column with (Int => Boolean) {
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
   def rowCompare(row1: Int, row2: Int): Int =
     java.lang.Boolean.compare(apply(row1), apply(row2))
+  
+  def asBitSet(undefinedVal: Boolean, size: Int): BitSet = {
+    val back = new BitSet(size)
+    var i = 0
+    while (i < size) {
+      val b = if (!isDefinedAt(i))
+        undefinedVal
+      else
+        apply(i)
+      
+      back.set(i, b)
+      i += 1
+    }
+    back
+  }
 
   override val tpe = CBoolean
   override def jValue(row: Int) = JBool(this(row))

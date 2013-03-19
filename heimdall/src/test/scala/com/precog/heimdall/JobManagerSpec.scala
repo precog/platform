@@ -62,7 +62,7 @@ class WebJobManagerSpec extends TestJobService { self =>
     val jobs = (new WebJobManager {
       val executionContext = self.executionContext
       val M = self.M
-      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client)
+      protected def withRawClient[A](f: HttpClient[ByteChunk] => A): A = f(client.path("/jobs/v1/"))
     }).withM[Future](ResponseAsFuture(M), FutureAsResponse(M), Monad[Response], M)
   })
 }

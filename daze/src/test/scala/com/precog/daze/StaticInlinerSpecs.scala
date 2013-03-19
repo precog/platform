@@ -183,6 +183,46 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RObject("k" -> CTrue, "l" -> CBoolean(false)))(line)
       }
     }
+    
+    "detect and resolve cond" >> {
+      val line = Line(1, 1, "")
+      
+      "const true" >> {
+        val input = Cond(Const(CBoolean(true))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
+        
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CString("j"))(line)
+      }
+      
+      "const false" >> {
+        val input = Cond(Const(CBoolean(false))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
+        
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CString("k"))(line)
+      }
+      
+      "invalid const" >> {
+        val input = Cond(Const(CString("fubar"))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
+        
+        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Undefined(line)
+      }
+    }
+    
+    "detect and resove union with identical left/right" in {
+      val line = Line(1, 1, "")
+      
+      val side = Const(CString("j"))(line)
+      val input = IUI(true, side, side)(line)
+      
+      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+    }
+    
+    "detect and resove intersect with identical left/right" in {
+      val line = Line(1, 1, "")
+      
+      val side = Const(CString("j"))(line)
+      val input = IUI(false, side, side)(line)
+      
+      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+    }
   }
 }
 

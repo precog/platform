@@ -109,7 +109,7 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
 }
 
 class AccountServiceSpec extends TestAccountService with Tags {
-  def accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/")
+  def accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/v1/accounts/")
 
   def auth(user: String, pass: String): HttpHeader = {
     val raw = (user + ":" + pass).getBytes("utf-8")

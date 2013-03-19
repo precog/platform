@@ -112,7 +112,7 @@ object NIHDBPlatformActor extends Logging {
 
         implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
 
-        val accountFinder = new StaticAccountFinder[Future]("")
+        val accountFinder = new StaticAccountFinder[Future]("", "", Some("/"))
         val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
         val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 

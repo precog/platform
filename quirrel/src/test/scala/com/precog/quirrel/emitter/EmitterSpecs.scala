@@ -107,6 +107,19 @@ object EmitterSpecs extends Specification
           PushNum("42"),
           Assert))
     }
+    
+    "emit cond" in {
+      testEmit("if true then 1 else 2")(
+        Vector(
+          PushNum("1"),
+          PushTrue,
+          FilterCross,
+          PushNum("2"),
+          PushTrue,
+          Map1(Comp),
+          FilterCross,
+          IUnion))
+    }
 
     "emit filter of two where'd loads with value provenance" >> {
       "which are numerics" >> {

@@ -161,13 +161,13 @@ trait TestShardService extends
    }
 
   lazy val queryService = client.contentType[QueryResult](application/(MimeTypes.json))
-                                 .path("/analytics/fs/")
+                                 .path("/analytics/v2/analytics/fs/")
 
   lazy val metaService = client.contentType[QueryResult](application/(MimeTypes.json))
-                                .path("/meta/fs/")
+                                .path("/analytics/v2/meta/fs/")
 
   lazy val asyncService = client.contentType[QueryResult](application/(MimeTypes.json))
-                                .path("/analytics/queries")
+                                .path("/analytics/v2/analytics/queries")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(1, Duration(3, "second"))
   val shortFutureTimeouts = FutureTimeouts(1, Duration(50, "millis"))
