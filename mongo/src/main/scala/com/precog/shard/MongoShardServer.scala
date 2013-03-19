@@ -29,9 +29,9 @@ import scalaz.Monad
 
 import org.streum.configrity.Configuration
 
+import com.precog.common.jobs.JobManager
+import com.precog.common.security.APIKeyFinder
 import com.precog.standalone.StandaloneShardServer
-
-import com.precog.common.security._
 
 object MongoShardServer extends StandaloneShardServer {
   val caveatMessage = Some("""
@@ -51,11 +51,10 @@ Please note that path globs are not yet supported in Precog for MongoDB
 """)
 
   val actorSystem = ActorSystem("mongoExecutorActorSystem")
-  implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  implicit val executionContext = actorSystem.dispatcher
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration) = M.point {
-    val apiKeyFinder = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-    BasicShardState(MongoQueryExecutor(config.detach("queryExecutor"))(executionContext, M), apiKeyFinder, Stoppable.fromFuture(Future(())))
-  }
+  def platformFor(config: Configuration, apiKeyfinder: APIKeyFinder[Future], jobManager: JobManager[Future]) =
+    (new MongoQueryExecutor(new MongoQueryExecutorConfig(config.detach("queryExecutor")), jobManager, actorSystem),
+     Stoppable.fromFuture(Future(())))
 }

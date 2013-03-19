@@ -115,7 +115,7 @@ trait TestEventService extends
 
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
 
-  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
+  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
     //println(apiKeyManager.apiKeys)
     val deps = EventServiceDeps(
       new DirectAPIKeyFinder(apiKeyManager),

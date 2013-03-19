@@ -21,9 +21,11 @@ package com.precog.shard
 package mongo
 
 import com.precog.common._
+import com.precog.common.jobs._
 import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.common.accounts._
+import com.precog.standalone._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.jdbm3._
@@ -35,6 +37,8 @@ import com.precog.yggdrasil.util._
 import com.precog.daze._
 import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
+
+import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -64,43 +68,27 @@ import scalaz.syntax.std.either._
 import scala.collection.JavaConverters._
 
 class MongoQueryExecutorConfig(val config: Configuration)
-  extends BaseConfig
-  with ColumnarTableModuleConfig
-  with MongoColumnarTableModuleConfig
-  with BlockStoreColumnarTableModuleConfig
-  with ShardQueryExecutorConfig
-  with IdSourceConfig
-  with ShardConfig {
-
-  val maxSliceSize = config[Int]("mongo.max_slice_size", 10000)
-  val smallSliceSize = config[Int]("mongo.small_slice_size", 8)
-
-  val shardId = "standalone"
+    extends StandaloneQueryExecutorConfig
+    with MongoColumnarTableModuleConfig {
   val logPrefix = "mongo"
-
-  val idSource = new FreshAtomicIdSource
 
   def mongoServer: String = config[String]("mongo.server", "localhost:27017")
 
   def dbAuthParams = config.detach("mongo.dbAuth")
 
-  def masterAPIKey: String = config[String]("masterAccount.apiKey", "12345678-9101-1121-3141-516171819202")
-
   def includeIdField: Boolean = config[Boolean]("include_ids", false)
-
-  val clock = blueeyes.util.Clock.System
-
-  val ingestConfig = None
 }
 
 object MongoQueryExecutor {
-  def apply(config: Configuration)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
-    new MongoQueryExecutor(new MongoQueryExecutorConfig(config))
+  def apply(config: Configuration, jobManager: JobManager[Future], jobActorSystem: ActorSystem)(implicit ec: ExecutionContext, M: Monad[Future]): Platform[Future, StreamT[Future, CharBuffer]] = {
+    new MongoQueryExecutor(new MongoQueryExecutorConfig(config), jobManager, jobActorSystem)
   }
 }
 
-class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAsyncContext: ExecutionContext, val M: Monad[Future])
-    extends ShardQueryExecutorPlatform[Future] with MongoColumnarTableModule { platform =>
+class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig, val jobManager: JobManager[Future], val jobActorSystem: ActorSystem)(implicit val executionContext: ExecutionContext, val M: Monad[Future])
+    extends StandaloneQueryExecutor
+    with MongoColumnarTableModule
+    with Logging { platform =>
   type YggConfig = MongoQueryExecutorConfig
 
   val includeIdField = yggConfig.includeIdField
@@ -115,31 +103,28 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
 
   def userMetadataView(apiKey: APIKey) = storage.userMetadataView(apiKey)
 
-  // to satisfy abstract defines in parent traits
-  val asyncContext = extAsyncContext
-
   Table.mongo = new Mongo(new MongoURI(yggConfig.mongoServer))
-  
+
   def shutdown() = Future {
     Table.mongo.close()
     true
   }
 
-  implicit val nt = NaturalTransformation.refl[Future]
-  object executor extends ShardQueryExecutor[Future](M) with IdSourceScannerModule {
-    val M = platform.M
-    type YggConfig = platform.YggConfig
-    val yggConfig = platform.yggConfig
-    val queryReport = LoggingQueryLogger[Future](M)
-  }
-
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, CharBuffer]]]] = {
-    Future(Success(executor))
-  }
-
   val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Promise.successful(Failure("Size not yet supported"))
-    def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+    def size(userUID: String, path: Path): Future[Validation[String, JNum]] = Future {
+      path.elements.toList match {
+        case dbName :: collectionName :: Nil =>
+          val db = Table.mongo.getDB(dbName)
+          success(JNum(db.getCollection(collectionName).getStats.getLong("count")))
+
+        case _ =>
+          success(JNum(0))
+      }
+    }.onFailure {
+      case t => logger.error("Failure during size", t)
+    }
+
+    def browse(userUID: String, path: Path): Future[Validation[String, JArray]] =
       Future {
         path.elements.toList match {
           case Nil =>
@@ -156,11 +141,15 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig)(implicit extAs
             val db = Table.mongo.getDB(dbName)
             Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
+          case dbName :: collectionName :: Nil =>
+            Success(JArray(Nil))
+
           case _ =>
             Failure("MongoDB paths have the form /databaseName/collectionName; longer paths are not supported.")
         }
+      }.onFailure {
+        case t => logger.error("Failure during browse", t)
       }
-    }
 
     def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
       Success(JObject.empty) // TODO: Implement somehow?

@@ -41,17 +41,20 @@ object StandaloneIngestServer extends StandaloneIngestServer with AkkaDefaults {
   val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
   val clock = Clock.System
- }
+}
 
 trait StandaloneIngestServer
     extends BlueEyesServer
     with EventService {
+
+  def clock: Clock
+
   def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
     val apiKey = config[String]("security.masterAccount.apiKey")
     val apiKeyFinder0 = new StaticAPIKeyFinder[Future](apiKey)
-    val accountFinder0 = new StaticAccountFinder[Future](apiKey, config[String]("security.masterAccount.accountId"))
-    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, Clock.System.instant())
-    val (eventStore0, stoppable) = KafkaEventStore(config.detach("eventStore"), permissionsFinder) getOrElse {
+    val accountFinder0 = new StaticAccountFinder[Future](config[String]("security.masterAccount.accountId"), apiKey, Some("/"))
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, clock.instant())
+    val (eventStore0, stoppable) = KafkaEventStore(config, permissionsFinder) getOrElse {
       sys.error("Invalid configuration: eventStore.central.zk.connect required")
     }
 

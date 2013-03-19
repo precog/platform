@@ -79,8 +79,8 @@ case class ManagedQueryShardState(
   apiKeyFinder: APIKeyFinder[Future],
   jobManager: JobManager[Future],
   clock: Clock,
-  options: ShardStateOptions = ShardStateOptions.NoOptions,
-  stoppable: Stoppable) extends ShardState
+  stoppable: Stoppable,
+  options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState
 
 case class BasicShardState(
   platform: Platform[Future, StreamT[Future, CharBuffer]],
@@ -152,11 +152,13 @@ trait ShardService extends
     }
   }
 
-  private def asyncQueryService(state: ShardState) = state match {
-    case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, DisableAsyncQueries, _) =>
-      new QueryServiceNotAvailable
-    case ManagedQueryShardState(platform, _, _, _, _, _) =>
-      new AsyncQueryServiceHandler(platform.asynchronous)
+  private def asyncQueryService(state: ShardState) = {
+    state match {
+      case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, _, DisableAsyncQueries) =>
+        new QueryServiceNotAvailable
+      case ManagedQueryShardState(platform, _, _, _, _, _) =>
+        new AsyncQueryServiceHandler(platform.asynchronous)
+    }
   }
 
   private def syncQueryService(state: ShardState) = state match {
@@ -166,7 +168,7 @@ trait ShardService extends
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
-  private val cf = implicitly[ByteChunk => Future[JValue]]
+  private def cf = implicitly[ByteChunk => Future[JValue]]
 
   def shardService[F[+_]](service: HttpService[Future[JValue], F[Future[HttpResponse[QueryResult]]]])(implicit
       F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {

@@ -95,6 +95,16 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
       }
     }
 
+    "list children API keys" in new TestAPIKeyManager {
+      val (result, expected) = Await.result(for {
+        k1 <- apiKeyManager.newAPIKey(Some("blah1"), None, child2.apiKey, Set.empty)
+        k2 <- apiKeyManager.newAPIKey(Some("blah2"), None, child2.apiKey, Set.empty)
+        kids <- apiKeyManager.findAPIKeyChildren(child2.apiKey)
+      } yield (kids, List(k1, k2)), timeout)
+
+      result must haveTheSameElementsAs(expected)
+    }
+
     "move API key to deleted pool on deletion" in new TestAPIKeyManager {
 
       type Results = (Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord], Option[APIKeyRecord])

@@ -20,6 +20,7 @@
 package com.precog.standalone
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
+import akka.util.Duration
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -28,16 +29,22 @@ import blueeyes.core.http._
 import blueeyes.json.JValue
 import blueeyes.util.Clock
 
+import java.io.File
+import java.util.concurrent.TimeUnit
+
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, HandlerWrapper, ResourceHandler}
 
+import org.streum.configrity.Configuration
+
 import scalaz.Monad
 
 import com.precog.accounts._
+import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.shard.ShardService
+import com.precog.shard._
 import java.awt.Desktop
 import java.net.URI
 
@@ -51,8 +58,31 @@ trait StandaloneShardServer
 
   def caveatMessage: Option[String]
 
-  def openBrowser(port: Int){
-    Desktop.getDesktop.browse(new URI("http://localhost:%s".format(port)))
+  def platformFor(config: Configuration, apiKeyManager: APIKeyFinder[Future], jobManager: JobManager[Future]): (ManagedPlatform, Stoppable)
+
+  def apiKeyFinderFor(config: Configuration): APIKeyFinder[Future] = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
+
+  def configureShardState(config: Configuration) = M.point {
+    val apiKeyFinder = apiKeyFinderFor(config)
+    config.get[String]("jobs.jobdir").map { jobdir =>
+      val dir = new File(jobdir)
+
+      if (!dir.isDirectory) {
+        throw new Exception("Configured job dir %s is not a directory".format(dir))
+      }
+
+      if (!dir.canWrite) {
+        throw new Exception("Configured job dir %s is not writeable".format(dir))
+      }
+
+      val jobManager = new FileJobManager(dir, M)
+      val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
+      ManagedQueryShardState(platform, apiKeyFinder, jobManager, Clock.System, stoppable)
+    }.getOrElse {
+      val jobManager = new ExpiringJobManager(Duration(60, TimeUnit.SECONDS))
+      val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
+      BasicShardState(platform, apiKeyFinder, stoppable)
+    }
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

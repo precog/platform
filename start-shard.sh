@@ -24,7 +24,7 @@ MAX_PORT_OPEN_TRIES=60
 # Parse opts to determine settings
 while getopts ":d:lbZYR" opt; do
     case $opt in
-        d) 
+        d)
             WORKDIR=$(cd $OPTARG; pwd)
             ;;
         l)
@@ -172,7 +172,7 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists "$ARTIFACTDIR"/zookeeper* && echo "  ZooKeeper exists") || {
     echo "Downloading current ZooKeeper artifact"
     pushd "$ARTIFACTDIR" > /dev/null
-    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || { 
+    wget -nd -q http://ops.reportgrid.com.s3.amazonaws.com/zookeeper/zookeeper-3.4.3.tar.gz || {
         echo "Failed to download zookeeper" >&2
         exit 3
     }
@@ -182,7 +182,7 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists "$ARTIFACTDIR"/kafka* && echo "  Kafka exists") || {
     echo "Downloading current Kafka artifact"
     pushd "$ARTIFACTDIR" > /dev/null
-    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || { 
+    wget -nd -q http://s3.amazonaws.com/ops.reportgrid.com/kafka/kafka-0.7.5.zip || {
         echo "Failed to download kafka" >&2
         exit 3
     }
@@ -192,9 +192,9 @@ echo "Using artifacts in $ARTIFACTDIR"
 (exists "$ARTIFACTDIR"/mongo* && echo "  Mongo exists") || {
     echo "Downloading current Mongo artifact"
     pushd "$ARTIFACTDIR" > /dev/null
-    wget -nd -q $MONGOURL || { 
+    wget -nd -q $MONGOURL || {
         echo "Failed to download kafka" >&2
-        exit 3 
+        exit 3
     }
     popd > /dev/null
 }
@@ -206,7 +206,7 @@ else
     REBEL_OPTS=''
 fi
 
-if [ "$WORKDIR" == "" ]; then  
+if [ "$WORKDIR" == "" ]; then
     WORKDIR=`mktemp -d -t standaloneShard.XXXXXX 2>&1`
     if [ $? -ne 0 ]; then
         echo "Couldn't create temp workdir! ($WORKDIR)" >&2
@@ -230,7 +230,7 @@ MONGODATA="$WORKDIR"/mongodata
 
 rm -rf $ZKBASE $KFBASE
 mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
-  
+
 echo "Running standalone shard under $WORKDIR"
 
 # Set shutdown hook
@@ -279,7 +279,7 @@ function on_exit() {
 
     if is_running $KFGLOBALPID; then
         echo "Stopping kafka..."
-        # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches 
+        # Kafka is somewhat of a pain, since the Java process daemonizes from within the startup script. That means that killing the script detaches
         # the Java process, leaving it running. Instead, we kill all child processes
         for pid in `ps -o pid,ppid | awk -v PID=$KFGLOBALPID '{ if($2 == PID) print $1}'`; do kill $pid; done
         wait $KFGLOBALPID
@@ -435,7 +435,7 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 sed -e "s/port = 30060/port = $INGEST_PORT/; \
 	s#/var/log#$WORKDIR/logs#; \
 	s/port = 30062/port = $AUTH_PORT/; \
-	s/rootKey = .*/rootKey = \"$TOKENID\"/; 
+	s/rootKey = .*/rootKey = \"$TOKENID\"/;
 	s#/security/v1/#/#; \
 	s/port = 30064/port = $ACCOUNTS_PORT/; \
 	s#/accounts/v1/#/#; \
@@ -562,7 +562,10 @@ echo "============================================================"
 cat > shard.out <<EOF
 id $ACCOUNTID
 token $ACCOUNTTOKEN
+accounts $ACCOUNTS_PORT
+auth $AUTH_PORT
 ingest $INGEST_PORT
+jobs $JOBS_PORT
 shard $SHARD_PORT
 EOF
 

@@ -193,7 +193,8 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
     ToPlusOps[({ type λ[α] = Future[Option[α]] })#λ, APIKeyRecord](findOneMatching[APIKeyRecord]("apiKey", apiKey, settings.apiKeys)) <+>
     findOneMatching[APIKeyRecord]("tid", apiKey, settings.apiKeys)
 
-  def findAPIKeyChildren(apiKey: APIKey): Future[Set[APIKeyRecord]] = sys.error("todo")
+  def findAPIKeyChildren(apiKey: APIKey): Future[Set[APIKeyRecord]] =
+    findAllMatching[APIKeyRecord]("issuerKey", apiKey, settings.apiKeys)
 
   def findGrant(gid: GrantId) =
     ToPlusOps[({ type λ[α] = Future[Option[α]] })#λ, Grant](findOneMatching[Grant]("grantId", gid, settings.grants)) <+>

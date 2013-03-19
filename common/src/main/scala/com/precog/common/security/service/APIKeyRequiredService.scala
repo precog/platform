@@ -84,7 +84,6 @@ extends DelegatingService[A, Validation[String, APIKey] => Future[B], A, APIKey 
 class APIKeyRequiredService[A, B](keyFinder: APIKey => Future[Option[APIKey]], val delegate: HttpService[A, Validation[String, APIKey] => Future[B]])
 extends DelegatingService[A, Future[B], A, Validation[String, APIKey] => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
-    logger.info("Received request " + request)
     request.parameters.get('apiKey).toSuccess[NotServed] {
       DispatchError(BadRequest, "An apiKey query parameter is required to access this URL")
     } flatMap { apiKey =>
