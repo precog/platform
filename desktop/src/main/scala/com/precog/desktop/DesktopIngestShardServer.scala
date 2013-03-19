@@ -9,9 +9,9 @@ import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
 import blueeyes.util.CommandLineArguments
 
-import com.precog.common.jobs.InMemoryJobManager
+import com.precog.common.jobs.JobManager
 import com.precog.common.accounts.StaticAccountFinder
-import com.precog.common.security.StaticAPIKeyFinder
+import com.precog.common.security.APIKeyFinder
 import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
@@ -151,12 +151,9 @@ object DesktopIngestShardServer
     }
   }
 
-  def configureShardState(config: Configuration) = Future {
-    println("Configuration at configure shard state=%s".format(config))
+  def platformFor(config: Configuration, apiKeyFinder: APIKeyFinder[Future], jobManager: JobManager[Future]): (ManagedPlatform, Stoppable) = {
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
-    val apiKeyFinder = new StaticAPIKeyFinder(rootAPIKey)
-    val accountFinder = new StaticAccountFinder(rootAPIKey, "desktop")
-    val jobManager = new InMemoryJobManager
+    val accountFinder = new StaticAccountFinder("desktop", rootAPIKey, Some("/"))
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
 
     val stoppable = Stoppable.fromFuture {
@@ -168,15 +165,7 @@ object DesktopIngestShardServer
       }
     }
 
-    val state = ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
-
-    logger.debug("Startup config complete. Returning " + state)
-    state
-  } recoverWith {
-    case ex: Throwable =>
-      System.err.println("Could not start NIHDB Shard server!!!")
-      ex.printStackTrace
-      Promise.failed(ex)
+    (platform, stoppable)
   }
 
   def waitForPortOpen(port: Int, tries: Int): Boolean = {
