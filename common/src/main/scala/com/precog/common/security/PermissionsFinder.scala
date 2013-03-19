@@ -31,7 +31,7 @@ import org.joda.time.Instant
 import scalaz._
 import scalaz.\/._
 import scalaz.std.option.optionInstance
-import scalaz.std.set._
+import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.bitraverse._
@@ -59,16 +59,16 @@ class PermissionsFinder[M[+_]: Monad](val apiKeyFinder: APIKeyFinder[M], val acc
 
     def selectWriter(writePermissions: Set[WritePermission]): M[Option[Authorities]] = {
       lazy val accountWriter: M[Option[Authorities]] = accountFinder.findAccountByAPIKey(apiKey) map { _ map { Authorities(_) } }
-      val eithers: Set[M[Option[Authorities]] \/ M[Option[Authorities]]] = writePermissions map {
+      val eithers: List[M[Option[Authorities]] \/ M[Option[Authorities]]] = writePermissions.map({
         case WritePermission(_, WriteAsAny) => 
           left(accountWriter)
         case WritePermission(_, WriteAsAll(accountIds)) => 
           (Authorities.ifPresent(accountIds).map(a => Some(a).point[M]) \/> accountWriter)
-      }
+      })(collection.breakOut)
 
       // if it is possible to write as the account holder for the api key, then do so, otherwise,
       // write as the distinct set of writers that the api key has path write permissions for
-      eithers.map(_.bisequence[M, Option[Authorities], Option[Authorities]]).sequence map { (perms: Set[Option[Authorities] \/ Option[Authorities]]) =>
+      eithers.traverse(_.bisequence[M, Option[Authorities], Option[Authorities]]) map { (perms: List[Option[Authorities] \/ Option[Authorities]]) =>
         perms collectFirst {
           case -\/(Some(authorities)) => authorities
         } orElse {
@@ -103,12 +103,12 @@ class PermissionsFinder[M[+_]: Monad](val apiKeyFinder: APIKeyFinder[M], val acc
         details.toSet.flatMap(_.grants).flatMap(_.permissions)
       }
       accountId <- accountFinder.findAccountByAPIKey(apiKey)
-      accountPath <- accountId.map(accountFinder.findAccountDetailsById).sequence.map(_.flatten.map(_.rootPath))
+      accountPath <- accountId.traverse(accountFinder.findAccountDetailsById)
     } yield {
       // FIXME: Not comprehensive/exhaustive in terms of finding all possible data you could read
       permissions flatMap {
         case perm @ WrittenByPermission(p0, _) if p0.isEqualOrParent(path) => 
-          if (perm.path == Path.Root) accountPath else Some(perm.path)
+          if (perm.path == Path.Root) accountPath.flatten.map(_.rootPath) else Some(perm.path)
 
         case _ => None
       }

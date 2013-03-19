@@ -30,9 +30,10 @@ import com.weiglewilczek.slf4s.Logging
 import org.joda.time.DateTime
 
 import scalaz._
+import scalaz.effect._
 import scalaz.std.option._
-import scalaz.std.set._
-import scalaz.syntax.id._
+import scalaz.std.list._
+import scalaz.syntax.effect.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
@@ -58,7 +59,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   private val childCache = Cache.simple[APIKey, Set[APIKeyRecord]](settings.childCacheSettings: _*)
   private val grantCache = Cache.simple[GrantId, Grant](settings.grantCacheSettings: _*)
 
-  protected def add(r: APIKeyRecord) = {
+  protected def add(r: APIKeyRecord) = IO {
     @inline def addChildren(k: APIKey, c: Set[APIKeyRecord]) = 
       childCache.put(k, childCache.get(k).getOrElse(Set()) union c)
 
@@ -66,9 +67,11 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
     addChildren(r.issuerKey, Set(r))
   }
 
-  protected def add(g: Grant) = grantCache.put(g.grantId, g)
+  protected def add(g: Grant) = IO {
+    grantCache.put(g.grantId, g)
+  }
 
-  protected def remove(r: APIKeyRecord) = {
+  protected def remove(r: APIKeyRecord) = IO {
     @inline def removeChildren(k: APIKey, c: Set[APIKeyRecord]) = 
       childCache.put(k, childCache.get(k).getOrElse(Set()) diff c)
 
@@ -76,21 +79,23 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
     removeChildren(r.issuerKey, Set(r))
   }
 
-  protected def remove(g: Grant) = grantCache.remove(g.grantId)
+  protected def remove(g: Grant) = IO {
+    grantCache.remove(g.grantId)
+  }
 
   def rootGrantId: M[GrantId] = manager.rootGrantId
   def rootAPIKey: M[APIKey] = manager.rootAPIKey
 
   def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
-    manager.newAPIKey(name, description, issuerKey, grants) map { _ tap add }
+    manager.newAPIKey(name, description, issuerKey, grants) map { _ tap add unsafePerformIO }
 
   def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]) =
-    manager.newGrant(name, description, issuerKey, parentIds, perms, expiration) map { _ tap add }
+    manager.newGrant(name, description, issuerKey, parentIds, perms, expiration) map { _ tap add unsafePerformIO }
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
     case None =>
       logger.debug("Cache miss on api key " + tid)
-      manager.findAPIKey(tid).map { _ tap { _ foreach add } }
+      manager.findAPIKey(tid) map { _.traverse(_ tap add).unsafePerformIO }
 
     case t    => M.point(t)
   }
@@ -98,13 +103,13 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def findGrant(gid: GrantId) = grantCache.get(gid) match {
     case None        =>
       logger.debug("Cache miss on grant " + gid)
-      manager.findGrant(gid).map { _ tap { _ foreach add } }
+      manager.findGrant(gid) map { _.traverse(_ tap add).unsafePerformIO }
 
     case s @ Some(_) => M.point(s)
   }
 
   def findAPIKeyChildren(apiKey: APIKey): M[Set[APIKeyRecord]] = childCache.get(apiKey) match {
-    case None    => manager.findAPIKeyChildren(apiKey) map { _ tap { _ foreach add } }
+    case None    => manager.findAPIKeyChildren(apiKey) map { _.toList.traverse(_ tap add).unsafePerformIO.toSet }
     case Some(s) => M.point(s)
   }
 
@@ -121,14 +126,14 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def findDeletedGrantChildren(gid: GrantId) = manager.findDeletedGrantChildren(gid)
 
   def addGrants(tid: APIKey, grants: Set[GrantId]) =
-    manager.addGrants(tid, grants).map { _.map { _ tap add } }
+    manager.addGrants(tid, grants).map { _.traverse(_ tap add).unsafePerformIO } 
   def removeGrants(tid: APIKey, grants: Set[GrantId]) =
-    manager.removeGrants(tid, grants).map { _.map { _ tap add } }
+    manager.removeGrants(tid, grants) map { _.traverse(_ tap remove).unsafePerformIO }
 
   def deleteAPIKey(tid: APIKey) =
-    manager.deleteAPIKey(tid) map { _ tap { _ foreach remove } }
+    manager.deleteAPIKey(tid) map { _.traverse(_ tap remove).unsafePerformIO }
   def deleteGrant(gid: GrantId) =
-    manager.deleteGrant(gid) map { _ tap { _ foreach remove } }
+    manager.deleteGrant(gid) map { _.toList.traverse(_ tap remove).unsafePerformIO.toSet }
 }
 
 // vim: set ts=4 sw=4 et:

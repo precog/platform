@@ -30,7 +30,7 @@ import org.joda.time.DateTime
 
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.std.option._
-import scalaz.std.set._
+import scalaz.std.list._
 import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
@@ -120,20 +120,30 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
   def deleteGrant(apiKey: GrantId): M[Set[Grant]]
 
   def findValidGrant(grantId: GrantId, at: Option[DateTime] = None): M[Option[Grant]] =
-    findGrant(grantId).flatMap { grantOpt =>
-      grantOpt.map { grant =>
-        if(grant.isExpired(at)) None.point[M]
+    findGrant(grantId) flatMap { grantOpt =>
+      grantOpt map { (grant: Grant) =>
+        if (grant.isExpired(at)) None.point[M]
         else grant.parentIds.foldLeft(some(grant).point[M]) { case (accM, parentId) =>
-          accM.flatMap(_.map { grant => findValidGrant(parentId, at).map(_ => grant) }.sequence)
+          accM flatMap {
+            _ traverse { grant => findValidGrant(parentId, at).map(_ => grant) }
+          }
         }
-      }.getOrElse(None.point[M])
+      } getOrElse {
+        None.point[M]
+      }
     }
 
   def validGrants(apiKey: APIKey, at: Option[DateTime] = None): M[Set[Grant]] = {
     logger.trace("Checking grant validity for apiKey " + apiKey)
-    findAPIKey(apiKey).flatMap(_.map { apiKeyRecord =>
-      apiKeyRecord.grants.map(findValidGrant(_, at)).sequence.map(_.flatten)
-    }.getOrElse(Set.empty.point[M]))
+    findAPIKey(apiKey) flatMap { 
+      _ map { 
+        _.grants.toList.traverse(findValidGrant(_, at)) map {
+          _.flatMap(_.toSet)(collection.breakOut): Set[Grant]
+        }
+      } getOrElse {
+        Set.empty.point[M]
+      }
+    }
   }
 
   def deriveGrant(name: Option[String], description: Option[String], issuerKey: APIKey, perms: Set[Permission], expiration: Option[DateTime] = None): M[Option[Grant]] = {
@@ -168,11 +178,12 @@ trait APIKeyManager[M[+_]] extends Logging { self =>
   }
 
   def newAPIKeyWithGrants(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[v1.NewGrantRequest]): M[Option[APIKeyRecord]] = {
-    grants.map(grant => hasCapability(issuerKey, grant.permissions, grant.expirationDate)).sequence flatMap { checks =>
+    val grantList = grants.toList
+    grantList.traverse(grant => hasCapability(issuerKey, grant.permissions, grant.expirationDate)) flatMap { checks =>
       if (checks.forall(_ == true)) {
         for {
-          newGrants <- grants.map(grant => deriveGrant(grant.name, grant.description, issuerKey, grant.permissions, grant.expirationDate)).sequence
-          newKey    <- newAPIKey(name, description, issuerKey, newGrants.flatten.map(_.grantId))
+          newGrants <- grantList traverse { g => deriveGrant(g.name, g.description, issuerKey, g.permissions, g.expirationDate) }
+          newKey    <- newAPIKey(name, description, issuerKey, newGrants.flatMap(_.map(_.grantId))(collection.breakOut))
         } yield some(newKey)
       } else {
         none[APIKeyRecord].point[M]

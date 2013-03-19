@@ -56,7 +56,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M8"
+  val blueeyesVersion = "1.0.0-M8.1"
   val scalazVersion = "7.0.0-M8"
 
   val commonSettings = Seq(
