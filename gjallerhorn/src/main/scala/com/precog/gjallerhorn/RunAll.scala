@@ -105,10 +105,12 @@ abstract class Task(settings: Settings) {
   def accounts = host(serviceHost, accountsPort) / "accounts"
 
   def security = host(serviceHost, authPort) / "apikeys"
-  
+
   def metadata = host(serviceHost, shardPort) / "meta"
 
   def ingest = host(serviceHost, ingestPort)
+
+  def analytics = host(serviceHost, shardPort) / "analytics"
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
