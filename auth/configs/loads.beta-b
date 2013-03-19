@@ -1,0 +1,6 @@
+/etc/precog/auth-v1-beta-b.conf=beta-b/auth-v1-beta.conf
+default=beta-b/auth-v1-beta.default
+init=beta-b/auth-v1-beta.init
+/etc/monit/conf.d/auth-v1-beta-b.monit=beta-b/auth-v1-beta.monit
+/etc/precog/auth-v1-beta-b.logging.xml=beta-b/auth-v1-beta.logging.xml
+postinstall=beta-b/postinstall.sh
