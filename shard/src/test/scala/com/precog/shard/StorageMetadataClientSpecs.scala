@@ -52,7 +52,8 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
   "browse" should {
     "find child paths" in {
       client.browse("", Path("/foo/")).copoint must beLike {
-        case Success(JArray(results)) => results must haveTheSameElementsAs(JString("/bar/") :: JString("/bar1/") :: JString("/bar2/") :: Nil)
+        //case Success(JArray(results)) => results must haveTheSameElementsAs(JString("/bar/") :: JString("/bar1/") :: JString("/bar2/") :: Nil)
+        case Success(JArray(results)) => results must haveTheSameElementsAs(JString("bar/") :: JString("bar1/") :: JString("bar2/") :: Nil)
       }
     }
   }
@@ -66,7 +67,7 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
 
     "find correct leaf types" in {
       client.structure("", Path("/foo/bar"), CPath("bar")).copoint must beLike {
-        case Success(result) => result must_== JObject("children" -> JArray(), "types" -> JObject("Long" -> JNum(50)))
+        case Success(result) => result must_== JObject("children" -> JArray(), "types" -> JObject("Number" -> JNum(50)))
       }
     }
   }

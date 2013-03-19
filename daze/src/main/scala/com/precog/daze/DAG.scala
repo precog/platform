@@ -502,6 +502,9 @@ trait DAG extends Instructions {
           }
             
           case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
+          
+          case graph @ dag.Cond(pred, left, leftJoin, right, rightJoin) =>
+            dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(graph.loc)
 
           case graph @ dag.Observe(data, samples) => dag.Observe(memoized(splits)(data), memoized(splits)(samples))(graph.loc)
 
@@ -865,6 +868,11 @@ trait DAG extends Instructions {
           val acc2 = foldDown0(pred, acc |+| f(pred))
           foldDown0(child, acc2 |+| f(child))
 
+        case dag.Cond(pred, left, _, right, _) =>
+          val acc2 = foldDown0(pred, acc |+| f(pred))
+          val acc3 = foldDown0(left, acc2 |+| f(left))
+          foldDown0(right, acc3 |+| f(right))
+
         case dag.Observe(data, samples) =>
           val acc2 = foldDown0(data, acc |+| f(data))
           foldDown0(samples, acc2 |+| f(samples))
@@ -1104,6 +1112,19 @@ trait DAG extends Instructions {
       lazy val isSingleton = child.isSingleton
       
       lazy val containsSplitArg = pred.containsSplitArg || child.containsSplitArg
+    }
+    
+    // note: this is not a StagingPoint, though it *could* be; this is an optimization for the common case (transpecability)
+    case class Cond(pred: DepGraph, left: DepGraph, leftJoin: JoinSort, right: DepGraph, rightJoin: JoinSort)(val loc: Line) extends DepGraph {
+      val peer = IUI(true, Filter(leftJoin, left, pred)(loc), Filter(rightJoin, right, Operate(Comp, pred)(loc))(loc))(loc)
+      
+      lazy val identities = peer.identities
+      
+      val sorting = peer.sorting
+      
+      lazy val isSingleton = peer.isSingleton
+      
+      lazy val containsSplitArg = peer.containsSplitArg
     }
     
     case class Observe(data: DepGraph, samples: DepGraph)(val loc: Line) extends DepGraph {

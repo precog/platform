@@ -55,7 +55,7 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
 
       case Some("children") =>
         metadataClient.browse(apiKey, path) map { v =>
-          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JArray => JObject("children" -> a) } 
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JArray => JObject("children" -> a) }
         }
 
       case Some("structure") =>

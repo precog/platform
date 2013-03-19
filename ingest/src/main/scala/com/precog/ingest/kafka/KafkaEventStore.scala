@@ -73,7 +73,7 @@ object KafkaEventStore {
   }
 }
 
-class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, maxMessageSize: Int)(implicit executor: ExecutionContext) extends EventStore[Future] with Logging {
+class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, maxMessageSize: Int, messagePadding: Int)(implicit executor: ExecutionContext) extends EventStore[Future] with Logging {
   logger.info("Creating LocalKafkaEventStore for %s with max message size = %d".format(topic, maxMessageSize))
   private[this] val codec = new KafkaEventCodec
 
@@ -83,7 +83,7 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
       def genEvents(ev: List[Event]): List[Message] = {
         val messages = ev.map(codec.toMessage)
 
-        if (messages.forall(_.size <= maxMessageSize)) {
+        if (messages.forall(_.size + messagePadding <= maxMessageSize)) {
           messages
         } else {
           if (ev.size == event.length) {
@@ -99,10 +99,8 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
       genEvents(List(event))
     }, a => List(codec.toMessage(a)))
 
-    toSend.foreach { ev =>
-      producer send {
-        new ProducerData[String, Message](topic, ev)
-      }
+    producer send {
+      new ProducerData[String, Message](topic, toSend)
     }
     PrecogUnit
   }
@@ -112,6 +110,7 @@ object LocalKafkaEventStore {
   def apply(config: Configuration)(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
     val localTopic = config[String]("topic")
     val maxMessageSize = config[Int]("broker.max_message_size", 1000000)
+    val messagePadding = config[Int]("message_padding", 100)
 
     val localProperties: java.util.Properties = {
       val props = JProperties.configurationToProperties(config)
@@ -126,6 +125,6 @@ object LocalKafkaEventStore {
     val producer = new Producer[String, Message](new ProducerConfig(localProperties))
     val stoppable = Stoppable.fromFuture(Future { producer.close })
 
-    Some(new LocalKafkaEventStore(producer, localTopic, maxMessageSize) -> stoppable)
+    Some(new LocalKafkaEventStore(producer, localTopic, maxMessageSize, messagePadding) -> stoppable)
   }
 }
