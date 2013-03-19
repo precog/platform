@@ -24,6 +24,7 @@ import com.precog.util._
 
 trait StorageReader {
   def snapshot(pathConstraints: Option[Set[CPath]]): Block
+  def snapshotRef(refConstraints: Option[Set[ColumnRef]]): Block
   def structure: Iterable[(CPath, CType)]
 
   def isStable: Boolean

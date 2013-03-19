@@ -57,9 +57,7 @@ case class GetMessages(sendTo: ActorRef)
 sealed trait ShardIngestAction
 sealed trait IngestResult extends ShardIngestAction
 case class IngestErrors(errors: Seq[String]) extends IngestResult
-case class IngestData(messages: Seq[EventMessage]) extends IngestResult
-
-case class DirectIngestData(messages: Seq[EventMessage]) extends ShardIngestAction
+case class IngestData(messages: Seq[(Long, EventMessage)]) extends IngestResult
 
 ////////////
 // ACTORS //
@@ -116,10 +114,6 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
         logger.info("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
       }
-
-    case DirectIngestData(d) =>
-      logger.info("Processing direct ingest of " + d.size + " messages")
-      processMessages(d, sender)
   }
 
   private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) ::
@@ -131,7 +125,7 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
    * InsertNoMetadata messages after processing each message.
    */
   //TODO: This needs review; not sure why only archive paths are being considered.
-  def processMessages(messages: Seq[EventMessage], batchCoordinator: ActorRef): Unit = {
+  def processMessages(messages: Seq[(Long, EventMessage)], batchCoordinator: ActorRef): Unit = {
     logger.debug("Beginning processing of %d messages".format(messages.size))
     //implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
 

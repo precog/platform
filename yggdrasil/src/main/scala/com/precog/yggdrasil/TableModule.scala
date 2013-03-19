@@ -143,7 +143,6 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
-    def intersect(identitySpec: TransSpec1, tables: Table*): M[Table] 
   }
 
   trait TableLike { this: Table =>

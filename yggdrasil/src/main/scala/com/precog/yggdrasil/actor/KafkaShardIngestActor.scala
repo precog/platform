@@ -245,7 +245,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         logger.info("Retrying failed ingest")
         for (messages <- ingestCache.get(checkpoint)) {
           val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
-          requestor.tell(IngestData(messages.map(_._2)), batchHandler)
+          requestor.tell(IngestData(messages), batchHandler)
         }
       } else {
         //logger.error("Halting ingest due to excessive consecutive failures at Kafka offsets: " + ingestCache.keys.map(_.offset).mkString("[", ", ", "]"))
@@ -279,7 +279,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                 // create a handler for the batch, then reply to the sender with the message set
                 // using that handler reference as the sender to which the ingest system will reply
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
-                requestor.tell(IngestData(messages.map(_._2)), batchHandler)
+                requestor.tell(IngestData(messages), batchHandler)
               } else {
                 logger.trace("No new data found after checkpoint: " + checkpoint)
                 runningBatches.getAndDecrement
@@ -296,6 +296,7 @@ abstract class KafkaShardIngestActor(shardId: String,
               logger.error("Failure during remote message read", t); requestor ! IngestData(Nil)
           }
         } else {
+
           logger.warn("Concurrent ingest window full (%d). Cannot start new ingest batch".format(runningBatches.get))
           requestor ! IngestData(Nil)
         }
@@ -385,7 +386,7 @@ abstract class KafkaShardIngestActor(shardId: String,
           }
 
           val authorityCacheFutures = apiKeys.distinct map {
-            case k @ (apiKey, path) => 
+            case k @ (apiKey, path) =>
               // infer write authorities without a timestamp here, because we'll only use this for legacy events
               permissionsFinder.inferWriteAuthorities(apiKey, path, None) map { k -> _ }
           }
@@ -397,10 +398,10 @@ abstract class KafkaShardIngestActor(shardId: String,
             }
 
             val updatedMessages: List[(Long, EventMessage)] = messageSet.flatMap {
-              case (offset, \/-(message)) => 
+              case (offset, \/-(message)) =>
                 Some((offset, message))
 
-              case (offset, -\/((apiKey, path, genMessage))) => 
+              case (offset, -\/((apiKey, path, genMessage))) =>
                 authorityCache.get((apiKey, path)) map { authorities =>
                   Some((offset, genMessage(authorities)))
                 } getOrElse {
@@ -408,15 +409,6 @@ abstract class KafkaShardIngestActor(shardId: String,
                   None
                 }
             }
-
-            val eventIds: List[(Long, Seq[EventId])] = updatedMessages.map { case (offset, message) =>
-                (offset, message.fold(_.data.map(_.eventId).toSeq, a => Seq(a.eventId)))
-            }
-
-            assert(eventIds.forall { case (_, ids) => ids.sortBy(_.sequenceId) == ids }, "sequenceIds out of order")
-            val sortByOffset = eventIds.map { case (o, s) => (o, s.map(_.sequenceId).min) }.sortBy(_._1)
-
-            assert(sortByOffset == sortByOffset.sortBy(_._2), "offset order doesn't match sequence order")
 
             buildBatch(updatedMessages, Vector.empty, fromCheckpoint)
           }

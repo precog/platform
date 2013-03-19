@@ -153,7 +153,7 @@ object Permission {
 
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
-      obj.validated[String]("accessType") flatMap {
+      obj.validated[String]("accessType").map(_.toLowerCase.trim) flatMap {
         case "write" =>  
           (obj \? "ownerAccountIds") map { ids => 
             (pathV |@| ids.validated[Set[AccountId]]) { (path, accountIds) => WritePermission(path, WriteAs(accountIds)) }
@@ -163,7 +163,8 @@ object Permission {
 
         case "read"   => writtenByPermission(obj, pathV) { ReadPermission.apply _ }
         case "reduce" => writtenByPermission(obj, pathV) { ReducePermission.apply _ }
-        case "delete" => writtenByPermission(obj, pathV) { DeletePermission.apply _ }
+        case "owner" | "delete" => writtenByPermission(obj, pathV) { DeletePermission.apply _ }
+        case other => failure(Invalid("Unrecognized permission type: " + other))
       }
     }
   }
@@ -181,7 +182,7 @@ object Permission {
 
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
-      obj.validated[String]("type") flatMap {
+      obj.validated[String]("type").map(_.toLowerCase.trim) flatMap {
         case "write" =>  
           obj.validated[Option[String]]("ownerAccountId") flatMap { opt => 
             opt map { id =>
@@ -194,6 +195,7 @@ object Permission {
         case "read"   => writtenByPermission(obj, pathV) { ReadPermission.apply _ }
         case "reduce" => writtenByPermission(obj, pathV) { ReducePermission.apply _ }
         case "owner" | "delete" => writtenByPermission(obj, pathV) { DeletePermission.apply _ }
+        case other => failure(Invalid("Unrecognized permission type: " + other))
       }
     }
   }

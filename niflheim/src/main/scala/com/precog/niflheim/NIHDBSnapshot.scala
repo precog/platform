@@ -65,8 +65,8 @@ trait NIHDBSnapshot extends Logging {
   def getBlock(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
     findReader(id0).map(_.snapshot(cols))
 
-  def getBlockAfter(id0: Option[Long], cols: Option[Set[CPath]]): Option[Block] =
-    findReaderAfter(id0).map(_.snapshot(cols))
+  def getBlockAfter(id0: Option[Long], cols: Option[Set[ColumnRef]]): Option[Block] =
+    findReaderAfter(id0).map(_.snapshotRef(cols))
 
   def structure: Set[(CPath, CType)] =
     readers.map(_.structure.toSet).toSet.flatten

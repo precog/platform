@@ -51,6 +51,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def Filter(node: dag.Filter)(leftParent: T, rightParent: => T): T
       def WrapArray(node: Operate)(parent: T): T
       def Op1(node: Operate)(parent: T, op: UnaryOperation): T
+      def Cond(node: dag.Cond)(pred: T, left: T, right: T): T
+      def Const(node: dag.Const)(under: T): T
       def unmatched(node: DepGraph): T
       def done(node: DepGraph): T
     }
@@ -70,6 +72,8 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
       def Filter(node: dag.Filter)(leftParent: Boolean, rightParent: => Boolean) = leftParent && rightParent
       def WrapArray(node: Operate)(parent: Boolean) = parent
       def Op1(node: Operate)(parent: Boolean, op: UnaryOperation) = parent
+      def Cond(node: dag.Cond)(pred: Boolean, left: Boolean, right: Boolean) = pred && left && right
+      def Const(node: dag.Const)(under: Boolean) = under
       def unmatched(node: DepGraph) = false
       def done(node: DepGraph) = true
     })
@@ -165,6 +169,32 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         
         def Op1(node: Operate)(parent: N[S], op: UnaryOperation) =
           parent.flatMap(leftMap(_)(parent => op1ForUnOp(op).spec(ctx)(parent)))
+        
+        def Cond(node: dag.Cond)(pred: N[S], left: N[S], right: N[S]) = {
+          for {
+            pp      <- pred
+            (p, ap) =  get(pp)
+            pl      <- left
+            (l, al) =  get(pl)
+            pr      <- right
+            (r, ar) =  get(pr)
+            
+            result  <-  if (ap == al && al == ar)
+              set(pp, (trans.Cond(p, l, r), ap))
+            else
+              init(Leaf(Source), node)  
+          } yield result
+        }
+        
+        def Const(node: dag.Const)(underN: N[S]) = {
+          val dag.Const(cv: CValue) = node      // TODO !!
+          
+          underN flatMap { under =>
+            leftMap(under) { spec =>
+              trans.ConstLiteral(cv, spec)
+            }
+          }
+        }
 
         def unmatched(node: DepGraph) = init(Leaf(Source), node)
         
@@ -192,6 +222,27 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
 
       def loop(graph: DepGraph): T = graph match {
         case node if from.map(_ == node).getOrElse(false) => alg.done(node)
+        
+        case node @ dag.Cond(pred, left @ dag.Const(_: CValue), CrossLeftSort | CrossRightSort, right, IdentitySort | ValueSort(_)) => {
+          val predRes = loop(pred)
+        
+          alg.Cond(node)(predRes, alg.Const(left)(predRes), loop(right))
+        }
+        
+        case node @ dag.Cond(pred, left, IdentitySort | ValueSort(_), right @ dag.Const(_: CValue), CrossLeftSort | CrossRightSort) => {
+          val predRes = loop(pred)
+        
+          alg.Cond(node)(predRes, loop(left), alg.Const(right)(predRes))
+        }
+        
+        case node @ dag.Cond(pred, left @ dag.Const(_: CValue), CrossLeftSort | CrossRightSort, right @ dag.Const(_: CValue), CrossLeftSort | CrossRightSort) => {
+          val predRes = loop(pred)
+        
+          alg.Cond(node)(predRes, alg.Const(left)(predRes), alg.Const(right)(predRes))
+        }
+        
+        case node @ dag.Cond(pred, left, IdentitySort | ValueSort(_), right, IdentitySort | ValueSort(_)) =>
+          alg.Cond(node)(loop(pred), loop(left), loop(right))
           
         case node @ Join(Eq, CrossLeftSort | CrossRightSort, left, Const(value)) =>
           alg.EqualLiteral(node)(loop(left), value, false)

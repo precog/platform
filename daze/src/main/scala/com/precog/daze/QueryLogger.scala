@@ -195,7 +195,7 @@ trait TimingQueryLogger[M[+_], P] extends QueryLogger[M, P] {
   def done: M[Unit] = {
     val logging = table.asScala map {
       case (pos, stats) =>
-        log(pos, "count = %d; sum = %d; sumSq = %d; min = %d; max = %d".format(stats.count, stats.sum, stats.sumSq, stats.min, stats.max))
+        log(pos, """{"count":%d,"sum":%d,"sumSq":%d,"min":%d,"max":%d}""".format(stats.count, stats.sum, stats.sumSq, stats.min, stats.max))
     }
     
     logging reduceOption { _ >> _ } getOrElse (M point ())

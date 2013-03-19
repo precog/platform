@@ -236,8 +236,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     private def outputChunks(output: QueryOutput)(tableM: N[Table]): StreamT[N, CharBuffer] =
       output match {
-        case JsonOutput => jsonChunks(tableM)
-        case CsvOutput => csvChunks(tableM)
+        case JSONOutput => jsonChunks(tableM)
+        case CSVOutput => csvChunks(tableM)
       }
 
     private def csvChunks(tableM: N[Table]): StreamT[N, CharBuffer] = {

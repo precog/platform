@@ -83,21 +83,15 @@ class NIHDBActorProjection(val db: NIHDB)(implicit executor: ExecutionContext) e
 
   def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
     // FIXME: We probably want to change this semantic throughout Yggdrasil
-    val constraint = columns.map(_.map(_.selector))
-    db.getBlockAfter(id0, constraint) map { block =>
+    db.getBlockAfter(id0, columns) map { block =>
       block map { case Block(id, segs, stable) =>
         BlockProjectionData[Long, Slice](id, id, SegmentsWrapper(segs, projectionId, id))
       }
     }
   }
 
-  def insert(v : Seq[IngestRecord])(implicit M: Monad[Future]): Future[PrecogUnit] = {
-    // TODO: Check # of identities.
-    v.groupBy(_.eventId.producerId).map {
-      case (p, events) =>
-        val maxSeq = events.map(_.eventId.sequenceId).max
-        db.insert(EventId(p, maxSeq).uid, events.map(_.value))
-    }.toList.sequence map { _ => PrecogUnit }
+  def insert(batches: Seq[(Long, Seq[IngestRecord])])(implicit M: Monad[Future]): Future[PrecogUnit] = {
+    db.insert(batches.map { case (offset, records) => (offset, records.map(_.value)) })
   }
 
   def length: Future[Long] = db.length
