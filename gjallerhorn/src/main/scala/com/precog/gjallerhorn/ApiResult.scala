@@ -22,10 +22,15 @@ package com.precog.gjallerhorn
 import blueeyes.json._
 
 sealed trait ApiResult {
-  def jvalue: JValue = this match {
+  def jvalue(): JValue = this match {
     case ApiFailure(code, msg) => sys.error("failure %d: %s" format (code, msg))
     case ApiBadJson(e) => sys.error("parse error: %s" format e.getMessage)
     case ApiResponse(j) => j
+  }
+  def complete(): Unit = this match {
+    case ApiFailure(code, msg) => sys.error("failure %d: %s" format (code, msg))
+    case ApiBadJson(e) => sys.error("parse error: %s" format e.getMessage)
+    case ApiResponse(j) => ()
   }
 }
 case class ApiFailure(code: Int, msg: String) extends ApiResult
