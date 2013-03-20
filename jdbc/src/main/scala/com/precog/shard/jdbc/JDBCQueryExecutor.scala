@@ -138,7 +138,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
       Future {
         path.elements.toList match {
           case Nil =>
-            Success(yggConfig.dbMap.keys.toList.map { d => "/" + d + "/" }.serialize.asInstanceOf[JArray])
+            Success(yggConfig.dbMap.keys.toList.map { d => d + "/" }.serialize.asInstanceOf[JArray])
 
           case dbName :: Nil =>
             // A little more complicated. Need to use metadata interface to enumerate table names
