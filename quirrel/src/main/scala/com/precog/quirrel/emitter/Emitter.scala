@@ -27,7 +27,7 @@ import bytecode.Instructions
 
 import com.precog.util._
 
-import scalaz.{StateT, Id, Bind, Monoid}
+import scalaz.{StateT, Id, Bind, Monoid, NonEmptyList => NEL}
 import scalaz.Scalaz._
 
 trait Emitter extends AST
@@ -353,10 +353,7 @@ trait Emitter extends AST
       case Nil => f(dispatches)
     }
 
-    def createJoins(provs: List[Provenance], op2: BinaryOperation): (Set[Provenance], Vector[EmitterState]) = {
-      // only to be used in cases when provs is nonEmpty
-      assert(!provs.isEmpty)
-
+    def createJoins(provs: NEL[Provenance], op2: BinaryOperation): (Set[Provenance], Vector[EmitterState]) = {
       // if `provs` has size one, we should not emit a join instruction
       provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
         case ((provAcc, instrAcc), prov) => {
@@ -512,7 +509,7 @@ trait Emitter extends AST
               stateAcc ++ (singles ++ joins)
           }
 
-          val (_, joins) = createJoins(provs, JoinObject)
+          val (_, joins) = createJoins(NEL(provs.head, provs.tail: _*), JoinObject)
 
           reduce(groups ++ joins)
         }
@@ -542,7 +539,7 @@ trait Emitter extends AST
             }
           }
 
-          val (_, joins) = createJoins(provs, JoinArray)
+          val (_, joins) = createJoins(NEL(provs.head, provs.tail: _*), JoinArray)
 
           val joined = reduce(groups ++ joins)
 
