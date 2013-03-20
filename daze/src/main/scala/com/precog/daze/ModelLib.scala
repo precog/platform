@@ -43,8 +43,8 @@ trait ModelLibModule[M[+_]] {
         private val kPath = CPath(TableModule.paths.Key)
         private val vPath = CPath(TableModule.paths.Value)
 
-        private val coefficients = "Coefficients"
-        private val estimate = "Estimate"
+        private val coefficients = "coefficients"
+        private val estimate = "estimate"
 
         def reduce(schema: CSchema, range: Range): Models = {
           val rowIdentities: Int => Seq[Option[Long]] = {

@@ -287,14 +287,14 @@ trait LinearRegressionLibModule[M[+_]]
         val resultErrors = stdErrors.map(CNum(_))
 
         val arr = resultCoeffs.zip(resultErrors) map { case (beta, error) =>
-          RObject(Map("Estimate" -> beta, "StandardError" -> error))
+          RObject(Map("estimate" -> beta, "standardError" -> error))
         }
 
         val theta = Table.fromRValues(Stream(RArray(arr.toList)))
 
         val thetaInSchema = theta.transform(spec)
 
-        val coeffsTable = thetaInSchema.transform(trans.WrapObject(Leaf(Source), "Coefficients"))
+        val coeffsTable = thetaInSchema.transform(trans.WrapObject(Leaf(Source), "coefficients"))
 
         val rSquared = 1 - (errors.rss / errors.tss)
         val rSquaredTable0 = Table.fromRValues(Stream(CNum(rSquared)))
@@ -361,7 +361,7 @@ trait LinearRegressionLibModule[M[+_]]
 
           val objectTables: M[Seq[Table]] = reducedTables map { 
             _.zipWithIndex map { case (tbl, idx) =>
-              val modelId = "Model" + (idx + 1)
+              val modelId = "model" + (idx + 1)
               tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
             }
           }

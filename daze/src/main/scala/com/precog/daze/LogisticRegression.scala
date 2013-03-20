@@ -220,14 +220,14 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
             val spec = TransSpec.concatChildren(tree)
 
             val res = finalTheta map { v =>
-              RObject(Map("Estimate" -> CNum(v)))
+              RObject(Map("estimate" -> CNum(v)))
             }
 
             val theta = Table.fromRValues(Stream(RArray(res.toList)))
 
             val result = theta.transform(spec)
 
-            val coeffsTable = result.transform(trans.WrapObject(Leaf(Source), "Coefficients"))
+            val coeffsTable = result.transform(trans.WrapObject(Leaf(Source), "coefficients"))
 
             val valueTable = coeffsTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
             val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
@@ -273,7 +273,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
           val objectTables: M[Seq[Table]] = reducedTables map { 
             _.zipWithIndex map { case (tbl, idx) =>
-              val modelId = "Model" + (idx + 1)
+              val modelId = "model" + (idx + 1)
               tbl.transform(liftToValues(trans.WrapObject(TransSpec1.Id, modelId)))
             }
           }
@@ -303,4 +303,3 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
     }
   }
 }
-
