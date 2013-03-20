@@ -64,7 +64,7 @@ trait StandaloneShardServer
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = apiKeyFinderFor(config)
-    config.get[String]("jobs.jobdir").map { jobdir =>
+    val jobManager = config.get[String]("jobs.jobdir").map { jobdir =>
       val dir = new File(jobdir)
 
       if (!dir.isDirectory) {
@@ -75,14 +75,13 @@ trait StandaloneShardServer
         throw new Exception("Configured job dir %s is not writeable".format(dir))
       }
 
-      val jobManager = new FileJobManager(dir, M)
-      val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
-      ManagedQueryShardState(platform, apiKeyFinder, jobManager, Clock.System, stoppable)
+      new FileJobManager(dir, M)
     }.getOrElse {
-      val jobManager = new ExpiringJobManager(Duration(60, TimeUnit.SECONDS))
-      val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
-      BasicShardState(platform, apiKeyFinder, stoppable)
+      new ExpiringJobManager(Duration(config[Int]("jobs.ttl", 300), TimeUnit.SECONDS))
     }
+    val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
+    // We always want a managed shard now, for better error reporting and Labcoat compatibility
+    ManagedQueryShardState(platform, apiKeyFinder, jobManager, Clock.System, stoppable)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
