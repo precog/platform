@@ -27,32 +27,48 @@ import java.io._
 import specs2._
 
 object Settings {
+  private val HostRegex = """^host (.+)$""".r
   private val IdRegex = """^id (.+)$""".r
   private val TokenRegex = """^token ([-A-F0-9]+)$""".r
   private val AccountsPort = """^accounts (\d+)$""".r
+  private val AccountsPath = """^accounts\-path (.+)$""".r
   private val AuthPort = """^auth (\d+)$""".r
+  private val AuthPath = """^auth\-path (.+)$""".r
   private val IngestPort = """^ingest (\d+)$""".r
+  private val IngestPath = """^ingest\-path (.+)$""".r
   private val JobsPort = """^jobs (\d+)$""".r
+  private val JobsPath = """^jobs\-path (.+)$""".r
   private val ShardPort = """^shard (\d+)$""".r
+  private val ShardPath = """^shard\-path (.+)$""".r
 
   def fromFile(f: File): Settings = {
     if (!f.canRead) sys.error("Can't read %s. Is shard running?" format f)
 
     case class PartialSettings(
-      host: Option[String] = None,
-      id: Option[String] = None, token: Option[String] = None,
-      accountsPort: Option[Int] = None, authPort: Option[Int] = None,
-      ingestPort: Option[Int] = None, jobsPort: Option[Int] = None,
-      shardPort: Option[Int] = None) {
+        host: Option[String] = None,
+        id: Option[String] = None,
+        token: Option[String] = None,
+        accountsPort: Option[Int] = None,
+        accountsPath: Option[String] = None,
+        authPort: Option[Int] = None,
+        authPath: Option[String] = None,
+        ingestPort: Option[Int] = None,
+        ingestPath: Option[String] = None,
+        jobsPort: Option[Int] = None,
+        jobsPath: Option[String] = None,
+        shardPort: Option[Int] = None,
+        shardPath: Option[String] = None) {
 
       def missing: List[String] = {
         def q(o: Option[_], s: String): List[String] =
           if (o.isDefined) Nil else s :: Nil
 
         q(host, "host") ++ q(id, "id") ++ q(token, "token") ++
-        q(accountsPort, "accountsPort") ++ q(authPort, "authPort") ++
-        q(ingestPort, "ingestPort") ++ q(jobsPort, "jobsPort") ++
-        q(shardPort, "shardPort")
+        q(accountsPort, "accountsPort") ++ q(accountsPath, "accountsPath") ++
+        q(authPort, "authPort") ++ q(authPath, "authPath") ++ 
+        q(ingestPort, "ingestPort") ++ q(ingestPath, "ingestPath") ++ 
+        q(jobsPort, "jobsPort") ++ q(jobsPath, "jobsPath") ++ 
+        q(shardPort, "shardPort") ++ q(shardPath, "shardPath")
       }
 
       def settings: Option[Settings] = for {
@@ -60,26 +76,50 @@ object Settings {
         i <- id
         t <- token
         ac <- accountsPort
+        acp <- accountsPath
         au <- authPort
+        aup <- authPath
         in <- ingestPort
+        inp <- ingestPath
         j <- jobsPort
+        jp <- jobsPath
         sh <- shardPort
+        shp <- shardPath
       } yield {
-        Settings(h, i, t, ac, au, in, j, sh)
+        Settings(h, i, t, ac, acp, au, aup, in, inp, j, jp, sh, shp)
       }
     }
 
     val lines = io.Source.fromFile(f).getLines
-    val ps = lines.foldLeft(PartialSettings(host = Some("localhost"))) { (ps, s) =>
-      s match {
+    
+    val defaults = PartialSettings(
+      host = Some("localhost"),
+      accountsPath = Some("accounts"),
+      authPath = Some("apikeys"),
+      ingestPath = Some("ingest"),
+      shardPath = Some("meta"))
+    
+    val ps = lines.foldLeft(defaults) { (ps, s) =>
+      val ps2 = s match {
+        case HostRegex(s) => ps.copy(host = Some(s))
         case IdRegex(s) => ps.copy(id = Some(s))
         case TokenRegex(s) => ps.copy(token = Some(s))
         case AccountsPort(n) => ps.copy(accountsPort = Some(n.toInt))
+        case AccountsPath(p) => ps.copy(accountsPath = Some(p))
         case AuthPort(n) => ps.copy(authPort = Some(n.toInt))
-        case IngestPort(n) => ps.copy(ingestPort = Some(n.toInt))
-        case JobsPort(n) => ps.copy(jobsPort = Some(n.toInt))
-        case ShardPort(n) => ps.copy(shardPort = Some(n.toInt))
+        case AuthPath(p) => ps.copy(authPath = Some(p))
         case _ => ps
+      }
+      
+      // split to avoid a bug in the pattern matcher
+      s match {
+        case IngestPort(n) => ps2.copy(ingestPort = Some(n.toInt))
+        case IngestPath(p) => ps2.copy(ingestPath = Some(p))
+        case JobsPort(n) => ps2.copy(jobsPort = Some(n.toInt))
+        case JobsPath(p) => ps2.copy(jobsPath = Some(p))
+        case ShardPort(n) => ps2.copy(shardPort = Some(n.toInt))
+        case ShardPath(p) => ps2.copy(shardPath = Some(p))
+        case _ => ps2
       }
     }
     ps.settings.getOrElse {
@@ -89,26 +129,31 @@ object Settings {
 }
 
 case class Settings(host: String, id: String, token: String, accountsPort: Int,
-  authPort: Int, ingestPort: Int, jobsPort: Int, shardPort: Int)
+  accountsPath: String, authPort: Int, authPath: String, ingestPort: Int,
+  ingestPath: String, jobsPort: Int, jobsPath: String, shardPort: Int, shardPath: String)
 
 case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String) {
   def bareRootPath = rootPath.substring(1, rootPath.length - 1)
 }
 
 abstract class Task(settings: Settings) {
-  val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
+  val Settings(serviceHost, id, token, accountsPort, accountsPath, authPort, authPath, ingestPort, ingestPath, jobsPort, jobsPath, shardPort, shardPath) = settings
 
   def text(n: Int) = scala.util.Random.alphanumeric.take(12).mkString
 
   def generateUserAndPassword = (text(12) + "@plastic-idolatry.com", text(12))
 
-  def accounts = host(serviceHost, accountsPort) / "accounts"
+  def accounts =
+    (accountsPath split "/").foldLeft(host(serviceHost, accountsPort)) { _ / _ }
 
-  def security = host(serviceHost, authPort) / "apikeys"
+  def security =
+    (authPath split "/").foldLeft(host(serviceHost, authPort)) { _ / _ }
   
-  def metadata = host(serviceHost, shardPort) / "meta"
+  def metadata =
+    (shardPath split "/").foldLeft(host(serviceHost, shardPort)) { _ / _ }
 
-  def ingest = host(serviceHost, ingestPort)
+  def ingest =
+    (ingestPath split "/").foldLeft(host(serviceHost, ingestPort)) { _ / _ }
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
