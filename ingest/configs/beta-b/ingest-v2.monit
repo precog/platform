@@ -12,6 +12,7 @@ check process ingest-v2-beta-b with pidfile /var/run/precog/ingest-v2-beta-b.pid
 check file ingest-v2-beta-b.server.log with path /var/log/precog/ingest-v2-beta-b.server.log
   if match "Exception" for 1 cycles then alert
   if match "Error" for 1 cycles then alert
+  if match "No ingested data and no errors" for 1 cycles then alert
   depends on ingest-v2-beta-b
   group ingest-v2-beta-b
 
