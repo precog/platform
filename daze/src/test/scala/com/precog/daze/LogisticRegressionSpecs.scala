@@ -117,11 +117,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
         dag.Const(CLong(0))(line))(line))(line)
   }
 
-  def returnCoeff(obj: Map[String, SValue]) = {
-    val coeff = "coefficient"
+  def returnEstimate(obj: Map[String, SValue]) = {
+    val estimate = "Estimate"
 
-    obj.keys mustEqual Set(coeff)  
-    obj(coeff)
+    obj.keys mustEqual Set(estimate)  
+    obj(estimate)
   }
 
   def testTrivial = {
@@ -158,16 +158,18 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 =>
 		      elems.keys mustEqual Set("Model1")
-		      val SArray(arr) = elems("Model1")
+
+          val SObject(fields) = elems("Model1")
+          val SArray(arr) = fields("Coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SArray(elems2) =>
             (elems2(0): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnEstimate(obj)
             }
           }
 
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(obj) =>
-            returnCoeff(obj)
+            returnEstimate(obj)
           }
             
           List(theta0.toDouble, theta1.toDouble)
@@ -220,25 +222,27 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
           elems.keys mustEqual Set("Model1")
- 		  val SArray(arr) = elems("Model1")
+
+          val SObject(fields) = elems("Model1")
+          val SArray(arr) = fields("Coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("bar"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnEstimate(obj)
             }
           }
           val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("baz"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnEstimate(obj)
             }
           }
           val SDecimal(theta3) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("foo"): @ unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnEstimate(obj)
             }
           }
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(obj) =>
-            returnCoeff(obj)
+            returnEstimate(obj)
           }
 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
@@ -302,13 +306,15 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       def theta(model: String) = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
           elems.keys mustEqual Set("Model1", "Model2", "Model3")
-          val SArray(arr) = elems(model)
+
+          val SObject(fields) = elems(model)
+          val SArray(arr) = fields("Coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) => 
             (map("bar"): @unchecked) match { case SObject(map) => 
               (map("baz"): @unchecked) match { case SArray(elems) =>
                 (elems(0): @unchecked) match { case SObject(obj) =>
-                  returnCoeff(obj)
+                  returnEstimate(obj)
                 }
               }
             } 
@@ -316,12 +322,12 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
           val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("foo"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnEstimate(obj)
             }
           }
 
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(map) =>
-            returnCoeff(map)
+            returnEstimate(map)
           }
 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
