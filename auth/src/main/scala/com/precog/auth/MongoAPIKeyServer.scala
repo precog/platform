@@ -22,7 +22,7 @@ package auth
 
 import common.security._
 
-import akka.dispatch.{ ExecutionContext, Future }
+import akka.dispatch.Future
 
 import blueeyes.bkka._
 import blueeyes.BlueEyesServer
