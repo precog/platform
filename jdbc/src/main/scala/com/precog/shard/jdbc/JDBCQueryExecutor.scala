@@ -134,7 +134,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
                   var tables = List.empty[String]
 
                   while (results.next) {
-                    tables ::= "/" + results.getString("TABLE_NAME") + "/"
+                    tables ::= results.getString("TABLE_NAME") + "/"
                   }
 
                   tables.serialize.asInstanceOf[JArray]
@@ -156,7 +156,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
     }
 
     def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
-      Success(JObject.empty) // TODO: Implement from table metadata
+      Success(JObject(Map("children" -> JArray.empty, "types" -> JObject.empty))) // TODO: Implement from table metadata
     )
   }
 }
