@@ -139,7 +139,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig, val jobManager
 
           case dbName :: Nil =>
             val db = Table.mongo.getDB(dbName)
-            Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => "/" + d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
+            Success(if (db == null) JArray(Nil) else db.getCollectionNames.asScala.map {d => d + "/" }.toList.sorted.serialize.asInstanceOf[JArray])
 
           case dbName :: collectionName :: Nil =>
             Success(JArray(Nil))
@@ -152,7 +152,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig, val jobManager
       }
 
     def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
-      Success(JObject.empty) // TODO: Implement somehow?
+      Success(JObject(Map("children" -> JArray.empty, "types" -> JObject.empty))) // TODO: How to implement this?
     )
   }
 }
