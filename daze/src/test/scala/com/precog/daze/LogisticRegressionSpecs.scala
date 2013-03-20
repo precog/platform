@@ -117,11 +117,11 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
         dag.Const(CLong(0))(line))(line))(line)
   }
 
-  def returnCoeff(obj: Map[String, SValue]) = {
-    val coeff = "coefficient"
+  def returnestimate(obj: Map[String, SValue]) = {
+    val estimate = "estimate"
 
-    obj.keys mustEqual Set(coeff)  
-    obj(coeff)
+    obj.keys mustEqual Set(estimate)  
+    obj(estimate)
   }
 
   def testTrivial = {
@@ -157,17 +157,19 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 =>
-		      elems.keys mustEqual Set("Model1")
-		      val SArray(arr) = elems("Model1")
+		      elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+          val SArray(arr) = fields("coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SArray(elems2) =>
             (elems2(0): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnestimate(obj)
             }
           }
 
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(obj) =>
-            returnCoeff(obj)
+            returnestimate(obj)
           }
             
           List(theta0.toDouble, theta1.toDouble)
@@ -219,26 +221,28 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
       val theta = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
-          elems.keys mustEqual Set("Model1")
- 		  val SArray(arr) = elems("Model1")
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+          val SArray(arr) = fields("coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("bar"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnestimate(obj)
             }
           }
           val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("baz"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnestimate(obj)
             }
           }
           val SDecimal(theta3) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("foo"): @ unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnestimate(obj)
             }
           }
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(obj) =>
-            returnCoeff(obj)
+            returnestimate(obj)
           }
 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble, theta3.toDouble)
@@ -301,14 +305,16 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
       def theta(model: String) = result collect {
         case (ids, SObject(elems)) if ids.length == 0 => {
-          elems.keys mustEqual Set("Model1", "Model2", "Model3")
-          val SArray(arr) = elems(model)
+          elems.keys mustEqual Set("model1", "model2", "model3")
+
+          val SObject(fields) = elems(model)
+          val SArray(arr) = fields("coefficients")
 
           val SDecimal(theta1) = (arr(0): @unchecked) match { case SObject(map) => 
             (map("bar"): @unchecked) match { case SObject(map) => 
               (map("baz"): @unchecked) match { case SArray(elems) =>
                 (elems(0): @unchecked) match { case SObject(obj) =>
-                  returnCoeff(obj)
+                  returnestimate(obj)
                 }
               }
             } 
@@ -316,21 +322,21 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
           val SDecimal(theta2) = (arr(0): @unchecked) match { case SObject(map) =>
             (map("foo"): @unchecked) match { case SObject(obj) =>
-              returnCoeff(obj)
+              returnestimate(obj)
             }
           }
 
           val SDecimal(theta0) = (arr(1): @unchecked) match { case SObject(map) =>
-            returnCoeff(map)
+            returnestimate(map)
           }
 
           List(theta0.toDouble, theta1.toDouble, theta2.toDouble)
         }
       }
 
-      thetasSchema1 = thetasSchema1 ++ theta("Model1")
-      thetasSchema2 = thetasSchema2 ++ theta("Model2")
-      thetasSchema3 = thetasSchema3 ++ theta("Model3")
+      thetasSchema1 = thetasSchema1 ++ theta("model1")
+      thetasSchema2 = thetasSchema2 ++ theta("model2")
+      thetasSchema3 = thetasSchema3 ++ theta("model3")
 
       i += 1
     }
@@ -370,25 +376,25 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val result = result0 collect { case (ids, value) if ids.size == 2 => value }
 
       result mustEqual Set(
-        (SObject(Map("Model2" -> SDecimal(3.487261531994447E-19), "Model1" -> SDecimal(8.644057113036095E-22)))),
-        (SObject(Map("Model2" -> SDecimal(1.5628821893349888E-18)))),
-        (SObject(Map("Model2" -> SDecimal(0.0003353501304664781), "Model1" -> SDecimal(0.000006144174602214718)))),
-        (SObject(Map("Model2" -> SDecimal(4.1399375473943306E-8), "Model1" -> SDecimal(0.0013585199504289591)))),
-        (SObject(Map("Model2" -> SDecimal(5.109089028037222E-12), "Model1" -> SDecimal(3.7751345441365816E-11)))), 
-        (SObject(Map("Model2" -> SDecimal(1.0261879630648827E-10), "Model1" -> SDecimal(6.305116760146985E-16)))),
-        (SObject(Map("Model2" -> SDecimal(2.543665647376276E-13), "Model1" -> SDecimal(1.1548224173015786E-17)))), 
-        (SObject(Map("Model2" -> SDecimal(0.11920292202211755), "Model1" -> SDecimal(0.5)))), 
-        (SObject(Map("Model2" -> SDecimal(0.9999998874648379), "Model1" -> SDecimal(0.9999999847700205)))), 
-        (SObject(Map("Model3" -> SDecimal(0.00007484622751061124)))),
-        (SObject(Map("Model3" -> SDecimal(0.0009110511944006454)))),
-        (SObject(Map("Model3" -> SDecimal(0.999983298578152)))),
-        (SObject(Map("Model3" -> SDecimal(2.646573631904765E-9)))),
-        (SObject(Map("Model3" -> SDecimal(0.6224593312018546)))),
-        (SObject(Map("Model3" -> SDecimal(4.1399375473943306E-8)))),
-        (SObject(Map("Model3" -> SDecimal(5.043474082014517E-7)))),
-        (SObject(Map("Model3" -> SDecimal(0.6224593312018546)))),
-        (SObject(Map("Model3" -> SDecimal(2.289734845593124E-11)))),
-        (SObject(Map("Model3" -> SDecimal(0.6224593312018546)))))
+        (SObject(Map("model2" -> SDecimal(3.487261531994447E-19), "model1" -> SDecimal(8.644057113036095E-22)))),
+        (SObject(Map("model2" -> SDecimal(1.5628821893349888E-18)))),
+        (SObject(Map("model2" -> SDecimal(0.0003353501304664781), "model1" -> SDecimal(0.000006144174602214718)))),
+        (SObject(Map("model2" -> SDecimal(4.1399375473943306E-8), "model1" -> SDecimal(0.0013585199504289591)))),
+        (SObject(Map("model2" -> SDecimal(5.109089028037222E-12), "model1" -> SDecimal(3.7751345441365816E-11)))), 
+        (SObject(Map("model2" -> SDecimal(1.0261879630648827E-10), "model1" -> SDecimal(6.305116760146985E-16)))),
+        (SObject(Map("model2" -> SDecimal(2.543665647376276E-13), "model1" -> SDecimal(1.1548224173015786E-17)))), 
+        (SObject(Map("model2" -> SDecimal(0.11920292202211755), "model1" -> SDecimal(0.5)))), 
+        (SObject(Map("model2" -> SDecimal(0.9999998874648379), "model1" -> SDecimal(0.9999999847700205)))), 
+        (SObject(Map("model3" -> SDecimal(0.00007484622751061124)))),
+        (SObject(Map("model3" -> SDecimal(0.0009110511944006454)))),
+        (SObject(Map("model3" -> SDecimal(0.999983298578152)))),
+        (SObject(Map("model3" -> SDecimal(2.646573631904765E-9)))),
+        (SObject(Map("model3" -> SDecimal(0.6224593312018546)))),
+        (SObject(Map("model3" -> SDecimal(4.1399375473943306E-8)))),
+        (SObject(Map("model3" -> SDecimal(5.043474082014517E-7)))),
+        (SObject(Map("model3" -> SDecimal(0.6224593312018546)))),
+        (SObject(Map("model3" -> SDecimal(2.289734845593124E-11)))),
+        (SObject(Map("model3" -> SDecimal(0.6224593312018546)))))
     }
 
     "predict case with repeated model names and arrays" in {
@@ -403,20 +409,20 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
       val result = result0 collect { case (ids, value) if ids.size == 2 => value }
 
       result mustEqual Set(
-        (SObject(Map("Model1" -> SDecimal(0.0003353501304664781), "Model3" -> SDecimal(1.522997951276035E-8)))),
-        (SObject(Map("Model1" -> SDecimal(4.1399375473943306E-8)))),
-        (SObject(Map("Model1" -> SDecimal(1.0261879630648827E-10)))),
-        (SObject(Map("Model1" -> SDecimal(0.11920292202211755)))),
-        (SObject(Map("Model2" -> SDecimal(8.315280276641321E-7), "Model1" -> SDecimal(0.00012339457598623172)))),
-        (SObject(Map("Model1" -> SDecimal(1.522997951276035E-8)))), 
-        (SObject(Map("Model1" -> SDecimal(3.7751345441365816E-11)))), 
-        (SObject(Map("Model1" -> SDecimal(0.04742587317756678)))),
-        (SObject(Map("Model3" -> SDecimal(0.5)))),
-        (SObject(Map("Model3" -> SDecimal(0.000746028833836697)))), 
-        (SObject(Map("Model3" -> SDecimal(0.9939401985084158)))), 
-        (SObject(Map("Model2" -> SDecimal(2.319522830243569E-16)))),
-        (SObject(Map("Model3" -> SDecimal(0.9820137900379085)))), 
-        (SObject(Map("Model2" -> SDecimal(3.625140919143559E-34)))))
+        (SObject(Map("model1" -> SDecimal(0.0003353501304664781), "model3" -> SDecimal(1.522997951276035E-8)))),
+        (SObject(Map("model1" -> SDecimal(4.1399375473943306E-8)))),
+        (SObject(Map("model1" -> SDecimal(1.0261879630648827E-10)))),
+        (SObject(Map("model1" -> SDecimal(0.11920292202211755)))),
+        (SObject(Map("model2" -> SDecimal(8.315280276641321E-7), "model1" -> SDecimal(0.00012339457598623172)))),
+        (SObject(Map("model1" -> SDecimal(1.522997951276035E-8)))), 
+        (SObject(Map("model1" -> SDecimal(3.7751345441365816E-11)))), 
+        (SObject(Map("model1" -> SDecimal(0.04742587317756678)))),
+        (SObject(Map("model3" -> SDecimal(0.5)))),
+        (SObject(Map("model3" -> SDecimal(0.000746028833836697)))), 
+        (SObject(Map("model3" -> SDecimal(0.9939401985084158)))), 
+        (SObject(Map("model2" -> SDecimal(2.319522830243569E-16)))),
+        (SObject(Map("model3" -> SDecimal(0.9820137900379085)))), 
+        (SObject(Map("model2" -> SDecimal(3.625140919143559E-34)))))
     }
   }
 }
