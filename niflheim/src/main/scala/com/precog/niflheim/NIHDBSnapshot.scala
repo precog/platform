@@ -102,7 +102,7 @@ trait NIHDBSnapshot extends Logging {
 
   def count(paths0: Option[Set[CPath]] = None): Long = {
     blockIds.foldLeft(0L) { (total, id) =>
-      count(Some(id), paths0).getOrElse(0L)
+      total + count(Some(id), paths0).getOrElse(0L)
     }
   }
 

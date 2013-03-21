@@ -33,7 +33,6 @@ import com.precog.util.IOUtils
 import com.precog.util.IdGen
 import com.precog.bytecode._
 
-import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import java.io._

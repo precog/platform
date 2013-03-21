@@ -322,7 +322,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                   }
 
                   val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op, ctx))
-                  
+
                   val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
                   val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
                   val result = join(leftResult, rightResult)(key, spec)

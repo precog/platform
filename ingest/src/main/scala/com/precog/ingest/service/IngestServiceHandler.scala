@@ -48,8 +48,8 @@ import blueeyes.util.Clock
 
 import com.google.common.base.Charsets
 
-import java.io.{ File, FileReader, BufferedReader, FileInputStream, FileOutputStream, Closeable, InputStreamReader }
-import java.nio.channels._
+import java.io._
+import java.nio.channels.{Channels, ReadableByteChannel, WritableByteChannel}
 import java.nio.ByteBuffer
 import java.util.concurrent.{ Executor, RejectedExecutionException }
 
@@ -141,10 +141,11 @@ class IngestServiceHandler(
 
     def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult] = {
       if (sync) {
-        val pipe = Pipe.open()
-        val channel = pipe.sink()
-        val writeFuture = writeChunkStream(channel, data)
-        val readFuture = ingestSync(pipe.source(), jobId)
+        val sink = new PipedOutputStream
+        val src = new PipedInputStream
+        sink.connect(src)
+        val writeFuture = writeChunkStream(Channels.newChannel(sink), data)
+        val readFuture = ingestSync(Channels.newChannel(src), jobId)
         M.apply2(writeFuture, readFuture) { (written, result) => result }
       } else {
         for ((file, size) <- writeToFile(data)) yield {
@@ -244,10 +245,11 @@ class IngestServiceHandler(
       readerBuilder(parseDirectives) map { f =>
         if (sync) {
           // must not return until everything is persisted to kafka central
-          val pipe = Pipe.open()
-          val channel = pipe.sink()
-          val writeFuture = writeChunkStream(channel, data)
-          val readFuture = ingestSync(f(new BufferedReader(Channels.newReader(pipe.source(), "UTF-8"))), jobId)
+          val sink = new PipedOutputStream
+          val src = new PipedInputStream
+          sink.connect(src)
+          val writeFuture = writeChunkStream(Channels.newChannel(sink), data)
+          val readFuture = ingestSync(f(new BufferedReader(new InputStreamReader(src, "UTF-8"))), jobId)
           M.apply2(writeFuture, readFuture) { (written, result) => result }
         } else {
           for ((file, size) <- writeToFile(data)) yield {
@@ -292,19 +294,18 @@ class IngestServiceHandler(
     new JsonBatchIngestSelector(apiKey, path, authorities)
   )
 
-  def ensureByteBufferSanity(bb: ByteBuffer) = {
-    if (bb.remaining == 0) {
-      // Oh hell no. We don't need no stinkin' pre-read ByteBuffers
-      bb.rewind()
-    }
-  }
-
   final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {
     stream.uncons flatMap {
       case Some((buf, tail)) =>
-        ensureByteBufferSanity(buf)
-        val written0 = chan.write(buf)
-        writeChannel(chan, tail, written + written0)
+        // This is safe since the stream is coming directly from BE
+        val safeBuf = buf.duplicate.rewind.asInstanceOf[ByteBuffer]
+        //logger.trace("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
+        try {
+          val written0 = chan.write(safeBuf)
+          writeChannel(chan, tail, written + written0)
+        } catch {
+          case t => logger.error("Failure on ByteBuffer read of %s (%d remaining)".format(safeBuf, safeBuf.remaining)); throw t
+        }
 
       case None =>
         M.point { chan.close(); written }
@@ -357,7 +358,9 @@ class IngestServiceHandler(
   }
 
   def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective], batchJob: JobId, sync: Boolean): Future[IngestResult] = {
-    def array(buffer: ByteBuffer): Array[Byte] = {
+    def array(unsafeBuffer: ByteBuffer): Array[Byte] = {
+      // This ByteBuffer is coming straight from BE, so it's OK to dup/rewind
+      val buffer = unsafeBuffer.duplicate.rewind.asInstanceOf[ByteBuffer]
       val target = new Array[Byte](buffer.remaining)
       buffer.get(target)
       buffer.flip()
@@ -397,7 +400,7 @@ class IngestServiceHandler(
               }
             } valueOr { error =>
               logger.warn("Ingest for %s with key %s at %s failed after %d results!".format(authorities, apiKey, path.toString, ingested), error)
-              Promise successful StreamingSyncResult(ingested, Some(error.getMessage))
+              Promise successful StreamingSyncResult(ingested, Option(error.getMessage).orElse(Some(error.getClass.toString)))
             }
           }
         }
@@ -408,8 +411,8 @@ class IngestServiceHandler(
     }
 
     data match {
-      case Left(buf) =>
-        ensureByteBufferSanity(buf)
+      case Left(unsafeBuf) =>
+        val buf = unsafeBuf.duplicate.rewind.asInstanceOf[ByteBuffer]
         val readableLength = buf.remaining
         JParser.parseManyFromByteBuffer(buf) map { jvalues =>
           if (jvalues.exists(_.flattenWithPath.size > maxFields)) {
@@ -427,10 +430,11 @@ class IngestServiceHandler(
         }
 
       case Right(stream) =>
-        val pipe = Pipe.open()
-        val channel = pipe.sink()
-        val writeFuture = writeChannel(channel, stream, 0)
-        val readFuture = ingestAll(pipe.source())
+        val sink = new PipedOutputStream
+        val src = new PipedInputStream
+        sink.connect(src)
+        val writeFuture = writeChannel(Channels.newChannel(sink), stream, 0)
+        val readFuture = ingestAll(Channels.newChannel(src))
         M.apply2(writeFuture, readFuture) { (written, result) => result }
     }
   }
@@ -475,7 +479,7 @@ class IngestServiceHandler(
                 }
               } getOrElse {
                 right(ingestStreaming(apiKey, path, authorities, content, parseDirectives))
-              }).map { f => f.recover { case t: Throwable => NotIngested(t.getMessage) } }.sequence
+              }).map { f => f.recover { case t: Throwable => logger.error("Failure on ingest", t); NotIngested(Option(t.getMessage).getOrElse(t.getClass.toString)) } }.sequence
             } yield {
               ingestResult.fold(
                 { message =>
@@ -512,7 +516,7 @@ class IngestServiceHandler(
                     val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
                     val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
                     logger.info("Streaming sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
-                    if (ingested == 0 && !error.isDefined)
+                    if (ingested == 0 && !error.isDefined) // The following message is searched for by monit
                       logger.info("No ingested data and no errors to %s with %s. Headers: %s. Content: %s".format(path, apiKey,
                         request.headers, content.fold(_.toString(), _.map(x => x.toString()).toStream.apply().toList)))
                     HttpResponse(responseCode, content = Some(responseContent))

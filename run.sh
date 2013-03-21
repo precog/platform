@@ -141,14 +141,23 @@ function repl {
     done
 }
 
+# Our current options for sync/streaming support, want to exercise all of them
+SYNCFLAG[0]="&mode=streaming"
+SYNCFLAG[1]="&mode=batch&receipt=true"
+SYNCFLAG[2]="&mode=batch&receipt=false"
+
+SYNCINDEX=0
+
 for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
     ALLTABLES="$ALLTABLES $TABLE"
-    DATA=$(cat $f)
-    COUNT=$(echo "$DATA" | wc -l)
-    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+    COUNT=$(wc -l "$f")
+
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @\"$f\" \"http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @"$f" "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
+
+    SYNCINDEX=$(( ($SYNCINDEX + 1) % ${#SYNCFLAG[@]} ))
 
     [ -n "$DEBUG" ] && echo $INGEST_RESULT
 

@@ -18,22 +18,18 @@
  *
  */
 package com.precog
-package auth
+package ragnarok
+package test
 
-import common.security._
+object SitaClustering extends PerfTestSuite {
+  query(
+    """
+    import std::stats::*
 
-import akka.dispatch.Future
+    locations := //sita1k
 
-import blueeyes.bkka._
-import blueeyes.BlueEyesServer
-
-import org.streum.configrity.Configuration
-
-import scalaz._
-
-object MongoAPIKeyServer extends BlueEyesServer with SecurityService with AkkaDefaults {
-  implicit val executionContext = defaultFutureDispatch
-  implicit val M: Monad[Future] = new FutureMonad(executionContext)
-  def APIKeyManager(config: Configuration): (APIKeyManager[Future], Stoppable) = MongoAPIKeyManager(config)
-  val clock = blueeyes.util.Clock.System
+    points := { x: locations.x, y: locations.y }
+    kMedians(points, 5)
+    """
+  )
 }
