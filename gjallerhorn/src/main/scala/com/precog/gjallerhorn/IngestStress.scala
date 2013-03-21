@@ -15,9 +15,7 @@ class IngestStress(settings: Settings) extends Task(settings) {
   
   val accountSet = Vector.fill(clients)(createAccount)
   
-  def randomIngest(account: Account, n: Int): Double = {
-    val generator = sample(schema)
-    
+  def randomIngest(account: Account, n: Int, generator: Arbitrary[SampleData]): Double = {
     def loop(n: Int, accumulated: Int = 0): Int = {
       val sd = generator.arbitrary.sample.get
       val actualSize = sd.data.length
@@ -47,8 +45,9 @@ class IngestStress(settings: Settings) extends Task(settings) {
     case (account, i) => {
       new Thread(new Runnable {
         def run() {
+          val generator = sample(schema)
           while (true) {
-            val rate = randomIngest(account, eps / clients)
+            val rate = randomIngest(account, eps / clients, generator)
             rates.set(i, rate)
             
             // throttle to the target EPS
@@ -64,15 +63,15 @@ class IngestStress(settings: Settings) extends Task(settings) {
   }
   
   println("Starting ingestion; batton down the hatches! (Ctrl-C to abort)")
-  println("Target EPS: %d; Clients: %d".format(eps, clients))
+  println("Target EPS: %d; Threads: %d".format(eps, clients))
   
   threads foreach { _.start() }
   
   while (true) {
     Thread.sleep(5000)
     
-    val burstRate = math.round((0 until clients map rates.get sum) / clients)
-    val throttle = math.round((0 until clients map throttles.get sum) / clients)
+    val burstRate = math.round(0 until clients map rates.get sum)
+    val throttle = math.round(0 until clients map throttles.get sum)
     
     println(">>> burst rate = %s; current throttle = %s".format(burstRate, throttle))
   }
