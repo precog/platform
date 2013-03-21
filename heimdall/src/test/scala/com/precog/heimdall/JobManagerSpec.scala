@@ -60,7 +60,7 @@ class FileJobManagerSpec extends Specification {
   include(new JobManagerSpec[Id] {
     val validAPIKey = "Anything should work!"
     val jobs = new FileJobManager[Id](tempDir, Id.id)
-    val M: Monad[Id] with Copointed[Id] = implicitly
+    val M: Monad[Id] with Comonad[Id] = implicitly
   })
 
   override def map(fs: => Fragments) = Step { IOUtils.recursiveDelete(tempDir).unsafePerformIO } ^ fs
