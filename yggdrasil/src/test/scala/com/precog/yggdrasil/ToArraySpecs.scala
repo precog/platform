@@ -3,7 +3,7 @@ package table
 
 import blueeyes.json._
 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import org.specs2.mutable._
 

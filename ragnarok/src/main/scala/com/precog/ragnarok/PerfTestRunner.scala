@@ -8,10 +8,10 @@ import scalaz._
 trait PerfTestRunner[M[+_], T] {
   import scalaz.syntax.monad._
   import scalaz.syntax.monoid._
-  import scalaz.syntax.copointed._
+  import scalaz.syntax.comonad._
   import scalaz.std.option._
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   /** Result type of running an eval. */
   type Result
@@ -111,7 +111,7 @@ trait PerfTestRunner[M[+_], T] {
 }
 
 
-class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M] with Copointed[M]) extends PerfTestRunner[M, Long] {
+class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M] with Comonad[M]) extends PerfTestRunner[M, Long] {
   import scalaz.syntax.monad._
 
   type Result = Unit
