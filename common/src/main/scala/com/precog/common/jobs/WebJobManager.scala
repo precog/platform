@@ -49,16 +49,21 @@ import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
+import scalaz.std.option._
+import scalaz.syntax.applicative._
+import scalaz.syntax.std.option._
 
 object WebJobManager {
-  def apply(config: Configuration)(implicit ec: ExecutionContext): JobManager[Response] = {
-    RealWebJobManager(
-      config[String]("service.protocol", "http"),
-      config[String]("service.host", "localhost"),
-      config[Int]("service.port", 80),
-      config[String]("service.path", "/jobs/v1/")
-    )
+  def apply(config: Configuration)(implicit ec: ExecutionContext): Validation[NEL[String], JobManager[Response]] = {
+    (
+      config.get[String]("service.protocol").toSuccess(NEL("Configuraiton property service.protocol is required.")) |@|
+      config.get[String]("service.host").toSuccess(NEL("Configuration property service.host is required")) |@|
+      config.get[Int]("service.port").toSuccess(NEL("Configuration property service.port is required")) |@|
+      config.get[String]("service.path").toSuccess(NEL("Configuration property service.path is required")) 
+    ) { (protocol, host, port, path) => 
+      RealWebJobManager(protocol, host, port, path)
+    }
   }
 }
 

@@ -62,7 +62,7 @@ import org.streum.configrity.io.BlockFormat
 
 import scalaz._
 import scalaz.effect.IO
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import java.io.File
 
@@ -94,9 +94,7 @@ object SBTConsole {
   val platform = new Platform { console =>
     implicit val actorSystem = ActorSystem("sbtConsoleActorSystem")
     implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-    implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-      def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
-    }
+    implicit val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
 
     val yggConfig = new PlatformConfig {
       val config = Configuration parse {

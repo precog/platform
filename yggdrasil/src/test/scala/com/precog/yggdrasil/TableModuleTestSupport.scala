@@ -31,7 +31,7 @@ import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -54,7 +54,7 @@ trait TestLib[M[+_]] extends TableModule[M] {
 }
 
 trait TableModuleTestSupport[M[+_]] extends TableModule[M] with TestLib[M] {
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
   def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
@@ -68,7 +68,7 @@ trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck {
   import SampleData._
   override val defaultPrettyParams = Pretty.Params(2)
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def checkMappings(testSupport: TableModuleTestSupport[M]) = {
     implicit val gen = sample(schema)

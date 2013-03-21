@@ -36,7 +36,7 @@ import blueeyes.json._
 
 import scalaz._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColumnarTableModule[M] { self =>
   import trans._
@@ -44,8 +44,6 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
 
   val library = new FSLib {}
   import library._
-
-  implicit def M: Monad[M] with Copointed[M]
 
   class YggConfig extends IdSourceConfig with ColumnarTableModuleConfig {
     val maxSliceSize = 10

@@ -34,7 +34,7 @@ import org.specs2.mutable._
 
 import scalaz._
 import scalaz.std.anyVal._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 
 /*

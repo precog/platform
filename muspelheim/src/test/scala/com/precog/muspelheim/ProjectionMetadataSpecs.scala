@@ -27,7 +27,7 @@ import com.precog.yggdrasil.table._
 import org.specs2.mutable._
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 //trait ProjectionMetadataSpecs[M[+_]] extends Specification 
 //    with StorageMetadataSource[M] 

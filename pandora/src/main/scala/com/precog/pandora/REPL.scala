@@ -283,9 +283,7 @@ object Console extends App {
 
         implicit val actorSystem = ActorSystem("replActorSystem")
         implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-        implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-          def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
-        }
+        implicit val M = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
 
         type YggConfig = REPLConfig
         val yggConfig = replConfig

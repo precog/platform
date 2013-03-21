@@ -32,6 +32,6 @@ trait AccessControl[M[+_]] {
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean]
 }
 
-class UnrestrictedAccessControl[M[+_]: Pointed] extends AccessControl[M] {
+class UnrestrictedAccessControl[M[+_]: Applicative] extends AccessControl[M] {
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = true.point[M]
 }

@@ -28,7 +28,7 @@ import blueeyes.json._
 
 import scalaz.StreamT
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.string._
 
 import org.specs2.ScalaCheck

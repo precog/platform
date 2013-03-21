@@ -64,11 +64,15 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
       sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
     }
 
+    val jobManager0 = WebJobManager(config.detach("jobs")) valueOr { errs =>
+      sys.error("Unable to build new WebJobManager: " + errs.list.mkString("\n", "\n", ""))
+    }
+
     val deps = EventServiceDeps[Future]( 
       apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
-      jobManager = WebJobManager(config.detach("jobs"))
+      jobManager = jobManager0
     )
 
     (deps, stoppable)
