@@ -423,7 +423,6 @@ sed -e "s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
-	s#/security/v1/#/#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
 	"$BASEDIR"/accounts/configs/dev/accounts-v1.conf > \
@@ -436,7 +435,6 @@ sed -e "s#port = 30066#port = $JOBS_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
-	s#/security/v1/#/#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
 	"$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > \
@@ -447,16 +445,13 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 
 sed -e "s/port = 30060/port = $INGEST_PORT/; \
 	s#/var/log#$WORKDIR/logs#; \
-	s/port = 30062/port = $AUTH_PORT/; \
-	s/rootKey = .*/rootKey = \"$TOKENID\"/;
-	s#/security/v1/#/#; \
-	s/port = 30064/port = $ACCOUNTS_PORT/; \
-	s#/accounts/v1/#/#; \
+	s#port = 30062#port = $AUTH_PORT#; \
+	s#rootKey = .*#rootKey = \"$TOKENID\"#; 
+	s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#port = 30066#port = $JOBS_PORT#; \
-	s#/jobs/v1/#/#; \
-	s/port = 9082/port = $KAFKA_LOCAL_PORT/; \
-	s/port = 9092/port = $KAFKA_GLOBAL_PORT/; \
-	s/connect = localhost:2181/connect = localhost:$ZOOKEEPER_PORT/" < \
+	s#port = 9082#port = $KAFKA_LOCAL_PORT#; \
+	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
+	s#connect = localhost:2181#connect = localhost:$ZOOKEEPER_PORT#" < \
 	"$BASEDIR"/ingest/configs/dev/ingest-v2.conf > \
 	"$WORKDIR"/configs/ingest-v2.conf || echo "Failed to update ingest config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/ingest-v2.logging.xml > "$WORKDIR"/configs/ingest-v2.logging.xml
@@ -466,11 +461,8 @@ sed -e "s#port = 30070#port = $SHARD_PORT#; \
 	s#/opt/precog/shard#$WORKDIR/shard-data#; \
 	s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
-	s#/security/v1/#/#; \
 	s#port = 30064#port = $ACCOUNTS_PORT#; \
-	s#/accounts/v1/#/#; \
 	s#port = 30066#port = $JOBS_PORT#; \
-	s#/jobs/v1/#/#; \
 	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
 	"$BASEDIR"/shard/configs/dev/shard-v2.conf > \
@@ -509,17 +501,17 @@ wait_until_port_open $JOBS_PORT
 # Now we need two accounts for testing: the root account and the test account
 if [ ! -e "$WORKDIR"/account_token.txt ]; then
     echo "Creating root account"
-    ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' "http://localhost:$ACCOUNTS_PORT/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    ROOTACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"operations@precog.com","password":"1234"}' "http://localhost:$ACCOUNTS_PORT/accounts/v1/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created root account: $ROOTACCOUNTID"
     echo "Updating root account with prior root APIKey"
     echo -e "db.accounts.update({\"accountId\":\"$ROOTACCOUNTID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | "$WORKDIR"/mongo/bin/mongo --port $MONGO_PORT accounts_v1
     echo "Update of root account complete"
 
     echo "Creating test account"
-    ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"test@precog.com","password":"fooble"}' "http://localhost:$ACCOUNTS_PORT/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
+    ACCOUNTID=$(set -e; curl -S -s -H 'Content-Type: application/json' -d '{"email":"test@precog.com","password":"fooble"}' "http://localhost:$ACCOUNTS_PORT/accounts/v1/accounts/" | sed 's/.*\([0-9]\{10\}\).*/\1/')
     echo "Created test account: $ACCOUNTID"
     echo $ACCOUNTID > "$WORKDIR"/account_id.txt
-    ACCOUNTTOKEN=$(set -e; curl -S -s -u 'test@precog.com:fooble' -H 'Content-Type: application/json' -G "http://localhost:$ACCOUNTS_PORT/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
+    ACCOUNTTOKEN=$(set -e; curl -S -s -u 'test@precog.com:fooble' -H 'Content-Type: application/json' -G "http://localhost:$ACCOUNTS_PORT/accounts/v1/accounts/$ACCOUNTID" | grep apiKey | sed 's/.*apiKey"[^"]*"\([^"]*\)".*/\1/')
     echo "Account token is $ACCOUNTTOKEN"
     echo $ACCOUNTTOKEN > "$WORKDIR"/account_token.txt
 else
@@ -587,7 +579,7 @@ function query() {
     curl -s -G \
       --data-urlencode "q=$1" \
       --data-urlencode "apiKey=$ACCOUNTTOKEN" \
-      "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
+      "http://localhost:$SHARD_PORT/analytics/v1/analytics/fs/$ACCOUNTID"
 }
 
 function count() {
@@ -648,7 +640,7 @@ if [ -n "$TESTQUIT" ]; then
     curl -o /dev/null -v \
       -H 'Content-Type: application/json' \
       --data-bin "@$TESTJSON" \
-      "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/xyz?apiKey=$ACCOUNTTOKEN"
+      "http://localhost:$INGEST_PORT/ingest/v1/fs/$ACCOUNTID/xyz?apiKey=$ACCOUNTTOKEN"
 
     echo ";;; polling for rows via count()"
     wait_til_nonzero 60

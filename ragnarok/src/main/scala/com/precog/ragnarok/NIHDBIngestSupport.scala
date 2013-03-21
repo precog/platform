@@ -36,7 +36,7 @@ import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 import akka.dispatch._
 import akka.actor.{ IO => _, _ }
@@ -47,7 +47,7 @@ import com.weiglewilczek.slf4s.Logging
  * Provides a simple interface for ingesting bulk JSON data.
  */
 trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
-  implicit def M: Monad[Future] with Copointed[Future]
+  implicit def M: Monad[Future] with Comonad[Future]
   def actorSystem: ActorSystem
 
   private val pid = System.currentTimeMillis.toInt & 0x7fffffff

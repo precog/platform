@@ -54,7 +54,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.validation._
 import scalaz.syntax.std.option._
 
-object WebAccountFinder {
+object WebAccountFinder extends Logging {
   def apply(config: Configuration)(implicit executor: ExecutionContext): Validation[NonEmptyList[String], AccountFinder[Response]] = {
     val serviceConfig = config.detach("service")
     serviceConfig.get[String]("hardcoded_account") map { accountId =>
@@ -69,6 +69,7 @@ object WebAccountFinder {
        serviceConfig.get[String]("password").toSuccess(NEL("Configuration property service.password is required"))) {
         (protocol, host, port, path, user, password) =>
           val cacheSize = serviceConfig[Int]("cache_size", 1000)
+          logger.info("Creating new WebAccountFinder with properties %s://%s:%s/%s %s:%s".format(protocol, host, port.toString, path, user, password))
           new WebAccountFinder(protocol, host, port, path, user, password, cacheSize)
       }
     }
@@ -88,9 +89,12 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
 
   def findAccountByAPIKey(apiKey: APIKey) : Response[Option[AccountId]] = {
     logger.debug("Finding account for API key " + apiKey + " with " + (protocol, host, port, path, user, password).toString)
-    apiKeyToAccountCache.get(apiKey).map(id => rightT(Promise.successful(Some(id)): Future[Option[AccountId]])).getOrElse {
+    apiKeyToAccountCache.get(apiKey).map { id =>
+      logger.debug("Cache hit for API key " + apiKey)
+      rightT(Promise.successful(Some(id)): Future[Option[AccountId]])
+    }.getOrElse {
       invoke { client =>
-        logger.info("Querying accounts service.")
+        logger.info("Cache miss for API key %s, querying accounts service.".format(apiKey))
         eitherT(client.query("apiKey", apiKey).get[JValue]("/accounts/") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
             logger.info("Got response for apiKey " + apiKey)
@@ -137,7 +141,7 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
   def invoke[A](f: HttpClient[ByteChunk] => A): A = {
     val auth = HttpHeaders.Authorization("Basic "+new String(Base64.encodeBase64((user+":"+password).getBytes("UTF-8")), "UTF-8"))
     withJsonClient { client =>
-      f(client.header(auth).path(path))
+      f(client.header(auth))
     }
   }
 }

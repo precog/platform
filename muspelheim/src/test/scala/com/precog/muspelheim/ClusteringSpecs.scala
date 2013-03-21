@@ -25,18 +25,18 @@ import com.precog.common._
 
 trait ClusteringSpecs extends EvalStackSpecs {
 
-  def clusterSchema(obj: Map[String, SValue]): List[String] = obj("Cluster1") match {
+  def clusterSchema(obj: Map[String, SValue]): List[String] = obj("cluster1") match {
     case SObject(ctr) => ctr.keys.toList.sorted
     case _ => sys.error("malformed SObject")
   }
 
-  def testModel(model: Map[String, SValue], validClusters: Set[String]) = {
-    model.keys mustEqual Set("ClusterId", "ClusterCenter")
+  def testmodel(model: Map[String, SValue], validClusters: Set[String]) = {
+    model.keys mustEqual Set("clusterId", "clusterCenter")
 
-    model("ClusterId") must beLike {
+    model("clusterId") must beLike {
       case SString(c1) => validClusters must contain(c1)
     }
-    model("ClusterCenter") must beLike {
+    model("clusterCenter") must beLike {
       case SObject(v) => v.keys mustEqual Set("HeightIncm", "Weight")
     }
   }
@@ -57,10 +57,10 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
-          elems.keys mustEqual Set("Model1")
-          elems("Model1") must beLike { case SObject(clusters) =>
+          elems.keys mustEqual Set("model1")
+          elems("model1") must beLike { case SObject(clusters) =>
             clusters must haveSize(3)
-            clusters.keys mustEqual Set("Cluster1", "Cluster2", "Cluster3")
+            clusters.keys mustEqual Set("cluster1", "cluster2", "cluster3")
             clusterSchema(clusters) must_== List("height", "weight")
           }
       }
@@ -93,15 +93,15 @@ trait ClusteringSpecs extends EvalStackSpecs {
       val count = resultsCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
       results must haveSize(count)
 
-      val validClusters = (1 to 4).map("Cluster" + _).toSet
+      val validClusters = (1 to 4).map("cluster" + _).toSet
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(1)
-          elems.keys mustEqual Set("Model1")
+          elems.keys mustEqual Set("model1")
 
-          elems("Model1") must beLike {
-            case SObject(model) => testModel(model, validClusters)
+          elems("model1") must beLike {
+            case SObject(model) => testmodel(model, validClusters)
           }
       }
     }
@@ -115,7 +115,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveSize(count)
       results must not beEmpty
 
-      val validClusters = (1 to 3).map("Cluster" + _).toSet
+      val validClusters = (1 to 3).map("cluster" + _).toSet
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
@@ -125,10 +125,10 @@ trait ClusteringSpecs extends EvalStackSpecs {
           elems.keys must contain("cluster")
           elems("cluster") must beLike {
             case SObject(obj) =>
-              obj.keys mustEqual Set("Model1")
+              obj.keys mustEqual Set("model1")
 
-              obj("Model1") must beLike {
-                case SObject(model) => testModel(model, validClusters)
+              obj("model1") must beLike {
+                case SObject(model) => testmodel(model, validClusters)
               }
           }
       }
@@ -219,25 +219,25 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveSize(count)
       results must not beEmpty
 
-      val validClusters = (1 to 3).map("Cluster" + _).toSet
+      val validClusters = (1 to 3).map("cluster" + _).toSet
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(2)
 
-          elems.keys mustEqual Set("cluster", "Model1")
+          elems.keys mustEqual Set("cluster", "model1")
 
-          elems("Model1") must beLike {
+          elems("model1") must beLike {
             case SObject(obj) =>
               obj.keys mustEqual(validClusters)
           }
 
           elems("cluster") must beLike {
             case SObject(obj) =>
-              obj.keys mustEqual Set("Model1")
+              obj.keys mustEqual Set("model1")
 
-              obj("Model1") must beLike {
-                case SObject(model) => testModel(model, validClusters)
+              obj("model1") must beLike {
+                case SObject(model) => testmodel(model, validClusters)
               }
           }
       }
@@ -253,7 +253,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
         clustering := std::stats::kMedians({ HeightIncm: h, Weight: w }, 5)
         assignments := std::stats::assignClusters(medals, clustering)
 
-        medals' := medals with { cluster: assignments.Model1 }
+        medals' := medals with { cluster: assignments.model1 }
 
         solve 'cluster
           clusters := medals'.cluster where medals'.cluster = 'cluster
@@ -264,7 +264,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
 
       results must haveSize(5)
 
-      val validClusters = (1 to 5).map("Cluster" + _).toSet
+      val validClusters = (1 to 5).map("cluster" + _).toSet
 
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
@@ -273,7 +273,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
             case SDecimal(d) => d must be_>=(BigDecimal(1))
           }
           elems("clusterId") must beLike {
-            case SObject(model) => testModel(model, validClusters)
+            case SObject(model) => testmodel(model, validClusters)
           }
       }
     }
@@ -305,7 +305,7 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
-          elems.keys mustEqual Set("Model1", "Model2", "Model3", "Model4")
+          elems.keys mustEqual Set("model1", "model2", "model3", "model4")
       }
     }
 
@@ -381,9 +381,9 @@ trait ClusteringSpecs extends EvalStackSpecs {
       results must haveAllElementsLike {
         case (ids, SObject(elems)) =>
           ids must haveSize(0)
-          elems.keys mustEqual Set("Model1")
-          elems("Model1") must beLike {
-            case SObject(obj) => obj.keySet mustEqual (1 to 6).map("Cluster" + _).toSet
+          elems.keys mustEqual Set("model1")
+          elems("model1") must beLike {
+            case SObject(obj) => obj.keySet mustEqual (1 to 6).map("cluster" + _).toSet
           }
       }
     }

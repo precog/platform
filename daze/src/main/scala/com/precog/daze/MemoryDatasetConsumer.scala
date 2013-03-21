@@ -35,7 +35,7 @@ import scalaz._
 import scalaz.Validation
 import scalaz.effect.IO
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.set._
 import Validation._
 
@@ -47,7 +47,7 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   type X = Throwable
   type SEvent = (Vector[IdType], SValue)
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M): EvaluatorLike[N]
   

@@ -30,11 +30,11 @@ import java.nio._
 import scalaz._
 import scalaz.Id.Id
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 class InMemoryFileStorageSpec extends Specification {
   include(new FileStorageSpec[Need] {
-    val M: Monad[Need] with Copointed[Need] = Need.need
+    val M: Monad[Need] with Comonad[Need] = Need.need
     val fs = new InMemoryFileStorage[Need]
   })
 }
@@ -43,7 +43,7 @@ trait FileStorageSpec[M[+_]] extends Specification {
   lazy val TEXT = MimeTypes.text / plain
   lazy val HTML = MimeTypes.text / html
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
   def fs: FileStorage[M]
 
   lazy val data1: FileData[M] = {

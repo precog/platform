@@ -145,7 +145,7 @@ trait ShardService extends
     loop(stream0, ByteBuffer.allocate(BufferSize))
   }
 
-  private val queryResultToByteChunk: QueryResult => ByteChunk = {
+  private def queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
       case Right(stream) => Right(bufferOutput(stream))

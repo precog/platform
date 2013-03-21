@@ -61,9 +61,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
       with EvaluatorConfig
 
   implicit val actorSystem = ActorSystem("NIHDBPerfTestRunner")
-  implicit val M = new blueeyes.bkka.FutureMonad(actorSystem.dispatcher) with Copointed[Future] {
-    def copoint[A](fa: Future[A]): A = Await.result(fa, testTimeout)
-  }
+  implicit val M = new UnsafeFutureComonad(actorSystem.dispatcher, testTimeout)
 
   type YggConfig = NIHDBPerfTestRunnerConfig
   object yggConfig extends NIHDBPerfTestRunnerConfig {

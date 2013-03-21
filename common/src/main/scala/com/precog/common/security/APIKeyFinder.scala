@@ -31,7 +31,7 @@ import org.joda.time.Instant
 import scalaz._
 import scalaz.\/._
 import scalaz.std.option.optionInstance
-import scalaz.std.set._
+import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.bitraverse._
@@ -73,10 +73,10 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
     case APIKeyRecord(apiKey, name, description, issuer, grantIds, false) =>
       underlying.findAPIKeyAncestry(apiKey).flatMap { ancestors =>
         val ancestorKeys = ancestors.drop(1).map(_.apiKey) // The first element of ancestors is the key itself, so we drop it
-        grantIds.map(underlying.findGrant).sequence map { grants =>
+        grantIds.map(underlying.findGrant).toList.sequence map { grants =>
           val divulgedIssuers = rootKey.map { rk => ancestorKeys.reverse.dropWhile(_ != rk).reverse }.getOrElse(Nil)
           logger.debug("Divulging issuers %s for key %s based on root key %s and ancestors %s".format(divulgedIssuers, apiKey, rootKey, ancestorKeys))
-          v1.APIKeyDetails(apiKey, name, description, grants.flatten map grantDetails, divulgedIssuers)
+          v1.APIKeyDetails(apiKey, name, description, grants.flatten.map(grantDetails)(collection.breakOut), divulgedIssuers)
         }
       }
   }
@@ -96,8 +96,8 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]] = {
     underlying.findAPIKey(fromRoot) flatMap {
       case Some(record) =>
-        underlying.findAPIKeyChildren(record.apiKey) flatMap {
-          _ collect recordDetails sequence
+        underlying.findAPIKeyChildren(record.apiKey) flatMap { recs =>
+          (recs collect recordDetails).toList.sequence.map(_.toSet)
         }
 
       case None =>
@@ -113,6 +113,3 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
     underlying.addGrants(accountKey, Set(grantId)) map { _.isDefined }
   }
 }
-
-
-// vim: set ts=4 sw=4 et:

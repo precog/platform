@@ -32,7 +32,7 @@ import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scala.annotation.tailrec
 
 import org.specs2._

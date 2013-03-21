@@ -30,7 +30,7 @@ import com.precog.yggdrasil.table.ColumnarTableModule
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait RenderStackSpecs extends EvalStackSpecs 
     with ParseEvalStack[Future]
@@ -38,7 +38,7 @@ trait RenderStackSpecs extends EvalStackSpecs
     with MemoryDatasetConsumer[Future]
     with Logging {
 
-  implicit val M: Monad[Future] with Copointed[Future]
+  implicit val M: Monad[Future] with Comonad[Future]
 
   implicit val ntFuture = NaturalTransformation.refl[Future]
 

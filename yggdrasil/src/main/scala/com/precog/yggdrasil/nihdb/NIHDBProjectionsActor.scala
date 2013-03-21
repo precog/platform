@@ -118,7 +118,7 @@ class NIHDBProjectionsActor(
 
   override def postStop() = {
     logger.info("Initiating shutdown of %d projections".format(projections.size))
-    Await.result(projections.values.toList.map (_.values.toList.map(_.close(context.system))).flatten.sequence, storageTimeout.duration)
+    Await.result(projections.values.flatMap(_.values).toList.traverse(_.close(context.system)), storageTimeout.duration)
     logger.info("Projection shutdown complete")
     logger.info("Shutting down TX log scheduler")
     txLogScheduler.shutdown()
@@ -194,19 +194,19 @@ class NIHDBProjectionsActor(
     import Permission._
 
     def deleteOk(apiKey: APIKey, authorities: Authorities): Future[Boolean] = {
-      authorities.accountIds.map({ accountId =>
+      authorities.accountIds.toList traverse { accountId =>
         // TODO: need a Clock in here
         apiKeyFinder.hasCapability(apiKey, Set(DeletePermission(path, WrittenByAccount(accountId))), Some(new DateTime))
-      }).sequence.map({
+      } map {
         _.exists(_ == true)
-      })
+      }
     }
 
     // First, we need to figure out which projections are actually
     // being archived based on the authorities and perms of the api key
     val toArchive: Future[List[Authorities]] = projections.get(path) match {
       case Some(projections) =>
-        projections.toList.map {
+        projections.toList traverse {
           case (authorities, proj) =>
             deleteOk(apiKey, authorities).flatMap { canDelete =>
               logger.debug("Delete allowed for projection at %s:%s with apiKey %s = %s".format(path, authorities, apiKey, canDelete))
@@ -217,16 +217,20 @@ class NIHDBProjectionsActor(
                 Promise.successful(None)(context.dispatcher)
               }
             }
-        }.sequence.map(_.flatten)
+        } map {
+          _.flatten
+        }
 
       case None =>
         // No open projections, so we need to scan the descriptors
         val authorities = findDescriptorDirs(path).map {
-          _.toList.map { dir =>
+          _.toList traverse { dir =>
             NIHDBActor.readDescriptor(dir).map {
               _.map(_.map(_.authorities).valueOr { e => throw new Exception("Error reading projection descriptor for %s from %s: %s".format(path, dir, e.message)) })
             }
-          }.sequence.unsafePerformIO.flatten
+          } map {
+            _.flatten
+          } unsafePerformIO
         }.getOrElse(Nil)
 
         Promise.successful(authorities)(context.dispatcher)
@@ -244,11 +248,11 @@ class NIHDBProjectionsActor(
           }
         }
 
-        authorities.map { auth =>
+        authorities traverse { auth =>
           archive(path, auth).except {
             case t: Throwable => IO { logger.error("Failure during archive of projction %s:%s".format(path, auth), t) }
           }
-        }.sequence.unsafePerformIO
+        } unsafePerformIO
 
         logger.debug("Processing of archive request complete on " + path)
       } else {
@@ -324,15 +328,15 @@ class NIHDBProjectionsActor(
   def aggregateProjections(path: Path, apiKey: Option[APIKey]): Future[Option[NIHDBProjection]] = {
     findProjections(path, apiKey).flatMap {
       case Some(inputs) =>
-        inputs.toNel.map { ps =>
+        inputs.toNel traverse{ ps =>
           if (ps.size == 1) {
             logger.debug("Aggregate on %s with key %s returns a single projection".format(path, apiKey))
             Promise.successful(ps.head)(context.dispatcher)
           } else {
             logger.debug("Aggregate on %s with key %s returns an aggregate projection".format(path, apiKey))
-            ps.map(_.getSnapshot).sequence.map { snaps => new NIHDBAggregateProjection(snaps) }
+            ps.traverse(_.getSnapshot) map { snaps => new NIHDBAggregateProjection(snaps) }
           }
-        }.sequence
+        }
 
       case None =>
         logger.debug("No projections found for " + path)
@@ -349,21 +353,23 @@ class NIHDBProjectionsActor(
 
       case Some(foundProjections) =>
         logger.debug("Checking found projections at " + path + " for access")
-        foundProjections.map { proj =>
+        foundProjections traverse { proj =>
           apiKey.map { key =>
             proj.authorities.flatMap { authorities =>
               // must have at a minimum a reduce permission from each authority
               // TODO: get a Clock in here
-              authorities.accountIds.map({ id =>
+              authorities.accountIds.toList traverse { id =>
                 apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
-              }).sequence.map({
+              } map {
                 _.forall(_ == true).option(proj)
-              })
+              }
             }
-          }.getOrElse {
+          } getOrElse {
             Promise.successful(Some(proj))(context.dispatcher)
           }
-        }.sequence.map { accessible: List[Option[NIHDBProjection]] => Some(accessible.flatten) }
+        } map { 
+          _.sequence
+        }
     }
   }
 

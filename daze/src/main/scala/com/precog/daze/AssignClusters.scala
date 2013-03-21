@@ -249,11 +249,11 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
                 val pref = CPath(TableModule.paths.Value)
 
                 val centers: Map[ColumnRef, Column] = zipped.collect { case (col, path) if path.hasPrefix(pref) =>
-                  val path0 = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterCenter"))
+                  val path0 = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("clusterCenter"))
                   ColumnRef(path0 \ path.dropPrefix(pref).get, CDouble) -> col
                 }.toMap
 
-                val idPath = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("ClusterId"))
+                val idPath = CPath(TableModule.paths.Value, CPathField(model.name), CPathField("clusterId"))
                 val centerId = Map(ColumnRef(idPath, CString) -> ArrayStrColumn(definedModel, resultArray))
 
                 centers ++ centerId

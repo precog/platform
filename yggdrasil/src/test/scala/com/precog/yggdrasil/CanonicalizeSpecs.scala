@@ -22,8 +22,8 @@ package table
 
 import blueeyes.json._
 
-import scalaz.{Copointed, StreamT}
-import scalaz.syntax.copointed._
+import scalaz.StreamT
+import scalaz.syntax.comonad._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck

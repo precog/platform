@@ -87,7 +87,7 @@ trait TestAPIKeyService extends BlueEyesServiceSpecification
 class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tags {
   import Permission._
 
-  val authService: HttpClient[JValue] = client.contentType[JValue](application/(MimeTypes.json))
+  val authService: HttpClient[JValue] = client.contentType[JValue](application/(MimeTypes.json)).path("/security/v1/")
   val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   val tc = new AsyncHttpTranscoder[JValue, JValue] {

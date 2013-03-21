@@ -174,9 +174,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   def includeIdField = false
 
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(asyncContext) with Copointed[Future] {
-    def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
 
   val report = new LoggingQueryLogger[Future, instructions.Line]
       with ExceptionQueryLogger[Future, instructions.Line]

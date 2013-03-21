@@ -30,12 +30,12 @@ import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait APIKeyFinderSpec[M[+_]] extends Specification {
   import Permission._
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def withAPIKeyFinder[A](mgr: APIKeyManager[M])(f: APIKeyFinder[M] => A): A
 

@@ -297,6 +297,7 @@ class IngestServiceHandler(
   final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {
     stream.uncons flatMap {
       case Some((buf, tail)) =>
+        // This is safe since the stream is coming directly from BE
         val safeBuf = buf.duplicate.rewind.asInstanceOf[ByteBuffer]
         //logger.trace("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
         try {
@@ -357,7 +358,9 @@ class IngestServiceHandler(
   }
 
   def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective], batchJob: JobId, sync: Boolean): Future[IngestResult] = {
-    def array(buffer: ByteBuffer): Array[Byte] = {
+    def array(unsafeBuffer: ByteBuffer): Array[Byte] = {
+      // This ByteBuffer is coming straight from BE, so it's OK to dup/rewind
+      val buffer = unsafeBuffer.duplicate.rewind.asInstanceOf[ByteBuffer]
       val target = new Array[Byte](buffer.remaining)
       buffer.get(target)
       buffer.flip()
