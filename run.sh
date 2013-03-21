@@ -126,7 +126,7 @@ SHARD_PORT:        $SHARD_PORT
 EOF
 
 function query {
-    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/fs/$ACCOUNTID"
+    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID"
 }
 
 function repl {
@@ -155,8 +155,8 @@ for f in $@; do
     DATA=$(cat $f)
     COUNT=$(echo "$DATA" | wc -l)
 
-    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
 
     SYNCINDEX=$(( ($SYNCINDEX + 1) % ${#SYNCFLAG[@]} ))
 
@@ -213,7 +213,7 @@ else
     echo "Deleting ingested data"
     for TABLE in $ALLTABLES; do
         echo "  deleting $TABLE..."
-        ARCHIVE_RESULT=$(curl -s -S -X DELETE "http://localhost:$INGEST_PORT/sync/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
+        ARCHIVE_RESULT=$(curl -s -S -X DELETE "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN")
 
         [ -n "$DEBUG" ] && echo $ARCHIVE_RESULT
     done
