@@ -14,7 +14,6 @@ import com.precog.util.IOUtils
 import com.precog.util.IdGen
 import com.precog.bytecode._
 
-import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import java.io._
@@ -24,7 +23,7 @@ import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.effect._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scala.Function._

@@ -17,7 +17,7 @@ import org.specs2.mutable._
 
 import scalaz._
 import scalaz.std.anyVal._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 
 trait MergeSpec[M[+_]] extends
@@ -290,8 +290,8 @@ trait MergeSpec[M[+_]] extends
   }
 }
 
-object MergeSpec extends MergeSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
+object MergeSpec extends MergeSpec[Need] {
+  implicit def M = Need.need
 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
 

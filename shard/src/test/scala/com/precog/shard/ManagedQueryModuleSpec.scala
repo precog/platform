@@ -28,7 +28,7 @@ import org.joda.time._
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 object ManagedQueryTestSupport {
   // We use TestFuture as our monad for QueryExecutor, as this let's us pass
@@ -50,9 +50,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   val actorSystem = ActorSystem("managedQueryModuleSpec")
   val jobActorSystem = ActorSystem("managedQueryModuleSpecJobs")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, Duration(30, "seconds"))
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(executionContext, Duration(30, "seconds"))
 
   val defaultTimeout = Duration(90, TimeUnit.SECONDS)
 
@@ -113,7 +111,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
         ticker ! Tick
     }
-    startup.copoint
+    startup.run.copoint
   }
 
   "A managed query" should {
@@ -213,7 +211,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   step {
     ticker ! Tick
-    shutdown.copoint
+    shutdown.run.copoint
     actorSystem.shutdown()
     actorSystem.awaitTermination()
   }
@@ -236,7 +234,7 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
   }
 
   def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]]]] = {
-    Pointed[TestFuture].point(Success(new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
+    Applicative[TestFuture].point(Success(new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
       import UserQuery.Serialization._
 
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
@@ -268,6 +266,6 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
   }
 
-  def startup = Pointed[TestFuture].point { true }
-  def shutdown = Pointed[TestFuture].point { true }
+  def startup = Applicative[TestFuture].point { true }
+  def shutdown = Applicative[TestFuture].point { true }
 }

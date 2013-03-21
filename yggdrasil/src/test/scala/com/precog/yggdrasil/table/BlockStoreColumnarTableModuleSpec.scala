@@ -17,7 +17,7 @@ import scala.util.Random
 
 import scalaz._
 import scalaz.effect.IO 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.anyVal._
 
 import org.specs2._
@@ -70,8 +70,8 @@ trait BlockStoreColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M]
   }
 }
 
-object BlockStoreColumnarTableModuleSpec extends BlockStoreColumnarTableModuleSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
+object BlockStoreColumnarTableModuleSpec extends BlockStoreColumnarTableModuleSpec[Need] {
+  implicit def M = Need.need
 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
   
