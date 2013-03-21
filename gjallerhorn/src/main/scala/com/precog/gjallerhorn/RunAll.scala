@@ -40,6 +40,7 @@ object Settings {
   private val JobsPath = """^jobs\-path (.+)$""".r
   private val ShardPort = """^shard (\d+)$""".r
   private val ShardPath = """^shard\-path (.+)$""".r
+  private val SecureRegex = """^secure (true|false)$""".r
 
   def fromFile(f: File): Settings = {
     if (!f.canRead) sys.error("Can't read %s. Is shard running?" format f)
@@ -57,7 +58,8 @@ object Settings {
         jobsPort: Option[Int] = None,
         jobsPath: Option[String] = None,
         shardPort: Option[Int] = None,
-        shardPath: Option[String] = None) {
+        shardPath: Option[String] = None,
+        secure: Option[Boolean] = None) {
 
       def missing: List[String] = {
         def q(o: Option[_], s: String): List[String] =
@@ -68,7 +70,7 @@ object Settings {
         q(authPort, "authPort") ++ q(authPath, "authPath") ++ 
         q(ingestPort, "ingestPort") ++ q(ingestPath, "ingestPath") ++ 
         q(jobsPort, "jobsPort") ++ q(jobsPath, "jobsPath") ++ 
-        q(shardPort, "shardPort") ++ q(shardPath, "shardPath")
+        q(shardPort, "shardPort") ++ q(shardPath, "shardPath") ++ q(secure, "secure")
       }
 
       def settings: Option[Settings] = for {
@@ -85,8 +87,9 @@ object Settings {
         jp <- jobsPath
         sh <- shardPort
         shp <- shardPath
+        sec <- secure
       } yield {
-        Settings(h, i, t, ac, acp, au, aup, in, inp, j, jp, sh, shp)
+        Settings(h, i, t, ac, acp, au, aup, in, inp, j, jp, sh, shp, sec)
       }
     }
 
@@ -97,7 +100,8 @@ object Settings {
       accountsPath = Some("accounts"),
       authPath = Some("apikeys"),
       ingestPath = Some("ingest"),
-      shardPath = Some("meta"))
+      shardPath = Some("meta"),
+      secure = Some(false))
     
     val ps = lines.foldLeft(defaults) { (ps, s) =>
       val ps2 = s match {
@@ -119,6 +123,7 @@ object Settings {
         case JobsPath(p) => ps2.copy(jobsPath = Some(p))
         case ShardPort(n) => ps2.copy(shardPort = Some(n.toInt))
         case ShardPath(p) => ps2.copy(shardPath = Some(p))
+        case SecureRegex(s) => ps2.copy(secure = Some(s.toBoolean))
         case _ => ps2
       }
     }
@@ -130,30 +135,31 @@ object Settings {
 
 case class Settings(host: String, id: String, token: String, accountsPort: Int,
   accountsPath: String, authPort: Int, authPath: String, ingestPort: Int,
-  ingestPath: String, jobsPort: Int, jobsPath: String, shardPort: Int, shardPath: String)
+  ingestPath: String, jobsPort: Int, jobsPath: String, shardPort: Int,
+  shardPath: String, secure: Boolean)
 
 case class Account(user: String, password: String, accountId: String, apiKey: String, rootPath: String) {
   def bareRootPath = rootPath.substring(1, rootPath.length - 1)
 }
 
 abstract class Task(settings: Settings) {
-  val Settings(serviceHost, id, token, accountsPort, accountsPath, authPort, authPath, ingestPort, ingestPath, jobsPort, jobsPath, shardPort, shardPath) = settings
+  val Settings(serviceHost, id, token, accountsPort, accountsPath, authPort, authPath, ingestPort, ingestPath, jobsPort, jobsPath, shardPort, shardPath, secure) = settings
 
   def text(n: Int) = scala.util.Random.alphanumeric.take(12).mkString
 
   def generateUserAndPassword = (text(12) + "@plastic-idolatry.com", text(12))
 
   def accounts =
-    (accountsPath split "/").foldLeft(host(serviceHost, accountsPort)) { _ / _ }
-
+    (accountsPath split "/").foldLeft(host0(serviceHost, accountsPort)) { _ / _ }
+  
   def security =
-    (authPath split "/").foldLeft(host(serviceHost, authPort)) { _ / _ }
+    (authPath split "/").foldLeft(host0(serviceHost, authPort)) { _ / _ }
   
   def metadata =
-    (shardPath split "/").foldLeft(host(serviceHost, shardPort)) { _ / _ }
+    (shardPath split "/").foldLeft(host0(serviceHost, shardPort)) { _ / _ }
 
   def ingest =
-    (ingestPath split "/").foldLeft(host(serviceHost, ingestPort)) { _ / _ }
+    (ingestPath split "/").foldLeft(host0(serviceHost, ingestPort)) { _ / _ }
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
@@ -232,6 +238,12 @@ abstract class Task(settings: Settings) {
     val res = Http(req OK as.String)
     val json = JParser.parseFromString(res()).valueOr(throw _)
     json
+  }
+  
+  private def host0(domain: String, port: Int) = {
+    val back = host(domain, port)
+    // port check is a hack to allow just accounts to run over https
+    if (secure && port != 80) back.secure else back
   }
 }
 
