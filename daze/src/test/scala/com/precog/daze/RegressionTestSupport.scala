@@ -11,6 +11,14 @@ import com.precog.common.json._
 import blueeyes.json._
 
 trait RegressionTestSupport[M[+_]] {
+  def makeTBounded: Double = {
+    val theta = Random.nextGaussian * 10
+    // we omit values of theta close to zero
+    // this is so that normal distribution of the y-values doesn't need to depend on the x-values
+    if (theta >= -3 && theta <= 3) makeTBounded
+    else theta
+  }
+
   def makeT: Double = {
     val theta = Random.nextGaussian * 10
     if (theta == 0) makeT
@@ -18,7 +26,8 @@ trait RegressionTestSupport[M[+_]] {
   }
 
   def makeThetas(length: Int): Array[Double] = {
-    Seq.fill(length)(makeT).toArray
+    val seq = List(makeT) ++ Seq.fill(length - 1)(makeTBounded)
+    seq.toArray
   }
 
   def jvalues(samples: Seq[(Array[Double], Double)], cpaths: Seq[CPath], mod: Int = 1): Seq[JValue] = samples.zipWithIndex map { case ((xs, y), idx) => 
@@ -88,4 +97,3 @@ trait RegressionTestSupport[M[+_]] {
     diff < mad * 3D
   }
 }
-
