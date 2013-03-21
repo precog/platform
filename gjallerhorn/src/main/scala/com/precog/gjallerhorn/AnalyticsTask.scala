@@ -84,15 +84,6 @@ class AnalyticsTask(settings: Settings) extends Task(settings: Settings) with Sp
   }
 }
 
-object RunAnalytics {
-  def main(args: Array[String]) {
-    try {
-      val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new AnalyticsTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunAnalytics extends Runner {
+  def tasks(settings: Settings) = new AnalyticsTask(settings) :: Nil
 }

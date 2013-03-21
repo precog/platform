@@ -107,6 +107,16 @@ abstract class Task(settings: Settings) extends Specification {
     Http(req OK as.String)()
   }
 
+  def asyncIngestString(account: Account, data: String, contentType: String)(f: Req => Req) {
+    val req = (f(ingest / "async" / "fs").POST
+                <:< List("Content-Type" -> contentType)
+                <<? List("apiKey" -> account.apiKey,
+                        "ownerAccountId" -> account.accountId)
+                << data)
+
+    Http(req OK as.String)()
+  }
+
   def ingestString(authAPIKey: String, ownerAccount: Account, data: String, contentType: String)(f: Req => Req) = {
     val req = (f(ingest / "sync" / "fs").POST
                 <:< List("Content-Type" -> contentType)

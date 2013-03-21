@@ -24,6 +24,8 @@ object RunAll extends Runner {
     new AccountsTask(settings),
     new SecurityTask(settings),
     new MetadataTask(settings),
+    new AnalyticsTask(settings),
+    new IngestTask(settings),
     new ScenariosTask(settings)
   )
 }
