@@ -89,9 +89,12 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
 
   def findAccountByAPIKey(apiKey: APIKey) : Response[Option[AccountId]] = {
     logger.debug("Finding account for API key " + apiKey + " with " + (protocol, host, port, path, user, password).toString)
-    apiKeyToAccountCache.get(apiKey).map(id => rightT(Promise.successful(Some(id)): Future[Option[AccountId]])).getOrElse {
+    apiKeyToAccountCache.get(apiKey).map { id =>
+      logger.debug("Cache hit for API key " + apiKey)
+      rightT(Promise.successful(Some(id)): Future[Option[AccountId]])
+    }.getOrElse {
       invoke { client =>
-        logger.info("Querying accounts service.")
+        logger.info("Cache miss for API key %s, querying accounts service.".format(apiKey))
         eitherT(client.query("apiKey", apiKey).get[JValue]("/accounts/") map {
           case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
             logger.info("Got response for apiKey " + apiKey)

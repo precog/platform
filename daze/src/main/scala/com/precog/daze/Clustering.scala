@@ -604,14 +604,14 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
         val transformedTables = tables map { table => table.transform(spec) }
 
         val wrappedTables = transformedTables.zipWithIndex map {
-          case (tbl, idx) => tbl.transform(trans.WrapObject(TransSpec1.Id, "Cluster" + (idx + 1)))
+          case (tbl, idx) => tbl.transform(trans.WrapObject(TransSpec1.Id, "cluster" + (idx + 1)))
         }
 
         val table = wrappedTables reduce { 
           (t1, t2) => t1.cross(t2)(trans.InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
 
-        val result = table.transform(trans.WrapObject(TransSpec1.Id, "Model" + modelId))
+        val result = table.transform(trans.WrapObject(TransSpec1.Id, "model" + modelId))
 
         val valueTable = result.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
         val keyTable = Table.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))

@@ -152,11 +152,10 @@ for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
     ALLTABLES="$ALLTABLES $TABLE"
-    DATA=$(cat $f)
-    COUNT=$(echo "$DATA" | wc -l)
+    COUNT=$(wc -l "$f")
 
-    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @- \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(echo "$DATA" | curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @- "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
+    [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @\"$f\" \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
+    INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @"$f" "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
 
     SYNCINDEX=$(( ($SYNCINDEX + 1) % ${#SYNCFLAG[@]} ))
 

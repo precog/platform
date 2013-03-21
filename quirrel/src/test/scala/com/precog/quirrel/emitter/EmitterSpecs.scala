@@ -358,6 +358,199 @@ object EmitterSpecs extends Specification
         ))
     }
 
+    "emit a match after a cross in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { five: five, increasedWeight: fivePlus }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit match and cross after a cross in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   { five: five, increasedWeight: fivePlus, weight: medals.Weight }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("weight"),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match and a cross in the correct order, after a cross, in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   six := new 6
+        |
+        |   six ~ fivePlus
+        |     { five: five, increasedWeight: fivePlus, six: six }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("six"),
+          PushNum("6"),
+          Map1(New),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match and a cross in the correct order, after a cross, from a dispatch, in a join-object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | makeNew(x) := new x
+        | five := makeNew(5)
+        | six := makeNew(6)
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |
+        |   six ~ fivePlus
+        |     { five: five, increasedWeight: fivePlus, six: six }
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("five"),
+          PushNum("5"),
+          Map1(New),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("six"),
+          PushNum("6"),
+          Map1(New),
+          Map2Cross(WrapObject),
+          PushString("increasedWeight"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Map2Match(JoinObject)))
+    }
+
+    "emit a match after a cross in a join-array" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | five := new 5 
+        |
+        | five ~ medals
+        |   fivePlus := five + medals.Weight
+        |   [medals.Weight, fivePlus]
+        | """.stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map1(WrapArray),
+          PushNum("5"),
+          Map1(New),
+          Swap(1),
+          Swap(2),
+          PushString("Weight"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Map1(WrapArray),
+          Map2Match(JoinArray)))
+    }
+
     "emit two distinct callsites of the same function" in {
       val input = """
         | medals := //summer_games/london_medals 
@@ -546,21 +739,9 @@ object EmitterSpecs extends Specification
           Map1(WrapArray),
           Map2Match(JoinArray),
           Map2Cross(JoinArray),
-          PushNum("0"),
-          Map2Cross(ArraySwap),
           PushNum("1"),
           Map2Cross(ArraySwap),
-          PushNum("0"),
-          Map2Cross(ArraySwap),
-          PushNum("0"),
-          Map2Cross(ArraySwap),
           PushNum("3"),
-          Map2Cross(ArraySwap),
-          PushNum("0"),
-          Map2Cross(ArraySwap),
-          PushNum("2"),
-          Map2Cross(ArraySwap),
-          PushNum("0"),
           Map2Cross(ArraySwap),
           PushNum("2"),
           Map2Cross(ArraySwap)))
@@ -569,7 +750,7 @@ object EmitterSpecs extends Specification
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
       testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
-          PushString("/foo"),
+          PushString("/bar"),
           Morph1(BuiltInMorphism1(expandGlob)),
           LoadLocal,
           Dup,
@@ -581,7 +762,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           Map1(WrapArray),
           Map2Match(JoinArray),
-          PushString("/bar"),
+          PushString("/foo"),
           Morph1(BuiltInMorphism1(expandGlob)),
           LoadLocal,
           Dup,
@@ -599,9 +780,9 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray),
           PushNum("1"),
           Map2Cross(ArraySwap),
-          PushNum("2"),
+          PushNum("3"),
           Map2Cross(ArraySwap),
-          PushNum("1"),
+          PushNum("2"),
           Map2Cross(ArraySwap)))
     }
 
@@ -1441,25 +1622,27 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           Group(0),
           Split,
+          PushString("kay"),
+          PushGroup(0),
+          Map2Cross(WrapObject),
           PushString("jay"),
           PushString("/views"),
           Morph1(BuiltInMorphism1(expandGlob)),
           LoadLocal,
           Dup,
+          Swap(3),
           Swap(2),
           Swap(1),
           PushString("time"),
           Map2Cross(DerefObject),
           Swap(1),
           Swap(2),
+          Swap(3),
           PushString("time"),
           Map2Cross(DerefObject),
           PushKey(1),
           Map2Cross(Gt),
           FilterMatch,
-          Map2Cross(WrapObject),
-          PushString("kay"),
-          PushGroup(0),
           Map2Cross(WrapObject),
           Map2Cross(JoinObject),
           Merge))
@@ -1556,105 +1739,98 @@ object EmitterSpecs extends Specification
           |     conversionTimes ~ impressionTimes
           |       { impression: impressions, nextConversion: conversions }
           """.stripMargin)(
-          Vector(
-            PushString("/conversions"),
-            Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
-            Dup,
-            PushString("userId"),
-            Map2Cross(DerefObject),
-            KeyPart(1),
-            Swap(1),
-            Group(0),
-            PushString("/impressions"),
-            Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
-            Dup,
-            Swap(2),
-            Swap(1),
-            PushString("userId"),
-            Map2Cross(DerefObject),
-            KeyPart(1),
-            Swap(1),
-            Swap(2),
-            Group(2),
-            MergeBuckets(true),
-            Split,
-            PushGroup(2),
-            Dup,
-            Dup,
-            PushString("time"),
-            Map2Cross(DerefObject),
-            KeyPart(4),
-            Swap(1),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Group(3),
-            Split,
-            PushString("impression"),
-            Swap(1),
-            PushGroup(3),
-            Dup,
-            Map2Match(Eq),
-            FilterMatch,
-            Map2Cross(WrapObject),
-            PushString("nextConversion"),
-            PushGroup(0),
-            Dup,
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Dup,
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Dup,
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Dup,
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            PushKey(4),
-            Map2Cross(Gt),
-            FilterMatch,
-            Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
-            Map2Cross(Eq),
-            FilterMatch,
-            Dup,
-            Map2Match(Eq),
-            FilterMatch,
-            Map2Cross(WrapObject),
-            Map2Cross(JoinObject),
-            Merge,
-            Merge))
+            Vector(
+              PushString("/conversions"),
+              Morph1(BuiltInMorphism1(expandGlob)),
+              LoadLocal,
+              Dup,
+              PushString("userId"),
+              Map2Cross(DerefObject),
+              KeyPart(1),
+              Swap(1),
+              Group(0),
+              PushString("/impressions"),
+              Morph1(BuiltInMorphism1(expandGlob)),
+              LoadLocal,
+              Dup,
+              Swap(2),
+              Swap(1),
+              PushString("userId"),
+              Map2Cross(DerefObject),
+              KeyPart(1),
+              Swap(1),
+              Swap(2),
+              Group(2),
+              MergeBuckets(true),
+              Split,
+              PushGroup(2),
+              Dup,
+              Dup,
+              PushString("time"),
+              Map2Cross(DerefObject),
+              KeyPart(4),
+              Swap(1),
+              PushString("time"),
+              Map2Cross(DerefObject),
+              Group(3),
+              Split,
+              PushString("nextConversion"),
+              PushGroup(0),
+              Dup,
+              Swap(2),
+              Swap(1),
+              Dup,
+              Swap(2),
+              Swap(1),
+              Dup,
+              Swap(2),
+              Swap(1),
+              Dup,
+              Swap(2),
+              Swap(1),
+              Swap(1),
+              Swap(2),
+              PushString("time"),
+              Map2Cross(DerefObject),
+              Swap(1),
+              Swap(2),
+              Swap(3),
+              PushString("time"),
+              Map2Cross(DerefObject),
+              Swap(1),
+              Swap(2),
+              Swap(3),
+              Swap(4),
+              PushString("time"),
+              Map2Cross(DerefObject),
+              Swap(1),
+              Swap(2),
+              Swap(3),
+              Swap(4),
+              Swap(5),
+              PushString("time"),
+              Map2Cross(DerefObject),
+              PushKey(4),
+              Map2Cross(Gt),
+              FilterMatch,
+              Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
+              Map2Cross(Eq),
+              FilterMatch,
+              Dup,
+              Map2Match(Eq),
+              FilterMatch,
+              Map2Cross(WrapObject),
+              PushString("impression"),
+              Swap(1),
+              Swap(2),
+              PushGroup(3),
+              Dup,
+              Map2Match(Eq),
+              FilterMatch,
+              Map2Cross(WrapObject),
+              Map2Cross(JoinObject),
+              Merge,
+              Merge))
       }
 
       "histogram.qrl" >> {
@@ -1702,25 +1878,152 @@ object EmitterSpecs extends Specification
         | f("India") union f("Canada")
         """.stripMargin
 
-      val result = compileEmit(input)
-
-      result must contain(PushString("India"))
-      result must contain(PushString("Canada"))
+      testEmit(input)(
+        Vector(
+          PushString("a"),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          PushString("India"),
+          Map2Cross(Eq),
+          FilterMatch,
+          Dup,
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          PushString("b"),
+          Swap(1),
+          Swap(2),
+          Map1(New),
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Swap(1),
+          PushString("Total"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          PushString("Total"),
+          Map2Cross(DerefObject),
+          Map2Cross(Eq),
+          FilterMatch,
+          PushString("a"),
+          PushString("/summer_games/london_medals"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          PushString("Canada"),
+          Map2Cross(Eq),
+          FilterMatch,
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          PushString("b"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Map1(New),
+          Dup,
+          Swap(5),
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("Country"),
+          Map2Cross(DerefObject),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Swap(1),
+          Swap(2),
+          PushString("Total"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("Total"),
+          Map2Cross(DerefObject),
+          Map2Cross(Eq),
+          FilterMatch,
+          IUnion))
     }
 
     // Regression test for #PLATFORM-652
     "if/then/else compiles into match instead of cross" in {
       val input = """
         | conversions := //conversions
-        | conversions' := conversions with
-        | {female: if conversions.customer.gender = "female" then 1 else 0}
-        | conversions'
+        | conversions with
+        |   {female: if conversions.customer.gender = "female" then 1 else 0}
         """.stripMargin
 
-      val result = compileEmit(input)
-
-      result must contain(Map2Match(JoinObject))
-      result must not(contain(Map2Cross(JoinObject)))
+      testEmit(input)(
+        Vector(
+          PushString("/conversions"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Dup,
+          PushString("female"),
+          PushNum("1"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("customer"),
+          Map2Cross(DerefObject),
+          PushString("gender"),
+          Map2Cross(DerefObject),
+          PushString("female"),
+          Map2Cross(Eq),
+          FilterCross,
+          PushNum("0"),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("customer"),
+          Map2Cross(DerefObject),
+          PushString("gender"),
+          Map2Cross(DerefObject),
+          PushString("female"),
+          Map2Cross(Eq),
+          Map1(Comp),
+          FilterCross,
+          IUnion,
+          Map2Cross(WrapObject),
+          Map2Match(JoinObject)))
     }
     
     // regression test for PLATFORM-909
