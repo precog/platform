@@ -34,8 +34,16 @@ abstract class Task(settings: Settings) extends Specification {
     Http(rb).map { r =>
       val s = r.getResponseBody
       r.getStatusCode match {
-        case 200 => JParser.parseFromString(s).fold(ApiBadJson, ApiResponse)
-        case n => ApiFailure(n, s)
+        case 200 =>
+          JParser.parseFromString(s).fold(ApiBadJson, ApiResponse)
+        case n if 200 < n && n < 300 =>
+          // things like 201 may not have a message body
+          if (s.isEmpty)
+            ApiResponse(JNull)
+          else
+            JParser.parseFromString(s).fold(ApiBadJson, ApiResponse)
+        case n =>
+          ApiFailure(n, s)
       }
     }
 
@@ -144,14 +152,11 @@ abstract class Task(settings: Settings) extends Specification {
     json
   }
 
-  def listGrantsFor(targetApiKey: String, authApiKey: String): JValue = {
-    val req = (security / targetApiKey / "grants" / "").addQueryParameter("apiKey", authApiKey)
-    val result = Http(req OK as.String)
-    JParser.parseFromString(result()).valueOr(throw _)
-  }
+  def listGrantsFor(targetApiKey: String, authApiKey: String): ApiResult =
+    http((security / targetApiKey / "grants" / "").addQueryParameter("apiKey", authApiKey))()
 
-  def createGrant(apiKey: String, perms: List[(String, String, List[String])]): JValue = {
-    val body = JObject(
+  def grantBody(perms: List[(String, String, List[String])]): String =
+    JObject(
       "permissions" -> JArray(
         perms.map { case (accessType, path, owners) =>
             val ids = JArray(owners.map(JString(_)))
@@ -161,6 +166,26 @@ abstract class Task(settings: Settings) extends Specification {
               "ownerAccountIds" -> ids)
         })).renderCompact
 
-    http((grants / "").POST.addQueryParameter("apiKey", apiKey) << body)().jvalue
+  def createGrant(apiKey: String, perms: List[(String, String, List[String])]): ApiResult =
+    http((grants / "").POST.addQueryParameter("apiKey", apiKey) << grantBody(perms))()
+
+  def createChildGrant(apiKey: String, grantId: String, perms: List[(String, String, List[String])]): ApiResult =
+    http((grants / grantId / "children" / "").POST.addQueryParameter("apiKey", apiKey) << grantBody(perms))()
+
+  def addToGrant(targetApiKey: String, authApiKey: String, grantId: String): ApiResult = {
+    val body = JObject("grantId" -> JString(grantId)).renderCompact
+    val url = security / targetApiKey / "grants" / ""
+    val req = (url).addQueryParameter("apiKey", authApiKey) << body
+    http(req)()
   }
+
+  def removeGrant(targetApiKey: String, authApiKey: String, grantId: String): ApiResult = {
+    val url = security / targetApiKey / "grants" / grantId
+    val req = (url).DELETE.addQueryParameter("apiKey", authApiKey)
+    http(req)()
+  }
+
+  def describeGrant(apiKey: String, grantId: String): ApiResult =
+    http((grants / grantId).addQueryParameter("apiKey", apiKey))()
+
 }

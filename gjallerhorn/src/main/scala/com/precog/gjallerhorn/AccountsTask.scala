@@ -20,6 +20,7 @@
 package com.precog.gjallerhorn
 
 import blueeyes.json._
+import blueeyes.json.serialization.DefaultSerialization._
 import dispatch._
 import org.specs2.mutable._
 import scalaz._
@@ -75,17 +76,19 @@ class AccountsTask(settings: Settings) extends Task(settings: Settings) with Spe
       Http(bad3 > (_.getStatusCode))() must_== 401
     }
 
-    // "add grant to an account" in {
-    //   val Account(user1, pass1, accountId1, apiKey1, rootPath1) = createAccount
-    //   val Account(user2, pass2, accountId2, apiKey2, rootPath2) = createAccount
-    //   //val Account(user3, pass3, accountId3, apiKey3, rootPath3) = createAccount
+    "add grant to an account" in {
+      val Account(user1, pass1, accountId1, apiKey1, rootPath1) = createAccount
+      val Account(user2, pass2, accountId2, apiKey2, rootPath2) = createAccount
 
-    //   def grant(id: String, u: String, p: String, n: Int) =
-    //     (accounts / id / "grants" / "").as(u, p) << ("[" + n + "]")
+      val p = rootPath1 + text(3) + "/"
+      val g = createGrant(apiKey1, ("read", p, accountId1 :: Nil) :: Nil).jvalue
+      val grantId = (g \ "grantId").deserialize[String]
 
-    //   val h1 = Http(grant(accountId2, user1, pass1, 6) OK as.String)
-    //   println(h1())
-    // }
+      val body = JObject("grantId" -> JString(grantId)).renderCompact
+      val req = (accounts / accountId2 / "grants" / "").POST.as(user1, pass1) << body
+      val r = http(req)().complete()
+      listGrantsFor(apiKey2, authApiKey = apiKey1).jvalue.children must contain(g)
+    }
 
     // "describe account's plan" in {}
 
