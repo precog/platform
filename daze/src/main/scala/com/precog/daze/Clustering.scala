@@ -26,6 +26,7 @@ import yggdrasil.table._
 
 import common._
 import common.json._
+import com.precog.util._
 
 import blueeyes.json._
 
@@ -51,8 +52,10 @@ trait KMediansCoreSetClustering {
         (points, weights) 
       } else {
         val centers = createCenters(points, weights)
+        //System.err.println("*** centers.length=%s" format centers.length)
 
         val (centers0, weights0) = makeCoreSet(points, weights, centers)
+        //System.err.println("*** centers0.length=%s" format centers0.length)
 
         val (_, clusters, _) = approxKMedian(centers0, weights0, k)
 
@@ -124,7 +127,10 @@ trait KMediansCoreSetClustering {
       val weights = new Array[Long](points.length)
       java.util.Arrays.fill(weights, 1L)
 
-      CoreSetTree(CoreSet.fromWeightedPoints(points, weights, k, epsilon), k)
+      val cs = CoreSet.fromWeightedPoints(points, weights, k, epsilon)
+      //System.err.println("CoreSetTree.fromPoints with points=%d k=%d" format (points.length, k))
+      //System.err.println("cs._1.length=%s" format cs._1.length)
+      CoreSetTree(cs, k)
     }
 
     implicit def CoreSetMonoid: Monoid[CoreSetTree] = new Monoid[CoreSetTree] {
@@ -145,12 +151,21 @@ trait KMediansCoreSetClustering {
    * This returns the cost of the k-medians clustering given by `centers`. The
    * points must also be associated with a set of weights.
    */
-  def kMediansCost(points: Array[Array[Double]], weights: Array[Long], centers: Array[Array[Double]]): Double = {
-    val (distances, _) = assign(points, centers)
-
-    // distances dot weights -- if we ever change weights to Array[Double]
-    weightArray(distances, weights)
-    distances.qsum
+  def kMediansCost(points: Array[Array[Double]], weights: Array[Long], centers: Array[Array[Double]], threshold: Double): Double = {
+    var i = 0    
+    var total = 0.0
+    while (i < points.length && total < threshold) {
+      var minDistSq = Double.PositiveInfinity
+      var j = 0
+      while (j < centers.length) {
+        val dsq = distSq(points(i), centers(j))
+        if (dsq < minDistSq) minDistSq = dsq
+        j += 1
+      }
+      total += math.sqrt(minDistSq) * weights(i)
+      i += 1
+    }
+    total
   }
 
   /**
@@ -164,36 +179,33 @@ trait KMediansCoreSetClustering {
    */
   private def localSearch(points: Array[Array[Double]], weights: Array[Long], centers0: Array[Array[Double]], epsilon: Double): (Double, Array[Array[Double]]) = {
 
-    @tailrec
-    def loop(minCost0: Double, centers: Array[Array[Double]]): (Double, Array[Array[Double]]) = {
-      var minCost = minCost0
-      var swapped = false
-      var i = 0
-      while (i < points.length && !swapped) {
-        var j = 0
-        while (j < centers.length && !swapped) {
-          val prevCenter = centers(j)
-          centers(j) = points(i)
-          val cost = kMediansCost(points, weights, centers)
-          if (cost < (minCost * (1 - epsilon) / centers.length)) {
-            minCost = cost
-            swapped = true
-          } else {
-            centers(j) = prevCenter
-          }
-          j += 1
+    val minCost0 = kMediansCost(points, weights, centers0, Double.PositiveInfinity)
+    val centers = java.util.Arrays.copyOf(centers0, centers0.length)
+
+    var minCost = minCost0
+    var i = 0
+    val clen = centers.length
+    val plen = points.length
+    while (i < plen) {
+      val threshold = minCost * (1 - epsilon) / clen
+      var j = 0
+      while (j < clen) {
+        val prevCenter = centers(j)
+        centers(j) = points(i)
+        val cost = kMediansCost(points, weights, centers, threshold)
+        if (cost < threshold) {
+          minCost = cost
+          i = -1
+          j = centers.length
+        } else {
+          centers(j) = prevCenter
         }
-        i += 1
+        j += 1
       }
-
-      if (swapped) {
-        loop(minCost, centers)
-      } else {
-        (minCost, centers)
-      }
+      i += 1
     }
-
-    loop(kMediansCost(points, weights, centers0), java.util.Arrays.copyOf(centers0, centers0.length))
+    
+    (minCost, centers)
   }
 
 
@@ -221,9 +233,8 @@ trait KMediansCoreSetClustering {
       } else {
         var radius = cost / weight
 
-        //val gamma = 0.001
-        //val sampleSize = gamma * k * (math.floor(math.log(points.length)) ** 2.0)
         val sampleSize = math.min(k * math.log(points.length), points.length / 10d)
+        //System.err.println("k=%s sampleSize=%s" format (k, sampleSize))
 
         val samples = points.take(sampleSize.toInt)
 
@@ -260,6 +271,7 @@ trait KMediansCoreSetClustering {
           i -= 1
         }
         val alpha = i
+        //System.err.println("thresholdCount=%s alpha=%s" format (thresholdCount, alpha))
 
         @inline def isBad(idx: Int) = assignments(idx) > alpha && !isCenter(idx)
 
@@ -271,6 +283,7 @@ trait KMediansCoreSetClustering {
           i += 1
         }
 
+        //System.err.println("badPoints.length=%s and centers.length=%s" format (keepLength, centers.length))
         val badPoints = new Array[Array[Double]](keepLength)
         val badWeights = new Array[Long](keepLength)
         i = 0
@@ -396,11 +409,13 @@ trait KMediansCoreSetClustering {
 
     val cost = distance.qsum
     val weight = weights.qsum
-    val c = 4d
+    //val c = 4d
+    val c = 0.125
     val n = points.length
 
     val radiusGLB = cost / (c * weight)
-    val maxResolution = math.ceil(2 * math.log(c * weight)).toInt
+    val maxResolution = math.max(0, math.ceil(2 * math.log(c * weight))).toInt
+    //System.err.println("maxResolution=%s" format maxResolution)
     val logRadiusGLB = math.log(radiusGLB)
     val log2 = math.log(2d)
 
@@ -413,7 +428,7 @@ trait KMediansCoreSetClustering {
         val minx = distMin(point, center)
         val j = math.max(0, math.ceil((math.log(minx) - logRadiusGLB) / log2).toInt)
 
-        require(j < sideLengths.length, "Point found outside of grid. What to do...")
+        require(j < sideLengths.length, "Point (%d) found outside of grid (%d). What to do..." format (j, sideLengths.length))
 
         val sideLength = sideLengths(j)
         val scaledPoint = {
@@ -458,7 +473,8 @@ trait KMediansCoreSetClustering {
   def distSq(x: Array[Double], y: Array[Double]): Double = {
     var i = 0
     var acc = 0d
-    while (i < x.length && i < y.length) {
+    val len = math.min(x.length, y.length)
+    while (i < len) {
       val delta = x(i) - y(i)
       acc += delta * delta
       i += 1
@@ -471,11 +487,10 @@ trait KMediansCoreSetClustering {
   def distMin(x: Array[Double], y: Array[Double]): Double = {
     var minx = Double.PositiveInfinity
     var i = 0
-    while (i < x.length && i < y.length) {
+    val len = math.min(x.length, y.length)
+    while (i < len) {
       val dx = math.abs(x(i) - y(i))
-      if (dx < minx) {
-        minx = dx
-      }
+      if (dx < minx) minx = dx
       i += 1
     }
     minx
@@ -498,8 +513,15 @@ trait KMediansCoreSetClustering {
       hash
     }
 
-    override def equals(that: Any) = that match {
-      case GridPoint(thatPoint) => Eq[Array[Double]].eqv(this.point, thatPoint)
+    override def equals(that: Any): Boolean = that match {
+      case GridPoint(thatPoint) => //Eq[Array[Double]].eqv(this.point, thatPoint)
+        if (this.point.length != thatPoint.length) return false
+        var i = 0
+        while (i < this.point.length) {
+          if (this.point(i) != thatPoint(i)) return false
+          i += 1
+        }
+        true
       case _ => false
     }
   }
@@ -638,7 +660,9 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
               }
             }
 
-            val sliceSize = 1000
+            // arrived at semi-emprically testing 400k rows of data
+            // TODO: arguably this should be a parameter we can pass in to tune things.
+            val sliceSize = 4000
             val features: StreamT[M, Table] = tables flatMap { case (tbl, jtype) =>
               val coreSetTree = tbl.canonicalize(sliceSize).toArray[Double].normalize.reduce(reducerFeatures(k))
 

@@ -593,7 +593,9 @@ object ImportTools extends Command with Logging {
 
           val input = if (n >= 0) Some(bb) else None
           val (AsyncParse(errors, results), parser) = p(input)
-          if (!errors.isEmpty) sys.error("errors: %s" format errors)
+          if (!errors.isEmpty) {
+            sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
+          }
           val eventidobj = EventId(pid, sid.getAndIncrement)
           val records = results.map(v => IngestRecord(eventidobj, v))
           val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))

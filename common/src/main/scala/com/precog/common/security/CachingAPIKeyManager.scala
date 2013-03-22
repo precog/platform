@@ -126,7 +126,7 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def findDeletedGrantChildren(gid: GrantId) = manager.findDeletedGrantChildren(gid)
 
   def addGrants(tid: APIKey, grants: Set[GrantId]) =
-    manager.addGrants(tid, grants).map { _.traverse(_ tap add).unsafePerformIO } 
+    manager.addGrants(tid, grants) map { _.traverse(_ tap add).unsafePerformIO } 
   def removeGrants(tid: APIKey, grants: Set[GrantId]) =
     manager.removeGrants(tid, grants) map { _.traverse(_ tap remove).unsafePerformIO }
 
