@@ -152,7 +152,7 @@ for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
     ALLTABLES="$ALLTABLES $TABLE"
-    COUNT=$(wc -l "$f")
+    COUNT=$(cat "$f" | wc -l)
 
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @\"$f\" \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
     INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @"$f" "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
