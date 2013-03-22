@@ -2629,6 +2629,24 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       eval(input) must not(beEmpty)
     }
+    
+    "produce non-empty results when defining a solve with a conditional in a constraint" in {
+      val input = """
+        | data := //clicks
+        | 
+        | import std::string::*
+        | 
+        | solve 'minexp
+        |   idx := indexOf(data.userId, "-")
+        |   exp := if idx < 0 then data.userId else takeLeft(data.userId, idx)
+        |   exptrim := trim(exp)
+        |   data2 := data where exptrim = 'minexp
+        | 
+        |   { MinExperience: 'minexp, numjobs: count(data2) }
+        | """.stripMargin
+        
+      eval(input) must not(beEmpty)
+    }
   }
 }
 
