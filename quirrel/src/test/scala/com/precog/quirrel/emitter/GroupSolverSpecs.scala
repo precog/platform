@@ -1121,5 +1121,14 @@ object GroupSolverSpecs extends Specification
       
       compileSingle(input) must not(throwA[Throwable])
     }
+    
+    "allow a solve with a critical condition defined by a Cond" in {
+      val input = """
+        | foo := //foo
+        | solve 'a
+        |   foo where (if foo.a then foo.b else foo.c) = 'a""".stripMargin
+        
+      compileSingle(input).errors must beEmpty
+    }
   }
 }
