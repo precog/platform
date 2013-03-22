@@ -2065,6 +2065,19 @@ object EmitterSpecs extends Specification
       emit(compileSingle(input))
       true mustEqual true
     }
+    
+    "not explode on an assert inside a solve" in {
+      val input = """
+        | data := //clicks
+        |  
+        | solve 'minexp
+        |   assert true
+        |   data where data = 'minexp
+        | """.stripMargin
+        
+      emit(compileSingle(input))
+      true mustEqual true
+    }
   }
   
   val exampleDir = new File("quirrel/examples")
