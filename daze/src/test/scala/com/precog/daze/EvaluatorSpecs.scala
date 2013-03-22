@@ -3504,6 +3504,28 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         results.head mustEqual SDecimal(1)
       }
     }
+    
+    "allow a cond to be used in the definition of a critical condition" in {
+      val line = Line(1, 1, "")
+      
+      val clicks = dag.LoadLocal(dag.Const(CString("/clicks"))(line))(line)
+      
+      lazy val input: dag.Split = dag.Split(
+        dag.Group(1,
+          clicks,
+          UnfixedSolution(2,
+            Cond(
+              Join(Eq, CrossLeftSort,
+                clicks,
+                dag.Const(CNull)(line))(line),
+              clicks, IdentitySort,
+              clicks, IdentitySort)(line))),
+        SplitGroup(1, clicks.identities)(input)(line))(line)
+        
+      testEval(input) { resultsE =>
+        resultsE must haveSize(100)
+      }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 

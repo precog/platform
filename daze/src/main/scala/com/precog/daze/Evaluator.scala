@@ -1014,6 +1014,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case dag.Morph1(_, parent) => Set(parent)
       case dag.Morph2(_, left, right) => Set(left, right)
       
+      case dag.Assert(pred, child) => Set(pred, child)
+      case dag.Cond(pred, left, _, right, _) => Set(pred, left, right)
+      
       case dag.Distinct(parent) => Set(parent)
       
       case dag.LoadLocal(parent, _) => Set(parent)
