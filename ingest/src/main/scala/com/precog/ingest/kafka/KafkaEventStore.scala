@@ -36,11 +36,14 @@ import blueeyes.bkka._
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
+import _root_.kafka.common._
 import _root_.kafka.message._
 import _root_.kafka.producer._
 
 import org.streum.configrity.{Configuration, JProperties}
 import com.weiglewilczek.slf4s._
+
+import scala.annotation.tailrec
 
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
@@ -70,12 +73,37 @@ object KafkaEventStore {
   }
 }
 
-class LocalKafkaEventStore(producer: Producer[String, Event], topic: String)(implicit executor: ExecutionContext) extends EventStore[Future] {
-  def save(event: Event, timeout: Timeout) = Future {
-    producer send {
-      new ProducerData[String, Event](topic, event)
-    }
+class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, maxMessageSize: Int)(implicit executor: ExecutionContext) extends EventStore[Future] with Logging {
+  logger.info("Creating LocalKafkaEventStore for %s with max message size = %d".format(topic, maxMessageSize))
+  private[this] val codec = new KafkaEventCodec
 
+  def save(event: Event, timeout: Timeout) = Future {
+    val toSend: List[Message] = event.fold({ ingest =>
+      @tailrec
+      def genEvents(ev: List[Event]): List[Message] = {
+        val messages = ev.map(codec.toMessage)
+
+        if (messages.forall(_.size <= maxMessageSize)) {
+          messages
+        } else {
+          if (ev.size == event.length) {
+            logger.error("Failed to reach reasonable message size after splitting JValues to individual inserts!")
+            throw new Exception("Failed insertion of excessively large event(s)!")
+          }
+
+          logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
+          genEvents(ev.flatMap(_.split(2)))
+        }
+      }
+
+      genEvents(List(event))
+    }, a => List(codec.toMessage(a)))
+
+    toSend.foreach { ev =>
+      producer send {
+        new ProducerData[String, Message](topic, ev)
+      }
+    }
     PrecogUnit
   }
 }
@@ -83,19 +111,21 @@ class LocalKafkaEventStore(producer: Producer[String, Event], topic: String)(imp
 object LocalKafkaEventStore {
   def apply(config: Configuration)(implicit executor: ExecutionContext): Option[(EventStore[Future], Stoppable)] = {
     val localTopic = config[String]("topic")
+    val maxMessageSize = config[Int]("broker.max_message_size", 1000000)
 
     val localProperties: java.util.Properties = {
       val props = JProperties.configurationToProperties(config)
       val host = config[String]("broker.host")
       val port = config[Int]("broker.port")
       props.setProperty("broker.list", "0:%s:%d".format(host, port))
-      props.setProperty("serializer.class", "com.precog.common.kafka.KafkaEventCodec")
+      //props.setProperty("serializer.class", "com.precog.common.kafka.KafkaEventCodec")
+      props.setProperty("max.message.size", maxMessageSize.toString)
       props
     }
 
-    val producer = new Producer[String, Event](new ProducerConfig(localProperties))
+    val producer = new Producer[String, Message](new ProducerConfig(localProperties))
     val stoppable = Stoppable.fromFuture(Future { producer.close })
 
-    Some(new LocalKafkaEventStore(producer, localTopic) -> stoppable)
+    Some(new LocalKafkaEventStore(producer, localTopic, maxMessageSize) -> stoppable)
   }
 }

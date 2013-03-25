@@ -577,16 +577,34 @@ object ImportTools extends Command with Logging {
     implicit val insertTimeout = Timeout(300 * 1000)
     config.input.foreach {
       case (db, input) =>
+
         logger.info("Inserting batch: %s:%s".format(db, input))
-        val rows = JParser.parseManyFromFile(new File(input)).valueOr(throw _)
-        val ingestRecords: Vector[IngestRecord] = rows.map({ jv => IngestRecord(EventId(pid, sid.getAndIncrement), jv) })(collection.breakOut)
+        import scala.annotation.tailrec
+        val bufSize = 8 * 1024 * 1024
+        val f = new File(input)
+        val ch = new FileInputStream(f).getChannel
+        val bb = ByteBuffer.allocate(bufSize)
 
-        ingestRecords.grouped(yggConfig.cookThreshold).foreach { records =>
-          val update = ProjectionInsert(Path(db), records, Authorities(config.accountId))
+        @tailrec def loop(p: AsyncParser) {
+          val n = ch.read(bb)
+          bb.flip()
 
-          logger.info(records.size + " events to be inserted")
+          val input = if (n >= 0) Some(bb) else None
+          val (AsyncParse(errors, results), parser) = p(input)
+          if (!errors.isEmpty) sys.error("errors: %s" format errors)
+          val eventidobj = EventId(pid, sid.getAndIncrement)
+          val records = results.map(v => IngestRecord(eventidobj, v))
+          val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
+          bb.flip()
+          if (n >= 0) loop(parser)
+        }
+
+        try {
+          loop(AsyncParser())
+        } finally {
+          ch.close()
         }
     }
 

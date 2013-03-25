@@ -26,6 +26,7 @@ import akka.dispatch.{ExecutionContext, Future, Promise}
 import blueeyes.bkka.{FutureMonad, Stoppable}
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
+import blueeyes.util.CommandLineArguments
 
 import com.precog.common.jobs.InMemoryJobManager
 import com.precog.common.accounts.StaticAccountFinder
@@ -34,9 +35,14 @@ import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone._
 import com.precog.ingest.{EventServiceDeps, EventService}
 import com.precog.ingest.kafka.KafkaEventStore
+import com.precog.util.PrecogUnit
+
+import java.awt._
+import java.awt.event._
+import javax.swing._
 
 import java.io.IOException
-import java.net.{InetAddress, Socket}
+import java.net.{InetAddress, Socket, URL}
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, KafkaServerStartable}
@@ -60,29 +66,88 @@ object DesktopIngestShardServer
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   implicit val M: Monad[Future] = new FutureMonad(executionContext)
 
-  def configureShardState(config: Configuration, rootConfig: Configuration) = Future {
-    val zookeeper = startZookeeperStandalone(rootConfig.detach("zookeeper"))
+  def runGUI(config: Configuration): Option[Future[PrecogUnit]] = {
+    val guiNotifier = if (config[Boolean]("appwindow.enabled", false)) {
+      logger.info("Starting gui window")
+      // Add a window with a menu for shutdown
+      val notifyArea = new JTextArea(25, 80)
+
+      EventQueue.invokeLater(new Runnable {
+        def run() {
+          val precogMenu = new JMenu("Precog for Desktop")
+          val quitItem = new JMenuItem("Quit", KeyEvent.VK_Q)
+          quitItem.addActionListener(new ActionListener {
+            def actionPerformed(ev: ActionEvent) = {
+              System.exit(0)
+            }
+          })
+
+          precogMenu.add(quitItem)
+
+          val labcoatMenu = new JMenu("Labcoat")
+          val launchItem = new JMenuItem("Launch", KeyEvent.VK_L)
+          launchItem.addActionListener(new ActionListener {
+            def actionPerformed(ev: ActionEvent) = {
+              LaunchLabcoat.launchBrowser(config)
+            }
+          })
+
+          labcoatMenu.add(launchItem)
+
+          val menubar = new JMenuBar
+          menubar.add(precogMenu)
+          menubar.add(labcoatMenu)
+
+          val appFrame = new JFrame("Precog for Desktop")
+          appFrame.setJMenuBar(menubar)
+
+          appFrame.addWindowListener(new WindowAdapter {
+            override def windowClosed(ev: WindowEvent) = {
+              System.exit(0)
+            }
+          })
+
+          notifyArea.setEditable(false)
+          appFrame.add(notifyArea)
+
+          appFrame.pack()
+
+          val iconUrl = ClassLoader.getSystemClassLoader.getResource("LargeIcon.png")
+          logger.debug("Loaded icon: " + iconUrl)
+          appFrame.setIconImage(Toolkit.getDefaultToolkit.getImage(iconUrl))
+
+          appFrame.setVisible(true)
+        }
+      })
+
+      Some({ (msg: String) =>
+        EventQueue.invokeLater(new Runnable {
+          def run() {
+            notifyArea.append(msg + "\n")
+          }
+        })
+      })
+    } else {
+      logger.info("Skipping gui window")
+      None
+    }
+
+    guiNotifier.foreach(_("Starting internal services"))
+    val zookeeper = startZookeeperStandalone(config.detach("zookeeper"))
 
     logger.debug("Waiting for ZK startup")
 
-    if (!waitForPortOpen(rootConfig[Int]("zookeeper.port"), 60)) {
+    if (!waitForPortOpen(config[Int]("zookeeper.port"), 60)) {
       throw new Exception("Timeout waiting for ZK port to open")
     }
 
-    val kafka = startKafkaStandalone(rootConfig)
+    val kafka = startKafkaStandalone(config)
 
     logger.debug("Waiting for Kafka startup")
 
-    if (!waitForPortOpen(rootConfig[Int]("kafka.port"), 60)) {
+    if (!waitForPortOpen(config[Int]("kafka.port"), 60)) {
       throw new Exception("Time out waiting on kafka port to open")
     }
-
-    println("Configuration at configure shard state=%s".format(config))
-    val rootAPIKey = config[String]("security.masterAccount.apiKey")
-    val apiKeyFinder = new StaticAPIKeyFinder(rootAPIKey)
-    val accountFinder = new StaticAccountFinder(rootAPIKey, "desktop")
-    val jobManager = new InMemoryJobManager
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
 
     Runtime.getRuntime.addShutdownHook(new Thread {
       override def run() = {
@@ -96,6 +161,23 @@ object DesktopIngestShardServer
       }
     })
 
+    guiNotifier.foreach(_("Internal services started, bringing up Precog"))
+
+    this.run(config) map {
+      _.onSuccess { case (runningState, stoppable) =>
+        guiNotifier.foreach(_("Precog startup complete"))
+      }.map { _ => PrecogUnit }
+    }
+  }
+
+  def configureShardState(config: Configuration) = Future {
+    println("Configuration at configure shard state=%s".format(config))
+    val rootAPIKey = config[String]("security.masterAccount.apiKey")
+    val apiKeyFinder = new StaticAPIKeyFinder(rootAPIKey)
+    val accountFinder = new StaticAccountFinder(rootAPIKey, "desktop")
+    val jobManager = new InMemoryJobManager
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+
     val stoppable = Stoppable.fromFuture {
       platform.shutdown.onComplete { _ =>
         logger.info("Platform shutdown complete")
@@ -105,7 +187,10 @@ object DesktopIngestShardServer
       }
     }
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
+    val state = ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, stoppable)
+
+    logger.debug("Startup config complete. Returning " + state)
+    state
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")
@@ -127,6 +212,7 @@ object DesktopIngestShardServer
       }
     }
 
+    logger.error("Port %d did not open in %d tries".format(port, tries))
     false
   }
 
@@ -185,45 +271,69 @@ object DesktopIngestShardServer
 
 object LaunchLabcoat{
   def main(args:Array[String]){
+    // Set some useful OS X props (just in case)
+    System.setProperty("apple.laf.useScreenMenuBar", "true")
+    System.setProperty("apple.awt.graphics.UseQuartz", "true")
+    System.setProperty("apple.awt.textantialiasing", "true")
+    System.setProperty("apple.awt.antialiasing", "true")
 
-    if(args.size != 1 || !args(0).startsWith("--configFile=") ){
-      sys.error("Wrong parameters. Usage: --configFile=<configuration>")
-    } else {
-      // Fire up a thread to wait on Jetty and spawn the desktop browser window if we can
-      import java.awt.Desktop
+    import java.awt.Desktop
 
-      val configFile=args(0).replaceFirst("--configFile=","")
+    val params = CommandLineArguments(args: _*).parameters
+
+    params.get("configFile").map { configFile =>
       val config = Configuration.load( configFile )
-      val jettyPort = config[Int]("services.analytics.v2.labcoat.port")
-      val shardPort = config[Int]("server.port")
-      val zkPort = config[Int]("zookeeper.port")
-      val kafkaPort = config[Int]("kafka.port")
 
-      def waitForPorts=
-        DesktopIngestShardServer.waitForPortOpen(jettyPort, 15) &&
-        DesktopIngestShardServer.waitForPortOpen(shardPort, 15) &&
-        DesktopIngestShardServer.waitForPortOpen(zkPort, 15) &&
-        DesktopIngestShardServer.waitForPortOpen(kafkaPort, 15)
-
-      @tailrec
-      def launchBrowser(){
-        if (waitForPorts) {
-          java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
-        } else {
-           import javax.swing.JOptionPane
-           JOptionPane.showMessageDialog(null, 
-             "Waiting for server to start.\nPlease check that PrecogService has been launched\nRetrying...",
-             "Labcoat launcher", JOptionPane.WARNING_MESSAGE)
-          launchBrowser()
+      // Check for launch first
+      if (params.contains("launch")) {
+        launchBrowser(config)
+        sys.exit(0)
+      } else {
+        DesktopIngestShardServer.runGUI(config).map {
+          _.map { _ => launchBrowser(config); println("Launch complete") }
+        }.getOrElse {
+          sys.error("Failed to start shard!")
         }
       }
+    }.getOrElse {
+      System.err.println("Usage: LaunchLabcoat --configFile <config file>")
+      sys.exit(1)
+    }
+  }
 
-      if (Desktop.isDesktopSupported){
-        launchBrowser()
+  def launchBrowser(config: Configuration): Unit = {
+    val jettyPort = config[Int]("services.analytics.v2.labcoat.port")
+    val shardPort = config[Int]("server.port")
+    val zkPort = config[Int]("zookeeper.port")
+    val kafkaPort = config[Int]("kafka.port")
+
+    launchBrowser(jettyPort, shardPort, zkPort, kafkaPort)
+  }
+
+  def launchBrowser(jettyPort: Int, shardPort: Int, zkPort: Int, kafkaPort: Int): Unit = {
+    def waitForPorts=
+      DesktopIngestShardServer.waitForPortOpen(jettyPort, 15) &&
+      DesktopIngestShardServer.waitForPortOpen(shardPort, 15) &&
+      DesktopIngestShardServer.waitForPortOpen(zkPort, 15) &&
+      DesktopIngestShardServer.waitForPortOpen(kafkaPort, 15)
+
+    @tailrec
+    def doLaunch(){
+      if (waitForPorts) {
+        java.awt.Desktop.getDesktop.browse(new java.net.URI("http://localhost:%s".format(jettyPort)))
       } else {
-        sys.error("Browser open on non-desktop system")
+        import javax.swing.JOptionPane
+        JOptionPane.showMessageDialog(null,
+          "Waiting for server to start.\nPlease check that PrecogService has been launched\nRetrying...",
+          "Labcoat launcher", JOptionPane.WARNING_MESSAGE)
+        doLaunch()
       }
     }
-    System.exit(0)
+
+    if (Desktop.isDesktopSupported){
+      doLaunch()
+    } else {
+      sys.error("Browser open on non-desktop system")
+    }
   }
 }

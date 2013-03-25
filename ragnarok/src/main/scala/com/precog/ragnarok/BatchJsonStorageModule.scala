@@ -100,9 +100,9 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
-    val records = readRows(data) map (IngestRecord(eventId, _))
+    val records = (eventId.uid, readRows(data) map (IngestRecord(eventId, _)))
 
-    val projection = (projectionsActor ? ProjectionInsert(path, records, Authorities(accountId))).flatMap { _ =>
+    val projection = (projectionsActor ? ProjectionInsert(path, Seq(records), Authorities(accountId))).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
       (projectionsActor ? FindProjection(path)).mapTo[NIHDBActorProjection]

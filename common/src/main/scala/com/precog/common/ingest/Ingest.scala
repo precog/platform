@@ -45,6 +45,8 @@ import shapeless._
 
 sealed trait Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A
+  def split(n: Int): List[Event]
+  def length: Int
 }
 
 object Event {
@@ -60,6 +62,13 @@ object Event {
  */
 case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A = ingest(this)
+  def split(n: Int): List[Event] = {
+    val splitSize = (data.length / n) max 1
+    data.grouped(splitSize).map {
+      d => this.copy(data = d)
+    }.toList
+  }
+  def length = data.length
 }
 
 object Ingest {
@@ -99,6 +108,8 @@ object Ingest {
 
 case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A): A = archive(this)
+  def split(n: Int) = List(this) // can't split an archive
+  def length = 1
 }
 
 object Archive {

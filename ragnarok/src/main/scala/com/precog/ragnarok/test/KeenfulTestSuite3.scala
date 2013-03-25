@@ -17,35 +17,28 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.niflheim
+package com.precog
+package ragnarok
+package test
 
-import com.precog.common.Path
+object KeenfulTestSuite3 extends PerfTestSuite {
+  query(
+    """
+import std::stats::rank
+data := //keenful
 
-import org.scalacheck.{Arbitrary, Gen}
+data' := data where data.action.verb = "view"
 
-import org.specs2.ScalaCheck
-import org.specs2.mutable.Specification
+byItem := solve 'item_id, 'item_url 
+  data'' := data' where data'.item.id = 'item_id & data'.item.url = 'item_url
+  {
+    item_id: 'item_id, 
+    count: count(data''), 
+    item_url : 'item_url
+  }  
 
-class NIHDBActorSpecs extends Specification with ScalaCheck {
-  import Gen._
+byItem' := byItem with {rank : rank(byItem.count)}
 
-  val hasSuffixGen: Gen[String] = resultOf[String, String] {
-    case prefix => prefix + NIHDBActor.escapeSuffix
-  }(Arbitrary(alphaStr))
-
-  val componentGen: Gen[String] = Gen.oneOf(Gen.oneOf(NIHDBActor.internalDirs.toSeq), hasSuffixGen, alphaStr)
-
-  implicit val pathGen: Arbitrary[Path] =
-    Arbitrary(for {
-      componentCount <- chooseNum(0, 200)
-      components     <- listOfN(componentCount, componentGen)
-    } yield Path(components))
-
-  "NIHDBActor path escaping" should {
-    import NIHDBActor._
-
-    "Handle arbitrary paths with components needing escaping" in check {
-      (p: Path) => unescapePath(escapePath(p, Set("/"))) mustEqual p
-    }
-  }
+byItem' where byItem'.rank > max(byItem'.rank - 5)
+    """)
 }

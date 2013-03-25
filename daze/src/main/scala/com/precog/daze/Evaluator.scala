@@ -581,9 +581,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               assertion = if (truthiness getOrElse false) {
                 N.point(())
               } else {
-                report.error(graph.loc, "Assertion failed")
-                // FIXME!!!! Also, flatMap.
-                // report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
+                for {
+                  _ <- report.error(graph.loc, "Assertion failed")
+                  _ <- report.die() // Arrrrrrrgggghhhhhhhhhhhhhh........ *gurgle*
+                } yield ()
               }
               _ <- transState liftM assertion
               
