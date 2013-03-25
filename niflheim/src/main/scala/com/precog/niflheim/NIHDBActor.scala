@@ -272,6 +272,8 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
 
   override def postStop() = {
     IO {
+      logger.debug("Closing projection in " + baseDir)
+      blockState.rawLog.close
       txLog.close
       ProjectionState.toFile(currentState, descriptorFile)
     }.except { case t: Throwable =>
