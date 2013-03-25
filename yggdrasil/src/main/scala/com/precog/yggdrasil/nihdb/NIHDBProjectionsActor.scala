@@ -169,6 +169,8 @@ class NIHDBProjectionsActor(
       val timeStampedArchive = new File(archive.getParentFile, archive.getName+"-"+System.currentTimeMillis())
       val archiveParent = timeStampedArchive.getParentFile
 
+      logger.debug("Archiving via move of %s to %s".format(current, timeStampedArchive))
+
       IO {
         if (! archiveParent.isDirectory) {
           // Ensure that the parent dir exists
@@ -181,8 +183,8 @@ class NIHDBProjectionsActor(
           throw new IOException("Invalid permissions on archive directory parent: " + archiveParent)
         }
       }.flatMap { _ =>
-        fileOps.rename(current, timeStampedArchive).map { _ =>
-          logger.info("Completed archive on " + path); PrecogUnit
+        fileOps.moveDir(current, timeStampedArchive).map { _ =>
+          logger.info("Completed archive on %s (%s => %s)".format(path, current, timeStampedArchive)); PrecogUnit
         }
       }
     } else {
