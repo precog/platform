@@ -90,7 +90,7 @@ trait ShardService extends
    * On service startup, the platform's `startup` method will be
    * called.
    */
-  def configureShardState(config: Configuration, rootConfig: Configuration): Future[ShardState]
+  def configureShardState(config: Configuration): Future[ShardState]
 
   val utf8 = Charset.forName("UTF-8")
   val BufferSize = 64 * 1024
@@ -219,7 +219,7 @@ trait ShardService extends
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           logger.info("Starting shard with config:\n" + context.config)
-          configureShardState(context.config, context.rootConfig)
+          configureShardState(context.config)
         } ->
         request { state =>
           import CORSHeaderHandler.allowOrigin
