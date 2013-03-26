@@ -254,6 +254,7 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val Or = new BoolOp2("or", _ || _)
       
       val concatString = new Op2F2(InfixNamespace, "concatString") {
+        //@deprecated, see the DEPRECATED comment in StringLib
         val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JTextT)
 
         private def build(c1: StrColumn, c2: StrColumn) =
