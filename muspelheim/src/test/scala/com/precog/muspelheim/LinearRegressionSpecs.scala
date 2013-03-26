@@ -23,12 +23,142 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait LinearRegressionSpecs extends EvalStackSpecs {
-  "linear regression" in {
+  "linear regression" should {
+    "throw an exception with constant x-values" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | medals' := medals with { const: 3 }
+        | 
+        | std::stats::linearRegression(medals'.Weight, medals'.const)
+      """.stripMargin
+
+      evalE(input) must throwA[IllegalArgumentException]
+    }
+
+    "throw an exception with constant x-values and more than column" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | medals' := medals with { const: 3 }
+        |
+        | data := { const: medals'.const, height: medals'.HeightIncm }
+        | 
+        | std::stats::linearRegression(medals'.Weight, data)
+      """.stripMargin
+
+      evalE(input) must throwA[IllegalArgumentException]
+    }
+
+    "accept a constant dependent variable" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | medals' := medals with { const: 3 }
+        | 
+        | std::stats::linearRegression(medals'.const, medals'.Weight)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
+    "accept a previous problematic case regarding slice boundaries" in {
+      val input = """
+        | conversions := //conversions
+        | conversions' := conversions with
+        | 
+        |  {
+        |    female : if conversions.customer.gender = "female" then 1 else 0
+        |  }
+        |
+        | independentVars := {
+        |   income: conversions'.customer.income, 
+        |   age: conversions'.customer.age,
+        |   female: conversions'.female
+        |   }
+        | 
+        | std::stats::linearRegression(conversions'.product.price, independentVars)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
+    "linearly dependent variables" in {
+      val input = """
+        | clicks := //clicks2
+        |
+        | vars := {
+        |   rate: clicks.marketing.bounceRate,
+        |   rate2: clicks.marketing.bounceRate * 2
+        |   }
+        | 
+        | std::stats::linearRegression(clicks.product.price, vars)
+      """.stripMargin
+
+      evalE(input) must throwA[IllegalArgumentException]
+    }
+
+    "accept case with problematic R^2 value" in {
+      val input = """
+        | conversions := //conversions
+        | conversions' := conversions with
+        |   {
+        |     female : if conversions.customer.gender = "female" then 1 else 0
+        |   }
+        | 
+        | std::stats::linearRegression(conversions'.female, conversions'.product.price)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
     "return correctly structured results in a simple case of linear regression" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
+        | medals := //summer_games/london_medals
+        | 
+        | std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
       """.stripMargin
 
       val results = evalE(input)
@@ -70,10 +200,10 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "predict linear regression" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
-        std::stats::predictLinear({height: 34, other: 35}, model)
+        | medals := //summer_games/london_medals
+        | 
+        | model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
+        | std::stats::predictLinear({height: 34, other: 35}, model)
       """.stripMargin
 
       val results = evalE(input)
@@ -112,64 +242,64 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "join predicted results with original dataset" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        model := std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
-        predictions := std::stats::predictLinear(medals, model)
-
-        medals with { predictedWeight: predictions }
-      """
+        | medals := //summer_games/london_medals
+        | 
+        | model := std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
+        | predictions := std::stats::predictLinear(medals, model)
+        |
+        | medals with { predictedWeight: predictions }
+      """.stripMargin
 
       val input2 = """ 
-        medals := //summer_games/london_medals
-
-        h := medals where std::type::isNumber(medals.HeightIncm)
-        count(h)
-      """
+        | medals := //summer_games/london_medals
+        |
+        | h := medals where std::type::isNumber(medals.HeightIncm)
+        | count(h)
+      """.stripMargin
 
       testJoinLinear(input, input2, false)
     }
 
     "join predicted results with original dataset when model is `new`ed" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
-
-        model ~ medals
-        predictions := std::stats::predictLinear(medals, model)
-
-        medals with { predictedWeight: predictions }
-      """
+        | medals := //summer_games/london_medals
+        | 
+        | model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
+        |
+        | model ~ medals
+        | predictions := std::stats::predictLinear(medals, model)
+        |
+        | medals with { predictedWeight: predictions }
+      """.stripMargin
 
       val input2 = """ 
-        medals := //summer_games/london_medals
-
-        h := medals where std::type::isNumber(medals.HeightIncm)
-        count(h)
-      """
+        | medals := //summer_games/london_medals
+        |
+        | h := medals where std::type::isNumber(medals.HeightIncm)
+        | count(h)
+      """.stripMargin
 
       testJoinLinear(input, input2, true)
     }
 
     "join predicted results with model when model is `new`ed" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
-
-        model ~ medals
-        predictions := std::stats::predictLinear(medals, model)
-
-        model with { predictedWeight: predictions }
-      """
+        | medals := //summer_games/london_medals
+        | 
+        | model := new std::stats::linearRegression(medals.Weight, { HeightIncm: medals.HeightIncm })
+        |
+        | model ~ medals
+        | predictions := std::stats::predictLinear(medals, model)
+        |
+        | model with { predictedWeight: predictions }
+      """.stripMargin
 
       val input2 = """ 
-        medals := //summer_games/london_medals
-
-        h := medals where std::type::isNumber(medals.HeightIncm)
-        count(h)
-      """
+        | medals := //summer_games/london_medals
+        |
+        | h := medals where std::type::isNumber(medals.HeightIncm)
+        | count(h)
+      """.stripMargin
 
       val results = evalE(input)
       val resultsCount = evalE(input2)
@@ -191,10 +321,10 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "predict linear regression when no field names in model are present in data" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
-        std::stats::predictLinear({weight: 34, other: 35}, model)
+        | medals := //summer_games/london_medals
+        | 
+        | model := std::stats::linearRegression(medals.Weight, { height: medals.HeightIncm })
+        | std::stats::predictLinear({weight: 34, other: 35}, model)
       """.stripMargin
 
       val results = evalE(input)
@@ -204,10 +334,10 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "return correct number of results in more complex case of linear regression" in {
       val input = """
-          medals := //summer_games/london_medals
-          
-          std::stats::linearRegression(medals.S, medals)
-        """.stripMargin
+        | medals := //summer_games/london_medals
+        | 
+        | std::stats::linearRegression(medals.S, medals)
+      """.stripMargin
 
       val results = evalE(input)
 
@@ -220,19 +350,19 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       }
     }
 
-    "return empty set when fed rank deficient data" in {
+    "throw exception when fed rank deficient data" in {
       val input = """
         std::stats::linearRegression(0, 4)
-      """.stripMargin
+      """
 
       evalE(input) must throwA[IllegalArgumentException]
     }
 
     "return empty set when the dependent variable is not at the root path" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        std::stats::linearRegression({weight: medals.Weight}, {height: medals.HeightIncm})
+        | medals := //summer_games/london_medals
+        | 
+        | std::stats::linearRegression({weight: medals.Weight}, {height: medals.HeightIncm})
       """.stripMargin
 
       evalE(input) must beEmpty
@@ -240,9 +370,9 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "return empty set when given feature values of wrong type" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        std::stats::linearRegression(medals.WeightIncm, medals.Country)
+        | medals := //summer_games/london_medals
+        | 
+        | std::stats::linearRegression(medals.WeightIncm, medals.Country)
       """.stripMargin
 
       evalE(input) must beEmpty
@@ -250,9 +380,9 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
     "return empty set when given dependent values of wrong type" in {
       val input = """
-        medals := //summer_games/london_medals
-        
-        std::stats::linearRegression(medals.Country, medals.WeightIncm)
+        | medals := //summer_games/london_medals
+        | 
+        | std::stats::linearRegression(medals.Country, medals.WeightIncm)
       """.stripMargin
 
       evalE(input) must beEmpty

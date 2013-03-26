@@ -181,20 +181,21 @@ trait LinearRegressionLibModule[M[+_]]
           }
 
           val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
-          val y0 = arrays map { _ map { _.last } }
-
-          val matrixX = xs map { case arr => new Matrix(arr) }
+          val matrixX0 = xs map { case arr => new Matrix(arr) }
 
           // FIXME ultimately we do not want to throw an IllegalArgumentException here
           // once the framework is in place, we will return the empty set and issue a warning to the user
           // this catches the case when the user runs regression on data when rows < (columns + 1)
-          val inverseX = try {
-            matrixX map { _.inverse() }
-          } catch {
-            case ex: RuntimeException if ex.getMessage == "Matrix is rank deficient." => 
-              throw new IllegalArgumentException("More features than rows found in linear regression. Not enough information to determine model.", ex)
+          val matrixX = matrixX0 map { mx =>
+            if (mx.rank < mx.getColumnDimension) {
+              throw new IllegalArgumentException("Matrix is rank deficient. Not enough information to determine model.")
+            } else {
+              mx
+            }
           }
+          val inverseX = matrixX map { _.inverse }
 
+          val y0 = arrays map { _ map { _.last } }
           val matrixY = y0 map { case arr => new Matrix(Array(arr)) }
 
           val matrixProduct: Option[Matrix] = for {
@@ -207,8 +208,8 @@ trait LinearRegressionLibModule[M[+_]]
           val res = matrixProduct map { _.getArray flatten } getOrElse Array.empty[Double]
 
           // We weight the results to handle slices of different sizes.
-          // Even though we canonicalize the slices, the last slice may be smaller 
-          // than all the others.
+          // Even though we canonicalize the slices to bound their size,
+          // but their sizes still may vary
           val weightedRes = res map { _ * count }
           
           CoeffAcc(weightedRes, count)
@@ -237,6 +238,7 @@ trait LinearRegressionLibModule[M[+_]]
           val y0 = arrays map { _ map { _.last } }
 
           val matrixX = xs map { case arr => new Matrix(arr) }
+
           val matrixProduct = matrixX map { matrix => matrix.transpose() times matrix } getOrElse { stdErrorMonoid.zero.product }
 
           val actualY0 = y0 map { arr => (new Matrix(Array(arr))).transpose() }
@@ -296,7 +298,10 @@ trait LinearRegressionLibModule[M[+_]]
 
         val coeffsTable = thetaInSchema.transform(trans.WrapObject(Leaf(Source), "coefficients"))
 
-        val rSquared = 1 - (errors.rss / errors.tss)
+        val rSquared = {
+          if (errors.tss == 0) 1
+          else 1 - (errors.rss / errors.tss)
+        }
         val rSquaredTable0 = Table.fromRValues(Stream(CNum(rSquared)))
         val rSquaredTable = rSquaredTable0.transform(trans.WrapObject(Leaf(Source), "RSquared"))
 
@@ -341,7 +346,7 @@ trait LinearRegressionLibModule[M[+_]]
           val sliceSize = 1000
           val tableReducer: (Table, JType) => M[Table] = {
             (table, jtype) => {
-              val arrayTable = table.canonicalize(sliceSize).toArray[Double].normalize
+              val arrayTable = table.canonicalize(sliceSize, Some(sliceSize * 2)).toArray[Double]
 
               val coeffs0 = arrayTable.reduce(coefficientReducer)
               val errors0 = coeffs0 flatMap { acc => arrayTable.reduce(stdErrorReducer(acc)) }
