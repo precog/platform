@@ -26,6 +26,7 @@ import scala.collection.mutable.ArrayBuffer
 trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
   trait TimeLib extends ColumnarTableLib with EvaluatorMethods {
     import trans._
+    import StdLib.{StrAndDateT, dateToStrCol}
 
     val TimeNamespace = Vector("std", "time")
 
@@ -98,12 +99,12 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       MaxTimeOf
     )
 
-    val textAndDate = JUnionT(JTextT, JDateT)
+    //val textAndDate = JUnionT(JTextT, JDateT)
 
     DateTimeZone.setDefault(DateTimeZone.UTC)
 
     object ParseDateTime extends Op2F2(TimeNamespace, "parseDateTime") {
-      val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
+      val tpe = BinaryOperationType(StrAndDateT, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::parseDateTime") {
         case (c1: DateColumn, c2: StrColumn) => c1
 
@@ -122,7 +123,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     object ParseDateTimeFuzzy extends Op1F1(TimeNamespace, "parseDateTimeFuzzy") {
-      val tpe = UnaryOperationType(textAndDate, JDateT)
+      val tpe = UnaryOperationType(StrAndDateT, JDateT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::parseDateTimeFuzzy") {
         case (c: DateColumn) => c
 
@@ -160,7 +161,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     def createDateCol(c: StrColumn) = cf.util.CoerceToDate(c) collect { case (dc: DateColumn) => dc } get
 
     object ChangeTimeZone extends Op2F2(TimeNamespace, "changeTimeZone") {
-      val tpe = BinaryOperationType(textAndDate, JTextT, JDateT)
+      val tpe = BinaryOperationType(StrAndDateT, JTextT, JDateT)
 
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::changeTimeZone") {
         case (c1: DateColumn, c2: StrColumn) => newColumn(c1, c2)
@@ -270,7 +271,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     trait ExtremeTime extends Op2F2 {
-      val tpe = BinaryOperationType(textAndDate, textAndDate, JDateT)
+      val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::extremeTime") {
         case (c1: StrColumn, c2: StrColumn) =>
           val dateCol1 = createDateCol(c1)
@@ -319,7 +320,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     trait TimePlus extends Op2F2 {
-      val tpe = BinaryOperationType(textAndDate, JNumberT, JDateT)
+      val tpe = BinaryOperationType(StrAndDateT, JNumberT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timePlus") {
         case (c1: StrColumn, c2: LongColumn) =>
           val dateCol1 = createDateCol(c1)
@@ -391,7 +392,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
     
     trait TimeBetween extends Op2F2 {
-      val tpe = BinaryOperationType(textAndDate, textAndDate, JNumberT)
+      val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::timeBetween") {
         case (c1: StrColumn, c2: StrColumn) =>
           val dateCol1 = createDateCol(c1)
@@ -459,7 +460,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       def checkDefined(c1: Column, c2: StrColumn, row: Int) =
         c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidTimeZone(c2(row))
 
-      val tpe = BinaryOperationType(JNumberT, JTextT, textAndDate)
+      val tpe = BinaryOperationType(JNumberT, JTextT, JDateT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::time::millisToIso") {
         case (c1: LongColumn, c2: StrColumn) => new DateColumn {
           def isDefinedAt(row: Int) = checkDefined(c1, c2, row)
@@ -500,7 +501,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     object GetMillis extends Op1F1(TimeNamespace, "getMillis") {
-      val tpe = UnaryOperationType(textAndDate, JNumberT)
+      val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::getMillis") {
         case (c: StrColumn) =>  
           val dateCol = createDateCol(c)
@@ -515,7 +516,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     object TimeZone extends Op1F1(TimeNamespace, "timeZone") {
-      val tpe = UnaryOperationType(textAndDate, JTextT)
+      val tpe = UnaryOperationType(StrAndDateT, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeZone") {
         case (c: StrColumn) =>
           val dateCol = createDateCol(c)
@@ -549,7 +550,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
         else "winter"
       }
     
-      val tpe = UnaryOperationType(textAndDate, JTextT)
+      val tpe = UnaryOperationType(StrAndDateT, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::season") {
         case (c: StrColumn) =>
           val dateCol = createDateCol(c)
@@ -564,7 +565,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     } 
 
     trait TimeFraction extends Op1F1 {
-      val tpe = UnaryOperationType(textAndDate, JNumberT)
+      val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::timeFraction") {
         case (c: StrColumn) =>
           val dateCol = createDateCol(c)
@@ -635,7 +636,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
     }
 
     trait TimeTruncation extends Op1F1 {
-      val tpe = UnaryOperationType(textAndDate, JTextT)
+      val tpe = UnaryOperationType(StrAndDateT, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::time::truncation") {
         case (c: StrColumn) =>
           val dateCol = createDateCol(c)
