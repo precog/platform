@@ -266,14 +266,16 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    @deprecated
-    object compareTo extends Op2SSL("compareTo", _ compareTo _)
+    object compareTo extends Op2SSL("compareTo", _ compareTo _) {
+      override val deprecation = Some("use compare instead")
+    }
 
     object compare extends Op2SSL("compare", _ compareTo _)
 
-    @deprecated
     object compareToIgnoreCase extends Op2SSL("compareToIgnoreCase",
-      _ compareToIgnoreCase _)
+      _ compareToIgnoreCase _) {
+      override val deprecation = Some("use compareIgnoreCase instead")
+    }
 
     object compareIgnoreCase extends Op2SSL("compareIgnoreCase",
       _ compareToIgnoreCase _)
