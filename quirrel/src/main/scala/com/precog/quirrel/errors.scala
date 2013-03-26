@@ -18,6 +18,7 @@ trait RawErrors extends Errors with Phases {
   
   override def isWarning(error: Error) = error match {
     case UnusedLetBinding(_) => true
+    case DeprecatedFunction(_, _) => true
     case _ => false
   }
 }
@@ -35,6 +36,7 @@ trait LineErrors extends Errors with Phases with parser.AST {
   override def isWarning(error: Error) = error match {
     case Error(UnusedLetBinding(_)) => true
     case Error(UnableToSolveCriticalCondition(_)) => true
+    case Error(DeprecatedFunction(_, _)) => true
     case _ => false
   }
   
@@ -60,6 +62,10 @@ case class MultiplyDefinedTicVariable(name: TicId) extends ErrorType {
 
 case class UndefinedFunction(name: Identifier) extends ErrorType {
   override def toString = "undefined name: %s".format(name)
+}
+
+case class DeprecatedFunction(name: Identifier, deprecation: String) extends ErrorType {
+  override def toString = "deprecated name: %s; %s".format(name, deprecation)
 }
 
 case object OperationOnUnrelatedSets extends ErrorType {
