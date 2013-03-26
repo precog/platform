@@ -2398,6 +2398,17 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = eval(input)
       results must not(beEmpty)
     }
+
+    "use string function on date columns" in {
+      val input = """
+        | import std::string::*
+        | indexOf((//clicks).timeString, "-")
+        | """.stripMargin
+
+      val results = eval(input)
+      results must_== Set(SDecimal(4))
+      System.err.println(results)
+    }
     
     "correctly filter the results of a non-trivial solve" in {
       val input = """
