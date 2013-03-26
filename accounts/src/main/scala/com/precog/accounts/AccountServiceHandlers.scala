@@ -24,8 +24,10 @@ import com.precog.common.NetUtils.remoteIpFrom
 import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
+import com.precog.common.security.service.v1
 import com.precog.common.security.service.v1.APIKeyDetails
 import com.precog.common.services._
+import com.precog.util.email.TemplateEmailer
 
 import akka.dispatch.{ ExecutionContext, Future, Promise }
 import akka.util.Timeout
@@ -55,13 +57,19 @@ import HttpHeaders.Authorization
 
 import com.weiglewilczek.slf4s.Logging
 
-import shapeless._
-
-import scalaz.{ Applicative, Validation, Success, Failure }
-
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
-import com.precog.common.security.service.v1
+
+import shapeless._
+
+import scalaz._
+import scalaz.Validation._
+import scalaz.std.option._
+import scalaz.syntax.apply._
+import scalaz.syntax.plus._
+import scalaz.syntax.applicative._
+import scalaz.syntax.validation._
+import scalaz.syntax.std.option._
 
 object Responses {
   def failure(error: HttpStatusCode, message: String) =
@@ -74,7 +82,7 @@ object Responses {
     HttpResponse[JValue](error, content = Some(JString(message)))
 }
 
-class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyFinder: APIKeyFinder[Future], clock: Clock, rootAccountId: String, rootAPIKey: APIKey)(implicit executor: ExecutionContext)
+class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyFinder: APIKeyFinder[Future], clock: Clock, rootAccountId: String, rootAPIKey: APIKey, emailer: TemplateEmailer)(implicit executor: ExecutionContext)
     extends Logging {
   import ServiceHandlerUtil._
 
@@ -101,6 +109,27 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     } getOrElse {
       Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
     }
+  }
+
+  object SearchAccountHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
+    val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+      Success {
+        request.parameters.get('email) match {
+          case Some(email) => accountManager.findAccountByEmail(email).map {
+            case Some(account) =>
+              HttpResponse(HttpStatus(OK), content = Some(JObject(jfield("accountId", account.accountId))))
+
+            case None =>
+              Responses.failure(NotFound, "No account found for address " + email)
+          }
+
+          case None =>
+            Promise.successful(Responses.failure(BadRequest, "Missing email address for search in query parameters"))
+        }
+      }
+    }
+
+    val metadata = None
   }
 
   object ListAccountsHandler extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] {
@@ -177,8 +206,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                   existingAccountOpt <- accountManager.findAccountByEmail(email)
                   accountResponse <-
                     existingAccountOpt map { account =>
-                      logger.debug("Found existing account: " + account.accountId)
-                      Future(HttpResponse[JValue](OK, content = Some(jobject(jfield("accountId", account.accountId)))))
+                      logger.warn("Creation attempted on existing account %s by %s".format(account.accountId, remoteIpFrom(request)))
+                      Promise.successful(Responses.failure(Conflict, "An account already exists with the email address %s. If you feel this is in error, please contact support@precog.com".format(email)))
                     } getOrElse {
                       accountManager.newAccount(email, password, clock.now(), AccountPlan.Free, Some(rootAccountId)) { (accountId, path) =>
                         logger.info("Created new account for " + email + " with id " + accountId + " and path " + path + " by " + remoteIpFrom(request))
@@ -259,6 +288,92 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val metadata = None
   }
 
+  object GenerateResetTokenHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
+    val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+      Success {
+        request.parameters.get('accountId).flatMap { accountId =>
+          request.content.map { futureContent =>
+            futureContent.flatMap { jvalue =>
+              (jvalue \ "email").validated[String] match {
+                case Success(requestEmail) =>
+                  accountManager.findAccountById(accountId).flatMap {
+                    case Some(account) =>
+                      if (account.email == requestEmail) {
+                        accountManager.generateResetToken(account).map { resetToken =>
+                          try {
+                            val params =
+                              Map(
+                                "token" -> resetToken,
+                                "requestor" -> remoteIpFrom(request),
+                                "accountId" -> account.accountId,
+                                "time" -> (new java.util.Date).toString
+                              )
+
+                            emailer.sendEmail(Seq(account.email), "reset.subj.mustache", Seq("reset.eml.txt.mustache" -> "text/plain", "reset.eml.html.mustache" -> "text/html"), params)
+                            HttpResponse[JValue](HttpStatus(OK), content = Some(JString("A reset token has been sent to the account email on file")))
+                          } catch {
+                            case t =>
+                              logger.error("Failure sending account password reset email", t)
+                              HttpResponse[JValue](HttpStatus(InternalServerError), content = Some(JString("Provided email does not match account for "+ accountId)))
+                          }
+                        }
+                      } else {
+                        logger.warn("Password reset request for account %s did not match email on file (%s provided)".format(accountId, requestEmail))
+                        Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("Provided email does not match account for "+ accountId))))
+                      }
+
+                    case None =>
+                      logger.warn("Password reset request on non-existent account " + accountId)
+                      Future(HttpResponse[JValue](HttpStatus(NotFound), content = Some(JString("Unable to find Account "+ accountId))))
+                  }
+
+                case Failure(error) =>
+                  logger.warn("Password reset request for account %s without body".format(accountId))
+                  Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body"), content = Some(JString("Missing/invalid email in request body"))))
+              }
+            }
+          }
+        }.getOrElse {
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing accountId in request URI."), content = Some(JString("Missing accountId in request URI."))))
+        }
+      }
+    }
+
+    val metadata = None
+  }
+
+  object PasswordResetHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
+    val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+      Success {
+        ( request.parameters.get('accountId).toSuccess(NonEmptyList("Missing account ID in request URI")) |@|
+          request.parameters.get('resetToken).toSuccess(NonEmptyList("Missing reset token in request URI")) |@|
+          request.content.toSuccess(NonEmptyList("Missing POST body (new password) in request"))).apply { (accountId, resetToken, futureContent) =>
+            futureContent.flatMap { jvalue =>
+              (jvalue \ "password").validated[String] match {
+                case Success(newPassword) =>
+                  accountManager.resetAccountPassword(accountId, resetToken, newPassword).map {
+                    case true =>
+                      logger.info("Password for account %s successfully reset by %s".format(accountId, remoteIpFrom(request)))
+                      HttpResponse[JValue](OK, content = None)
+
+                    case false =>
+                      logger.warn("Password reset for account %s from %s failed".format(accountId, remoteIpFrom(request)))
+                      Responses.failure(InternalServerError, "Account password reset failed, please contact support.")
+                  }
+
+                case Failure(error) =>
+                  logger.warn("Password reset request for account %s without new password".format(accountId))
+                  Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body"), content = Some(JString("Missing/invalid password in request body"))))
+              }
+            }
+        } valueOr { errors =>
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing required data"), content = Some(JString(errors.list.mkString("\n")))))
+        }
+      }
+    }
+
+    val metadata = None
+  }
 
   //update account password
   object PutAccountPasswordHandler extends CustomHttpService[Future[JValue], Account =>Future[HttpResponse[JValue]]] {

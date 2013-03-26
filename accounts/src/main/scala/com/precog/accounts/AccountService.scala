@@ -20,6 +20,7 @@
 package com.precog.accounts
 
 import com.precog.util._
+import com.precog.util.email.TemplateEmailer
 import com.precog.common.NetUtils
 import com.precog.common.accounts._
 import com.precog.common.security._
@@ -103,6 +104,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
   def AccountManager(config: Configuration): (AccountManager[Future], Stoppable)
   def APIKeyFinder(config: Configuration): APIKeyFinder[Future]
   def RootKey(config: Configuration): APIKey
+  def Emailer(config: Configuration): TemplateEmailer
 
   def clock: Clock
 
@@ -118,7 +120,9 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
             val apiKeyFinder = APIKeyFinder(config.detach("security"))
             val rootAccountId = config[String]("accounts.rootAccountId", "INVALID")
             val rootAPIKey = RootKey(config.detach("security"))
-            val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId, rootAPIKey)
+            val emailer = Emailer(config.detach("email"))
+
+            val handlers = new AccountServiceHandlers(accountManager, apiKeyFinder, clock, rootAccountId, rootAPIKey, emailer)
 
             State(handlers, stoppable)
           }
@@ -128,6 +132,15 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           jsonp[ByteChunk] {
             transcode {
               path("/accounts/") {
+                path("'accountId/password/reset") {
+                  path("/'resetToken") {
+                    post(PasswordResetHandler)
+                  } ~
+                  post(GenerateResetTokenHandler)
+                } ~
+                path("search") {
+                  get(SearchAccountHandler)
+                } ~
                 post(PostAccountHandler) ~
                 auth(handlers.accountManager) {
                   get(ListAccountsHandler) ~
