@@ -306,7 +306,15 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = UnaryOperationType(JNumberT, JTextT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::numToString") {
         case c: LongColumn => new StrFrom.L(c, _ => true, _.toString)
-        case c: DoubleColumn => new StrFrom.D(c, _ => true, _.toString)
+        case c: DoubleColumn => {
+          new StrFrom.D(c, _ => true, { d =>
+            val back = d.toString
+            if (back.endsWith(".0"))
+              back.substring(0, back.length - 2)
+            else
+              back
+          })
+        }
         case c: NumColumn => new StrFrom.N(c, _ => true, _.toString)
       }
     }
