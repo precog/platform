@@ -29,7 +29,7 @@ object EmitterSpecs extends Specification
 
   def compileEmit(input: String) = {
     val tree = compileSingle(input.stripMargin)
-    tree.errors must beEmpty
+    tree.errors filterNot isWarning must beEmpty
     emit(tree)
   }
 
