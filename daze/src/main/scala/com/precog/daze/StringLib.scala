@@ -14,6 +14,18 @@ import java.lang.String
 
 import TransSpecModule._
 
+/* DEPRECATED
+ *
+ * Currently, we are accepting StrColumn and DateColumn when we need
+ * strings. This is because we don't have date literal syntax, so ingest
+ * will turn some strings into dates (when they match ISO8601). But
+ * in cases where users do want to use that data as a string, we must
+ * allow that to occur.
+ *
+ * In the future when we have date literals for ingest, we should
+ * revert this and only accept JTextT (StrColumn).
+ */
+
 trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
   trait StringLib extends ColumnarTableLib {
     import trans._
@@ -39,6 +51,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     class Op1SS(name: String, f: String => String)
     extends Op1F1(StringNamespace, name) {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       private def build(c: StrColumn) = new StrFrom.S(c, _ != null, f)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::op1ss::" + name) {
@@ -56,6 +69,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object intern extends Op1SS("intern", _.intern)
 
     object isEmpty extends Op1F1(StringNamespace, "isEmpty") {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JBooleanT)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::isEmpty") {
         case c: StrColumn => new BoolFrom.S(c, _ != null, _.isEmpty)
@@ -66,6 +80,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     def neitherNull(x: String, y: String) = x != null && y != null
 
     object length extends Op1F1(StringNamespace, "length") {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       private def build(c: StrColumn) = new LongFrom.S(c, _ != null, _.length)
       def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::length") {
@@ -76,6 +91,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     class Op2SSB(name: String, f: (String, String) => Boolean)
     extends Op2F2(StringNamespace, name) {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JBooleanT)
       private def build(c1: StrColumn, c2: StrColumn) = new BoolFrom.SS(c1, c2, neitherNull, f)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ss" + name) {
@@ -101,6 +117,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object regexMatch extends Op2(StringNamespace, "regexMatch") {
       import trans._
       
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
       def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
@@ -192,6 +209,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     object concat extends Op2F2(StringNamespace, "concat") {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::concat") {
         case (c1: StrColumn, c2: StrColumn) =>
@@ -208,6 +226,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     class Op2SLL(name: String,
       defined: (String, Long) => Boolean,
       f: (String, Long) => Long) extends Op2F2(StringNamespace, name) {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, JNumberT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2sll::" + name) {
         case (c1: StrColumn, c2: DoubleColumn) =>
@@ -247,6 +266,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       (s, n) => s.codePointBefore(n.toInt))
 
     class Substring(name: String)(f: (String, Int) => String) extends Op2F2(StringNamespace, name) {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, JNumberT, JTextT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring::" + name) {
         case (c1: StrColumn, c2: LongColumn) =>
@@ -283,6 +303,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     class Op2SSL(name: String, f: (String, String) => Long)
     extends Op2F2(StringNamespace, name) {
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JNumberT)
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ssl::" + name) {
         case (c1: StrColumn, c2: StrColumn) =>
@@ -318,6 +339,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
       val decPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
 
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JNumberT)
 
       private def build(c: StrColumn) = new Map1Column(c) with NumColumn {
@@ -348,6 +370,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object split extends Op2F2(StringNamespace, "split") {
       import java.util.regex.Pattern
 
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
 
       private def build(c1: StrColumn, c2: StrColumn) = new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
@@ -370,6 +393,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object splitRegex extends Op2F2(StringNamespace, "splitRegex") {
       import java.util.regex.Pattern
 
+      //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
 
       private def build(c1: StrColumn, c2: StrColumn) = new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
