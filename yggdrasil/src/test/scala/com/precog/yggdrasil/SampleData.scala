@@ -10,7 +10,6 @@ import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
-import scalaz.syntax.copointed._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
