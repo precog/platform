@@ -35,7 +35,7 @@ import scalaz._
 import scalaz.effect._
 import scalaz.std.anyVal._
 import scalaz.std.list._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 
 import org.specs2.ScalaCheck
@@ -53,8 +53,6 @@ import TableModule._
 import PrecogJValueOrder._
 
 trait BlockSortSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification with ScalaCheck { self =>
-  implicit def M: Monad[M] with Copointed[M]
-
   def testSortDense(sample: SampleData, sortOrder: DesiredSortOrder, unique: Boolean, sortKeys: JPath*) = {
     val module = BlockStoreTestModule.empty[M]
 

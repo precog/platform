@@ -67,7 +67,7 @@ trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule
     def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
       for {
         paths       <- pathsM(table)
-        projections <- paths.map(Projection(_)).sequence.map(_.flatten)
+        projections <- paths.toList.traverse(Projection(_)).map(_.flatten)
         totalLength = projections.map(_.length).sum
       } yield {
         def slices(proj: Projection, constraints: Option[Set[ColumnRef]]): StreamT[M, Slice] = {

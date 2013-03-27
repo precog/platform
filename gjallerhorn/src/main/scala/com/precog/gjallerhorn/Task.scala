@@ -51,17 +51,17 @@ abstract class Task(settings: Settings) extends Specification {
 
   def generateUserAndPassword = (text(12) + "@plastic-idolatry.com", text(12))
 
-  def accounts = host(serviceHost, accountsPort) / "accounts"
+  def accounts = host0(serviceHost, accountsPort) / "accounts"
 
-  def security = host(serviceHost, authPort) / "apikeys"
+  def security = host0(serviceHost, authPort) / "apikeys"
 
-  def grants = host(serviceHost, authPort) / "grants"
+  def grants = host0(serviceHost, authPort) / "grants"
   
-  def metadata = host(serviceHost, shardPort) / "meta"
+  def metadata = host0(serviceHost, shardPort) / "meta"
 
-  def ingest = host(serviceHost, ingestPort)
+  def ingest = host0(serviceHost, ingestPort)
 
-  def analytics = host(serviceHost, shardPort) / "analytics"
+  def analytics = host0(serviceHost, shardPort) / "analytics"
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
@@ -188,4 +188,9 @@ abstract class Task(settings: Settings) extends Specification {
   def describeGrant(apiKey: String, grantId: String): ApiResult =
     http((grants / grantId).addQueryParameter("apiKey", apiKey))()
 
+  private def host0(domain: String, port: Int) = {
+    val back = host(domain, port)
+    // port check is a hack to allow just accounts to run over https
+    if (secure && port != 80) back.secure else back
+  }
 }

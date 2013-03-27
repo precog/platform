@@ -36,7 +36,7 @@ import scalaz._
 import scalaz.effect._
 import scalaz.std.anyVal._
 import scalaz.std.list._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 

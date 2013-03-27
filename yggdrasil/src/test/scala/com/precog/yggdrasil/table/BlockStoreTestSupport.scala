@@ -39,7 +39,7 @@ import scala.util.Random
 
 import scalaz._
 import scalaz.effect.IO 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.anyVal._
 import scalaz.std.list._
 
@@ -82,7 +82,7 @@ trait BaseBlockStoreTestModule[M[+_]]
   import trans._
   import CValueGenerators._
 
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   object Projection extends ProjectionCompanion
 
@@ -158,14 +158,14 @@ trait BaseBlockStoreTestModule[M[+_]]
 }
 
 object BlockStoreTestModule {
-  def empty[M[+_]](implicit M0: Monad[M] with Copointed[M]) = new BlockStoreTestModule[M] {
+  def empty[M[+_]](implicit M0: Monad[M] with Comonad[M]) = new BlockStoreTestModule[M] {
     val M = M0 
     val projections = Map.empty[Path, Projection]
   }
 }
 
 trait BlockStoreTestSupport[M[+_]] { self =>
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   def emptyTestModule = BlockStoreTestModule.empty[M]
 }

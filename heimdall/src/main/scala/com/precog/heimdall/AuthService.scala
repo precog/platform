@@ -65,7 +65,7 @@ case class WebAuthService(protocol: String, host: String, port: Int, path: Strin
   }
 }
 
-case class TestAuthService[M[+_]](validAPIKeys: Set[APIKey])(implicit M: Pointed[M]) extends AuthService[M] {
+case class TestAuthService[M[+_]](validAPIKeys: Set[APIKey])(implicit M: Applicative[M]) extends AuthService[M] {
   final def isValid(apiKey: APIKey): M[Boolean] = M.point(validAPIKeys contains apiKey)
 }
 

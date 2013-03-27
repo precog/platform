@@ -30,8 +30,9 @@ import java.util.concurrent.TimeUnit._
 import org.joda.time.DateTime
 
 import scalaz._
-import scalaz.syntax.id._
+import scalaz.effect._
 import scalaz.syntax.monad._
+import scalaz.syntax.effect.id._
 
 case class CachingAPIKeyFinderSettings(
   apiKeyCacheSettings: Seq[Cache.CacheOption[APIKey, v1.APIKeyDetails]],
@@ -46,11 +47,10 @@ object CachingAPIKeyFinderSettings {
 }
 
 class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPIKeyFinderSettings = CachingAPIKeyFinderSettings.Default)(implicit val M: Monad[M]) extends APIKeyFinder[M] {
-
   private val apiKeyCache = Cache.simple[APIKey, v1.APIKeyDetails](settings.apiKeyCacheSettings: _*)
 
   def findAPIKey(tid: APIKey, rootKey: Option[APIKey]) = apiKeyCache.get(tid) match {
-    case None => delegate.findAPIKey(tid, rootKey).map { _.map { _ tap add } }
+    case None => delegate.findAPIKey(tid, rootKey).map { _ map { _ tap add unsafePerformIO } }
     case t    => M.point(t)
   }
 
@@ -58,9 +58,9 @@ class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPI
     sys.error("todo")
   }
 
-  protected def add(r: v1.APIKeyDetails) = apiKeyCache.put(r.apiKey, r)
+  protected def add(r: v1.APIKeyDetails) = IO { apiKeyCache.put(r.apiKey, r) }
 
-  protected def remove(r: v1.APIKeyDetails) = apiKeyCache.remove(r.apiKey)
+  protected def remove(r: v1.APIKeyDetails) = IO { apiKeyCache.remove(r.apiKey) } 
 
   // TODO: Cache capability checks
   def hasCapability(apiKey: APIKey, perms: Set[Permission], at: Option[DateTime]): M[Boolean] = 

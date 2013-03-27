@@ -44,7 +44,7 @@ import org.streum.configrity.io.BlockFormat
 import java.nio.ByteBuffer
 
 import scalaz._
-import scalaz.Scalaz._
+import scalaz.syntax.comonad._
 
 import blueeyes.akka_testing._
 import blueeyes.bkka.AkkaDefaults

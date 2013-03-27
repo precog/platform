@@ -64,14 +64,12 @@ import DefaultBijections._
 import org.apache.commons.codec.binary.Base64
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait TestAccountService extends BlueEyesServiceSpecification with AccountService with AkkaDefaults {
 
   implicit def executionContext = defaultFutureDispatch
-  implicit def M = new FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(5, "seconds"))
-  }
+  implicit def M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(5, "seconds"))
 
   val config = """
     security {
@@ -111,7 +109,7 @@ trait TestAccountService extends BlueEyesServiceSpecification with AccountServic
 }
 
 class AccountServiceSpec extends TestAccountService with Tags {
-  def accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/")
+  def accounts = client.contentType[JValue](application/(MimeTypes.json)).path("/accounts/v1/accounts/")
 
   def auth(user: String, pass: String): HttpHeader = {
     val raw = (user + ":" + pass).getBytes("utf-8")
