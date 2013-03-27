@@ -27,7 +27,7 @@ object ProvenanceComputationSpecs extends Specification
           foo(clicks)""".format(f.fqn))
 
         tree.provenance mustEqual StaticProvenance("/clicks")
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }
     
@@ -39,7 +39,7 @@ object ProvenanceComputationSpecs extends Specification
           foo(clicks.a, clicks.b)""".format(f.fqn))
 
         tree.provenance mustEqual StaticProvenance("/clicks")
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }     
 
@@ -52,7 +52,7 @@ object ProvenanceComputationSpecs extends Specification
 
         tree.provenance mustEqual ValueProvenance
 
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     } 
     "compute result provenance correctly in a morph1" in {
@@ -64,13 +64,13 @@ object ProvenanceComputationSpecs extends Specification
 
         if (f.retainIds) {
           tree.provenance mustEqual StaticProvenance("/clicks")
-          tree.errors must beEmpty
+          tree.errors filterNot isWarning must beEmpty
         } else if (f.namespace == Vector("std", "random")) {
           tree.provenance mustEqual InfiniteProvenance
           tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
         } else {
           tree.provenance mustEqual ValueProvenance
-          tree.errors must beEmpty
+          tree.errors filterNot isWarning must beEmpty
         }
       }
     } 
@@ -86,7 +86,7 @@ object ProvenanceComputationSpecs extends Specification
         else
           tree.provenance mustEqual ValueProvenance
 
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }    
 
@@ -569,7 +569,7 @@ object ProvenanceComputationSpecs extends Specification
       forall(libMorphism1) { f =>
         val tree = compileSingle("%s(//foo, //bar)".format(f.fqn))
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(IncorrectArity(1, 2))
+        tree.errors filterNot isWarning mustEqual Set(IncorrectArity(1, 2))
       }
     }
     "identify morph1 dispatch according to its child" in {
@@ -577,13 +577,13 @@ object ProvenanceComputationSpecs extends Specification
         val tree = compileSingle("%s(//foo)".format(f.fqn))
         if (f.retainIds) {
           tree.provenance mustEqual StaticProvenance("/foo")
-          tree.errors must beEmpty
+          tree.errors filterNot isWarning must beEmpty
         } else if (f.namespace == Vector("std", "random")) {
           tree.provenance mustEqual InfiniteProvenance
-          tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
+          tree.errors filterNot isWarning mustEqual Set(CannotUseDistributionWithoutSampling)
         } else { 
           tree.provenance mustEqual ValueProvenance
-          tree.errors must beEmpty
+          tree.errors filterNot isWarning must beEmpty
         }
       }
     }
@@ -591,7 +591,7 @@ object ProvenanceComputationSpecs extends Specification
       forall(libMorphism2) { f => 
         val tree = compileSingle("%s(//foo, //bar)".format(f.fqn))
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        tree.errors filterNot isWarning mustEqual Set(OperationOnUnrelatedSets)
       }
     }
 
@@ -602,7 +602,7 @@ object ProvenanceComputationSpecs extends Specification
           tree.provenance mustEqual StaticProvenance("/foo")
         else
           tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }
 
@@ -613,14 +613,14 @@ object ProvenanceComputationSpecs extends Specification
           tree.provenance mustEqual ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
         else
           tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }
     "identify morph2 dispatch according to its children given sets not related" in {
       forall(libMorphism2) { f =>
         val tree = compileSingle("""foo(a, b) := %s(a, b) foo(//bar, //baz)""".format(f.fqn))
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        tree.errors filterNot isWarning mustEqual Set(OperationOnUnrelatedSets)
       }
     }
 
@@ -1106,28 +1106,28 @@ object ProvenanceComputationSpecs extends Specification
           forall(lib1) { f =>
             val tree = compileSingle("%s(10) union {a: 33}".format(f.fqn))
             tree.provenance mustEqual ValueProvenance
-            tree.errors must beEmpty
+            tree.errors filterNot isWarning must beEmpty
           }
         }
         {
           forall(lib2) { f =>
             val tree = compileSingle("%s((//bar).foo, (//bar).ack) union //bar".format(f.fqn))
             tree.provenance must beLike { case StaticProvenance("/bar") => ok }
-            tree.errors must beEmpty
+            tree.errors filterNot isWarning must beEmpty
           }
         }        
         {
           forall(libReduction) { f =>
             val tree = compileSingle("%s((//bar).foo) union [1, 9]".format(f.fqn))
             tree.provenance mustEqual ValueProvenance 
-            tree.errors must beEmpty
+            tree.errors filterNot isWarning must beEmpty
           }
         }          
         {
           forall(libReduction) { f =>
             val tree = compileSingle("%s((//bar).foo) union //foo".format(f.fqn))
             tree.provenance mustEqual NullProvenance
-            tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+            tree.errors filterNot isWarning mustEqual Set(ProductProvenanceDifferentLength)
           }
         }        
         {
@@ -1135,13 +1135,13 @@ object ProvenanceComputationSpecs extends Specification
             val tree = compileSingle("%s((//bar).foo) union //baz".format(f.fqn))
             if (f.retainIds) {
               tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
-              tree.errors must beEmpty
+              tree.errors filterNot isWarning must beEmpty
             } else if (f.namespace == Vector("std", "random")) {
               tree.provenance mustEqual NullProvenance 
-              tree.errors mustEqual Set(CannotUseDistributionWithoutSampling)
+              tree.errors filterNot isWarning mustEqual Set(CannotUseDistributionWithoutSampling)
             } else {
               tree.provenance mustEqual NullProvenance
-              tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+              tree.errors filterNot isWarning mustEqual Set(ProductProvenanceDifferentLength)
             }
           }
         }        
@@ -1150,18 +1150,18 @@ object ProvenanceComputationSpecs extends Specification
             val tree = compileSingle("%s((//bar).foo, (//bar).ack) union //baz".format(f.fqn))
             if (f.retainIds) {
               tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok }
-              tree.errors must beEmpty
+              tree.errors filterNot isWarning must beEmpty
             } else {
               tree.provenance mustEqual NullProvenance
-              tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+              tree.errors filterNot isWarning mustEqual Set(ProductProvenanceDifferentLength)
             }
           }
         }
         {
           forall(libMorphism2) { f =>
             val tree = compileSingle("%s(//bar, //foo) union //ack".format(f.fqn))
-              tree.provenance mustEqual NullProvenance
-              tree.errors mustEqual Set(OperationOnUnrelatedSets)
+            tree.provenance mustEqual NullProvenance
+            tree.errors filterNot isWarning mustEqual Set(OperationOnUnrelatedSets)
           }
         }
         {
