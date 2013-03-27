@@ -57,6 +57,7 @@ trait StaticLibrary extends Library {
   
   lazy val libMorphism1 = Set(
     M1,
+    DeprecatedM1,
     M11,
     Morphism1(Vector(), "bar33", 0x0002),
     Morphism1(Vector(), "denseRank", 0x0003))
@@ -66,6 +67,11 @@ trait StaticLibrary extends Library {
     Morphism2(Vector("std", "lib9"), "baz2", 0x0003))
     
   lazy val expandGlob = Morphism1(Vector("std", "fs"), "expandGlob", 0x0004)
+  
+  object DeprecatedM1 extends Morphism1(Vector(), "bin25", 0x0025) {
+    override val retainIds = true
+    override val deprecation = Some("use bin5 instead")
+  }
   
   object M1 extends Morphism1(Vector(), "bin5", 0x0000) {
     override val retainIds = true

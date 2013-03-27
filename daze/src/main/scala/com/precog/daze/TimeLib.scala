@@ -691,27 +691,27 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       val fmt = ISODateTimeFormat.dateHour()
     }
 
-    @deprecated
     object DateHourMin extends Op1F1(TimeNamespace, "dateHourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinute()
+      override val deprecation = Some("use dateHourMinute instead")
     }
 
     object DateHourMinute extends Op1F1(TimeNamespace, "dateHourMinute") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinute()
     }
 
-    @deprecated
     object DateHourMinSec extends Op1F1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecond()
+      override val deprecation = Some("use dateHourMinuteSecond instead")
     }
 
     object DateHourMinuteSecond extends Op1F1(TimeNamespace, "dateHourMinuteSecond") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecond()
     }
 
-    @deprecated
     object DateHourMinSecMilli extends Op1F1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
       val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
+      override val deprecation = Some("use dateHourMinuteSecondMillis instead")
     }
 
     object DateHourMinuteSecondMillis extends Op1F1(TimeNamespace, "dateHourMinuteSecondMillis") with TimeTruncation {
@@ -726,18 +726,18 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
       val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
     }
 
-    @deprecated
     object HourMin extends Op1F1(TimeNamespace, "hourMin") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinute()
+      override val deprecation = Some("use hourMinute instead")
     }
 
     object HourMinute extends Op1F1(TimeNamespace, "hourMinute") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinute()
     }
 
-    @deprecated
     object HourMinSec extends Op1F1(TimeNamespace, "hourMinSec") with TimeTruncation {
       val fmt = ISODateTimeFormat.hourMinuteSecond()
+      override val deprecation = Some("use hourMinuteSecond instead")
     }
 
     object HourMinuteSecond extends Op1F1(TimeNamespace, "hourMinuteSecond") with TimeTruncation {
