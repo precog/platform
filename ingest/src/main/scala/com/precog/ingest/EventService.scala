@@ -35,6 +35,7 @@ import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
+import blueeyes.core.service.RestPathPattern._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
 import blueeyes.util.Clock
@@ -68,8 +69,8 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
 
   val eventService = this.service("ingest", "2.0") {
-    requestLogging {
-      healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
+    requestLogging { help("/docs/api") {
+      healthMonitor("/health", defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
           Future {
             import context._
@@ -113,6 +114,6 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           state.stop
         }
       }
-    }
+    }}
   }
 }

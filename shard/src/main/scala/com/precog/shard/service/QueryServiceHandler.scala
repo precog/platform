@@ -54,7 +54,7 @@ final class QueryServiceNotAvailable(implicit M: Monad[Future])
     })
   }
 
-  val metadata = Some(DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query."))
+  val metadata = DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query.")
 }
 
 object QueryServiceHandler {
@@ -115,12 +115,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     })
   }
 
-  def metadata = Some(DescriptionMetadata(
-    """
-Takes a quirrel query and returns the result of evaluating the query.
-    """
-  ))
-
+  def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 
   def list(apiKey: APIKey, p: Path) = {
     platform.metadataClient.browse(apiKey, p).map {

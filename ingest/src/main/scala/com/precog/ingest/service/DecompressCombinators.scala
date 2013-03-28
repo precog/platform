@@ -62,7 +62,10 @@ extends DelegatingService[ByteChunk, B, ByteChunk, B] with Logging {
     }
   }
 
-  val metadata = None
+  val metadata = AboutMetadata(
+    EncodingMetadata(`x-zip`, `gzip`, `deflate`),
+    DescriptionMetadata("This service supports these encodings.")
+  )
 }
 
 trait DecompressCombinators {
