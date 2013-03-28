@@ -28,7 +28,7 @@ import org.specs2.mutable.Specification
 import specs2._
 
 abstract class Task(settings: Settings) extends Specification {
-  val Settings(serviceHost, id, token, accountsPort, authPort, ingestPort, jobsPort, shardPort) = settings
+  val Settings(serviceHost, id, token, accountsPort, accountsPath, authPort, authPath, ingestPort, ingestPath, jobsPort, jobsPath, shardPort, shardPath, secure) = settings
 
   def http(rb: RequestBuilder): Promise[ApiResult] =
     Http(rb).map { r =>
