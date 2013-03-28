@@ -326,9 +326,16 @@ class IngestServiceHandler(
   }
 
   def ingest(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
-    val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant())
-    logger.trace("Saving event: " + eventInstance)
-    eventStore.save(eventInstance, ingestTimeout)
+    if (data.length > 0) {
+      val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant())
+      logger.trace("Saving event: " + eventInstance)
+      eventStore.save(eventInstance, ingestTimeout)
+    } else {
+      Future {
+        logger.warn("Unable to ingest empty set of values for %s at %s".format(apiKey, path.toString))
+        PrecogUnit
+      }
+    }
   }
 
   def getParseDirectives(request: HttpRequest[_]): Set[ParseDirective] = {
