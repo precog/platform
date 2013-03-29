@@ -145,16 +145,23 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    * with failures.
    */
   implicit def sink(implicit M: ShardQueryMonad) = new (ShardQuery ~> Future) {
-    def apply[A](f: ShardQuery[A]): Future[A] = f.run map {
-      case Running(_, value) =>
-        value
-      case Cancelled =>
-        M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
-        throw QueryCancelledException("Query was cancelled before it was completed.")
-      case Expired =>
-        M.jobId map (jobManager.expire(_, yggConfig.clock.now()))
-        throw QueryExpiredException("Query expired before it was completed.")
-    }
+    def apply[A](f: ShardQuery[A]): Future[A] = f.run recover {
+        case ex =>
+          M.jobId map { jobId =>
+            jobManager.addMessage(jobId, JobManager.channels.ServerError, JString("Internal server error."))
+            jobManager.abort(jobId, "Internal server error.", yggConfig.clock.now())
+          }
+          throw ex
+      } map {
+        case Running(_, value) =>
+          value
+        case Cancelled =>
+          M.jobId map (jobManager.abort(_, "Query was cancelled.", yggConfig.clock.now()))
+          throw QueryCancelledException("Query was cancelled before it was completed.")
+        case Expired =>
+          M.jobId map (jobManager.expire(_, yggConfig.clock.now()))
+          throw QueryExpiredException("Query expired before it was completed.")
+      }
   }
 
   /**
