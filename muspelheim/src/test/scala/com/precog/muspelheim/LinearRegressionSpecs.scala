@@ -23,8 +23,22 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait LinearRegressionSpecs extends EvalStackSpecs {
+  def handleCoeffs(obj: Map[String, SValue]) = {
+    obj.keys mustEqual Set("estimate", "standardError")
+
+    obj("estimate") must beLike { case SDecimal(_) => ok }
+    obj("standardError") must beLike { case SDecimal(_) => ok }
+  }
+
+  def handleNull(obj: Map[String, SValue]) = {
+    obj.keys mustEqual Set("estimate", "standardError")
+
+    obj("estimate") mustEqual SNull
+    obj("standardError") mustEqual SNull
+  }
+
   "linear regression" should {
-    "throw an exception with constant x-values" in {
+    "handle a constant x-values" in {
       val input = """
         | medals := //summer_games/london_medals
         | medals' := medals with { const: 3 }
@@ -32,20 +46,165 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         | std::stats::linearRegression(medals'.Weight, medals'.const)
       """.stripMargin
 
-      evalE(input) must throwA[IllegalArgumentException]
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => handleNull(obj) }
+
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
     }
 
-    "throw an exception with constant x-values and more than column" in {
+    "handle multiple indep vars, one of which is a constant" in {
       val input = """
         | medals := //summer_games/london_medals
-        | medals' := medals with { const: 3 }
+        | medals' := medals where std::type::isNumber(medals.HeightIncm) & std::type::isNumber(medals.Weight)
+        | medals'' := medals' with { const: 3 }
         |
-        | data := { const: medals'.const, height: medals'.HeightIncm }
+        | data := { const: medals''.const, height: medals''.HeightIncm }
+        | 
+        | std::stats::linearRegression(medals''.Weight, data)
+      """.stripMargin
+
+      val input2 = """
+        | medals := //summer_games/london_medals
+        | medals' := medals where std::type::isNumber(medals.HeightIncm) & std::type::isNumber(medals.Weight)
+        |
+        | data := { height: medals'.HeightIncm }
         | 
         | std::stats::linearRegression(medals'.Weight, data)
       """.stripMargin
 
-      evalE(input) must throwA[IllegalArgumentException]
+      val result = evalE(input)
+      val result2 = evalE(input2)
+
+      result must haveSize(1)
+      result2 must haveSize(1)
+
+      val res1Values = new Array[BigDecimal](5)
+      val res2Values = new Array[BigDecimal](5)
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("height", "const")
+
+            obj("height") must beLike {
+              case SObject(height) => 
+                height.keys mustEqual Set("estimate", "standardError")
+
+                height("estimate") must beLike { case SDecimal(d) => res1Values(0) = d; ok }
+                height("standardError") must beLike { case SDecimal(d) => res1Values(1) = d; ok }
+            }
+            obj("const") must beLike {
+              case SObject(const) => 
+                const.keys mustEqual Set("estimate", "standardError")
+
+                const("estimate") mustEqual SNull
+                const("standardError") mustEqual SNull
+            }
+          }
+
+          arr(1) must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("estimate", "standardError")
+
+            obj("estimate") must beLike { case SDecimal(d) => res1Values(2) = d; ok }
+            obj("standardError") must beLike { case SDecimal(d) => res1Values(3) = d; ok }
+          }
+
+          rSquared must beLike { case SDecimal(d) => res1Values(4) = d; ok }
+        }
+      }
+
+      result2 must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("height")
+
+            obj("height") must beLike {
+              case SObject(height) => 
+                height.keys mustEqual Set("estimate", "standardError")
+
+                height("estimate") must beLike { case SDecimal(d) => res2Values(0) = d; ok }
+                height("standardError") must beLike { case SDecimal(d) => res2Values(1) = d; ok }
+            }
+          }
+
+          arr(1) must beLike { case SObject(obj) =>
+            obj.keys mustEqual Set("estimate", "standardError")
+
+            obj("estimate") must beLike { case SDecimal(d) => res2Values(2) = d; ok }
+            obj("standardError") must beLike { case SDecimal(d) => res2Values(3) = d; ok }
+          }
+
+          rSquared must beLike { case SDecimal(d) => res2Values(4) = d; ok }
+        }
+      }
+
+      res1Values mustEqual res2Values
+    }
+
+    "predict when nulls are present in the regression model" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | medals' := medals where std::type::isNumber(medals.HeightIncm) & std::type::isNumber(medals.Weight)
+        | medals'' := medals' with { const: 3 }
+        |
+        | data := { const: medals''.const, height: medals''.HeightIncm }
+        | model := std::stats::linearRegression(medals''.Weight, data)
+        | input := { height: medals.HeightIncm + 4 }
+        |
+        | std::stats::predictLinear(input, model)
+      """.stripMargin
+
+      val input2 = """ 
+        | medals := //summer_games/london_medals
+        |
+        | h := medals where std::type::isNumber(medals.HeightIncm)
+        | count(h)
+      """.stripMargin
+
+      val result = evalE(input)
+      val resultCount = evalE(input2)
+
+      val count = resultCount.collectFirst { case (_, SDecimal(d)) => d.toInt }.get
+      result must haveSize(count)
+
+      result must haveAllElementsLike { case (ids, SObject(elems)) =>
+        ids must haveSize(1)
+        elems.keys mustEqual Set("model1")
+
+        elems("model1") must beLike { case SDecimal(_) => ok }
+      }
     }
 
     "accept a constant dependent variable" in {
@@ -110,30 +269,16 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
       }
     }
 
-    "linearly dependent variables" in {
+    "accept linearly dependent variables" in {
       val input = """
         | clicks := //clicks2
         |
         | vars := {
         |   rate: clicks.marketing.bounceRate,
-        |   rate2: clicks.marketing.bounceRate * 2
-        |   }
+        |   rate2: (clicks.marketing.bounceRate * 2) + 1
+        | }
         | 
         | std::stats::linearRegression(clicks.product.price, vars)
-      """.stripMargin
-
-      evalE(input) must throwA[IllegalArgumentException]
-    }
-
-    "accept case with problematic R^2 value" in {
-      val input = """
-        | conversions := //conversions
-        | conversions' := conversions with
-        |   {
-        |     female : if conversions.customer.gender = "female" then 1 else 0
-        |   }
-        | 
-        | std::stats::linearRegression(conversions'.female, conversions'.product.price)
       """.stripMargin
 
       val result = evalE(input)
@@ -148,6 +293,117 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
 
           val SArray(arr) = fields("coefficients")
           val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("rate", "rate2")
+
+            obj("rate2") must beLike {
+              case SObject(height) =>  handleCoeffs(height)
+            }
+            obj("rate") must beLike {
+              case SObject(const) => handleNull(const)
+            }
+          }
+
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
+    "accept linearly dependent variables in case with three columns" in {
+      val input = """
+        | clicks := //clicks2
+        |
+        | vars := {
+        |   rate: clicks.marketing.bounceRate,
+        |   rateprice: (clicks.marketing.bounceRate * 2) + (clicks.product.price * 3) + 5,
+        |   price: clicks.product.price + 8
+        | }
+        | 
+        | std::stats::linearRegression(clicks.product.price, vars)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("rate", "rateprice", "price")
+
+            obj("rate") must beLike {
+              case SObject(rate) => handleCoeffs(rate)
+            }
+            obj("rateprice") must beLike {
+              case SObject(rateprice) => handleCoeffs(rateprice)
+            }
+            obj("price") must beLike {
+              case SObject(price) => handleNull(price)
+            }
+          }
+
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
+    "accept linearly dependent variables in case with two dependent columns" in {
+      val input = """
+        | clicks := //clicks2
+        |
+        | vars := {
+        |   rate: clicks.marketing.bounceRate,
+        |   rateprice: (clicks.marketing.bounceRate * 2) + (clicks.product.price * 3) + 5,
+        |   price: clicks.product.price + 8,
+        |   zzz: clicks.product.price + 9
+        | }
+        | 
+        | std::stats::linearRegression(clicks.product.price, vars)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)  
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => 
+            obj.keys mustEqual Set("rate", "rateprice", "price", "zzz")
+
+            obj("price") must beLike {
+              case SObject(price) => handleNull(price)
+            }
+            obj("rateprice") must beLike {
+              case SObject(rateprice) => handleNull(rateprice)
+            }
+            obj("zzz") must beLike {
+              case SObject(zzz) => handleCoeffs(zzz)
+            }
+            obj("rate") must beLike {
+              case SObject(rate) => handleCoeffs(rate)
+            }
+          }
+
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
 
           rSquared must beLike { case SDecimal(_) => ok }
         }
@@ -179,20 +435,11 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
             obj.keys mustEqual Set("height")
 
             obj("height") must beLike {
-              case SObject(height) => 
-                height.keys mustEqual Set("estimate", "standardError")
-
-                height("estimate") must beLike { case SDecimal(d) => ok }
-                height("standardError") must beLike { case SDecimal(d) => ok }
+              case SObject(height) => handleCoeffs(height)
             }
           }
 
-          arr(1) must beLike { case SObject(obj) =>
-            obj.keys mustEqual Set("estimate", "standardError")
-
-            obj("estimate") must beLike { case SDecimal(d) => ok }
-            obj("standardError") must beLike { case SDecimal(d) => ok }
-          }
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
 
           rSquared must beLike { case SDecimal(_) => ok }
       }
@@ -215,7 +462,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           ids must haveSize(0)
           elems.keys mustEqual Set("model1")
 
-          elems("model1") must beLike { case SDecimal(d) => ok }
+          elems("model1") must beLike { case SDecimal(_) => ok }
       }
     }
 
