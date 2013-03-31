@@ -29,7 +29,7 @@ import com.precog.util.NumericComparisons
 
 trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
   trait InfixLib extends ColumnarTableLib {
-    import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom, doubleIsDefined}
+    import StdLib.{BoolFrom, DoubleFrom, LongFrom, NumFrom, StrFrom, doubleIsDefined, StrAndDateT, dateToStrCol}
 
     def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
     
@@ -254,10 +254,17 @@ trait InfixLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val Or = new BoolOp2("or", _ || _)
       
       val concatString = new Op2F2(InfixNamespace, "concatString") {
-        val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
+        //@deprecated, see the DEPRECATED comment in StringLib
+        val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JTextT)
+
+        private def build(c1: StrColumn, c2: StrColumn) =
+          new StrFrom.SS(c1, c2, _ != null && _ != null, _ + _)
+
         def f2(ctx: EvaluationContext): F2 = CF2P("builtin::infix:concatString") {
-          case (c1: StrColumn, c2: StrColumn) =>
-            new StrFrom.SS(c1, c2, _ != null && _ != null, _ + _)
+          case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
+          case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
+          case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
+          case (c1: DateColumn, c2: DateColumn) => build(dateToStrCol(c1), dateToStrCol(c2))
         }
       }
     }

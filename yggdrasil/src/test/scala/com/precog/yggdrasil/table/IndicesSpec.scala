@@ -37,7 +37,7 @@ import scala.util.Random
 
 import scalaz._
 import scalaz.effect.IO 
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.std.anyVal._
 import scalaz.std.stream._
 
@@ -246,8 +246,8 @@ trait IndicesSpec[M[+_]] extends ColumnarTableModuleTestSupport[M]
   }
 }
 
-object IndicesSpec extends IndicesSpec[Free.Trampoline] {
-  implicit def M = Trampoline.trampolineMonad
+object IndicesSpec extends IndicesSpec[Need] {
+  implicit def M = Need.need
 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
 

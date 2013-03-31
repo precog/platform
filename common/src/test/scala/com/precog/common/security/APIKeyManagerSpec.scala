@@ -26,12 +26,12 @@ import org.specs2.mutable.Specification
 
 import scalaz._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 import scalaz.syntax.traverse._
 import scalaz.std.list._
 
 trait APIKeyManagerSpec[M[+_]] extends Specification {
-  implicit def M: Monad[M] with Copointed[M]
+  implicit def M: Monad[M] with Comonad[M]
 
   "API Key Manager" should {
     "properly ascribe parentage for grants" in {

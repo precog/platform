@@ -2398,6 +2398,17 @@ trait MiscStackSpecs extends EvalStackSpecs {
       val results = eval(input)
       results must not(beEmpty)
     }
+
+    "use string function on date columns" in {
+      val input = """
+        | import std::string::*
+        | indexOf((//clicks).timeString, "-")
+        | """.stripMargin
+
+      val results = eval(input)
+      results must_== Set(SDecimal(4))
+      System.err.println(results)
+    }
     
     "correctly filter the results of a non-trivial solve" in {
       val input = """
@@ -2627,6 +2638,24 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | [predicted, observed]
         | """.stripMargin
       
+      eval(input) must not(beEmpty)
+    }
+    
+    "produce non-empty results when defining a solve with a conditional in a constraint" in {
+      val input = """
+        | data := //clicks
+        | 
+        | import std::string::*
+        | 
+        | solve 'minexp
+        |   idx := indexOf(data.userId, "-")
+        |   exp := if idx < 0 then data.userId else takeLeft(data.userId, idx)
+        |   exptrim := trim(exp)
+        |   data2 := data where exptrim = 'minexp
+        | 
+        |   { MinExperience: 'minexp, numjobs: count(data2) }
+        | """.stripMargin
+        
       eval(input) must not(beEmpty)
     }
   }

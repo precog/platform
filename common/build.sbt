@@ -38,9 +38,6 @@ ivyXML :=
       <exclude org="org.apache.hadoop"/>
       <exclude org="org.apache.avro"/>
     </dependency>
-    <dependency org="org.apache.avro" name="avro" rev="1.4.0">
-      <exclude org="org.mortbay.jetty"/>
-    </dependency>
   </dependencies>
 
 parallelExecution in test := false

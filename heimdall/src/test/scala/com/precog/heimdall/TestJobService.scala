@@ -42,22 +42,21 @@ import org.joda.time.DateTime
 import scalaz._
 
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
-  lazy val executionContext = defaultFutureDispatch
+  type Resource = Unit
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "second"))
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "seconds"))
+  val validAPIKey = "secret"
+
+  lazy val executionContext = defaultFutureDispatch
+  implicit lazy val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(executionContext, Duration(10, "seconds"))
 
   lazy val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 
-  implicit val M = new FutureMonad(executionContext)
-
   lazy val clock = blueeyes.util.Clock.System
-
-  type Resource = Unit
-
   lazy val jobs = new InMemoryJobManager[Future]
+
   def jobManager(config: Configuration): (Unit, JobManager[Future]) = ((), jobs)
 
-  def validAPIKey = "secret"
 
   def authService(config: Configuration): AuthService[Future] = TestAuthService[Future](Set(validAPIKey))
 
@@ -65,17 +64,14 @@ trait TestJobService extends BlueEyesServiceSpecification with JobService with A
 }
 
 class JobServiceSpec extends TestJobService {
-  import scalaz.syntax.copointed._
+  import scalaz.syntax.comonad._
   import DefaultBijections._
   import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
   import JobState._
 
-  implicit val copointedFuture = new Copointed[Future] {
-    def map[A, B](m: Future[A])(f: A => B) = m map f
-    def copoint[A](f: Future[A]) = Await.result(f, Duration(10, "seconds"))
-  }
-
   val JSON = MimeTypes.application / MimeTypes.json
+
+  val jobsClient = client.contentType[ByteChunk](JSON).path("/jobs/v1/")
 
   val simpleJob: JValue = JObject(List(
     JField("name", JString("abc")),
@@ -93,21 +89,21 @@ class JobServiceSpec extends TestJobService {
     (ts map { dt => JField("timestamp", dt.serialize) :: Nil } getOrElse Nil)
   )
 
-  def postJob(job: JValue, apiKey: String = validAPIKey) = client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
+  def postJob(job: JValue, apiKey: String = validAPIKey) = jobsClient.query("apiKey", apiKey).post[JValue]("/jobs/")(job)
 
   def postJobAndGetId(job: JValue, apiKey: String = validAPIKey) = for {
-    res <- client.contentType[ByteChunk](JSON).query("apiKey", apiKey).post[JValue]("/jobs/")(job)
+    res <- jobsClient.query("apiKey", apiKey).post[JValue]("/jobs/")(job)
     Some(JString(jobId)) = res.content map (_ \ "id")
   } yield jobId
 
-  def getJob(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s".format(jobId))
+  def getJob(jobId: String) = jobsClient.get[JValue]("/jobs/%s".format(jobId))
 
-  def putState(jobId: String, state: JValue) = client.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/state".format(jobId))(state)
+  def putState(jobId: String, state: JValue) = jobsClient.put[JValue]("/jobs/%s/state".format(jobId))(state)
 
-  def getState(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/state".format(jobId))
+  def getState(jobId: String) = jobsClient.get[JValue]("/jobs/%s/state".format(jobId))
 
   def postMessage(jobId: String, channel: String, msg: JValue) =
-    client.contentType[ByteChunk](JSON).post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
+    jobsClient.post[JValue]("/jobs/%s/messages/%s" format (jobId, channel))(msg)
 
   def postMessageAndGetId(jobId: String, channel: String, msg: JValue) = for {
     res <- postMessage(jobId, channel, msg)
@@ -115,12 +111,12 @@ class JobServiceSpec extends TestJobService {
   } yield id
 
   def getMessages(jobId: String, channel: String, after: Option[BigDecimal]) = {
-    val client0 = after map { id => client.query("after", id.toInt.toString) } getOrElse client
+    val client0 = after map { id => jobsClient.query("after", id.toInt.toString) } getOrElse jobsClient
     client0.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/messages/%s" format (jobId, channel))
   }
 
   def putStatusRaw(jobId: String, prev: Option[BigDecimal])(obj: JValue) = {
-    val client0 = prev map { id => client.query("prevStatusId", id.toLong.toString) } getOrElse client
+    val client0 = prev map { id => jobsClient.query("prevStatusId", id.toLong.toString) } getOrElse jobsClient
     client0.contentType[ByteChunk](JSON).put[JValue]("/jobs/%s/status".format(jobId))(obj)
   }
 
@@ -140,7 +136,7 @@ class JobServiceSpec extends TestJobService {
     } yield id
   }
 
-  def getStatus(jobId: String) = client.contentType[ByteChunk](JSON).get[JValue]("/jobs/%s/status".format(jobId))
+  def getStatus(jobId: String) = jobsClient.get[JValue]("/jobs/%s/status".format(jobId))
 
   "job service" should {
     "allow job creation" in {

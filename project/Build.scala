@@ -57,12 +57,12 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M7.10"
-  val scalazVersion = "7.0-precog-M2"
+  val blueeyesVersion = "1.0.0-M8.2"
+  val scalazVersion = "7.0.0-M8"
 
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "2.3.0-SNAPSHOT",
+    version := "2.6.0-SNAPSHOT",
     addCompilerPlugin("org.scala-tools.sxr" % "sxr_2.9.0" % "0.2.7"),
     scalacOptions <+= scalaSource in Compile map { "-P:sxr:base-directory:" + _.getAbsolutePath },
     scalacOptions ++= {
@@ -191,7 +191,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   lazy val gjallerhorn = Project(id = "gjallerhorn", base = file("gjallerhorn")).
-    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil % "compile->test", ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard, logging % "test->test")

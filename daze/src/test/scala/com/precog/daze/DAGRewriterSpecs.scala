@@ -28,7 +28,7 @@ import org.joda.time.DateTime
 import scalaz.{ FirstOption, NaturalTransformation, Tag }
 import scalaz.std.anyVal.booleanInstance.disjunction
 import scalaz.std.option.optionFirst
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 trait DAGRewriterSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M] {

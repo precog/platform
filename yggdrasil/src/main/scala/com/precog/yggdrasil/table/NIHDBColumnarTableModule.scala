@@ -37,7 +37,7 @@ import org.joda.time.DateTime
 import java.io.File
 
 import scalaz._
-import scalaz.std.set._
+import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
@@ -54,12 +54,14 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
       logger.debug("Starting load from " + table.toJson)
       for {
         paths          <- pathsM(table)
-        projections    <- paths.map { path =>
-          logger.debug("  Loading path: " + path)
-          implicit val timeout = storageTimeout
-          (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]]
-        }.sequence map (_.flatten)
-        totalLength    <- projections.map(_.length).sequence.map(_.sum)
+        projections    <- paths.toList traverse { path =>
+                            logger.debug("  Loading path: " + path)
+                            implicit val timeout = storageTimeout
+                            (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]]
+                          } map { 
+                            _.flatten 
+                          }
+        lengths    <- projections.traverse(_.length)
       } yield {
         logger.debug("Loading from projections: " + projections)
         def slices(proj: NIHDBProjection, constraints: Option[Set[ColumnRef]]): StreamT[Future, Slice] = {
@@ -72,7 +74,7 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
           // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
           val constraints = proj.structure.map { struct => Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet) }
           acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) }) 
-        }, ExactSize(totalLength))
+        }, ExactSize(lengths.sum))
       }
     }
   }

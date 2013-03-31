@@ -47,7 +47,7 @@ import org.specs2.mutable.Specification
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.monad._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   import JobState._
@@ -57,9 +57,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   val actorSystem = ActorSystem("managedQueryModuleSpec")
   val jobActorSystem = ActorSystem("managedQueryModuleSpecJobActorSystem")
   implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  implicit val M: Monad[Future] with Copointed[Future] = new blueeyes.bkka.FutureMonad(executionContext) with Copointed[Future] {
-    def copoint[A](m: Future[A]) = Await.result(m, Duration(15, "seconds"))
-  }
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(executionContext, Duration(15, "seconds"))
   val defaultTimeout = Duration(90, TimeUnit.SECONDS)
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]

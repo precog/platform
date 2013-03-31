@@ -864,6 +864,21 @@ trait StringLibSpecs[M[+_]] extends Specification
         "4"
       ).only
     }
+    
+    "trim the trailing '.0' in round double conversion" in {
+      val input = dag.Operate(BuiltInFunction1Op(numToString),
+        dag.Operate(BuiltInFunction1Op(round),
+          Const(CDouble(3.14))(line))(line))(line)
+
+      val resultE = testEval(input)
+      resultE must haveSize(1)
+      
+      val result = resultE.collect {
+        case (_, SString(s)) => s
+      }
+      
+      result must contain("3")
+    }
   }
 
   "split" should {

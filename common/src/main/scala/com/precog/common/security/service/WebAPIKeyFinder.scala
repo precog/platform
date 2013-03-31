@@ -45,6 +45,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Validation._
+import scalaz.{NonEmptyList => NEL}
 import scalaz.EitherT.eitherT
 import scalaz.std.option._
 import scalaz.std.stream._
@@ -60,14 +61,12 @@ object WebAPIKeyFinder {
       implicit val M = ResponseMonad(new FutureMonad(executor))
       success(new StaticAPIKeyFinder[Response](apiKey))
     } getOrElse {
-      config.get[String]("rootKey").toSuccess("rootKey configuration parameter is required").toValidationNEL map { rootKey: APIKey =>
-        new RealWebAPIKeyFinder(
-          serviceConfig[String]("protocol", "http"),
-          serviceConfig[String]("host", "localhost"),
-          serviceConfig[Int]("port", 80),
-          serviceConfig[String]("path", "/security/v1/"),
-          rootKey
-        )
+      (config.get[String]("rootKey").toSuccess("Configuration property \"rootKey\" is required").toValidationNEL |@|
+       serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property \"service.protocol\" is required")) |@|
+       serviceConfig.get[String]("host").toSuccess(NEL("Configuration property \"service.host\" is required")) |@|
+       serviceConfig.get[Int]("port").toSuccess(NEL("Configuration property \"service.port\" is required")) |@|
+       serviceConfig.get[String]("path").toSuccess(NEL("Configuration property \"service.path\" is required"))) { (rootKey, protocol, host, port, path) =>
+        new RealWebAPIKeyFinder(protocol, host, port, path, rootKey)
       }
     }
   }

@@ -32,7 +32,6 @@ import blueeyes.json._
 import scala.annotation.tailrec
 
 import scalaz._
-import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.std.anyVal._

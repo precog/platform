@@ -392,6 +392,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       
       case Relate(_, _, _, in) => isTranspecable(in, from, sigma)
       
+      case Cond(_, pred, left, right) =>
+        isTranspecable(pred, from, sigma) && isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
+      
       case to @ Dispatch(_, id, actuals) => {
         to.binding match {
           case FormalBinding(let) => {

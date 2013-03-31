@@ -319,6 +319,16 @@ object StdLib {
       def apply(row: Int) = f(c(row))
     }
 
+    class Dt(c: DateColumn, defined: DateTime => Boolean, f: DateTime => String)
+        extends Map1Column(c)
+        with StrColumn {
+
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
     class SS(
       c1: StrColumn, c2: StrColumn, defined: (String, String) => Boolean,
       f: (String, String) => String)
@@ -380,6 +390,16 @@ object StdLib {
     }
 
     class S(c: StrColumn, defined: String => Boolean, f: String => Long)
+        extends Map1Column(c)
+        with LongColumn {
+
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
+    class Dt(c: DateColumn, defined: DateTime => Boolean, f: DateTime => Long)
         extends Map1Column(c)
         with LongColumn {
 
@@ -867,6 +887,15 @@ object StdLib {
       def apply(row: Int) = f(c1(row), c2(row))
     }
 
+    class Dt(c: DateColumn, defined: DateTime => Boolean, f: DateTime => Boolean)
+        extends Map1Column(c) with BoolColumn {
+
+      override def isDefinedAt(row: Int) =
+        super.isDefinedAt(row) && defined(c(row))
+
+      def apply(row: Int) = f(c(row))
+    }
+
     class DtDt(
       c1: DateColumn, c2: DateColumn,
       defined: (DateTime, DateTime) => Boolean,
@@ -879,5 +908,12 @@ object StdLib {
 
       def apply(row: Int) = f(c1(row), c2(row))
     }
+  }
+
+  val StrAndDateT = JUnionT(JTextT, JDateT)
+
+  def dateToStrCol(c: DateColumn): StrColumn = new StrColumn {
+    def isDefinedAt(row: Int): Boolean = c.isDefinedAt(row)
+    def apply(row: Int): String = c(row).toString
   }
 }
