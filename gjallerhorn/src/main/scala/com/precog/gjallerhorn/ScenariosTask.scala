@@ -153,16 +153,7 @@ class ScenariosTask(settings: Settings) extends Task(settings: Settings) with Sp
   }
 }
 
-object RunScenarios {
-  def main(args: Array[String]) {
-    try {
-      val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new ScenariosTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunScenarios extends Runner {
+  def tasks(settings: Settings) = new ScenariosTask(settings) :: Nil
 }
 

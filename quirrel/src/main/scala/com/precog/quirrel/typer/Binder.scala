@@ -168,6 +168,20 @@ trait Binder extends parser.AST {
             case NullBinding => sys.error("unreachable code")
           }
           
+          val functionLikeM = binding match {
+            case ReductionBinding(f) => Some(f)
+            case Morphism1Binding(f) => Some(f)
+            case Morphism2Binding(f) => Some(f)
+            case Op1Binding(f) => Some(f)
+            case Op2Binding(f) => Some(f)
+            case _ => None
+          }
+          
+          val warningM = for {
+            f <- functionLikeM
+            deprecation <- f.deprecation
+          } yield Error(d, DeprecatedFunction(name, deprecation))
+          
           val errors = if (actuals.length == arity) {
             d.binding = binding
             Set()
@@ -188,7 +202,7 @@ trait Binder extends parser.AST {
             case _ =>
           }
           
-          recursive ++ errors
+          recursive ++ errors ++ warningM.toSet
         } else {
           d.binding = NullBinding
           d.isReduction = false
