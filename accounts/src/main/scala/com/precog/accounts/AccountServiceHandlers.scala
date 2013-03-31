@@ -319,7 +319,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                         }
                       } else {
                         logger.warn("Password reset request for account %s did not match email on file (%s provided)".format(accountId, requestEmail))
-                        Future(HttpResponse[JValue](HttpStatus(Unauthorized), content = Some(JString("Provided email does not match account for "+ accountId))))
+                        Future(HttpResponse[JValue](HttpStatus(Forbidden), content = Some(JString("Provided email does not match account for "+ accountId))))
                       }
 
                     case None =>
@@ -352,22 +352,26 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
               (jvalue \ "password").validated[String] match {
                 case Success(newPassword) =>
                   accountManager.resetAccountPassword(accountId, resetToken, newPassword).map {
-                    case true =>
+                    case \/-(true) =>
                       logger.info("Password for account %s successfully reset by %s".format(accountId, remoteIpFrom(request)))
                       HttpResponse[JValue](OK, content = None)
 
-                    case false =>
+                    case \/-(false) =>
                       logger.warn("Password reset for account %s from %s failed".format(accountId, remoteIpFrom(request)))
                       Responses.failure(InternalServerError, "Account password reset failed, please contact support.")
+
+                    case -\/(error) =>
+                      logger.error("Password reset for account %s from %s failed: %s".format(accountId, remoteIpFrom(request), error))
+                      Responses.failure(BadRequest, "Password reset attempt failed: " + error)
                   }
 
                 case Failure(error) =>
                   logger.warn("Password reset request for account %s without new password".format(accountId))
-                  Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid request body"), content = Some(JString("Missing/invalid password in request body"))))
+                  Future(Responses.failure(BadRequest, "Missing/invalid password in request body"))
               }
             }
         } valueOr { errors =>
-          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing required data"), content = Some(JString(errors.list.mkString("\n")))))
+          Future(Responses.failure(BadRequest, errors.list.mkString("\n")))
         }
       }
     }

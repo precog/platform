@@ -31,6 +31,7 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.std.stream._
+import scalaz.syntax.std.option._
 
 trait AccountManager[M[+_]] extends AccountFinder[M] {
   import Account._
@@ -49,14 +50,14 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
     updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt, lastPasswordChangeTime = Some(new DateTime)))
   }
 
-  def resetAccountPassword(accountId: AccountId, tokenId: ResetTokenId, newPassword: String): M[Boolean] = {
+  def resetAccountPassword(accountId: AccountId, tokenId: ResetTokenId, newPassword: String): M[String \/ Boolean] = {
     findAccountByResetToken(accountId, tokenId).flatMap {
-      _.map { account =>
+      case errD @ -\/(error) => M.point(errD)
+      case \/-(account) =>
         for {
           updated <- updateAccountPassword(account, newPassword)
           _       <- markResetTokenUsed(tokenId)
-        } yield updated
-      }.getOrElse(M.point(false))
+        } yield \/-(updated)
     }
   }
 
@@ -67,27 +68,27 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
   def findResetToken(accountId: AccountId, tokenId: ResetTokenId): M[Option[ResetToken]]
 
   // The accountId is used here as a sanity/security check only, not for lookup
-  def findAccountByResetToken(accountId: AccountId, tokenId: ResetTokenId): M[Option[Account]] = {
+  def findAccountByResetToken(accountId: AccountId, tokenId: ResetTokenId): M[String \/ Account] = {
     logger.debug("Locating account for token id %s, account id %s".format(tokenId, accountId))
     findResetToken(accountId, tokenId).flatMap {
       case Some(token) =>
         if (token.expiresAt.isBefore(new DateTime)) {
           logger.warn("Located expired reset token: " + token)
-          M.point(None)
+          M.point(-\/("Reset token %s has expired".format(tokenId)))
         } else if (token.usedAt.nonEmpty) {
           logger.warn("Reset attempted with previously used reset token: " + token)
-          M.point(None)
+          M.point(-\/("Reset token %s has already been used".format(tokenId)))
         } else if (token.accountId != accountId) {
           logger.debug("Located reset token, but with the wrong account (expected %s): %s".format(accountId, token))
-          M.point(None)
+          M.point(-\/("Reset token %s does not match provided account %s".format(tokenId, accountId)))
         } else {
           logger.debug("Located reset token " + token)
-          findAccountById(token.accountId)
+          findAccountById(token.accountId).map(_.\/>("Could not find account by id " + token.accountId))
         }
 
       case None =>
         logger.warn("Could not locate reset token for id " + tokenId)
-        M.point(None)
+        M.point(-\/("No reset token found for id " + tokenId))
     }
   }
 
