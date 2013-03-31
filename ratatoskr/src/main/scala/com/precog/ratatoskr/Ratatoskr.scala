@@ -56,11 +56,18 @@ import akka.routing.RoundRobinRouter
 import _root_.kafka.message._
 
 import au.com.bytecode.opencsv._
+
 import com.weiglewilczek.slf4s.Logging
+
 import org.joda.time._
+import org.joda.time.format.ISODateTimeFormat
+
 import org.streum.configrity._
+
 import org.I0Itec.zkclient._
+
 import org.apache.zookeeper.data.Stat
+
 import scopt.mutable.OptionParser
 
 import java.io._
@@ -231,26 +238,95 @@ object KafkaTools extends Command {
     }
 
     object UsageReport extends KafkaAction {
+      sealed trait TimeStamp
+      case class ExactTime(time: Long, index: Long) extends TimeStamp
+      case class Interpolated(index: Long) extends TimeStamp
+
+      // Default to September 25th, 2012 as a lower bound
+      var lastTimestamp: ExactTime = ExactTime(1348545600000L, -1L)
+      var pendingTimes: List[Interpolated] = Nil
+
+      var interpolationMap: Map[Interpolated, Long] = Map()
+
       // TODO: This needs to take into account the Authorities as well
       case class ReportState(index: Long, pathSize: Map[Path, Long]) {
         def inc = this.copy(index = index + 1)
       }
 
       var trackedAccounts: List[AccountId] = Nil
-      val slices: ArrayBuffer[(Long, Map[AccountId,Long])] = ArrayBuffer.empty
+      val slices: ArrayBuffer[(TimeStamp, Map[AccountId,Long])] = ArrayBuffer.empty
 
       def trackState(state: ReportState): Unit = {
         val byAccount: Map[AccountId, Long] = state.pathSize.groupBy(_._1.elements.head).map {
           case (account, sizes) => (account, sizes.map(_._2).sum)
         }
 
-        //print(byAccount + "\n")
+        import state.index
+
+        val timestamp = lastTimestamp match {
+          case ts @ ExactTime(_, `index`) => ts
+          case _ => Interpolated(index).tap { temp =>
+            //println("Adding %s to pending timestamps".format(temp))
+            pendingTimes ::= temp
+          }
+        }
 
         trackedAccounts = trackedAccounts ++ (byAccount.keySet -- trackedAccounts)
-        slices += (state.index -> byAccount)
+        slices += (timestamp -> byAccount)
       }
 
       def processIngest(trackInterval: Int, state: ReportState, msg: IngestMessage) = {
+        // Track timestamps
+        (if (msg.timestamp != EventMessage.defaultTimestamp) {
+          //println("Exact timestamp found: " + msg.timestamp)
+          Some(ExactTime(msg.timestamp.getMillis, state.index))
+        } else {
+          // see if we can deduce from the data (assuming Nathan's twitter feed or SE postings)
+          val timestamps = (msg.data.map (_.value \ "timeStamp") ++ msg.data.map(_.value \ "timestamp")).flatMap {
+            case JString(date) =>
+              // Dirty hack for trying variations of ISO8601 in use by customers
+              List(date, date.replaceFirst(":", "-").replaceFirst(":", "-")).flatMap { date => List(date, date + ".000Z") }
+            case _ => None
+          }.flatMap { date =>
+            try {
+              val ts = ISODateTimeFormat.dateTime.parseDateTime(date)
+              if (ts.getMillis > lastTimestamp.time) {
+                //println("Assigning new timestamp: " + ts)
+                Some(ts)
+              } else {
+                //println("%s is before %s".format(ts, new DateTime(lastTimestamp.time)))
+                None
+              }
+            } catch {
+              case t =>
+                //println("Error on datetime parse: " + t)
+                None
+            }
+          }
+
+          //println("Deducing timestamp from " + timestamps)
+
+          timestamps.headOption.map { ts => ExactTime(ts.getMillis, state.index) }
+        }).foreach { newTimestamp =>
+          if (newTimestamp.time <= System.currentTimeMillis) {
+            if (pendingTimes.nonEmpty) {
+              //println("Updating pending times: " + pendingTimes)
+              interpolationMap ++= pendingTimes.map { interp =>
+                val interpFraction = (interp.index - lastTimestamp.index).toDouble / (newTimestamp.index - lastTimestamp.index)
+                val timeSpanSize = newTimestamp.time - lastTimestamp.time
+                val interpTS = (interpFraction * timeSpanSize + lastTimestamp.time).toLong
+                (interp, interpTS)
+              }
+
+              //println("InterpolationMap now = " + interpolationMap)
+
+              pendingTimes = Nil
+            }
+
+            lastTimestamp = newTimestamp
+          }
+        }
+
         import msg._
         if (state.index % trackInterval == 0) { trackState(state) }
 
@@ -281,7 +357,7 @@ object KafkaTools extends Command {
 
         //println("Got lookup DB:" + accountLookup)
 
-        config.files.foldLeft(ReportState(0L, Map.empty)) { case (state, file) =>
+        val finalState = config.files.foldLeft(ReportState(0L, Map.empty)) { case (state, file) =>
           val ms = new FileMessageSet(file, false)
 
           ms.iterator.grouped(1000).flatMap { _.toSeq.par.map(parseEventMessage) }.foldLeft(state) {
@@ -313,18 +389,32 @@ object KafkaTools extends Command {
           }
         }
 
+        trackState(finalState)
+
         if (config.reportFormat == "csv") {
           println("index,total," + trackedAccounts.sorted.map { acct => "\"%s\"".format(accountLookup.getOrElse(acct, acct)) }.mkString(","))
           slices.foreach { case (index, byAccount) =>
               val accountTotals = trackedAccounts.sorted.map(byAccount.getOrElse(_, 0L))
-              println("%d,%d,%s".format(index, accountTotals.sum, accountTotals.mkString(",")))
+              (index match {
+                case ExactTime(time, _) => Some(time)
+                case i: Interpolated => interpolationMap.get(i)
+              }).foreach { timestamp =>
+                //println(index + " => " + timestamp)
+                println("%d,%d,%s".format(timestamp, accountTotals.sum, accountTotals.mkString(",")))
+              }
           }
         } else {
           slices.foreach { case (index, byAccount) =>
-              println(JObject("index" -> JNum(index), "account" -> JString("total"), "size" -> JNum(byAccount.map(_._2).sum)).renderCompact)
-              trackedAccounts.foreach { account =>
-                if (byAccount.contains(account)) {
-                  println(JObject("index" -> JNum(index), "account" -> JString(account), "size" -> JNum(byAccount.getOrElse(account, 0L))).renderCompact)
+              (index match {
+                case ExactTime(time, _) => Some(time)
+                case i: Interpolated => interpolationMap.get(i)
+              }).foreach { timestamp =>
+                //println(index + " => " + timestamp)
+                println(JObject("index" -> JNum(timestamp), "account" -> JString("total"), "size" -> JNum(byAccount.map(_._2).sum)).renderCompact)
+                trackedAccounts.foreach { account =>
+                  if (byAccount.contains(account)) {
+                    println(JObject("index" -> JNum(timestamp), "account" -> JString(accountLookup.getOrElse(account, account)), "size" -> JNum(byAccount.getOrElse(account, 0L))).renderCompact)
+                  }
                 }
               }
           }
