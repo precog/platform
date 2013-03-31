@@ -236,6 +236,30 @@ else
     else
         echo "Archive completed"
     fi
+
+    # Test health check URLs for all services
+    echo "Checking health URLs"
+    curl -sG 'http://localhost:$INGEST_PORT/blueeyes/services/ingest/v2/health'     > /dev/null || {
+        echo "Ingest health check failed" >&2
+        EXIT_CODE=1
+    }
+    curl -sG 'http://localhost:$AUTH_PORT/blueeyes/services/auth/v1/health'     > /dev/null || {
+        echo "Auth health check failed" >&2
+        EXIT_CODE=1
+    }
+    curl -sG 'http://localhost:$ACCOUNTS_PORT/blueeyes/services/accounts/v1/health'     > /dev/null || {
+        echo "Accounts health check failed" >&2
+        EXIT_CODE=1
+    }
+    curl -sG 'http://localhost:$JOBS_PORT/blueeyes/services/jobs/v1/health'     > /dev/null || {
+        echo "Jobs health check failed" >&2
+        EXIT_CODE=1
+    }
+    curl -sG 'http://localhost:$SHARD_PORT/blueeyes/services/analytics/v2/health'     > /dev/null || {
+        echo "Shard health check failed" >&2
+        EXIT_CODE=1
+    }
+
 fi
 
 exit $EXIT_CODE
