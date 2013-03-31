@@ -94,7 +94,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph = {
       composeOptimizations(optimize, List(
         inlineStatics(_, ctx, splits),
-        optimizeJoins(_, splits)
+        optimizeJoins(_, splits),
+        rewriteConditionals(_, splits)
       ))
     }
 
@@ -106,7 +107,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           //predicatePullups(_, ctx),
           inferTypes(JType.JUniverseT),
           { g => megaReduce(g, findReductions(g, ctx)) },
-          rewriteConditionals,
           pushDownSorts,
           memoize
         ))
@@ -994,6 +994,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       
       case dag.Morph1(_, parent) => Set(parent)
       case dag.Morph2(_, left, right) => Set(left, right)
+      
+      case dag.Assert(pred, child) => Set(pred, child)
+      case dag.Cond(pred, left, _, right, _) => Set(pred, left, right)
       
       case dag.Distinct(parent) => Set(parent)
       

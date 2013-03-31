@@ -909,7 +909,7 @@ object BinderSpecs extends Specification
         val d @ Dispatch(_, _, _) = parseSingle(f.fqn + "(1)")
         d.binding mustEqual Morphism1Binding(f)
         d.isReduction mustEqual false
-        d.errors must beEmpty
+        d.errors filterNot isWarning must beEmpty
       }
     }    
 
@@ -920,7 +920,7 @@ object BinderSpecs extends Specification
         val d @ Dispatch(_, _, _) = parseSingle(f.fqn + "(1, 2)")
         d.binding mustEqual Morphism2Binding(f)
         d.isReduction mustEqual false
-        d.errors must beEmpty
+        d.errors filterNot isWarning must beEmpty
       }
     }
 
@@ -931,7 +931,7 @@ object BinderSpecs extends Specification
         val d @ Dispatch(_, _, _) = parseSingle(f.fqn + "(1)")
         d.binding mustEqual ReductionBinding(f)
         d.isReduction mustEqual true
-        d.errors must beEmpty
+        d.errors filterNot isWarning must beEmpty
       }
     }
 
@@ -940,7 +940,7 @@ object BinderSpecs extends Specification
         val d @ Dispatch(_, _, _) = parseSingle(f.fqn + "(1)")
         d.binding mustEqual Op1Binding(f)
         d.isReduction mustEqual false
-        d.errors must beEmpty
+        d.errors filterNot isWarning must beEmpty
       }
     }
 
@@ -949,8 +949,13 @@ object BinderSpecs extends Specification
         val d @ Dispatch(_, _, _) = parseSingle(f.fqn + "(1, 2)")
         d.binding mustEqual Op2Binding(f)
         d.isReduction mustEqual false
-        d.errors must beEmpty
+        d.errors filterNot isWarning must beEmpty
       }
+    }
+    
+    "emit a warning on deprecated usage" in {
+      val d @ Dispatch(_, _, _) = parseSingle("bin25(1)")
+      d.errors must contain(DeprecatedFunction(Identifier(Vector(), "bin25"), "use bin5 instead"))
     }
   }
   

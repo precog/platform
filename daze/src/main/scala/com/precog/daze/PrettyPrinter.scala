@@ -1,7 +1,6 @@
 package com.precog.daze
 
 import com.precog.common._
-import org.apache.commons.lang.StringEscapeUtils.escapeJava
 import com.precog.yggdrasil._
 
 trait PrettyPrinter extends DAG {
@@ -12,7 +11,7 @@ trait PrettyPrinter extends DAG {
     
     def mkIndent(depth: Int): String = "  "*depth
     def wrap(depth: Int, prefix: String, body: String, suffix: String) = prefix+body+mkIndent(depth)+suffix
-    def prettyString(s : String) = "\""+escapeJava(s)+"\""
+    def prettyString(s : String) = "\""+s+"\""
     
     def prettyPrintBinding(graph: DepGraph, bindings: Map[DepGraph, String]): String = {
       "lazy val "+bindings(graph)+" =\n"+prettyPrintAux(graph, bindings, 1, resolveBinding = false)

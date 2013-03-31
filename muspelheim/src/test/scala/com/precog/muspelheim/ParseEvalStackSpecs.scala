@@ -30,7 +30,6 @@ import java.io.File
 
 import scalaz._
 import scalaz.std.anyVal._
-import scalaz.syntax.copointed._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -82,11 +81,11 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     parseEvalLogger.debug("Beginning evaluation of query: " + str)
 
     val preForest = compile(str)
-    val forest = preForest filter { _.errors.isEmpty }
+    val forest = preForest filter { _.errors filterNot isWarning isEmpty }
 
     forest must haveSize(1) or {
       forall(preForest) { tree =>
-        tree.errors must beEmpty
+        tree.errors filterNot isWarning must beEmpty
       }
     }
 

@@ -1,0 +1,3 @@
+curl "http://staging.precog.com/analytics/v1/fs/0000000068?apiKey=9120C30A-DDDD-4E93-BA08-97C942645E7C&q=import%20std%3A%3Astats%3A%3A*%20locations%20%3A%3D%20%2F%2Fdevicelocations%2F2012%2F11%2F01%20points%20%3A%3D%20%7B%20x%3A%20locations.x%2C%20y%3A%20locations.y%20%7D%20model%20%3A%3D%20kMedians(points%2C%205)%20locations%20with%20%7Bclusters%3A%20assignClusters(points%2C%20model)%7D"
+
+#SITA create clusters and assign clusters 400k rows ran in 25 seconds on 3-22-13
