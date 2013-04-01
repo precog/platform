@@ -45,7 +45,7 @@ import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity._
 
 import scalaz._
-import scalaz.syntax.copointed._
+import scalaz.syntax.comonad._
 
 object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
   val timeout = Duration(30, "seconds")
@@ -120,7 +120,7 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
         tokenId <- accountManager.generateResetToken(account)
         resolvedAccount <- accountManager.findAccountByResetToken(account.accountId, tokenId)
       } yield resolvedAccount).copoint must beLike {
-        case Some(resolvedAccount) =>
+        case \/-(resolvedAccount) =>
           resolvedAccount.accountId must_== account.accountId
       }
     }
@@ -129,7 +129,9 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
       (for {
         tokenId <- accountManager.generateResetToken(account, (new DateTime).minusMinutes(5))
         resolvedAccount <- accountManager.findAccountByResetToken(account.accountId, tokenId)
-      } yield resolvedAccount).copoint must beNone
+      } yield resolvedAccount).copoint must beLike {
+        case -\/(_) => ok
+      }
     }
 
     "update an Account password with a reset token" in new AccountManager {
@@ -179,7 +181,7 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
   class AccountManager extends After {
     val defaultActorSystem = ActorSystem("AccountManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
-    implicit val M = new FutureMonad(execContext) with Copointed[Future] {
+    implicit val M = new FutureMonad(execContext) with Comonad[Future] {
       def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(60, "seconds"))
     }
 
