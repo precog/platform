@@ -22,7 +22,8 @@
 MAX_SHARD_STARTUP_WAIT=300
 
 function usage {
-    echo "Usage: ./run.sh [-b] [-l] [-d] [-q directory] [ingest.json ...]" >&2
+    echo "Usage: ./run.sh [-b] [-l] [-d] [-a <assemblies to build>] [-q directory] [ingest.json ...]" >&2
+    echo "  -a: Force build of the specified assemblies" >&2
     echo "  -b: Build any required artifacts for the run" >&2
     echo "  -d: Print debug output" >&2
     echo "  -l: Don't clean work directory on completion" >&2
@@ -35,8 +36,11 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:bld" opt; do
+while getopts ":a:q:bld" opt; do
     case $opt in
+        a)
+            EXTRAFLAGS="$EXTRAFLAGS -a $OPTARG"
+            ;;
         q)
             QUERYDIR=$OPTARG
             ;;

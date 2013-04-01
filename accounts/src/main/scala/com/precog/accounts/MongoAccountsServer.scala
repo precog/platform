@@ -79,8 +79,8 @@ object MongoAccountServer extends BlueEyesServer with AccountService with AkkaDe
     emailProps.setProperty("mail.smtp.port", config[String]("port", "25"))
     emailProps.setProperty("mail.from", config[String]("from", "support@precog.com"))
     val templateDir = new File(config[String]("template_dir"))
-    assert(templateDir.isDirectory)
-    assert(templateDir.canRead)
+    require(templateDir.isDirectory, "Provided template directory %s is not a directory".format(templateDir))
+    require(templateDir.canRead, "Provided template directory %s is not readable".format(templateDir))
     new DirectoryTemplateEmailer(templateDir, config.detach("params").data, Some(emailProps))
   }
 }
