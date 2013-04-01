@@ -92,7 +92,7 @@ class IngestServiceHandler(
 
 
   sealed trait IngestResult
-  case class AsyncSuccess(contentLength: Long) extends IngestResult
+  case object AsyncSuccess extends IngestResult
   case class BatchSyncResult(total: Int, ingested: Int, errors: Vector[(Int, String)]) extends IngestResult
   case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult
   case class NotIngested(reason: String) extends IngestResult
@@ -103,57 +103,51 @@ class IngestServiceHandler(
     def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult]
   }
 
-  class JSONBatchIngest(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngest {
-    @tailrec final def readBatch(reader: BufferedReader, batch: Vector[Validation[Throwable, JValue]]): Vector[Validation[Throwable, JValue]] = {
-      val line = reader.readLine()
+  case class JSONParseState(parser: AsyncParser, apiKey: APIKey, path: Path, authorities: Authorities, jobId: Option[JobId], ingested: Int, errors: Seq[(Int, String)]) {
+    def update(newParser: AsyncParser, newIngested: Int, newErrors: Seq[(Int, String)] = Seq.empty) =
+      this.copy(parser = newParser, ingested = this.ingested + newIngested, errors = this.errors ++ newErrors)
+  }
 
-      if (line == null || batch.size >= batchSize) batch
-      else if (line.trim.isEmpty) readBatch(reader, batch)
-      else readBatch(reader, batch :+ JParser.parseFromString(line))
-    }
-
-    def ingestSync(channel: ReadableByteChannel, jobId: JobId): Future[IngestResult] = {
-      def readBatches(reader: BufferedReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
-        M.point(readBatch(reader, Vector())) flatMap { batch =>
-          if (batch.isEmpty) {
-            // the batch will only be empty if there's nothing left to read
-            // TODO: notify jobs api of completion
-            M.point(BatchSyncResult(total, ingested, errors))
-          } else {
-            val (_, values, errors0) = batch.foldLeft((0, Vector.empty[JValue], Vector.empty[(Int, Extractor.Error)])) {
-              case ((i, values, errors), Success(value)) if value.flattenWithPath.size < maxFields =>
-                (i + 1, values :+ value, errors)
-              case ((i, values, errors), Success(value)) =>
-                (i + 1, values, errors :+ (i, Extractor.Invalid(excessiveFieldsError)))
-              case ((i, values, errors), Failure(error)) =>
-                (i + 1, values, errors :+ (i, Extractor.Thrown(error)))
-            }
-
-            ingest(apiKey, path, authorities, values, Some(jobId)) flatMap { _ =>
-              readBatches(reader, total + batch.length, ingested + values.length, errors ++ (errors0 map { ((_:Extractor.Error).message).second }))
-            }
-          }
+  def ingestJSONChunk(state: JSONParseState, stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = stream.uncons.flatMap {
+    case Some((head, rest)) =>
+      import state._
+      val (result, updatedParser) = parser(Some(head))
+      val toIngest = result.values.takeWhile { jv => jv.flattenWithPath.size <= maxFields }
+      if (toIngest.size == result.values.size) {
+        ingest(apiKey, path, authorities, result.values, jobId) flatMap { _ =>
+          ingestJSONChunk(state.update(updatedParser, result.values.size, result.errors.map { pe => (pe.line, pe.msg) }), rest)
         }
-      }
-
-      readBatches(new BufferedReader(Channels.newReader(channel, "UTF-8")), 0, 0, Vector())
-    }
-
-    def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult] = {
-      if (sync) {
-        val sink = new PipedOutputStream
-        val src = new PipedInputStream
-        sink.connect(src)
-        val writeFuture = writeChunkStream(Channels.newChannel(sink), data)
-        val readFuture = ingestSync(Channels.newChannel(src), jobId)
-        M.apply2(writeFuture, readFuture) { (written, result) => result }
       } else {
-        for ((file, size) <- writeToFile(data)) yield {
-          ingestSync(new FileInputStream(file).getChannel(), jobId)
-          AsyncSuccess(size)
+        ingest(apiKey, path, authorities, toIngest, jobId) map { _ =>
+          state.update(updatedParser, toIngest.size, Seq((-1, excessiveFieldsError)))
         }
       }
+
+    case None => Promise.successful {
+      val (finalResult, finalParser) = state.parser(None)
+      state.copy(parser = finalParser)
     }
+  }
+
+  class JSONBatchIngest(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngest {
+    def runParse(data: ByteChunk, sync: Boolean, jobId: JobId): Future[IngestResult] = {
+      val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(), apiKey, path, authorities, Some(jobId), 0, Vector.empty), data match {
+        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
+        case Right(stream) => stream
+      })
+
+      if (sync) {
+        parseFuture.map {
+            case JSONParseState(_, _, _, _, _, ingested, errors) =>
+            BatchSyncResult(ingested + errors.size, ingested, Vector(errors: _*))
+        }
+      } else {
+        Promise.successful(AsyncSuccess)
+      }
+    }
+
+    def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult] =
+      runParse(data, sync, jobId)
   }
 
   class CSVBatchIngest(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngest {
@@ -256,7 +250,7 @@ class IngestServiceHandler(
             // spin off a future, but don't bother flatmapping through it since we
             // can return immediately
             ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), jobId)
-            AsyncSuccess(size)
+            AsyncSuccess
           }
         }
       } valueOr { errors =>
@@ -393,56 +387,12 @@ class IngestServiceHandler(
   }
 
   def ingestStreaming(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[IngestResult] = {
-    def ingestAll(channel: ReadableByteChannel): Future[IngestResult] = {
-      def read(reader: BufferedReader, ingested: Int): Future[IngestResult] = {
-        M.point(reader.readLine()) flatMap { line =>
-          if (line == null) Promise successful StreamingSyncResult(ingested, None)
-          else if (line.trim.isEmpty) read(reader, ingested)
-          else {
-            JParser.parseFromString(line) map { jvalue =>
-              if (jvalue.flattenWithPath.size > maxFields) {
-                Promise successful StreamingSyncResult(ingested, Some(excessiveFieldsError))
-              } else {
-                ingest(apiKey, path, authorities, Vector(jvalue), None) flatMap { _ => read(reader, ingested + 1) }
-              }
-            } valueOr { error =>
-              logger.warn("Ingest for %s with key %s at %s failed after %d results!".format(authorities, apiKey, path.toString, ingested), error)
-              Promise successful StreamingSyncResult(ingested, Option(error.getMessage).orElse(Some(error.getClass.toString)))
-            }
-          }
-        }
-      }
-
-      // must lift the read into the future to avoid blocking on the initial read
-      read(new BufferedReader(Channels.newReader(channel, "UTF-8")), 0)
-    }
-
-    data match {
-      case Left(unsafeBuf) =>
-        val buf = unsafeBuf.duplicate.rewind.asInstanceOf[ByteBuffer]
-        val readableLength = buf.remaining
-        JParser.parseManyFromByteBuffer(buf) map { jvalues =>
-          if (jvalues.exists(_.flattenWithPath.size > maxFields)) {
-            Promise successful NotIngested(excessiveFieldsError)
-          } else {
-            ingest(apiKey, path, authorities, jvalues, None) map { _ => StreamingSyncResult(jvalues.length, None) }
-          }
-        } valueOr { error =>
-          val message = error match {
-            case e: IndexOutOfBoundsException => "Input exhausted during parse"
-            case o => Option(o.getMessage).getOrElse(o.getClass.toString)
-          }
-          logger.warn("Ingest for %s with key %s at %s failed!".format(authorities, apiKey, path.toString), error)
-          Promise successful NotIngested(message)
-        }
-
-      case Right(stream) =>
-        val sink = new PipedOutputStream
-        val src = new PipedInputStream
-        sink.connect(src)
-        val writeFuture = writeChannel(Channels.newChannel(sink), stream, 0)
-        val readFuture = ingestAll(Channels.newChannel(src))
-        M.apply2(writeFuture, readFuture) { (written, result) => result }
+    ingestJSONChunk(JSONParseState(AsyncParser(), apiKey, path, authorities, None, 0, Vector.empty), data match {
+      case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
+      case Right(stream) => stream
+    }).map {
+      case JSONParseState(_, _, _, _, _, ingested, errors) =>
+        StreamingSyncResult(ingested, errors.headOption.map(_._2))
     }
   }
 
@@ -450,7 +400,9 @@ class IngestServiceHandler(
     logger.debug("Got request in ingest handler: " + request)
     Success { (apiKey: APIKey, path: Path) => {
       val timestamp = clock.now()
-      def createJob = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)) map { _.id }
+      def createJob: Future[String \/ JobId] = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id).run.recover {
+        case t: Throwable => -\/(Option(t.getMessage).getOrElse(t.getClass.toString))
+      }
 
       val requestAuthorities = for {
         paramIds <- request.parameters.get('ownerAccountId)
@@ -473,63 +425,88 @@ class IngestServiceHandler(
             val batchMode = request.parameters.get('mode).exists(_ equalsIgnoreCase "batch") ||
                             request.parameters.get('sync).exists(_ equalsIgnoreCase "sync")
 
-            for {
-              batchJob <- batchMode.option(createJob.run).sequence
-              ingestResult <- (batchJob map {
-                _ map { jobId =>
-                  val sync = request.parameters.get('receipt) match {
-                    case Some(v) => v equalsIgnoreCase "true"
-                    case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
-                  }
+            if (batchMode) {
+              for {
+                batchId <- createJob
+                ingestResult <- batchId match {
+                  case err: -\/[_] => Promise.successful(err)
 
-                  ingestBatch(apiKey, path, authorities, content, parseDirectives, jobId, sync)
-                }
-              } getOrElse {
-                right(ingestStreaming(apiKey, path, authorities, content, parseDirectives))
-              }).map { f => f.recover { case t: Throwable => logger.error("Failure on ingest", t); NotIngested(Option(t.getMessage).getOrElse(t.getClass.toString)) } }.sequence
-            } yield {
-              ingestResult.fold(
-                { message =>
-                  logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
-                  HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
-                {
-                  case NotIngested(reason) =>
-                    logger.warn("Ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason))
-                    HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
-
-                  case AsyncSuccess(contentLength) =>
-                    logger.info("Async ingest succeeded to %s with %s, length %d".format(path, apiKey, contentLength))
-                    HttpResponse[JValue](Accepted, content = Some(JObject(JField("content-length", JNum(contentLength)) :: Nil)))
-
-                  case BatchSyncResult(total, ingested, errors) =>
-                    val failed = errors.size
-                    val responseContent = JObject(
-                      JField("total", JNum(total)),
-                      JField("ingested", JNum(ingested)),
-                      JField("failed", JNum(failed)),
-                      JField("skipped", JNum(total - ingested - failed)),
-                      JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*))
-                    )
-
-                    logger.info("Batch sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
-
-                    if (ingested == 0 && total > 0) {
-                      HttpResponse[JValue](BadRequest, content = Some(responseContent))
-                    } else {
-                      HttpResponse[JValue](OK, content = Some(responseContent))
+                  case \/-(bid) =>
+                    val sync = request.parameters.get('receipt) match {
+                      case Some(v) => v equalsIgnoreCase "true"
+                      case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
                     }
 
-                  case StreamingSyncResult(ingested, error) =>
-                    val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
-                    val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
-                    logger.info("Streaming sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
-                    if (ingested == 0 && !error.isDefined) // The following message is searched for by monit
-                      logger.info("No ingested data and no errors to %s with %s. Headers: %s. Content: %s".format(path, apiKey,
-                        request.headers, content.fold(_.toString(), _.map(x => x.toString()).toStream.apply().toList)))
-                    HttpResponse(responseCode, content = Some(responseContent))
+                    ingestBatch(apiKey, path, authorities, content, parseDirectives, bid, sync).recover {
+                      case t: Throwable =>
+                        logger.error("Failure on ingest", t)
+                        NotIngested(Option(t.getMessage).getOrElse(t.getClass.toString))
+                    }.map { result => \/-((bid, result)) }
                 }
-              )
+              } yield {
+                ingestResult.fold(
+                  { message =>
+                    logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
+                    HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
+                  {
+                    case (bid, result) =>
+                      def jobMessage(channel: String, message: String) =
+                        jobManager.addMessage(bid, channel, JString(message))
+
+                      result match {
+                        case NotIngested(reason) =>
+                          val message = "Ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason)
+                          logger.warn(message)
+                          jobMessage(JobManager.channels.Warning, message)
+                          HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
+
+                        case AsyncSuccess =>
+                          val message = "Async ingest succeeded to %s with %s, batchId %s".format(path, apiKey, bid)
+                          logger.info(message)
+                          jobMessage(JobManager.channels.Info, message)
+                          HttpResponse[JValue](Accepted, content = Some(JObject(JField("ingestId", JString(bid)) :: Nil)))
+
+                        case BatchSyncResult(total, ingested, errors) =>
+                          val failed = errors.size
+                          val responseContent = JObject(
+                            JField("total", JNum(total)),
+                            JField("ingested", JNum(ingested)),
+                            JField("failed", JNum(failed)),
+                            JField("skipped", JNum(total - ingested - failed)),
+                            JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*)),
+                            JField("ingestId", JString(bid))
+                          )
+
+                          logger.info("Batch sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
+                          jobManager.addMessage(bid, JobManager.channels.Info, responseContent)
+
+                          if (ingested == 0 && total > 0) {
+                            HttpResponse[JValue](BadRequest, content = Some(responseContent))
+                          } else {
+                            HttpResponse[JValue](OK, content = Some(responseContent))
+                          }
+                      }
+                  }
+                )
+              }
+            } else {
+              ingestStreaming(apiKey, path, authorities, content, parseDirectives).map {
+                case NotIngested(reason) =>
+                    logger.warn("Streaming sync ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason))
+                    HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
+
+                case StreamingSyncResult(ingested, error) =>
+                  val responseContent = JObject(JField("ingested", JNum(ingested)), JField("errors", JArray(error.map(JString(_)).toList)))
+                  val responseCode = if (error.isDefined) { if (ingested == 0) BadRequest else RetryWith } else OK
+                  logger.info("Streaming sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
+                  if (ingested == 0 && !error.isDefined) // The following message is searched for by monit
+                    logger.info("No ingested data and no errors to %s with %s. Headers: %s. Content: %s".format(path, apiKey,
+                      request.headers, content.fold(_.toString(), _.map(x => x.toString()).toStream.apply().toList)))
+                  HttpResponse(responseCode, content = Some(responseContent))
+              }
             }
+
+
           } getOrElse {
             logger.warn("No event data found for ingest request from %s owner %s at path %s".format(apiKey, authorities, path))
             M.point(HttpResponse[JValue](BadRequest, content = Some(JString("Missing event data."))))
