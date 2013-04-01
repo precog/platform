@@ -32,7 +32,7 @@ import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
-import blueeyes.bkka.FutureMonad
+import blueeyes.bkka.UnsafeFutureComonad
 import blueeyes.persistence.mongo._
 
 import blueeyes.json._
@@ -181,9 +181,7 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
   class AccountManager extends After {
     val defaultActorSystem = ActorSystem("AccountManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
-    implicit val M = new FutureMonad(execContext) with Comonad[Future] {
-      def copoint[A](fa: Future[A]): A = Await.result(fa, Duration(60, "seconds"))
-    }
+    implicit val M = new UnsafeFutureComonad(execContext, Duration(60, "seconds"))
 
     val accountManager = new MongoAccountManager(mongo, mongo.database("test_v1_" + dbInstance.getAndIncrement), defaultSettings) {
       def newAccountId = M.point("test%04d".format(dbInstance.getAndIncrement))
