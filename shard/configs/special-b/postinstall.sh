@@ -40,7 +40,7 @@ fi
 sleep 30
 
 echo "Running health checks"
-curl -v -f -G "http://localhost:31070/blueeyes/services/analytics/v2/health"
+curl -v -f -G "http://localhost:31070/analytics/v2/health"
 echo "Completed health checks"
 
 exit 0
