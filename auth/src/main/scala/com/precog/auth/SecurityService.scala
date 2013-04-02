@@ -50,8 +50,8 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
   def clock: blueeyes.util.Clock
 
   def securityService = service("security", "1.0") {
-    requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
+    requestLogging(timeout) { help("/docs/api") {
+      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
           val securityConfig = config.detach("security")
@@ -105,6 +105,6 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
           stoppable
         }
       }
-    }
+    }}
   }
 }

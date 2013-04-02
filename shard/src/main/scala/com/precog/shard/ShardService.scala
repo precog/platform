@@ -239,16 +239,13 @@ trait ShardService extends
 
   lazy val analyticsService = this.service("analytics", "2.0") {
     requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
+      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
         startup {
           logger.info("Starting shard with config:\n" + context.config)
           configureShardState(context.config)
         } ->
         request { state =>
-          implicit val compression = CompressService.defaultCompressions
-          compress { 
-            asyncHandler(state) ~ syncHandler(state) 
-          }
+          asyncHandler(state) ~ syncHandler(state) 
         } ->
         stop { state: ShardState =>
           state.stoppable

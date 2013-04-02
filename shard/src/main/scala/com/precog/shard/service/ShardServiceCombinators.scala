@@ -163,7 +163,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
   def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, (APIKey, Path) => Future[B]] = {
     new DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Query, QueryOptions) => Future[B]] {
       val delegate = next
-      val metadata = None
+      val metadata = NoMetadata
       val service = (request: HttpRequest[A]) => {
         val query: Option[String] = request.parameters.get('q).filter(_ != null)
         val offsetAndLimit = getOffsetAndLimit(request)

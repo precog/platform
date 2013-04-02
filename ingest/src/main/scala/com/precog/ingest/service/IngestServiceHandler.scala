@@ -535,10 +535,15 @@ class IngestServiceHandler(
     }}
   }
 
-  val metadata = Some(DescriptionMetadata(
-    """
-      This service can be used to store an data point with or without an associated timestamp.
-      Timestamps are not added by default.
-    """
-  ))
+  val metadata = {
+    import MimeTypes._
+    import Metadata._
+    and(
+      about(
+        or(requestHeader(`Content-Type`(application/json)), requestHeader(`Content-Type`(text/csv))),
+        description("The content type of the ingested data should be specified. The service will attempt to infer structure if no content type is specified, but this may yield degraded or incorrect results under some circumstances.")
+      ),
+      description("""This service can be used to store one or more records, supplied as either whitespace-delimited JSON or CSV.""")
+    )
+  }
 }
