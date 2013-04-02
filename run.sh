@@ -164,14 +164,14 @@ for f in $@; do
     TRIES_LEFT=30
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
-    while [[ $TRIES_LEFT != 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
+    while [[ $TRIES_LEFT -gt 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
         [ -n "$DEBUG" ] && echo "Count result for $TABLE = ${COUNT_RESULT:-0} / $COUNT on try $TRIES_LEFT"
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
         TRIES_LEFT=$(( $TRIES_LEFT - 1 ))
     done
 
-    [ "$TRIES_LEFT" != "0" ] || {
+    [ "$TRIES_LEFT" -gt "0" ] || {
         echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
 	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
         EXIT_CODE=1

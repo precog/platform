@@ -32,14 +32,11 @@ import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.actor.IngestErrors
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
-import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 
 import blueeyes.bkka._
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
-import blueeyes.core.http.MimeTypes._
-import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.json._
@@ -49,13 +46,10 @@ import blueeyes.util.Clock
 import com.google.common.base.Charsets
 
 import java.io._
-import java.nio.channels.{Channels, ReadableByteChannel, WritableByteChannel}
 import java.nio.ByteBuffer
 import java.util.concurrent.{ Executor, RejectedExecutionException }
 
 import com.weiglewilczek.slf4s.Logging
-
-import au.com.bytecode.opencsv.CSVReader
 
 import scalaz._
 import scalaz.\/._
@@ -69,6 +63,29 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 import scala.annotation.tailrec
 
+sealed trait ParseDirective {
+  def toMap: Map[String, String] // escape hatch for interacting with other systems
+}
+
+case class CSVDelimiter(delimiter: String) extends ParseDirective { val toMap = Map("csv:delimiter" -> delimiter) }
+case class CSVQuote(quote: String) extends ParseDirective { val toMap = Map("csv:quote" -> quote) }
+case class CSVSeparator(separator: String) extends ParseDirective { val toMap = Map("csv:separator" -> separator) }
+case class CSVEscape(escape: String) extends ParseDirective { val toMap = Map("csv:escape" -> escape) }
+case class MimeDirective(mimeType: MimeType) extends ParseDirective { val toMap = Map("content-type" -> mimeType.toString) }
+
+sealed trait BatchIngestResult
+sealed trait StreamingIngestResult
+
+case object AsyncSuccess extends BatchIngestResult
+case class BatchSyncResult(total: Int, ingested: Int, errors: Vector[(Int, String)]) extends BatchIngestResult
+
+case class StreamingSyncResult(ingested: Int, error: Option[String]) extends StreamingIngestResult
+case class NotIngested(reason: String) extends BatchIngestResult with StreamingIngestResult
+
+sealed trait IngestStore {
+  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit]
+}
+
 class IngestServiceHandler(
   permissionsFinder: PermissionsFinder[Future],
   jobManager: JobManager[Response],
@@ -78,248 +95,13 @@ class IngestServiceHandler(
   batchSize: Int,
   maxFields: Int)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
-    with Logging {
+    with IngestStore
+    with Logging { ingestStore =>
 
-  sealed trait ParseDirective {
-    def toMap: Map[String, String] // escape hatch for interacting with other systems
-  }
+  private[this] val processorSelector = new IngestProcessorSelection(maxFields, batchSize, ingestStore)
+  import processorSelector._
 
-  case class CSVDelimiter(delimiter: String) extends ParseDirective { val toMap = Map("csv:delimiter" -> delimiter) }
-  case class CSVQuote(quote: String) extends ParseDirective { val toMap = Map("csv:quote" -> quote) }
-  case class CSVSeparator(separator: String) extends ParseDirective { val toMap = Map("csv:separator" -> separator) }
-  case class CSVEscape(escape: String) extends ParseDirective { val toMap = Map("csv:escape" -> escape) }
-  case class MimeDirective(mimeType: MimeType) extends ParseDirective { val toMap = Map("content-type" -> mimeType.toString) }
-
-
-  sealed trait IngestResult
-  case object AsyncSuccess extends IngestResult
-  case class BatchSyncResult(total: Int, ingested: Int, errors: Vector[(Int, String)]) extends IngestResult
-  case class StreamingSyncResult(ingested: Int, error: Option[String]) extends IngestResult
-  case class NotIngested(reason: String) extends IngestResult
-
-  private val excessiveFieldsError = "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields)
-
-  trait BatchIngest {
-    def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult]
-  }
-
-  case class JSONParseState(parser: AsyncParser, apiKey: APIKey, path: Path, authorities: Authorities, jobId: Option[JobId], ingested: Int, errors: Seq[(Int, String)]) {
-    def update(newParser: AsyncParser, newIngested: Int, newErrors: Seq[(Int, String)] = Seq.empty) =
-      this.copy(parser = newParser, ingested = this.ingested + newIngested, errors = this.errors ++ newErrors)
-  }
-
-  def ingestJSONChunk(state: JSONParseState, stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = stream.uncons.flatMap {
-    case Some((head, rest)) =>
-      import state._
-      val (result, updatedParser) = parser(Some(head))
-      val toIngest = result.values.takeWhile { jv => jv.flattenWithPath.size <= maxFields }
-      if (toIngest.size == result.values.size) {
-        ingest(apiKey, path, authorities, result.values, jobId) flatMap { _ =>
-          ingestJSONChunk(state.update(updatedParser, result.values.size, result.errors.map { pe => (pe.line, pe.msg) }), rest)
-        }
-      } else {
-        ingest(apiKey, path, authorities, toIngest, jobId) map { _ =>
-          state.update(updatedParser, toIngest.size, Seq((-1, excessiveFieldsError)))
-        }
-      }
-
-    case None => Promise.successful {
-      val (finalResult, finalParser) = state.parser(None)
-      state.copy(parser = finalParser)
-    }
-  }
-
-  class JSONBatchIngest(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngest {
-    def runParse(data: ByteChunk, sync: Boolean, jobId: JobId): Future[IngestResult] = {
-      val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(), apiKey, path, authorities, Some(jobId), 0, Vector.empty), data match {
-        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
-        case Right(stream) => stream
-      })
-
-      if (sync) {
-        parseFuture.map {
-            case JSONParseState(_, _, _, _, _, ingested, errors) =>
-            BatchSyncResult(ingested + errors.size, ingested, Vector(errors: _*))
-        }
-      } else {
-        Promise.successful(AsyncSuccess)
-      }
-    }
-
-    def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult] =
-      runParse(data, sync, jobId)
-  }
-
-  class CSVBatchIngest(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngest {
-    import scalaz.syntax.applicative._
-    import scalaz.Validation._
-
-    def readerBuilder(parseDirectives: Set[ParseDirective]): ValidationNEL[String, java.io.Reader => CSVReader] = {
-      def charOrError(s: Option[String], default: Char): ValidationNEL[String, Char] = {
-        s map {
-          case s if s.length == 1 => success(s.charAt(0))
-          case _ => failure("Expected a single character but found a string.")
-        } getOrElse {
-          success(default)
-        } toValidationNEL
-      }
-
-      val delimiter = charOrError(parseDirectives collectFirst { case CSVDelimiter(str) => str }, ',')
-      val quote     = charOrError(parseDirectives collectFirst { case CSVQuote(str) => str }, '"')
-      val escape    = charOrError(parseDirectives collectFirst { case CSVEscape(str) => str }, '\\')
-
-      (delimiter |@| quote |@| escape) { (delimiter, quote, escape) =>
-        (reader: java.io.Reader) => new CSVReader(reader, delimiter, quote, escape)
-      }
-    }
-
-    @tailrec final def readBatch(reader: CSVReader, batch: Vector[Array[String]]): Vector[Array[String]] = {
-      val nextRow = reader.readNext()
-      if (nextRow == null || batch.size >= batchSize) batch else readBatch(reader, batch :+ nextRow)
-    }
-
-    /**
-     * Normalize headers by turning them into `JPath`s. Normally, a field will
-     * be mapped to a `JPath` simply by wrapping it in a `JPathField`. However,
-     * in the case of duplicate headers, we turn that field into an array. So,
-     * the header a,a,a will create objects of the form `{a:[_, _, _]}`.
-     */
-    def normalizeHeaders(headers: Array[String]): Array[JPath] = {
-      val positions = headers.zipWithIndex.foldLeft(Map.empty[String, List[Int]]) {
-        case (hdrs, (h, i)) =>
-          val pos = i :: hdrs.getOrElse(h, Nil)
-            hdrs + (h -> pos)
-      }
-
-      positions.toList.flatMap {
-        case (h, Nil) =>
-          Nil
-        case (h, pos :: Nil) =>
-          (pos -> JPath(JPathField(h))) :: Nil
-        case (h, ps) =>
-          ps.reverse.zipWithIndex map { case (pos, i) =>
-            (pos -> JPath(JPathField(h), JPathIndex(i)))
-          }
-      }.sortBy(_._1).map(_._2).toArray
-    }
-
-    def ingestSync(reader: CSVReader, jobId: JobId): Future[IngestResult] = {
-      def readBatches(paths: Array[JPath], reader: CSVReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
-        // TODO: handle errors in readBatch
-        M.point(readBatch(reader, Vector())) flatMap { batch =>
-          if (batch.isEmpty) {
-            // the batch will only be empty if there's nothing left to read
-            // TODO: Write out job completion information to the queue.
-            M.point(BatchSyncResult(total, ingested, errors))
-          } else {
-            val types = CsvType.inferTypes(batch.iterator)
-            val jvals = batch map { row =>
-              (paths zip types zip row).foldLeft(JUndefined: JValue) { case (obj, ((path, tpe), s)) =>
-                JValue.unsafeInsert(obj, path, tpe(s))
-              }
-            }
-
-            ingest(apiKey, path, authorities, jvals, Some(jobId)) flatMap { _ =>
-              readBatches(paths, reader, total + batch.length, ingested + batch.length, errors)
-            }
-          }
-        }
-      }
-
-      M.point(reader.readNext()) flatMap { header =>
-        if (header == null) {
-          M.point(NotIngested("No CSV data was found in the request content."))
-        } else {
-          readBatches(normalizeHeaders(header), reader, 0, 0, Vector())
-        }
-      }
-    }
-
-    def apply(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[IngestResult] = {
-      readerBuilder(parseDirectives) map { f =>
-        if (sync) {
-          // must not return until everything is persisted to kafka central
-          val sink = new PipedOutputStream
-          val src = new PipedInputStream
-          sink.connect(src)
-          val writeFuture = writeChunkStream(Channels.newChannel(sink), data)
-          val readFuture = ingestSync(f(new BufferedReader(new InputStreamReader(src, "UTF-8"))), jobId)
-          M.apply2(writeFuture, readFuture) { (written, result) => result }
-        } else {
-          for ((file, size) <- writeToFile(data)) yield {
-            // spin off a future, but don't bother flatmapping through it since we
-            // can return immediately
-            ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), jobId)
-            AsyncSuccess
-          }
-        }
-      } valueOr { errors =>
-        M.point(NotIngested(errors.list.mkString("; ")))
-      }
-    }
-  }
-
-  /** Chain of responsibility used to determine a BatchIngest strategy */
-  trait BatchIngestSelector {
-    def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest]
-  }
-
-  class MimeBatchIngestSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngestSelector {
-    def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
-      val JSON = application/json
-      val CSV = text/csv
-
-      parseDirectives collectFirst {
-        case MimeDirective(JSON) => new JSONBatchIngest(apiKey, path, authorities)
-        case MimeDirective(CSV) => new CSVBatchIngest(apiKey, path, authorities)
-      }
-    }
-  }
-
-  class JsonBatchIngestSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends BatchIngestSelector {
-    def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
-      val (AsyncParse(errors, values), parser) = JParser.parseAsync(ByteBuffer.wrap(partialData))
-      (errors.isEmpty && !values.isEmpty) option { new JSONBatchIngest(apiKey, path, authorities) }
-    }
-  }
-
-  def batchSelectors(apiKey: APIKey, path: Path, authorities: Authorities): List[BatchIngestSelector] = List(
-    new MimeBatchIngestSelector(apiKey, path, authorities),
-    new JsonBatchIngestSelector(apiKey, path, authorities)
-  )
-
-  final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {
-    stream.uncons flatMap {
-      case Some((buf, tail)) =>
-        // This is safe since the stream is coming directly from BE
-        val safeBuf = buf.duplicate.rewind.asInstanceOf[ByteBuffer]
-        //logger.trace("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
-        try {
-          val written0 = chan.write(safeBuf)
-          writeChannel(chan, tail, written + written0)
-        } catch {
-          case t => logger.error("Failure on ByteBuffer read of %s (%d remaining)".format(safeBuf, safeBuf.remaining)); throw t
-        }
-
-      case None =>
-        M.point { chan.close(); written }
-    }
-  }
-
-  def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Long] = {
-    chunk match {
-      case Left(bb) => writeChannel(chan, bb :: StreamT.empty[Future, ByteBuffer], 0L)
-      case Right(stream) => writeChannel(chan, stream, 0L)
-    }
-  }
-
-  def writeToFile(byteStream: ByteChunk): Future[(File, Long)] = {
-    val file = File.createTempFile("async-ingest-", null)
-    val outChannel = new FileOutputStream(file).getChannel()
-    for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
-  }
-
-  def ingest(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
+  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
     if (data.length > 0) {
       val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant())
       logger.trace("Saving event: " + eventInstance)
@@ -332,33 +114,7 @@ class IngestServiceHandler(
     }
   }
 
-  def getParseDirectives(request: HttpRequest[_]): Set[ParseDirective] = {
-    val mimeDirective =
-      for {
-        header <- request.headers.header[`Content-Type`]
-        mimeType <- header.mimeTypes.headOption
-      } yield MimeDirective(mimeType)
-
-    val delimiter = request.parameters get 'delimiter map { CSVDelimiter(_) }
-    val quote = request.parameters get 'quote map { CSVQuote(_) }
-    val escape = request.parameters get 'escape map { CSVEscape(_) }
-
-    mimeDirective.toSet ++ delimiter ++ quote ++ escape
-  }
-
-  @tailrec final def selectBatchIngest(from: List[BatchIngestSelector], partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[BatchIngest] = {
-    from match {
-      case hd :: tl =>
-        hd.select(partialData, parseDirectives) match { // not using map so as to get tailrec
-          case None => selectBatchIngest(tl, partialData, parseDirectives)
-          case some => some
-        }
-
-      case Nil => None
-    }
-  }
-
-  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective], batchJob: JobId, sync: Boolean): Future[IngestResult] = {
+  def chooseProcessor(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[Option[IngestProcessor]] = {
     def array(unsafeBuffer: ByteBuffer): Array[Byte] = {
       // This ByteBuffer is coming straight from BE, so it's OK to dup/rewind
       val buffer = unsafeBuffer.duplicate.rewind.asInstanceOf[ByteBuffer]
@@ -368,31 +124,30 @@ class IngestServiceHandler(
       target
     }
 
-    val selectors = batchSelectors(apiKey, path, authorities)
+    val selectors = ingestSelectors(apiKey, path, authorities)
 
-    val futureBatchIngest = data match {
+    data match {
       case Left(buf) =>
-        M.point(selectBatchIngest(selectors, array(buf), parseDirectives))
+        M.point(selectIngestProcessor(selectors, array(buf), parseDirectives))
 
       case Right(stream) =>
         stream.uncons map {
-          _ flatMap { case (buf, _) => selectBatchIngest(selectors, array(buf), parseDirectives) }
+          _ flatMap { case (buf, _) => selectIngestProcessor(selectors, array(buf), parseDirectives) }
         }
     }
+  }
 
-    futureBatchIngest flatMap {
-      case Some(batchIngest) => batchIngest(data, parseDirectives, batchJob, sync)
+  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective], batchJob: JobId, sync: Boolean): Future[BatchIngestResult] = {
+    chooseProcessor(apiKey, path, authorities, data, parseDirectives) flatMap {
+      case Some(processor) => processor.processBatch(data, parseDirectives, batchJob, sync)
       case None => M.point(NotIngested("Could not successfully determine a data type for your batch ingest. Please consider setting the Content-Type header."))
     }
   }
 
-  def ingestStreaming(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[IngestResult] = {
-    ingestJSONChunk(JSONParseState(AsyncParser(), apiKey, path, authorities, None, 0, Vector.empty), data match {
-      case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
-      case Right(stream) => stream
-    }).map {
-      case JSONParseState(_, _, _, _, _, ingested, errors) =>
-        StreamingSyncResult(ingested, errors.headOption.map(_._2))
+  def ingestStreaming(apiKey: APIKey, path: Path, authorities: Authorities, data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[StreamingIngestResult] = {
+    chooseProcessor(apiKey, path, authorities, data, parseDirectives) flatMap {
+      case Some(processor) => processor.processStream(data, parseDirectives)
+      case None => M.point(NotIngested("Could not successfully determine a data type for your streaming ingest. Please consider setting the Content-Type header."))
     }
   }
 
@@ -400,9 +155,11 @@ class IngestServiceHandler(
     logger.debug("Got request in ingest handler: " + request)
     Success { (apiKey: APIKey, path: Path) => {
       val timestamp = clock.now()
-      def createJob: Future[String \/ JobId] = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id).run.recover {
-        case t: Throwable => -\/(Option(t.getMessage).getOrElse(t.getClass.toString))
-      }
+      def createJob: EitherT[Future, String, JobId] = jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
+
+      //.run.recover {
+      //  case t: Throwable => -\/(Option(t.getMessage).getOrElse(t.getClass.toString))
+      //}
 
       val requestAuthorities = for {
         paramIds <- request.parameters.get('ownerAccountId)
@@ -426,69 +183,61 @@ class IngestServiceHandler(
                             request.parameters.get('sync).exists(_ equalsIgnoreCase "sync")
 
             if (batchMode) {
-              for {
-                batchId <- createJob
-                ingestResult <- batchId match {
-                  case err: -\/[_] => Promise.successful(err)
+              (for {
+                jobId <- createJob.leftMap { message =>
+                  logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
+                  HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))
+                }
+                ingestResult <- {
+                  val sync = request.parameters.get('receipt) match {
+                    case Some(v) => v equalsIgnoreCase "true"
+                    case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
+                  }
 
-                  case \/-(bid) =>
-                    val sync = request.parameters.get('receipt) match {
-                      case Some(v) => v equalsIgnoreCase "true"
-                      case None => request.parameters.get('sync) forall (_ equalsIgnoreCase "sync")
-                    }
-
-                    ingestBatch(apiKey, path, authorities, content, parseDirectives, bid, sync).recover {
-                      case t: Throwable =>
-                        logger.error("Failure on ingest", t)
-                        NotIngested(Option(t.getMessage).getOrElse(t.getClass.toString))
-                    }.map { result => \/-((bid, result)) }
+                  EitherT.right(ingestBatch(apiKey, path, authorities, content, parseDirectives, jobId, sync).recover {
+                    case t: Throwable =>
+                      logger.error("Failure on ingest", t)
+                      NotIngested(Option(t.getMessage).getOrElse(t.getClass.toString))
+                  })
                 }
               } yield {
-                ingestResult.fold(
-                  { message =>
-                    logger.error("Internal error during ingest; got bad response from the jobs server: " + message)
-                    HttpResponse[JValue](InternalServerError, content = Some(JString("An error occurred creating a batch ingest job: " + message)))},
-                  {
-                    case (bid, result) =>
-                      def jobMessage(channel: String, message: String) =
-                        jobManager.addMessage(bid, channel, JString(message))
+                def jobMessage(channel: String, message: String) =
+                  jobManager.addMessage(jobId, channel, JString(message))
 
-                      result match {
-                        case NotIngested(reason) =>
-                          val message = "Ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason)
-                          logger.warn(message)
-                          jobMessage(JobManager.channels.Warning, message)
-                          HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
+                ingestResult match {
+                  case NotIngested(reason) =>
+                    val message = "Ingest failed to %s with %s with reason: %s ".format(path, apiKey, reason)
+                    logger.warn(message)
+                    jobMessage(JobManager.channels.Warning, message)
+                    HttpResponse[JValue](BadRequest, content = Some(JString(reason)))
 
-                        case AsyncSuccess =>
-                          val message = "Async ingest succeeded to %s with %s, batchId %s".format(path, apiKey, bid)
-                          logger.info(message)
-                          jobMessage(JobManager.channels.Info, message)
-                          HttpResponse[JValue](Accepted, content = Some(JObject(JField("ingestId", JString(bid)) :: Nil)))
+                  case AsyncSuccess =>
+                    val message = "Async ingest succeeded to %s with %s, jobId %s".format(path, apiKey, jobId)
+                    logger.info(message)
+                    jobMessage(JobManager.channels.Info, message)
+                    HttpResponse[JValue](Accepted, content = Some(JObject(JField("ingestId", JString(jobId)) :: Nil)))
 
-                        case BatchSyncResult(total, ingested, errors) =>
-                          val failed = errors.size
-                          val responseContent = JObject(
-                            JField("total", JNum(total)),
-                            JField("ingested", JNum(ingested)),
-                            JField("failed", JNum(failed)),
-                            JField("skipped", JNum(total - ingested - failed)),
-                            JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*)),
-                            JField("ingestId", JString(bid))
-                          )
+                  case BatchSyncResult(total, ingested, errors) =>
+                    val failed = errors.size
+                    val responseContent = JObject(
+                      JField("total", JNum(total)),
+                      JField("ingested", JNum(ingested)),
+                      JField("failed", JNum(failed)),
+                      JField("skipped", JNum(total - ingested - failed)),
+                      JField("errors", JArray(errors map { case (line, msg) => JObject(JField("line", JNum(line)) :: JField("reason", JString(msg)) :: Nil) }: _*)),
+                      JField("ingestId", JString(jobId))
+                    )
 
-                          logger.info("Batch sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
-                          jobManager.addMessage(bid, JobManager.channels.Info, responseContent)
+                    logger.info("Batch sync ingest succeeded to %s with %s. Result: %s".format(path, apiKey, responseContent.renderPretty))
+                    jobManager.addMessage(jobId, JobManager.channels.Info, responseContent)
 
-                          if (ingested == 0 && total > 0) {
-                            HttpResponse[JValue](BadRequest, content = Some(responseContent))
-                          } else {
-                            HttpResponse[JValue](OK, content = Some(responseContent))
-                          }
-                      }
-                  }
-                )
-              }
+                    if (ingested == 0 && total > 0) {
+                      HttpResponse[JValue](BadRequest, content = Some(responseContent))
+                    } else {
+                      HttpResponse[JValue](OK, content = Some(responseContent))
+                    }
+                }
+              }).valueOr { x => x }
             } else {
               ingestStreaming(apiKey, path, authorities, content, parseDirectives).map {
                 case NotIngested(reason) =>
