@@ -62,7 +62,7 @@ case class EventServiceDeps[M[+_]](
     eventStore: EventStore[M],
     jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
 
-trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators {
+trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators {
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -91,22 +91,20 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           }
         } ->
         request { (state: EventServiceState) =>
-          decompress {
-            jsonp {
-              (jsonAPIKey(state.accessControl) {
+          jsonp {
+            (jsonAPIKey(state.accessControl) {
+              dataPath("/fs") {
+                post(state.ingestHandler) ~
+                delete(state.archiveHandler)
+              } ~ //legacy handler
+              path("/(?<sync>a?sync)") {
                 dataPath("/fs") {
                   post(state.ingestHandler) ~
                   delete(state.archiveHandler)
-                } ~ //legacy handler
-                path("/(?<sync>a?sync)") {
-                  dataPath("/fs") {
-                    post(state.ingestHandler) ~
-                    delete(state.archiveHandler)
-                  }
                 }
-              }) map {
-                _ map { _ map jvalueToChunk }
               }
+            }) map {
+              _ map { _ map jvalueToChunk }
             }
           }
         } ->

@@ -245,10 +245,7 @@ trait ShardService extends
           configureShardState(context.config)
         } ->
         request { state =>
-          implicit val compression = CompressService.defaultCompressions
-          compress { 
-            asyncHandler(state) ~ syncHandler(state) 
-          }
+          asyncHandler(state) ~ syncHandler(state) 
         } ->
         stop { state: ShardState =>
           state.stoppable
