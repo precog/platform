@@ -66,9 +66,5 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
     }
   })
 
-  val metadata = Some(DescriptionMetadata(
-"""
-Browse the children of the given path. 
-"""
-  ))
+  val metadata = DescriptionMetadata("""Browse the children of the given path.""")
 }
