@@ -27,6 +27,36 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "return count of empty set as 0 in body of solve" in {
+      val input = """
+        | data := new {a: "down", b: 13}
+        |
+        | solve 'b
+        |   xyz := data where data.b = 'b
+        |   count(xyz where xyz.a = "up")
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)
+
+      result must haveAllElementsLike { 
+        case (ids, SDecimal(d)) =>
+          ids must haveSize(1)
+          d mustEqual(0)
+      }
+    }
+
+    "return count of empty set as 0 in body of solve" in {
+      val input = """
+        | data := new {a: "down", b: 13}
+        |
+        | solve 'b
+        |   count(data where data.b = 'b & data.a = "up")
+      """.stripMargin
+
+      evalE(input) must beEmpty
+    }
+
     "join arrays after a relate" in {
       val input = """
         medals' := //summer_games/london_medals
