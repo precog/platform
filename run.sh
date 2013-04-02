@@ -173,7 +173,7 @@ for f in $@; do
 
     [ "$TRIES_LEFT" != "0" ] || {
         echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
-	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
+	[ -n "$DEBUG" ] && sleep 86400 # Maybe excessive
         EXIT_CODE=1
         exit 1
     }
@@ -239,23 +239,29 @@ else
 
     # Test health check URLs for all services
     echo "Checking health URLs"
-    curl -sG 'http://localhost:$INGEST_PORT/blueeyes/services/ingest/v2/health'     > /dev/null || {
+
+    echo -n "Checking ingest health at http://localhost:$INGEST_PORT/ingest/v2/health......."
+    curl -sG "http://localhost:$INGEST_PORT/ingest/v2/health" > /dev/null && echo OK || {
         echo "Ingest health check failed" >&2
         EXIT_CODE=1
     }
-    curl -sG 'http://localhost:$AUTH_PORT/blueeyes/services/auth/v1/health'     > /dev/null || {
+    echo -n "Checking auth health at http://localhost:$AUTH_PORT/security/v1/health......."
+    curl -sG "http://localhost:$AUTH_PORT/security/v1/health" > /dev/null && echo OK || {
         echo "Auth health check failed" >&2
         EXIT_CODE=1
     }
-    curl -sG 'http://localhost:$ACCOUNTS_PORT/blueeyes/services/accounts/v1/health'     > /dev/null || {
+    echo -n "Checking accounts health at http://localhost:$ACCOUNTS_PORT/accounts/v1/health..."
+    curl -sG "http://localhost:$ACCOUNTS_PORT/accounts/v1/health" > /dev/null && echo OK || {
         echo "Accounts health check failed" >&2
         EXIT_CODE=1
     }
-    curl -sG 'http://localhost:$JOBS_PORT/blueeyes/services/jobs/v1/health'     > /dev/null || {
+    echo -n "Checking jobs health at http://localhost:$JOBS_PORT/jobs/v1/health..........."
+    curl -sG "http://localhost:$JOBS_PORT/jobs/v1/health" > /dev/null && echo OK || {
         echo "Jobs health check failed" >&2
         EXIT_CODE=1
     }
-    curl -sG 'http://localhost:$SHARD_PORT/blueeyes/services/analytics/v2/health'     > /dev/null || {
+    echo -n "Checking shard health at http://localhost:$SHARD_PORT/analytics/v2/health....."
+    curl -sG "http://localhost:$SHARD_PORT/analytics/v2/health" > /dev/null && echo OK || {
         echo "Shard health check failed" >&2
         EXIT_CODE=1
     }
