@@ -143,7 +143,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     } getOrElse success(TableModule.SortAscending)
   }
 
-  private def getOffsetAndLimit(request: HttpRequest[_]): ValidationNEL[String, Option[(Long, Long)]] = {
+  private def getOffsetAndLimit(request: HttpRequest[_]): ValidationNel[String, Option[(Long, Long)]] = {
     val limit = request.parameters.get('limit).filter(_ != null).map {
       case Limit(n) => Validation.success(n)
       case _ => Validation.failure("The limit query parameter must be a positive integer.")
@@ -155,7 +155,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
       case _ => Validation.failure("The offset query parameter must be a non-negative integer.")
     }.sequence[({ type λ[α] = Validation[String, α] })#λ, Long]
 
-    (offset.toValidationNEL |@| limit.toValidationNEL) { (offset, limit) =>
+    (offset.toValidationNel |@| limit.toValidationNel) { (offset, limit) =>
       limit map ((offset getOrElse 0, _))
     }
   }
@@ -167,9 +167,9 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
       val service = (request: HttpRequest[A]) => {
         val query: Option[String] = request.parameters.get('q).filter(_ != null)
         val offsetAndLimit = getOffsetAndLimit(request)
-        val sortOn = getSortOn(request).toValidationNEL
-        val sortOrder = getSortOrder(request).toValidationNEL
-        val timeout = getTimeout(request).toValidationNEL
+        val sortOn = getSortOn(request).toValidationNel
+        val sortOrder = getSortOrder(request).toValidationNel
+        val timeout = getTimeout(request).toValidationNel
         val output = getOutputType(request)
 
         (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>

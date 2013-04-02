@@ -55,13 +55,13 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
 object WebAPIKeyFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Response]] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNel[String, APIKeyFinder[Response]] = {
     val serviceConfig = config.detach("service")
     serviceConfig.get[String]("hardcoded_rootKey") map { apiKey =>
       implicit val M = ResponseMonad(new FutureMonad(executor))
       success(new StaticAPIKeyFinder[Response](apiKey))
     } getOrElse {
-      (config.get[String]("rootKey").toSuccess("Configuration property \"rootKey\" is required").toValidationNEL |@|
+      (config.get[String]("rootKey").toSuccess("Configuration property \"rootKey\" is required").toValidationNel |@|
        serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property \"service.protocol\" is required")) |@|
        serviceConfig.get[String]("host").toSuccess(NEL("Configuration property \"service.host\" is required")) |@|
        serviceConfig.get[Int]("port").toSuccess(NEL("Configuration property \"service.port\" is required")) |@|

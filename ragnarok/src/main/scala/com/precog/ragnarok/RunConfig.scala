@@ -70,10 +70,10 @@ object RunConfig {
     }
   }
 
-  def fromCommandLine(args: Array[String]): ValidationNEL[String, RunConfig] = fromCommandLine(args.toList)
+  def fromCommandLine(args: Array[String]): ValidationNel[String, RunConfig] = fromCommandLine(args.toList)
 
   @tailrec
-  def fromCommandLine(args: List[String], config: ValidationNEL[String, RunConfig] = RunConfig().successNel): ValidationNEL[String, RunConfig] = args match {
+  def fromCommandLine(args: List[String], config: ValidationNel[String, RunConfig] = RunConfig().successNel): ValidationNel[String, RunConfig] = args match {
     case Nil =>
       config
 

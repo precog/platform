@@ -160,14 +160,14 @@ class IngestServiceHandler(
     import scalaz.syntax.applicative._
     import scalaz.Validation._
 
-    def readerBuilder(parseDirectives: Set[ParseDirective]): ValidationNEL[String, java.io.Reader => CSVReader] = {
-      def charOrError(s: Option[String], default: Char): ValidationNEL[String, Char] = {
+    def readerBuilder(parseDirectives: Set[ParseDirective]): ValidationNel[String, java.io.Reader => CSVReader] = {
+      def charOrError(s: Option[String], default: Char): ValidationNel[String, Char] = {
         s map {
           case s if s.length == 1 => success(s.charAt(0))
           case _ => failure("Expected a single character but found a string.")
         } getOrElse {
           success(default)
-        } toValidationNEL
+        } toValidationNel
       }
 
       val delimiter = charOrError(parseDirectives collectFirst { case CSVDelimiter(str) => str }, ',')
