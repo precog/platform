@@ -159,24 +159,22 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
   }
 
   def processBatch(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[BatchIngestResult] = {
-    readerBuilder(parseDirectives) map { f =>
+    readerBuilder(parseDirectives).map { f =>
+      val ingestResult = for {
+        (file, size) <- writeToFile(data)
+        result <- ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), jobId)
+      } yield {
+        file.delete()
+        result
+      }
+
       if (sync) {
         // must not return until everything is persisted to kafka central
-        val sink = new PipedOutputStream
-        val src = new PipedInputStream
-        sink.connect(src)
-        val writeFuture = writeChunkStream(Channels.newChannel(sink), data)
-        val readFuture = ingestSync(f(new BufferedReader(new InputStreamReader(src, "UTF-8"))), jobId)
-        M.apply2(writeFuture, readFuture) { (written, result) => result }
+        ingestResult
       } else {
-        for ((file, size) <- writeToFile(data)) yield {
-          // spin off a future, but don't bother flatmapping through it since we
-          // can return immediately
-          ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), jobId)
-          AsyncSuccess
-        }
+        Promise.successful(AsyncSuccess)
       }
-    } valueOr { errors =>
+    }.valueOr { errors =>
       M.point(NotIngested(errors.list.mkString("; ")))
     }
   }
