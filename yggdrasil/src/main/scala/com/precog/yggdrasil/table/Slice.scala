@@ -1589,7 +1589,7 @@ object Slice {
           acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
         }, offset + slice.size)
 
-      case  ((cols, offset), _) => (cols, offset)
+      case ((cols, offset), _) => (cols, offset)
     }
 
     val slice = new Slice {
@@ -1712,6 +1712,7 @@ case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: L
       ctype match {
         case CString => new ArrayStrColumn(defined, values)
         case CDate => new ArrayDateColumn(defined, values)
+        case CPeriod => new ArrayPeriodColumn(defined, values)
         case CNum => new ArrayNumColumn(defined, values)
         case CDouble => new ArrayDoubleColumn(defined, values)
         case CLong => new ArrayLongColumn(defined, values)
