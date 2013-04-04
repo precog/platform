@@ -4,6 +4,3 @@ init=nihdb/accounts-v1.init
 /etc/monit/conf.d/accounts-v1-nihdb.monit=nihdb/accounts-v1.monit
 /etc/precog/accounts-v1-nihdb.logging.xml=nihdb/accounts-v1.logging.xml
 postinstall=nihdb/postinstall.sh
-/etc/precog/templates/reset.subj.mustache=reset.subj.mustache
-/etc/precog/templates/reset.eml.txt.mustache=reset.eml.txt.mustache
-/etc/precog/templates/reset.eml.html.mustache=reset.eml.html.mustache
