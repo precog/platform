@@ -4,6 +4,3 @@ init=special-b/accounts-v1.init
 /etc/monit/conf.d/accounts-v1-b.monit=special-b/accounts-v1.monit
 /etc/precog/accounts-v1-b.logging.xml=special-b/accounts-v1.logging.xml
 postinstall=special-b/postinstall.sh
-/etc/precog/templates/reset.subj.mustache=reset.subj.mustache
-/etc/precog/templates/reset.eml.txt.mustache=reset.eml.txt.mustache
-/etc/precog/templates/reset.eml.html.mustache=reset.eml.html.mustache
