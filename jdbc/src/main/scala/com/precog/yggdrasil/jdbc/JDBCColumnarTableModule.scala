@@ -216,7 +216,7 @@ trait JDBCColumnarTableModule
                 case "json"   =>
                   JParser.parseFromString(pgo.getValue) match {
                     case Success(jv) => 
-                      buildColumns = Table.withIdsAndValues(jv, buildColumns, rowId, yggConfig.maxSliceSize, Some(selector \ CPath(_)))
+                      buildColumns = Slice.withIdsAndValues(jv, buildColumns, rowId, yggConfig.maxSliceSize, Some(selector \ CPath(_)))
 
                     case Failure(error) => 
                       logger.error("Failure parsing JSON column value (%s): %s".format(truncateString(pgo.getValue), error.getMessage))

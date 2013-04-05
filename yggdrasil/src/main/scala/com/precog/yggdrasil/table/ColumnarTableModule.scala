@@ -1405,9 +1405,11 @@ trait ColumnarTableModule[M[+_]]
             }
           }
 
-          collectSchemas(schemas ++ (masks flatMap { schemaMask =>
+          val next = masks flatMap { schemaMask =>
             mkSchema(refs collect { case (ref, i) if RawBitSet.get(schemaMask, i) => ref })
-          }), slices)
+          }
+
+          collectSchemas(schemas ++ next, slices)
 
         case None =>
           M.point(schemas)
