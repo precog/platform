@@ -1589,7 +1589,7 @@ object Slice {
           acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
         }, offset + slice.size)
 
-      case  ((cols, offset), _) => (cols, offset)
+      case ((cols, offset), _) => (cols, offset)
     }
 
     val slice = new Slice {

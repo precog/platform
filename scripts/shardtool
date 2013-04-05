@@ -13,20 +13,23 @@ def call(args):
 class Service(object):
     @classmethod
     def frompath(self, path):
+        d = {}
         for line in open(path, 'r'):
             toks = line.split()
-            if not toks: continue
-            elif toks[0] == 'id': account = toks[1]
-            elif toks[0] == 'token': token = toks[1]
-            elif toks[0] == 'ingest': ingest = toks[1]
-            elif toks[0] == 'shard': shard = toks[1]
-        return Service(ingest, shard, account, token)
+            if len(toks) != 2: continue
+            d[toks[0]] = toks[1]
+        return Service(d)
 
-    def __init__(self, ingestport, shardport, account, apikey):
-        self.ingestport = ingestport
-        self.shardport = shardport
-        self.account = account
-        self.apikey = apikey
+    def __init__(self, d):
+        self.basedir = d.get('basedir')
+        self.accountid = d.get('id')
+        self.apikey = d.get('token')
+
+        self.accountsport = d.get('accounts')
+        self.authport = d.get('auth')
+        self.ingestport = d.get('ingest')
+        self.jobsport = d.get('jobs')
+        self.shardport = d.get('shard')
 
     def ingest(self, fspath, qpath, syncType):
         assert(os.path.exists(fspath))
@@ -39,7 +42,7 @@ class Service(object):
         print ""
 
     def query(self, query):
-        url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.account)
+        url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.accountid)
         #args = ['curl', '-v', '-s', '-G',
         args = ['curl', '-s', '-G',
                 #'-H', 'Accept-Encoding: gzip',
@@ -62,6 +65,7 @@ def usage():
     print "       %s -e QUERY          # run query" % prog
     print "       %s -m QPATH          # fetch metadata for path" % prog
     print "       %s -e                # run query from stdin" % prog
+    print "       %s -s [ARG1 ...]     # run subshell from tmpdir" % prog
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -71,6 +75,12 @@ if __name__ == "__main__":
         usage()
     elif args[0] == '-i':
         service.ingest(args[1], args[2], "sync")
+    elif args[0] == '-s':
+        os.chdir(service.basedir)
+        if args[1:]:
+            os.execvp(args[1], args[1:])
+        else:
+            os.execlp('bash', 'bash')
     elif args[0] == '-a':
         service.ingest(args[1], args[2], "async")
     elif args[0] == '-e':
