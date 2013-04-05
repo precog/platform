@@ -270,27 +270,12 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       }
       
       "fully undefined object" >> {
-        //testRenderJson(JObject(
-        //  JField("foo", JUndefined) ::
-        //  JField("bar", JUndefined) ::
-        //  JField("baz", JUndefined) :: Nil) :: Nil)
-        testRenderJson(
-          JObject(
-            Map(
-              "foo" -> JUndefined,
-              "bar" -> JUndefined,
-              "baz" -> JUndefined
-            )
-          ) :: Nil
-        )
+        testRenderJson(JObject(Map.empty) :: Nil)
       }
       
       "undefined row" >> {
         testRenderJson(
-          JObject(
-            JField("foo", JUndefined) ::
-            JField("bar", JUndefined) ::
-            JField("baz", JUndefined) :: Nil) ::
+          JObject(Nil) ::
           JNum(42) :: Nil)
       }
       
