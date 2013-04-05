@@ -30,6 +30,12 @@ import bytecode._
 
 import common.json._
 
+import Jama._
+import Jama.Matrix._
+
+import org.apache.commons._
+import math3.distribution._
+
 import scalaz._
 import Scalaz._
 import scalaz.std.anyVal._
@@ -43,9 +49,9 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
   import trans._
   import trans.constants._
 
-  trait PredictionSupport extends ColumnarTableLib with ModelSupport {
+  trait PredictionSupport extends ColumnarTableLib with ModelSupport with RegressionSupport {
     trait PredictionBase extends ModelBase {
-      protected def morph1Apply(models: Models, function: Double => Double): Morph1Apply = new Morph1Apply {
+      protected def morph1Apply(models: Models, trans: Double => Double): Morph1Apply = new Morph1Apply {
         def scanner(modelSet: ModelSet): CScanner = new CScanner {
           type A = Unit
           def init: A = ()
@@ -81,26 +87,84 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
                 val includedModel = included(model)
                 val definedModel = defined(includedModel)
 
+                val cpaths = includedModel.map { case (ColumnRef(cpath, _), _) => cpath }.toSeq sorted
+                val modelDoubles = cpaths map { model.featureValues(_) }
+
+                val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toMap
+
+                //todo remove fold
                 val resultArray = filteredRange(includedModel).foldLeft(new Array[Double](range.end)) { case (arr, i) =>
-                  val cpaths = includedModel.map { case (ColumnRef(cpath, _), _) => cpath }.toSeq sorted
-
-                  val modelDoubles = cpaths map { model.featureValues(_) }
-
-                  val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toMap
                   val includedDoubles = cpaths map { includedCols(_).apply(i) }
 
-                  assert(modelDoubles.length == includedDoubles.length)
-                  val res = (modelDoubles.zip(includedDoubles)).map { case (d1, d2) => d1 * d2 }.sum + model.constant
-
-                  arr(i) = function(res)
-                  arr
+                  if (modelDoubles.length == includedDoubles.length) {
+                    arr(i) = dotProduct(modelDoubles.toArray, includedDoubles.toArray) + model.constant
+                    arr
+                  } else {
+                    sys.error("blah") 
+                  }
                 }
 
-                Map(ColumnRef(CPath(TableModule.paths.Value, CPathField(model.name)), CDouble) -> ArrayDoubleColumn(definedModel, resultArray))
-              } 
+                val dist = new TDistribution(model.degOfFreedom)
+
+                val prob = 0.975
+                val tStat = dist.inverseCumulativeProbability(prob)
+
+                val varCovarMatrix = new Matrix(model.varCovar)
+
+                case class Intervals(confidence: Array[Double], prediction: Array[Double])
+                val res = filteredRange(includedModel).foldLeft(Intervals(new Array[Double](range.end), new Array[Double](range.end))) { case (Intervals(arrConf, arrPred), i) =>
+                  val includedDoubles = 1.0 +: (cpaths map { includedCols(_).apply(i) })
+                  val includedMatrix = new Matrix(Array(includedDoubles.toArray))
+                  //println("varCovar: " + varCovarMatrix.getArray.deep)
+
+                  val prod = includedMatrix.times(varCovarMatrix).times(includedMatrix.transpose()).getArray
+                  //println("prod: " + prod.deep)
+
+                  val inner = {
+                    if (prod.length == 1 && prod.head.length == 1) prod(0)(0)
+                    else sys.error("matrix of wrong shape")
+                  }
+
+                  val conf = math.sqrt(inner)
+                  val pred = math.sqrt(math.pow(model.resStdErr, 2.0) + inner)
+
+                  arrConf(i) = tStat * conf
+                  arrPred(i) = tStat * pred
+
+                  Intervals(arrConf, arrPred)
+                }
+
+                val confidenceWidth = res.confidence
+                val predictionWidth = res.prediction
+                //println("res.prediction: " + res.prediction.deep)
+
+                val confidenceUpper = arraySum(resultArray, confidenceWidth)
+                val confidenceLower = arraySum(resultArray, confidenceWidth map { -_ })
+
+                val predictionUpper = arraySum(resultArray, predictionWidth)
+                val predictionLower = arraySum(resultArray, predictionWidth map { -_ })
+
+                // the correct model name gets added to the CPath here
+                val confIntvStr = "confidenceInterval"
+                val predIntvStr = "predictionInterval"
+                val fitStr = "fit"
+
+                val pathFit = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(fitStr))
+                val pathConfidenceLower = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(confIntvStr), CPathIndex(0))
+                val pathConfidenceUpper = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(confIntvStr), CPathIndex(1))
+                val pathPredictionLower = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(predIntvStr), CPathIndex(0))
+                val pathPredictionUpper = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(predIntvStr), CPathIndex(1))
+
+                Map(
+                  ColumnRef(pathFit, CDouble) -> ArrayDoubleColumn(definedModel, resultArray),
+                  ColumnRef(pathConfidenceUpper, CDouble) -> ArrayDoubleColumn(definedModel, confidenceUpper),
+                  ColumnRef(pathConfidenceLower, CDouble) -> ArrayDoubleColumn(definedModel, confidenceLower),
+                  ColumnRef(pathPredictionUpper, CDouble) -> ArrayDoubleColumn(definedModel, predictionUpper),
+                  ColumnRef(pathPredictionLower, CDouble) -> ArrayDoubleColumn(definedModel, predictionLower))
+              }
               
               val identitiesResult: Map[ColumnRef, Column] = {
-                val featureCols = cols collect { 
+                val featureCols = cols collect {
                   case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) => 
                     val path = Seq(TableModule.paths.Key, CPathIndex(idx))
                     (ColumnRef(CPath(path: _*), ctype), col)

@@ -42,11 +42,11 @@ trait LinearRegressionTestSupport[M[+_]]
   import dag._
   import instructions._
 
-  def predictionInput(morph: Morphism2, modelData: String, model: String) = {
+  def morph2Input(morph: Morphism2, dataLeft: String, dataRight: String) = {
     val line = Line(0, 0, "")
     dag.Morph2(morph,
-      dag.LoadLocal(Const(CString(modelData))(line))(line),
-      dag.LoadLocal(Const(CString(model))(line))(line)
+      dag.LoadLocal(Const(CString(dataLeft))(line))(line),
+      dag.LoadLocal(Const(CString(dataRight))(line))(line)
     )(line)
   }
 
@@ -453,22 +453,32 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     isOk(expectedRSquared, rSquaredsSchema3) mustEqual true
   }
 
+  /*
   "linear regression" should {
     "pass randomly generated test with a single feature" in (testTrivial or testTrivial)
     "pass randomly generated test with three features inside an object" in (testThreeFeatures or testThreeFeatures)
     "pass randomly generated test with three distinct schemata" in (testThreeSchemata or testThreeSchemata)
   }
+*/
 
   "linear prediction" should {
     "predict simple case" in {
-
-      val input = predictionInput(LinearPrediction, "/hom/model1data", "/hom/model1")
+      //todo bad data, fails out. maybe test if covar matrix is symmetric.
+      val input = morph2Input(LinearPrediction, "/hom/model1data", "/hom/model1")
 
       val result0 = testEval(input)
 
       result0 must haveSize(19)
 
-      val result = result0 collect { case (ids, value) if ids.size == 2 => value }
+      val result = result0 collect { case (ids, value) if ids.size == 2 =>
+        value match {
+          case SObject(obj) => obj map { case (modelId, fit) => 
+            val res = fit match { case SObject(obj2) => obj2("fit") }
+            (modelId, res)
+          }
+        }
+      //    case SObject(Map(modelId -> SObject(Map("fit" -> fit, _, _)))) => SObject(Map(modelId -> fit))
+      }
 
       result mustEqual Set(
         (SObject(Map("model2" -> SDecimal(42.5), "model1" -> SDecimal(48.5)))),
@@ -493,7 +503,7 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
     }
 
     "predict case with repeated model names and arrays" in {
-      val input = predictionInput(LinearPrediction, "/hom/model2data", "/hom/model2")
+      val input = morph2Input(LinearPrediction, "/hom/model2data", "/hom/model2")
 
       val result0 = testEval(input)
 
