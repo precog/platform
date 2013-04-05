@@ -24,7 +24,7 @@ name := "yggdrasil"
 // For now, skip column specs because SBT will die a horrible, horrible death
 testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 
-fork in test := true
+//fork in test := true
 
 parallelExecution in test := false
 

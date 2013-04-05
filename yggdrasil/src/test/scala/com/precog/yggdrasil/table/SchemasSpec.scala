@@ -85,6 +85,7 @@ trait SchemasSpec[M[+_]] extends ColumnarTableModuleTestSupport[M] with Specific
       JObjectFixedT(Map("b" -> JNumberT)),
       JObjectFixedT(Map.empty)
     )
+
     val data = Stream.tabulate(100) {
       case i if i % 4 == 0 => JObject(List(JField("a", JNum(1)), JField("b", JNum(i))))
       case i if i % 4 == 1 => JObject(List(JField("a", JNum(1)), JField("b", JUndefined)))

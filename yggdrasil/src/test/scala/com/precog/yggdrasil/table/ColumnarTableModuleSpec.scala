@@ -108,6 +108,93 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
 
   lazy val xlogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.ColumnarTableModuleSpec")
 
+  def streamToString(stream: StreamT[M, CharBuffer]): String = {
+    def loop(stream: StreamT[M, CharBuffer], sb: StringBuilder): M[String] =
+      stream.uncons.flatMap {
+        case None =>
+          M.point(sb.toString)
+        case Some((cb, tail)) =>
+          sb.append(cb)
+          loop(tail, sb)
+      }
+    loop(stream, new StringBuilder).copoint
+  }
+
+
+  def testRenderCsv(json: String, maxSliceSize: Option[Int] = None): String = {
+    val t0 = System.currentTimeMillis()
+    val es = JParser.parseManyFromString(json).valueOr(throw _)
+    val table = fromJson(es.toStream, maxSliceSize)
+    val csv = streamToString(table.renderCsv())
+    val t = System.currentTimeMillis() - t0
+    // uncomment for timing info
+    //println("rendered csv (len=%d) in %d ms" format (csv.length, t))
+    csv
+  }
+
+  def testRenderJson(seq: Seq[JValue]) = {
+    def arr(es: List[JValue]) = if (es.isEmpty) None else Some(JArray(es))
+
+    def minimizeItem(t: (String, JValue)) = minimize(t._2).map((t._1, _))
+
+    def minimize(value: JValue): Option[JValue] = {
+      value match {
+        case JObject(fields) => Some(JObject(fields.flatMap(minimizeItem)))
+
+        case JArray(Nil) => Some(JArray(Nil))
+
+        case JArray(elements) =>
+          val elements2 = elements.flatMap(minimize)
+          if (elements2.isEmpty) None else Some(JArray(elements2))
+
+        case JUndefined => None
+
+        case v => Some(v)
+      }
+    }
+  
+    val table = fromJson(seq.toStream)
+    
+    val expected = JArray(seq.toList)
+    
+    val values = table.renderJson(',') map { _.toString }
+    
+    val strM = values.foldLeft("") { _ + _ }
+    
+    val arrayM = strM map { body =>
+      val input = "[%s]".format(body)
+      JParser.parseUnsafe(input)
+    }
+    
+    val minimized = minimize(expected) getOrElse JArray(Nil)
+    arrayM.copoint mustEqual minimized
+  }
+  
+  def renderLotsToCsv(lots: Int, maxSliceSize: Option[Int] = None) {
+    val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+    val events = event * lots
+    val csv = testRenderCsv(events, maxSliceSize)
+    val expected = ".x,.y,.z.xx,.z.yy\r\n" + ("123,foobar,1,2\r\n" * lots)
+    csv must_== expected
+  }
+
+  def renderLotsToJson(lots: Int, maxSliceSize: Option[Int] = None) {
+    def testRenderJson(json: String, maxSliceSize: Option[Int] = None): String = {
+      val t0 = System.currentTimeMillis()
+      val es = JParser.parseManyFromString(json).valueOr(throw _)
+      val table = fromJson(es.toStream, maxSliceSize)
+      val output = streamToString(table.renderJson(','))
+      val t = System.currentTimeMillis() - t0
+      // uncomment for timing info
+      //println("rendered json (len=%d) in %d ms" format (output.length, t))
+      output
+    }
+
+    val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
+    val events = event * lots
+    testRenderJson(events, maxSliceSize)
+  }
+
   "a table dataset" should {
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
@@ -215,44 +302,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "check long encoding" in check { ln: Long =>
         testRenderJson(JNum(ln) :: Nil)
       }.set(minTestsOk -> 20000, workers -> Runtime.getRuntime.availableProcessors)
-    }
-    
-    def testRenderJson(seq: Seq[JValue]) = {
-      def arr(es: List[JValue]) = if (es.isEmpty) None else Some(JArray(es))
-
-      def minimizeItem(t: (String, JValue)) = minimize(t._2).map((t._1, _))
-
-      def minimize(value: JValue): Option[JValue] = {
-        value match {
-          case JObject(fields) => Some(JObject(fields.flatMap(minimizeItem)))
-
-          case JArray(Nil) => Some(JArray(Nil))
-
-          case JArray(elements) =>
-            val elements2 = elements.flatMap(minimize)
-            if (elements2.isEmpty) None else Some(JArray(elements2))
-
-          case JUndefined => None
-
-          case v => Some(v)
-        }
-      }
-    
-      val table = fromJson(seq.toStream)
-      
-      val expected = JArray(seq.toList)
-      
-      val values = table.renderJson(',') map { _.toString }
-      
-      val strM = values.foldLeft("") { _ + _ }
-      
-      val arrayM = strM map { body =>
-        val input = "[%s]".format(body)
-        JParser.parseUnsafe(input)
-      }
-      
-      val minimized = minimize(expected) getOrElse JArray(Nil)
-      arrayM.copoint mustEqual minimized
     }
     
     "in cogroup" >> {
@@ -568,30 +617,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       }
     }
 
-    def streamToString(stream: StreamT[M, CharBuffer]): String = {
-      def loop(stream: StreamT[M, CharBuffer], sb: StringBuilder): M[String] =
-        stream.uncons.flatMap {
-          case None =>
-            M.point(sb.toString)
-          case Some((cb, tail)) =>
-            sb.append(cb)
-            loop(tail, sb)
-        }
-      loop(stream, new StringBuilder).copoint
-    }
-
-
-    def testRenderCsv(json: String, maxSliceSize: Option[Int] = None): String = {
-      val t0 = System.currentTimeMillis()
-      val es = JParser.parseManyFromString(json).valueOr(throw _)
-      val table = fromJson(es.toStream, maxSliceSize)
-      val csv = streamToString(table.renderCsv())
-      val t = System.currentTimeMillis() - t0
-      // uncomment for timing info
-      //println("rendered csv (len=%d) in %d ms" format (csv.length, t))
-      csv
-    }
-
     "render to CSV in a simple case" in {
       val events = """
 {"a": 1, "b": {"bc": 999, "bd": "foooooo", "be": true, "bf": null, "bg": false}, "c": [1.999], "d": "dog"}
@@ -608,30 +633,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "4,996,fooo,true,null,false,4.999,dogggg\r\n"
 
       testRenderCsv(events) must_== expected
-    }
-
-    def renderLotsToCsv(lots: Int, maxSliceSize: Option[Int] = None) {
-      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
-      val events = event * lots
-      val csv = testRenderCsv(events, maxSliceSize)
-      val expected = ".x,.y,.z.xx,.z.yy\r\n" + ("123,foobar,1,2\r\n" * lots)
-      csv must_== expected
-    }
-
-    def renderLotsToJson(lots: Int, maxSliceSize: Option[Int] = None) {
-      val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
-      val events = event * lots
-      testRenderJson(events, maxSliceSize)
-      def testRenderJson(json: String, maxSliceSize: Option[Int] = None): String = {
-        val t0 = System.currentTimeMillis()
-        val es = JParser.parseManyFromString(json).valueOr(throw _)
-        val table = fromJson(es.toStream, maxSliceSize)
-        val output = streamToString(table.renderJson(','))
-        val t = System.currentTimeMillis() - t0
-        // uncomment for timing info
-        //println("rendered json (len=%d) in %d ms" format (output.length, t))
-        output
-      }
     }
 
     "test rendering uniform tables of varying sizes" in {
@@ -695,8 +696,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
   }
 }
 
-object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Need] {
-  implicit def M = Need.need
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
+  implicit def M = new Monad[Free.Trampoline] with Comonad[Free.Trampoline] with Cobind.FromCojoin[Free.Trampoline] {
+    import scalaz.Free._
+    import scalaz.std.function._
+    override def point[A](a: => A) = freeMonad[Function0].point(a)
+    override def bind[A, B](m: Free.Trampoline[A])(f: A => Free.Trampoline[B]) = freeMonad[Function0].bind(m)(f)
+    override def copoint[A](m: Free.Trampoline[A]) = m go { f => f() }
+    override def cojoin[A](m: Free.Trampoline[A]) = point(m)
+  }
 
   type YggConfig = IdSourceConfig with ColumnarTableModuleConfig
   val yggConfig = new IdSourceConfig with ColumnarTableModuleConfig {

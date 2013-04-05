@@ -349,10 +349,6 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] =
-      Slice.withIdsAndValues(jv, into, sliceIndex, sliceSize, remapPath) // TODO: refactor and remove this
-
-
     def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
       rv.flattenWithPath.foldLeft(into) {
         case (acc, (cpath, CUndefined)) => acc
