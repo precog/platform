@@ -199,7 +199,9 @@ class AccountServiceSpec extends TestAccountService with Tags {
         HttpResponse(HttpStatus(Conflict, _), _, Some(errorMessage), _) <- createAccount("test0002@email.com", "password2")
       } yield errorMessage
 
-      msgFuture.copoint must_== JString("An account already exists for user test0002@email.com")
+      msgFuture.copoint must beLike {
+        case JString(msg) => msg must startWith("An account already exists")
+      }
     }
 
     "find own account" in {
@@ -298,7 +300,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
     }
 
     "not find other account" in {
-      val (user, pass) = ("test0010@email.com", "password")
+      val (user, pass) = ("test0011@email.com", "password")
       (for {
         id1 <- createAccountAndGetId(user, pass)
         id2 <- createAccountAndGetId("some-other-email@email.com", "password")
