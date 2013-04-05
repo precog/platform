@@ -2,3 +2,4 @@
 -Xmx4096m
 -XX:MaxPermSize=1024m
 -XX:ReservedCodeCacheSize=512m
+-Xloggc:target/gc.log
