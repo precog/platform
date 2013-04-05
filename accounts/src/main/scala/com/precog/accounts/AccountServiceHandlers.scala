@@ -110,7 +110,10 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = AndMetadata(
+      AboutMetadata(ParameterMetadata('email, None), DescriptionMetadata("The email address associated with the account ID you want to retrieve.")),
+      DescriptionMetadata("This endpoint provides capabilities for account search, returning a list of matching account identifiers.")
+    )
   }
 
   object ListAccountsHandler extends CustomHttpService[Future[JValue], Account => Future[HttpResponse[JValue]]] {
@@ -168,7 +171,10 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = AboutMetadata(
+      ParameterMetadata('apiKey, Some("<api key associated with authorizing account>")),
+      DescriptionMetadata("Returns the list of accounts associated with the authorized account's API key, or the API key specified by the apiKey request parameter if the authorized account has elevated account management privileges.")
+    )
   }
 
   //returns accountId of account if exists, else creates account,
@@ -213,7 +219,20 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Creates a new account associated with the specified email address, subscribed to the free plan.")
+  }
+
+  object SearchAccountsHandler extends CustomHttpService[Future[JValue], String => Future[HttpResponse[JValue]]] {
+    val service: HttpRequest[Future[JValue]] => Validation[NotServed, String => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => Success {
+      (email: String) => {
+        accountManager.findAccountByEmail(email) map {
+          case Some(account) => HttpResponse[JValue](OK, content = Some(JArray(account.accountId.serialize)))
+          case None => HttpResponse[JValue](OK, content = Some(JArray()))
+        }
+      }
+    }
+
+    val metadata = DescriptionMetadata("Returns a set of account IDs that correspond to the specified query parameters.")
   }
 
   object CreateAccountGrantHandler extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] {
@@ -252,7 +271,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
         }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Adds the grant specified by the grantId property of the request body to the account resource specified in the URL path. The account requesting this change (as determined by HTTP Basic authentication) will be recorded.")
   }
 
 
@@ -266,7 +285,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the current plan associated with the account resource specified by the request URL.")
   }
 
   object GenerateResetTokenHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
@@ -320,7 +339,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("This service is used to generate a password reset token for an account.")
   }
 
   object PasswordResetHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
@@ -330,7 +349,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           request.parameters.get('resetToken).toSuccess(NonEmptyList("Missing reset token in request URI")) |@|
           request.content.toSuccess(NonEmptyList("Missing POST body (new password) in request"))).apply { (accountId, resetToken, futureContent) =>
             futureContent.flatMap { jvalue =>
-              (jvalue \ "password").validated[String] match {
+              jvalue.validated[String]("password") match {
                 case Success(newPassword) =>
                   accountManager.resetAccountPassword(accountId, resetToken, newPassword).map {
                     case \/-(true) =>
@@ -357,7 +376,11 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = AndMetadata(
+      AboutMetadata(ParameterMetadata('resetToken, None), DescriptionMetadata("The account reset token sent to the email address of the account whose password is being reset.")),
+      DescriptionMetadata("""The request body must be of the form: {"password": "my new password"}"""),
+      DescriptionMetadata("This service can be used to reset your account password.")
+    )
   }
 
   //update account password
@@ -391,7 +414,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Updates the current password for the account resource specified by the request URL.")
   }
 
   //update account Plan
@@ -423,7 +446,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Updates the current plan for the account resource specified by the request URL.")
   }
 
   //sets plan to "free"
@@ -443,7 +466,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Downgrades the specified account to the free plan.")
   }
 
 
@@ -457,7 +480,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the details of the account resource specified by the request URL.")
   }
 
 
@@ -477,7 +500,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Disables the account resource specified by the request URL.")
   }
 }
 

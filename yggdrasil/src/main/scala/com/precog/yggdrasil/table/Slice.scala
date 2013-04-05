@@ -1639,7 +1639,7 @@ object Slice {
         }
         
         acc + (ref -> updatedColumn)
-    }
+      }
   }
 
   private sealed trait SchemaNode

@@ -38,8 +38,6 @@ extends CustomHttpService[A, APIKey => Future[HttpResponse[A]]] {
     })
   }
 
-  val metadata = Some(DescriptionMetadata(
-    """Requests the deletion of an asynchronous query."""
-  ))
+  val metadata = DescriptionMetadata("""Requests the deletion of an asynchronous query.""")
 }
 

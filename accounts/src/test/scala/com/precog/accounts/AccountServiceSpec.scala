@@ -157,10 +157,12 @@ class AccountServiceSpec extends TestAccountService with Tags {
 
   def createAccountAndGetId(email: String, pass: String): Future[String] = {
     createAccount(email, pass) map {
-      case response @ HttpResponse(_, _, Some(jv), _) =>
+      case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
         val JString(id) = jv \ "accountId"
         id
-      case _ => sys.error("Invalid response from server when creating account.")
+
+      case error => 
+        sys.error("Invalid response from server when creating account: " + error)
     }
   }
 
@@ -173,12 +175,13 @@ class AccountServiceSpec extends TestAccountService with Tags {
     }
 
     "not create duplicate accounts" in {
-      val user = "test0002@email.com"
-      (for {
-        _ <- createAccount(user, "password1")
-        response <- createAccount(user, "password2")
-      } yield response).copoint must beLike {
-        case HttpResponse(HttpStatus(Conflict, _), _, _, _) => ok
+      val msgFuture = for {
+        HttpResponse(HttpStatus(OK, _), _, Some(jv1), _) <- createAccount("test0002@email.com", "password1")
+        HttpResponse(HttpStatus(Conflict, _), _, Some(errorMessage), _) <- createAccount("test0002@email.com", "password2")
+      } yield errorMessage
+
+      msgFuture.copoint must beLike {
+        case JString(msg) => msg must startWith("An account already exists")
       }
     }
 
@@ -190,18 +193,6 @@ class AccountServiceSpec extends TestAccountService with Tags {
       } yield resp).copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
           jv \ "email" must_== JString(user)
-      }
-    }
-
-    "not find other account" in {
-      val (user, pass) = ("test0004@email.com", "password")
-      (for {
-        id1 <- createAccountAndGetId(user, pass)
-        id2 <- createAccountAndGetId("some-other-email@email.com", "password")
-        resp <- getAccount(id2, user, pass)
-      } yield resp).copoint must beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(jv), _) =>
-          ok
       }
     }
 
@@ -287,6 +278,18 @@ class AccountServiceSpec extends TestAccountService with Tags {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => jvalue \ "accountId"
         case badResponse => failure("Invalid response: " + badResponse)
       }.copoint mustEqual JString(accountId)
+    }
+
+    "not find other account" in {
+      val (user, pass) = ("test0011@email.com", "password")
+      (for {
+        id1 <- createAccountAndGetId(user, pass)
+        id2 <- createAccountAndGetId("some-other-email@email.com", "password")
+        resp <- getAccount(id2, user, pass)
+      } yield resp).copoint must beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(jv), _) =>
+          ok
+      }
     }
 
     "create and use a password reset token" in {

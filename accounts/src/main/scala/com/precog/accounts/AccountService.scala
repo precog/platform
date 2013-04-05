@@ -70,7 +70,7 @@ trait AuthenticationCombinators extends HttpRequestHandlerCombinators {
       }
     }
 
-    val metadata = Some(AboutMetadata(ParameterMetadata('accountId, None), DescriptionMetadata("A accountId is required for the use of this service.")))
+    val metadata = DescriptionMetadata("HTTP Basic authentication is required for use of this service.")
   }
 }
 
@@ -91,7 +91,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
 
   val AccountService = service("accounts", "1.0") {
     requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
+      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
 
@@ -123,6 +123,11 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                   get(SearchAccountHandler)
                 } ~
                 post(PostAccountHandler) ~
+                path("search") {
+                  parameter('email) {
+                    get(SearchAccountsHandler) 
+                  }
+                } ~
                 auth(handlers.accountManager) {
                   get(ListAccountsHandler) ~
                   path("'accountId") {
