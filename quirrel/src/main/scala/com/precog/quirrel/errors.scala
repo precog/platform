@@ -149,6 +149,10 @@ case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
   override def toString = "unable to solve for variable %s".format(id)
 }
 
+case object UnableToSolveCriticalConditionAnon extends ErrorType {
+  override def toString = "unable to solve conditional: invalid expression type"
+}
+
 case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
   override def toString = "unable to solve defining set for variable %s".format(id)
 }
