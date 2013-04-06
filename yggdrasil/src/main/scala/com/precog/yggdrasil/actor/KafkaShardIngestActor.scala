@@ -377,9 +377,9 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       val eventMessages: List[Validation[Error, (Long, EventMessage.EventMessageExtraction)]] =
         msTime({t => logger.debug("Raw kafka deserialization in %d ms".format(t)) }) {
-          rawMessages.toList.map { msgAndOffset =>
+          rawMessages.par.map { msgAndOffset =>
             EventMessageEncoding.read(msgAndOffset.message.payload) map { (msgAndOffset.offset, _) }
-          }
+          }.toList
         }
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
