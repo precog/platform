@@ -16,4 +16,6 @@ trait StorageReader {
    * Returns the total length of the block.
    */
   def length: Int
+
+  override def toString = "StorageReader: id = %d, length = %d, structure = %s".format(id, length, structure)
 }
