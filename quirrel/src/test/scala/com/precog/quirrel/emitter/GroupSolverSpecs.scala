@@ -1111,5 +1111,16 @@ object GroupSolverSpecs extends Specification
         
       compileSingle(input).errors must beEmpty
     }
+    
+    "reject a reduction in an extra" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo where foo.a = 'a & exists(foo.b = "boo")
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
+    }
   }
 }
