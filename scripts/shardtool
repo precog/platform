@@ -34,7 +34,7 @@ class Service(object):
     def ingest(self, fspath, qpath, syncType):
         assert(os.path.exists(fspath))
         assert(not qpath.startswith('/'))
-        url = "http://localhost:%s/%s/fs/%s/%s?apiKey=%s" % (self.ingestport, syncType, self.account, qpath, self.apikey)
+        url = "http://localhost:%s/ingest/v2/%s/fs/%s/%s?apiKey=%s" % (self.ingestport, syncType, self.account, qpath, self.apikey)
         mime = 'Content-Type: application/json'
         #args = ['curl', '-v', '-H', mime, '--data-bin', "@" + fspath, url]
         args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
@@ -42,17 +42,18 @@ class Service(object):
         print ""
 
     def query(self, query):
-        url = "http://localhost:%s/analytics/fs/%s" % (self.shardport, self.accountid)
+        url = "http://localhost:%s/analytics/v2/analytics/fs/%s" % (self.shardport, self.account)
         #args = ['curl', '-v', '-s', '-G',
         args = ['curl', '-s', '-G',
                 #'-H', 'Accept-Encoding: gzip',
+                '--data-urlencode', "format=detailed",
                 '--data-urlencode', "q=" + query,
                 '--data-urlencode', 'apiKey=' + self.apikey, url]
         call(args)
         print ""
 
     def metadata(self, qpath):
-        url = "http://localhost:%s/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
+        url = "http://localhost:%s/analytics/v2/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
         args = ['curl', '-s', '-G',
                 '--data-urlencode', 'apiKey=' + self.apikey, url]
         call(args)

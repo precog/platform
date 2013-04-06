@@ -807,7 +807,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               for {
                 _ <- prepareEval(point, splits)
                 rewritten <- stagedOptimizations(graph, ctx, optimize, splitNodes)
-                
                 toEval = listStagingPoints(Queue(rewritten)) filter referencesOnlySplit(parentSplits)
                 result <- stage(toEval, rewritten)
               } yield result
