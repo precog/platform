@@ -40,6 +40,8 @@ import org.joda.time.{DateTime, Period}
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.annotation.{switch, tailrec}
 
 import scala.collection.{breakOut, mutable}
@@ -1683,7 +1685,7 @@ object Slice {
 
 import com.precog.niflheim._
 
-case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice {
+case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice with Logging {
   import TransSpecModule.paths
 
   // FIXME: This should use an identity of Array[Long](projectionId,
@@ -1740,6 +1742,13 @@ case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: L
 
   private val cols: Map[ColumnRef, Column] = buildMap(segments) + buildKeyColumn(segments.headOption map (_.length) getOrElse 0)
 
-  val size: Int = segments.foldLeft(0)(_ max _.length)
+  val size: Int = {
+    val sz = segments.foldLeft(0)(_ max _.length)
+    if (logger.isTraceEnabled) {
+      logger.trace("Computed size %d from:\n  %s".format(sz, segments.mkString("\n  ")))
+    }
+    sz
+  }
+
   def columns: Map[ColumnRef, Column] = cols
 }

@@ -58,7 +58,9 @@ trait NIHDBSnapshot extends Logging {
     // be careful! the semantics of findReaderAfter are somewhat subtle
     val i = id0.map(Arrays.binarySearch(blockIds, _)) getOrElse -1
     val j = if (i < 0) -i - 1 else i + 1
-    logger.trace("findReaderAfter(%s) has i = %d, j = %d with blockIds.length = %d".format(id0, i, j, blockIds.length))
+    if (logger.isTraceEnabled) {
+      logger.trace("findReaderAfter(%s) has i = %d, j = %d with blockIds.length = %d".format(id0, i, j, blockIds.length))
+    }
     if (j >= blockIds.length) None else Some(readers(j))
   }
 
@@ -67,10 +69,15 @@ trait NIHDBSnapshot extends Logging {
 
   def getBlockAfter(id0: Option[Long], cols: Option[Set[ColumnRef]]): Option[Block] =
     findReaderAfter(id0).map { reader =>
-      logger.trace("Block after %s is %s (%s)".format(id0, reader, reader.hashCode))
-      reader.snapshotRef(cols)
+      val snapshot = reader.snapshotRef(cols)
+      if (logger.isTraceEnabled) {
+        logger.trace("Block after %s, %s (%s)\nSnapshot on %s:\n  %s".format(id0, reader, reader.hashCode, cols, snapshot.segments.map(_.toString).mkString("\n  ")))
+      }
+      snapshot
     }.orElse {
-      logger.trace("No block after " + id0)
+      if (logger.isTraceEnabled) {
+        logger.trace("No block after " + id0)
+      }
       None
     }
 

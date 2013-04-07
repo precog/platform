@@ -39,6 +39,8 @@ sealed trait Segment {
   def defined: BitSet
   def length: Int
   def extend(amount: Int): Segment
+
+  override def toString = "Segment(%d, %s, %s, %d/%d)".format(blockid, cpath, ctype, defined.cardinality, length)
 }
 
 sealed trait ValueSegment[@spec(Boolean,Long,Double) A] extends Segment {
