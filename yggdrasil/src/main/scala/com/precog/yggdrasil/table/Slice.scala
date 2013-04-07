@@ -37,6 +37,8 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 import org.joda.time.{DateTime, Period}
 
+import org.slf4j.LoggerFactory
+
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
@@ -936,7 +938,7 @@ trait Slice { source =>
             case CPathMeta(_) :: _ => target
 
             case CPathArray :: _ => sys.error("todo")
-            
+
             case Nil => {
               val node = SchemaNode.Leaf(ctype, col)
 
@@ -1232,17 +1234,17 @@ trait Slice { source =>
         def renderDate(date: DateTime) {
           renderString(date.toString)
         }
-        
+
         @inline
         def renderPeriod(period: Period) {
           renderString(period.toString)
         }
-        
+
         @inline
         def renderArray[A](array: Array[A]) {
           renderString(array.deep.toString)
         }
-        
+
         def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
           case obj: SchemaNode.Obj => {
             val keys = obj.keys
@@ -1449,10 +1451,10 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CPeriod => {
               val specCol = col.asInstanceOf[PeriodColumn]
-              
+
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderPeriod(specCol(row))
@@ -1461,10 +1463,10 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CArrayType(_) => {
               val specCol = col.asInstanceOf[HomogeneousArrayColumn[_]]
-              
+
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderArray(specCol(row))
@@ -1473,7 +1475,7 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CUndefined => false
           }
         }
@@ -1626,11 +1628,11 @@ object Slice {
       case (acc, (jpath, v)) =>
         val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
         val ref = ColumnRef(remapPath.map(_(jpath)).getOrElse(CPath(jpath)), ctype)
-        
+
         val updatedColumn: ArrayColumn[_] = v match {
           case JBool(b) =>
             acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
-            
+
           case JNum(d) => ctype match {
             case CLong =>
               acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
@@ -1643,22 +1645,22 @@ object Slice {
 
             case _ => sys.error("non-numeric type reached")
           }
-            
+
           case JString(s) =>
             acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
-            
+
           case JArray(Nil) =>
             acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
-            
+
           case JObject.empty =>
             acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
-            
+
           case JNull        =>
             acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
 
           case _ => sys.error("non-flattened value reached")
         }
-        
+
         acc + (ref -> updatedColumn)
       }
   }
@@ -1685,8 +1687,10 @@ object Slice {
 
 import com.precog.niflheim._
 
-case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice with Logging {
+case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice {
   import TransSpecModule.paths
+
+  val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.SegmentsWrapper")
 
   // FIXME: This should use an identity of Array[Long](projectionId,
   // blockId), but the evaluator will cry if we do that right now

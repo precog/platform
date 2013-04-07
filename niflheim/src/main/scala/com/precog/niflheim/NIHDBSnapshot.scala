@@ -26,7 +26,7 @@ import com.precog.common.json._
 import com.precog.common.security.Authorities
 import com.precog.util._
 
-import com.weiglewilczek.slf4s.Logging
+import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 import scala.collection.immutable.SortedMap
@@ -41,9 +41,11 @@ object NIHDBSnapshot {
     }
 }
 
-trait NIHDBSnapshot extends Logging {
+trait NIHDBSnapshot {
   def blockIds: Array[Long]
   def readers: Array[StorageReader]
+
+  val logger = LoggerFactory.getLogger("com.precog.niflheim.NIHDBSnapshot")
 
   protected[this] def findReader(id0: Option[Long]): Option[StorageReader] = {
     if (readers.isEmpty) {
