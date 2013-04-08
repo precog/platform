@@ -68,7 +68,7 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
         (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map { 
           case ((sizeV, childrenV), structureV) =>
             {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: { 
-              (sizeV.toValidationNEL |@| childrenV.toValidationNEL |@| structureV.toValidationNEL) { (size, children, structure) =>
+              (sizeV.toValidationNel |@| childrenV.toValidationNel |@| structureV.toValidationNel) { (size, children, structure) =>
                 JObject("size" -> size, "children" -> children, "structure" -> structure)
               }
             }
@@ -85,9 +85,5 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
     }
   })
 
-  val metadata = Some(DescriptionMetadata(
-"""
-Browse the children of the given path. 
-"""
-  ))
+  val metadata = DescriptionMetadata("""Browse the children of the given path.""")
 }

@@ -34,6 +34,7 @@ import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 
 import com.weiglewilczek.slf4s.Logging
+import scalaz.syntax.show._
 
 trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging {
   def dataPath[A, B](prefix: String)(next: HttpService[A, (APIKey, Path) => Future[B]]) = {
@@ -41,13 +42,16 @@ trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging 
       new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
-          logger.debug("Handling dataPath request " + request)
+          logger.debug("Handling dataPath request " + request.shows)
         
           val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
           next.service(request) map { f => (apiKey: APIKey) => f(apiKey, Path(path.getOrElse(""))) }
         }
 
-        val metadata = None
+        val metadata = AboutMetadata(
+          PathPatternMetadata(prefix),
+          DescriptionMetadata("The portion of the URL path following this prefix will be treated as a path in the Precog virtual filesystem.")
+        )
       }
     }
   }

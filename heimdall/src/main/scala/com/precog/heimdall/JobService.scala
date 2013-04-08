@@ -30,6 +30,7 @@ import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
+import blueeyes.core.service.RestPathPattern._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -76,8 +77,8 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
   implicit def M: Monad[Future]
 
   val jobService = this.service("jobs", "1.0") {
-    requestLogging(timeout) {
-      healthMonitor(timeout, List(eternity)) { monitor => context =>
+    requestLogging(timeout) { help("/docs/api") {
+      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
           M.point {
@@ -123,7 +124,7 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
           close(state.resource)
         }
       }
-    }
+    }}
   }
 }
 

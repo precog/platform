@@ -93,7 +93,5 @@ class AsyncQueryResultServiceHandler(jobManager: JobManager[Future])(implicit ex
     })
   }
 
-  val metadata = Some(DescriptionMetadata(
-    """Takes a job ID and may return the results of the execution of that query."""
-  ))
+  val metadata = DescriptionMetadata("""Takes a job ID and may return the results of the execution of that query.""")
 }

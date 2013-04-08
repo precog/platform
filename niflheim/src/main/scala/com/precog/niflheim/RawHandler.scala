@@ -57,6 +57,8 @@ class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue])
   @volatile protected[this] var segments = Segments.empty(id)
   protected[this] var count = rows.length
 
+  protected[this] val rowLock = new Object
+
   def isStable: Boolean = true
 
   def structure: Iterable[(CPath, CType)] =
@@ -66,7 +68,7 @@ class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue])
 
   def handleNonempty = {
     if (!rows.isEmpty) {
-      segments.synchronized {
+      rowLock.synchronized {
         if (!rows.isEmpty) {
           segments.extendWithRows(rows)
           rows.clear()
@@ -100,9 +102,11 @@ class RawReader private[niflheim] (val id: Long, val log: File, rs: Seq[JValue])
 class RawHandler private[niflheim] (id: Long, log: File, rs: Seq[JValue], private var os: OutputStream) extends RawReader(id, log, rs) {
   def write(eventid: Long, values: Seq[JValue]) {
     if (!values.isEmpty) {
-      count += values.length
-      RawLoader.writeEvents(os, eventid, values)
-      rows ++= values
+      rowLock.synchronized {
+        count += values.length
+        RawLoader.writeEvents(os, eventid, values)
+        rows ++= values
+      }
     }
   }
 

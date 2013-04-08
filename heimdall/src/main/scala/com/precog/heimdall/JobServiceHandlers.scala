@@ -60,7 +60,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     })
   }
 
-  val metadata = Some(AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("Job creation requires an 'apiKey.")))
+  val metadata = AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("Job creation requires an 'apiKey."))
 }
 
 class CreateJobHandler(jobs: JobManager[Future], auth: AuthService[Future], clock: Clock)(implicit ctx: ExecutionContext)
@@ -102,7 +102,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("Job creation requires an 'apiKey.")))
+  val metadata = AboutMetadata(ParameterMetadata('apiKey, None), DescriptionMetadata("Job creation requires an 'apiKey."))
 }
 
 class GetJobHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -120,7 +120,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(ParameterMetadata('jobId, None), DescriptionMetadata("Retrieve jobs by job ID.")))
+  val metadata = AboutMetadata(ParameterMetadata('jobId, None), DescriptionMetadata("Retrieve jobs by job ID."))
 }
 
 class GetJobStatusHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -137,7 +137,7 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(ParameterMetadata('jobId, None), DescriptionMetadata("Get the latest status of a job.")))
+  val metadata = AboutMetadata(ParameterMetadata('jobId, None), DescriptionMetadata("Get the latest status of a job."))
 }
 
 class UpdateJobStatusHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -179,13 +179,13 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     AndMetadata(
       ParameterMetadata('jobId, None),
       ParameterMetadata('prevStatusId, None)
     ),
     DescriptionMetadata("Post status updates to a job.")
-  ))
+  )
 }
 
 class ListChannelsHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -200,10 +200,10 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     })
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     ParameterMetadata('jobId, None),
     DescriptionMetadata("Return channels that have messages posted to them.")
-  ))
+  )
 }
 
 class AddMessageHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -224,13 +224,13 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     AndMetadata(
       ParameterMetadata('jobId, None),
       ParameterMetadata('channel, None)
     ),
     DescriptionMetadata("Post a message to a channel.")
-  ))
+  )
 }
 
 class ListMessagesHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -259,13 +259,13 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     }
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     AndMetadata(
       ParameterMetadata('jobId, None),
       ParameterMetadata('channel, None)
     ),
     DescriptionMetadata("Retrieve a list of messages posted to a channel.")
-  ))
+  )
 }
 
 class GetJobStateHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -283,10 +283,10 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     })
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     ParameterMetadata('jobId, None),
     DescriptionMetadata("Retreive the current state of a job.")
-  ))
+  )
 }
 
 class PutJobStateHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -365,10 +365,10 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
     })
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     ParameterMetadata('jobId, None),
     DescriptionMetadata("Update the state of a job if it is permissable.")
-  ))
+  )
 }
 
 class CreateResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -399,10 +399,10 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
     })
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     ParameterMetadata('jobId, None),
     DescriptionMetadata("Save the result of a job.")
-  ))
+  )
 }
 
 class GetResultHandler(jobs: JobManager[Future])(implicit ctx: ExecutionContext)
@@ -431,10 +431,10 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
     })
   }
 
-  val metadata = Some(AboutMetadata(
+  val metadata = AboutMetadata(
     ParameterMetadata('jobId, None),
     DescriptionMetadata("Get a job's result.")
-  ))
+  )
 }
 
 

@@ -153,7 +153,7 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
         (json1 \ "size").deserialize[Long] must_== 5
 
         val json2 = metadataFor(eve.apiKey)(_ / adam.bareRootPath / "")
-        println(json2)
+        //println(json2)
         (json2 \ "size").deserialize[Long] must_== 0
       }
     }
@@ -186,15 +186,6 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
   }
 }
 
-object RunMetadata {
-  def main(args: Array[String]) {
-    try {
-      val settings = Settings.fromFile(new java.io.File("shard.out"))
-      run(
-        new MetadataTask(settings)
-      )
-    } finally {
-      Http.shutdown()
-    }
-  }
+object RunMetadata extends Runner {
+  def tasks(settings: Settings) = new MetadataTask(settings) :: Nil
 }

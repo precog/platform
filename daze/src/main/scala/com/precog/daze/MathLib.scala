@@ -153,15 +153,17 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] with InfixLibModule
   
     object minOf extends Op2DDD("minOf", bothDefined, Math.min)
   
-    @deprecated
-    object min extends Op2DDD("min", bothDefined, Math.min)
+    object min extends Op2DDD("min", bothDefined, Math.min) {
+      override val deprecation = Some("use minOf instead")
+    }
   
     object hypot extends Op2DDD("hypot", bothDefined, Math.hypot)
 
     object maxOf extends Op2DDD("maxOf", bothDefined, Math.max)
   
-    @deprecated
-    object max extends Op2DDD("max", bothDefined, Math.max)
+    object max extends Op2DDD("max", bothDefined, Math.max) {
+      override val deprecation = Some("use maxOf instead")
+    }
   
     object atan2 extends Op2DDD("atan2", bothDefined, Math.atan2)
   

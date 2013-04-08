@@ -137,7 +137,7 @@ object JDBCPlatformSpecEngine extends Logging {
 
             JParser.parseManyFromFile(file) match {
               case Success(data) =>
-                val rows: Seq[Vector[(String, (String, String))]] = data.map { jv =>
+                val rows: Seq[List[(String, (String, String))]] = data.map { jv =>
                   jv.flattenWithPath.map { case (p, v) => (JDBCColumnarTableModule.escapePath(p.toString.drop(1)), jvToSQL(v)) }
                 }
 

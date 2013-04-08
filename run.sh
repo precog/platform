@@ -22,7 +22,8 @@
 MAX_SHARD_STARTUP_WAIT=300
 
 function usage {
-    echo "Usage: ./run.sh [-b] [-l] [-d] [-q directory] [ingest.json ...]" >&2
+    echo "Usage: ./run.sh [-b] [-l] [-d] [-a <assemblies to build>] [-q directory] [ingest.json ...]" >&2
+    echo "  -a: Force build of the specified assemblies" >&2
     echo "  -b: Build any required artifacts for the run" >&2
     echo "  -d: Print debug output" >&2
     echo "  -l: Don't clean work directory on completion" >&2
@@ -35,8 +36,11 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-while getopts ":q:bld" opt; do
+while getopts ":a:q:bld" opt; do
     case $opt in
+        a)
+            EXTRAFLAGS="$EXTRAFLAGS -a $OPTARG"
+            ;;
         q)
             QUERYDIR=$OPTARG
             ;;
@@ -152,7 +156,7 @@ for f in $@; do
     echo "Ingesting: $f"
     TABLE=$(basename "$f" ".json")
     ALLTABLES="$ALLTABLES $TABLE"
-    COUNT=$(wc -l "$f")
+    COUNT=$(cat "$f" | wc -l)
 
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @\"$f\" \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
     INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @"$f" "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
@@ -164,16 +168,16 @@ for f in $@; do
     TRIES_LEFT=30
 
     COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
-    while [[ $TRIES_LEFT != 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
+    while [[ $TRIES_LEFT -gt 0 && ( -z "$COUNT_RESULT" || ${COUNT_RESULT:-0} -lt $COUNT ) ]] ; do
         [ -n "$DEBUG" ] && echo "Count result for $TABLE = ${COUNT_RESULT:-0} / $COUNT on try $TRIES_LEFT"
         sleep 2
         COUNT_RESULT=$(query "count(//$TABLE)" | tr -d '[]')
         TRIES_LEFT=$(( $TRIES_LEFT - 1 ))
     done
 
-    [ "$TRIES_LEFT" != "0" ] || {
+    [ "$TRIES_LEFT" -gt "0" ] || {
         echo "Exceeded maximum ingest count attempts for $TABLE. Expected $COUNT, got $COUNT_RESULT. Failure!"
-	[ -N "$DEBUG" ] && sleep 86400 # Maybe excessive
+	[ -n "$DEBUG" ] && sleep 86400 # Maybe excessive
         EXIT_CODE=1
         exit 1
     }
@@ -236,6 +240,36 @@ else
     else
         echo "Archive completed"
     fi
+
+    # Test health check URLs for all services
+    echo "Checking health URLs"
+
+    echo -n "Checking ingest health at http://localhost:$INGEST_PORT/ingest/v2/health......."
+    curl -sG "http://localhost:$INGEST_PORT/ingest/v2/health" > /dev/null && echo OK || {
+        echo "Ingest health check failed" >&2
+        EXIT_CODE=1
+    }
+    echo -n "Checking auth health at http://localhost:$AUTH_PORT/security/v1/health......."
+    curl -sG "http://localhost:$AUTH_PORT/security/v1/health" > /dev/null && echo OK || {
+        echo "Auth health check failed" >&2
+        EXIT_CODE=1
+    }
+    echo -n "Checking accounts health at http://localhost:$ACCOUNTS_PORT/accounts/v1/health..."
+    curl -sG "http://localhost:$ACCOUNTS_PORT/accounts/v1/health" > /dev/null && echo OK || {
+        echo "Accounts health check failed" >&2
+        EXIT_CODE=1
+    }
+    echo -n "Checking jobs health at http://localhost:$JOBS_PORT/jobs/v1/health..........."
+    curl -sG "http://localhost:$JOBS_PORT/jobs/v1/health" > /dev/null && echo OK || {
+        echo "Jobs health check failed" >&2
+        EXIT_CODE=1
+    }
+    echo -n "Checking shard health at http://localhost:$SHARD_PORT/analytics/v2/health....."
+    curl -sG "http://localhost:$SHARD_PORT/analytics/v2/health" > /dev/null && echo OK || {
+        echo "Shard health check failed" >&2
+        EXIT_CODE=1
+    }
+
 fi
 
 exit $EXIT_CODE

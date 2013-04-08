@@ -35,6 +35,7 @@ import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
+import blueeyes.core.service.RestPathPattern._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
 import blueeyes.util.Clock
@@ -62,7 +63,7 @@ case class EventServiceDeps[M[+_]](
     eventStore: EventStore[M],
     jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
 
-trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators {
+trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators {
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -71,8 +72,8 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   def eventOptionsResponse = CORSHeaders.apply[JValue, Future](M)
 
   val eventService = this.service("ingest", "2.0") {
-    requestLogging {
-      healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
+    requestLogging { help("/docs/api") {
+      healthMonitor("/health", defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
           Future {
             import context._
@@ -93,34 +94,20 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           }
         } ->
         request { (state: EventServiceState) =>
-          import CORSHeaderHandler.allowOrigin
-          allowOrigin("*") {
-            decompress {
-              jsonp {
-                (jsonAPIKey(state.accessControl) {
-                  dataPath("/fs") {
-                    post(state.ingestHandler) ~
-                    delete(state.archiveHandler)
-                  } ~ //legacy handler
-                  path("/(?<sync>a?sync)") {
-                    dataPath("/fs") {
-                      post(state.ingestHandler) ~
-                      delete(state.archiveHandler)
-                    }
-                  } ~ //for legacy labcoat compatibility
-                  path("/ingest/(?<sync>a?sync)") {
-                    dataPath("/fs") {
-                      post(state.ingestHandler) ~
-                      delete(state.archiveHandler) ~
-                      options {
-                        (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => eventOptionsResponse
-                      }
-                    }
-                  }
-                }) map {
-                  _ map { _ map jvalueToChunk }
+          jsonp {
+            (jsonAPIKey(state.accessControl) {
+              dataPath("/fs") {
+                post(state.ingestHandler) ~
+                delete(state.archiveHandler)
+              } ~ //legacy handler
+              path("/(?<sync>a?sync)") {
+                dataPath("/fs") {
+                  post(state.ingestHandler) ~
+                  delete(state.archiveHandler)
                 }
               }
+            }) map {
+              _ map { _ map jvalueToChunk }
             }
           }
         } ->
@@ -128,6 +115,6 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           state.stop
         }
       }
-    }
+    }}
   }
 }
