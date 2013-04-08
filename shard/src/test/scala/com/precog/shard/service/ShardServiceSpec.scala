@@ -263,6 +263,7 @@ class ShardServiceSpec extends TestShardService {
       } yield result
 
       val expected = JObject(
+        JField("serverErrors", JArray(Nil)) ::
         JField("warnings", JArray(Nil)) ::
         JField("errors", JArray(Nil)) ::
         JField("data", JArray(JNum(2) :: Nil)) ::

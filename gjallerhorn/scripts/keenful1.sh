@@ -1,0 +1,3 @@
+curl "http://staging.precog.com/analytics/v1/fs/0000000071?apiKey=BD491DD0-B3C3-4D3B-A5BC-ECDED9798CA8&q=import%20std%3A%3Atime%3A%3A*%20data%20%3A%3D%20%2F%2Fprod%2F510d6f801c8430000967f555%2Factions%20data'%20%3A%3D%20data%20where%20getMillis%20(data.action.created_date)%20%3E%20getMillis(%222013-03-03%22)%20%26%20getMillis%20(data.action.created_date)%20%3C%20getMillis(%222013-03-10%22)%20count(distinct(data'.visitor.id))"
+
+#Keenful Query, ran in 9 seconds on 3-22-13
