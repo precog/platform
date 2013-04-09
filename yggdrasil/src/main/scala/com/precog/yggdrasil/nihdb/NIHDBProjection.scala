@@ -24,7 +24,6 @@ import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.security.Authorities
 import com.precog.common.ingest._
-import com.precog.common.json._
 import com.precog.niflheim._
 import com.precog.util._
 import com.precog.yggdrasil.actor._

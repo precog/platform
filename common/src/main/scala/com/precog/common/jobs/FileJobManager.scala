@@ -28,10 +28,10 @@ import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
 
 import com.google.common.cache.RemovalCause
 
-import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.util._
 import com.precog.util.cache.{Cache, SimpleCache}
@@ -271,6 +271,6 @@ object FileJobState {
 
   val schemaV1 = "job" :: "status" :: "messages" :: HNil
 
-  implicit val fjsDecomposerV1 : Decomposer[FileJobState] = decomposerV(schemaV1, Some("1.0"))
-  implicit val fjsExtractorV1 : Extractor[FileJobState] = extractorV(schemaV1, Some("1.0"))
+  implicit val fjsDecomposerV1 : Decomposer[FileJobState] = decomposerV(schemaV1, Some("1.0".v))
+  implicit val fjsExtractorV1 : Extractor[FileJobState] = extractorV(schemaV1, Some("1.0".v))
 }

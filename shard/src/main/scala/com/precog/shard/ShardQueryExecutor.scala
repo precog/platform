@@ -24,7 +24,7 @@ import blueeyes.json.serialization._
 import blueeyes.util.Clock
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.daze._

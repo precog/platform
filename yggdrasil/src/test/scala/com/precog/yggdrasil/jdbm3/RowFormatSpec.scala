@@ -24,7 +24,7 @@ import com.precog.common._
 import com.precog.yggdrasil.table._
 import com.precog.util.ByteBufferPool
 
-import com.precog.common.json._
+
 import blueeyes.json.{ JPath, JPathIndex }
 
 import org.joda.time.DateTime

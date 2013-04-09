@@ -25,6 +25,7 @@ import blueeyes.json._
 import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
 
 import com.weiglewilczek.slf4s._
 

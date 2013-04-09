@@ -24,7 +24,6 @@ import scalaz.Monoid
 import scala.collection.mutable
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule.paths

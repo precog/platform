@@ -20,7 +20,6 @@
 package com.precog.niflheim
 
 import com.precog.common._
-import com.precog.common.json._
 
 import com.precog.util.PrecogUnit
 

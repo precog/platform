@@ -23,9 +23,9 @@ package accounts
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Versioned._
 
 import com.precog.common.accounts._
-import com.precog.common.json._
 
 import org.joda.time.DateTime
 
@@ -38,5 +38,5 @@ object ResetToken {
 
   val schemaV1 = "tokenId" :: "accountId" :: "email" :: "expiresAt" :: "usedAt" :: HNil
 
-  implicit val (decomposerV1, extractorV1)  = serializationV(schemaV1, Some("1.0"))
+  implicit val (decomposerV1, extractorV1)  = serializationV(schemaV1, Some("1.0".v))
 }

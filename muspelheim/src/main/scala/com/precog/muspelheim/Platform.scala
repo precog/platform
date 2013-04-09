@@ -20,7 +20,7 @@
 package com.precog.muspelheim
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.daze.QueryExecutor
 import blueeyes.json._

@@ -26,7 +26,7 @@ import blueeyes.bkka._
 import com.mongodb.Mongo
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._

@@ -22,7 +22,7 @@ package table
 
 import com.precog.common._
 import com.precog.bytecode.JType
-import com.precog.common.json._
+
 import com.precog.util._
 import com.precog.util.{BitSetUtil, BitSet, Loop}
 import com.precog.util.BitSetUtil.Implicits._

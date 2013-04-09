@@ -20,7 +20,7 @@
 package com.precog.shard
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
 import com.precog.muspelheim._

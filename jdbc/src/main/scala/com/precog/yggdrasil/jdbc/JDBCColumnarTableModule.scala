@@ -23,7 +23,7 @@ package jdbc
 
 import com.precog.bytecode._
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.yggdrasil.util._
 import com.precog.util._

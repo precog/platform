@@ -20,7 +20,6 @@
 package com.precog.common
 package security
 
-import json._
 import accounts.AccountId
 
 import blueeyes.json._
@@ -28,6 +27,7 @@ import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.Extractor.Invalid
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.serialization.Versioned._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -200,6 +200,6 @@ object Permission {
     }
   }
 
-  implicit val decomposer = Serialization.versioned(decomposerV1Base, Some("1.0"))
-  implicit val extractor = Serialization.versioned(extractorV1Base, Some("1.0")) <+> extractorV1Base
+  implicit val decomposer = versioned(decomposerV1Base, Some("1.0".v), defaultVersionProperty)
+  implicit val extractor = versioned(extractorV1Base, Some("1.0".v), defaultVersionProperty) <+> extractorV1Base
 }
