@@ -9,7 +9,7 @@ import table._
 
 import bytecode._
 
-import common.json._
+
 
 import scalaz._
 import Scalaz._

@@ -5,7 +5,7 @@ import yggdrasil._
 import yggdrasil.table._
 
 import common._
-import common.json._
+
 
 import bytecode._
 import TableModule._

@@ -1,7 +1,7 @@
 package com.precog.shard
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.accounts._
 import com.precog.common.security._
 
