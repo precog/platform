@@ -252,6 +252,8 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
 
   override def postStop() = {
     IO {
+      logger.debug("Closing projection in " + baseDir)
+      blockState.rawLog.close
       txLog.close
       ProjectionState.toFile(currentState, descriptorFile)
     }.except { case t: Throwable =>
@@ -264,7 +266,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
   private def rawFileFor(seq: Long) = new File(rawDir, "%06x.raw".format(seq))
 
   private def computeBlockMap(current: BlockState) = {
-    val allBlocks: List[StorageReader] = (current.cooked ++ current.pending.values :+ current.rawLog).sortBy(_.id)
+    val allBlocks: List[StorageReader] = (current.cooked ++ current.pending.values :+ current.rawLog)
     SortedMap(allBlocks.map { r => r.id -> r }.toSeq: _*)
   }
 
