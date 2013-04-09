@@ -87,7 +87,7 @@ trait TestEventService extends
   private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   protected val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
-  protected val testAccount = TestAccounts.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {
+  protected val testAccount = TestAccounts.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
     case (accountId, path) => apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey)
   } copoint
 
@@ -104,7 +104,7 @@ trait TestEventService extends
     DeletePermission(testAccount.rootPath, WrittenByAny)
   )
 
-  val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None) {
+  val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
     case (accountId, path) =>
       apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey =>
         apiKeyManager.deriveAndAddGrant(None, None, testAccount.apiKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
