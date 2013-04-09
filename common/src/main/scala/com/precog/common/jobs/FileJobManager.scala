@@ -52,15 +52,21 @@ import java.util.UUID
 
 import scala.collection.mutable
 
-class FileJobManager[M[+_]](workDir: File, monadM: Monad[M])
+object FileJobManager {
+  def apply[M[+_]](workDir: File, monadM: Monad[M]): FileJobManager[M] = {
+    assert(workDir.isDirectory)
+    assert(workDir.canWrite)
+
+    new FileJobManager(workDir, monadM)
+  }
+}
+
+class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Monad[M])
     extends JobManager[M]
     with JobStateManager[M]
     with JobResultManager[M]
     with FileStorage[M]
     with Logging {
-
-  assert(workDir.isDirectory)
-  assert(workDir.canWrite)
 
   import JobState._
 
@@ -90,13 +96,13 @@ class FileJobManager[M[+_]](workDir: File, monadM: Monad[M])
   private[this] def saveJob(jobId: JobId, jobState: FileJobState) = {
     cache += (jobId -> jobState)
     // FIXME: Why can't this find the decomposer implicitly?
-    IOUtils.safeWriteToFile(jobState.serialize(FileJobState.fjsDecomposerV1).renderCompact,  jobFile(jobId)).unsafePerformIO
+    IOUtils.safeWriteToFile(jobState.serialize.renderCompact,  jobFile(jobId)).unsafePerformIO
   }
 
   private[this] def loadJob(jobId: JobId): Option[FileJobState] = {
     cache.get(jobId) orElse {
       if (jobFile(jobId).exists) {
-        JParser.parseFromFile(jobFile(jobId)).bimap(Extractor.Thrown(_), j => j).flatMap { jobV => jobV.validated[FileJobState](FileJobState.fjsExtractorV1) }.bimap({
+        JParser.parseFromFile(jobFile(jobId)).bimap(Extractor.Thrown(_), j => j).flatMap { jobV => jobV.validated[FileJobState] }.bimap({
           error => logger.error("Error loading job for %s: %s".format(jobId, error.message))
         }, j => j).toOption
       } else {
@@ -258,5 +264,6 @@ object FileJobState {
 
   val schemaV1 = "job" :: "status" :: "messages" :: HNil
 
-  implicit val (fjsDecomposerV1, fjsExtractorV1) = serializationV[FileJobState](schemaV1, Some("1.0"))
+  implicit val fjsDecomposerV1 : Decomposer[FileJobState] = decomposerV(schemaV1, Some("1.0"))
+  implicit val fjsExtractorV1 : Extractor[FileJobState] = extractorV(schemaV1, Some("1.0"))
 }

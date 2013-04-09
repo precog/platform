@@ -76,7 +76,7 @@ trait StandaloneShardServer
         throw new Exception("Configured job dir %s is not writeable".format(dir))
       }
 
-      new FileJobManager(dir, M)
+      FileJobManager(dir, M)
     }.getOrElse {
       new ExpiringJobManager(Duration(config[Int]("jobs.ttl", 300), TimeUnit.SECONDS))
     }
