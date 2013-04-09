@@ -24,6 +24,7 @@ import com.precog.common.Path
 import com.precog.common.json._
 import com.precog.common.security.APIKey
 
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -59,11 +60,12 @@ case class Account(accountId: AccountId,
                    rootPath: Path,
                    plan: AccountPlan,
                    parentId: Option[String] = None,
-                   lastPasswordChangeTime: Option[DateTime] = None)
+                   lastPasswordChangeTime: Option[DateTime] = None,
+                   profile: Option[JValue] = None)
 
 object Account {
   implicit val iso = Iso.hlist(Account.apply _, Account.unapply _)
-  val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: HNil
+  val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: "profile" :: HNil
 
   val extractorPreV = extractorV[Account](schemaV1, None)
   val extractorV1 = extractorV[Account](schemaV1, Some("1.0"))

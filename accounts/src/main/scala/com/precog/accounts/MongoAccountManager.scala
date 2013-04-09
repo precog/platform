@@ -95,7 +95,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   def newAccountId: Future[String]
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId])(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId], profile: Option[JValue])(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -107,7 +107,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           saltAndHashSHA256(password, salt), salt,
           creationDate,
           apiKey, path, plan,
-          parent)
+          parent, Some(creationDate), profile)
 
         database(insert(account0.serialize.asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0

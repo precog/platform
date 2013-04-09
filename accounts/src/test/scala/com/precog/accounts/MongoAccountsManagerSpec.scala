@@ -53,13 +53,13 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
   "MongoAccountManager" should {
     "find an Account by accountId" in new AccountManager {
       accountManager.findAccountById(account.accountId).copoint must beLike {
-        case Some(Account(accountId,_,_,_,_,_,_,_,_,_)) => accountId must_== account.accountId
+        case Some(Account(accountId,_,_,_,_,_,_,_,_,_,_)) => accountId must_== account.accountId
       }
     }
 
      "find an Account by email address" in new AccountManager {
        accountManager.findAccountByEmail(account.email).copoint must beLike {
-        case Some(Account(accountId,_,_,_,_,_,_,_,_,_)) => accountId must_== account.accountId
+        case Some(Account(accountId,_,_,_,_,_,_,_,_,_,_)) => accountId must_== account.accountId
       }
     }
 
@@ -76,7 +76,7 @@ object MongoAccountManagerSpec extends Specification with RealMongoSpecSupport {
         _ <- accountManager.updateAccount(updatedAccount)
         result2 <- accountManager.findAccountById(account.accountId)
       } yield result2).copoint must beLike {
-        case Some(Account(accountId,_,_,_,_,apiKey,_,_,_,_)) => apiKey must_== updatedAccount.apiKey
+        case Some(Account(accountId,_,_,_,_,apiKey,_,_,_,_,_)) => apiKey must_== updatedAccount.apiKey
       }
     }
 
