@@ -2669,6 +2669,21 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       eval(input) must not(beEmpty)
     }
+    
+    "not explode" in {
+      val input = """
+        | travlex := //clicks
+        | 
+        | summarize(data, n) := solve data = 'qualifier
+        |   'qualifier + n
+        | 
+        | summarize(travlex, 1) union
+        | summarize(travlex, 2)
+        | """.stripMargin
+
+      eval(input)
+      true mustEqual true
+    }
   }
 }
 

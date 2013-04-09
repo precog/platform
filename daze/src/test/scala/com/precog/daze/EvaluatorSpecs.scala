@@ -10,8 +10,7 @@ import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.util.IOUtils
-import com.precog.util.IdGen
+import com.precog.util.{IOUtils, IdGen, Identifier}
 import com.precog.bytecode._
 
 import akka.util.duration._
@@ -2725,16 +2724,18 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        
       val nums = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(Add, CrossLeftSort,
-          SplitGroup(1, nums.identities)(input)(line),
+          SplitGroup(1, nums.identities, id)(line),
           dag.Reduce(Max,
             Filter(IdentitySort,
               nums,
               Join(Lt, CrossLeftSort,
                 nums,
-                SplitParam(0)(input)(line))(line))(line))(line))(line))(line)
+                SplitParam(0, id)(line))(line))(line))(line))(line), id)(line)
               
       testEval(input) { result =>
         result must haveSize(4)
@@ -2756,11 +2757,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1,
           Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line),
           UnfixedSolution(0, Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line))),
-        SplitGroup(1, clicks.identities)(input)(line))(line)
+        SplitGroup(1, clicks.identities, id)(line), id)(line)
         
       testEval(input) { result =>
         result must haveSize(100)
@@ -2776,7 +2779,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1,
           Join(DerefObject, CrossLeftSort, clicks, Const(CString("page"))(line))(line),
           IntersectBucketSpec(
@@ -2786,7 +2791,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
                 Const(CString("/sign-up.html"))(line))(line)),
             UnfixedSolution(0, 
               Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line)))),
-        dag.Reduce(Count, SplitGroup(1, clicks.identities)(input)(line))(line))(line)
+        dag.Reduce(Count, SplitGroup(1, clicks.identities, id)(line))(line), id)(line)
         
       testEval(input) { results =>
         results must not(beEmpty)
@@ -2813,9 +2818,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           clicks,
           Const(CString("page"))(line))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1, data, UnfixedSolution(0, data)),
-        SplitParam(0)(input)(line))(line)
+        SplitParam(0, id)(line), id)(line)
     }
     
     "split where the commonality is a union" in {
@@ -2829,9 +2836,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val data = dag.IUI(true, clicks, clicks)(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1, data, UnfixedSolution(0, Join(DerefObject, CrossLeftSort, data, Const(CString("page"))(line))(line))),
-        SplitGroup(1, data.identities)(input)(line))(line)
+        SplitGroup(1, data.identities, id)(line), id)(line)
         
       testEval(input) { results =>
         results must not(beEmpty)
@@ -2885,8 +2894,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // 
       // 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      
+      val id = new Identifier
        
-      lazy val input: dag.Split = dag.Split(
+      val input = dag.Split(
         dag.Group(1,
           clicks,
           UnfixedSolution(0, 
@@ -2896,11 +2907,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
-            SplitParam(0)(input)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
-              SplitGroup(1, clicks.identities)(input)(line))(line))(line))(line))(line)
+              SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
       
       testEval(input) { result =>
         result must haveSize(10)
@@ -3052,8 +3063,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // 
       // 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      
+      val id = new Identifier
        
-      lazy val histogram: dag.Split = dag.Split(
+      val histogram = dag.Split(
         dag.Group(1,
           clicks,
           UnfixedSolution(0,
@@ -3063,11 +3076,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
-            SplitParam(0)(histogram)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
-              SplitGroup(1, clicks.identities)(histogram)(line))(line))(line))(line))(line)
+              SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
        
       val input = Filter(IdentitySort,
         histogram,
@@ -3101,8 +3114,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       //
     
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      
+      val id = new Identifier
        
-      lazy val histogram: dag.Split = dag.Split(
+      val histogram = dag.Split(
         dag.Group(1,
           clicks,
           UnfixedSolution(0,
@@ -3112,11 +3127,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
-            SplitParam(0)(histogram)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
-              SplitGroup(1, clicks.identities)(histogram)(line))(line))(line))(line))(line)
+              SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
 
       val input = Join(JoinObject, IdentitySort,
         histogram,
@@ -3491,7 +3506,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val clicks = dag.LoadLocal(dag.Const(CString("/clicks"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1,
           clicks,
           UnfixedSolution(2,
@@ -3501,7 +3518,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
                 dag.Const(CNull)(line))(line),
               clicks, IdentitySort,
               clicks, IdentitySort)(line))),
-        SplitGroup(1, clicks.identities)(input)(line))(line)
+        SplitGroup(1, clicks.identities, id)(line), id)(line)
         
       testEval(input) { resultsE =>
         resultsE must haveSize(100)
