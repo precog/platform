@@ -20,12 +20,12 @@
 package com.precog.common
 package services
 
-import akka.dispatch.Future
+import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.core.http._
 import blueeyes.core.service._
 
-import scalaz.Monad
+import scalaz.{Monad, Success}
 
 object CORSHeaders {
   def genHeaders(
@@ -48,7 +48,17 @@ object CORSHeaders {
 }
 
 object CORSHeaderHandler {
-  def allowOrigin[A, B](value: String)(service: HttpService[A, Future[HttpResponse[B]]]): HttpService[A, Future[HttpResponse[B]]] = service map { _.map {
-    case resp @ HttpResponse(_, headers, _, _) => resp.copy(headers = headers ++ CORSHeaders.genHeaders(origin = value))
-  } }
+  def allowOrigin[A, B](value: String, executor: ExecutionContext)(delegateService: HttpService[A, Future[HttpResponse[B]]]): HttpService[A, Future[HttpResponse[B]]] =
+    new DelegatingService[A, Future[HttpResponse[B]], A, Future[HttpResponse[B]]] {
+      private val corsHeaders = CORSHeaders.genHeaders(origin = value)
+      val delegate = delegateService
+      val service = (r: HttpRequest[A]) => r.method match {
+        case HttpMethods.OPTIONS => Success(Promise.successful(HttpResponse(headers = corsHeaders))(executor))
+        case _ => delegateService.service(r).map { _.map {
+          case resp @ HttpResponse(_, headers, _, _) => resp.copy(headers = headers ++ corsHeaders)
+        } }
+      }
+
+      val metadata = delegateService.metadata
+    }
 }

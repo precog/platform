@@ -94,20 +94,23 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           }
         } ->
         request { (state: EventServiceState) =>
-          jsonp {
-            (jsonAPIKey(state.accessControl) {
-              dataPath("/fs") {
-                post(state.ingestHandler) ~
-                delete(state.archiveHandler)
-              } ~ //legacy handler
-              path("/(?<sync>a?sync)") {
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*", executionContext) {
+            jsonp {
+              (jsonAPIKey(state.accessControl) {
                 dataPath("/fs") {
                   post(state.ingestHandler) ~
                   delete(state.archiveHandler)
+                } ~ //legacy handler
+                path("/(?<sync>a?sync)") {
+                  dataPath("/fs") {
+                    post(state.ingestHandler) ~
+                    delete(state.archiveHandler)
+                  }
                 }
+              }) map {
+                _ map { _ map jvalueToChunk }
               }
-            }) map {
-              _ map { _ map jvalueToChunk }
             }
           }
         } ->
