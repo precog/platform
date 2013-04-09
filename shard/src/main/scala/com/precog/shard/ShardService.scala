@@ -225,7 +225,7 @@ trait ShardService extends
         } ->
         request { state =>
           import CORSHeaderHandler.allowOrigin
-          allowOrigin("*") {
+          allowOrigin("*", executionContext) {
             asyncHandler(state) ~ syncHandler(state)
           }
         } ->
