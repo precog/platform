@@ -205,8 +205,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
       request.content map { futureContent =>
         Success(
           futureContent flatMap { jv =>
-            (jv \ "email", jv \ "password") match {
-              case (JString(email), JString(password)) =>
+            (jv \ "email", jv \ "password", jv \ "profile") match {
+              case (JString(email), JString(password), profile) =>
                 logger.debug("About to create account for email " + email)
                 for {
                   existingAccountOpt <- accountManager.findAccountByEmail(email)
@@ -215,7 +215,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                       logger.warn("Creation attempted on existing account %s by %s".format(account.accountId, remoteIpFrom(request)))
                       Promise.successful(Responses.failure(Conflict, "An account already exists with the email address %s. If you feel this is in error, please contact support@precog.com".format(email)))
                     } getOrElse {
-                      accountManager.newAccount(email, password, clock.now(), AccountPlan.Free, Some(rootAccountId)) { (accountId, path) =>
+                      accountManager.newAccount(email, password, clock.now(), AccountPlan.Free, Some(rootAccountId), profile.minimize) { (accountId, path) =>
                         logger.info("Created new account for " + email + " with id " + accountId + " and path " + path + " by " + remoteIpFrom(request))
                         apiKeyFinder.newAPIKey(accountId, path, Some("Root key for account " + accountId), Some("This is your master API key. Keep it secure!")) map {
                           details => details.apiKey

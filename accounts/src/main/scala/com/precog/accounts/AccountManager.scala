@@ -25,6 +25,8 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
+import blueeyes.json._
+
 import org.joda.time.DateTime
 
 import scalaz._
@@ -92,7 +94,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
     }
   }
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None, profile: Option[JValue] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
 
   def findAccountByEmail(email: String) : M[Option[Account]]
 
