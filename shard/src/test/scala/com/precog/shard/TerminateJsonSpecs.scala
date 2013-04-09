@@ -106,6 +106,18 @@ class TerminateJsonSpecs extends Specification {
         case Success(_) => ok
       }
     }
+    "not terminate perfectly fine string ~" in {
+      val data = """[{"_id":"ObjectId(\"50c0340042a1295fc55f4783\")"},{"_id":"ObjectId(\"50c0340042a1295fc55f4784\")"}]"""
+      parse(data) must beLike {
+        case Success(x) => ok
+      }
+    }
+    "not terminate perfectly fine string" in {
+      val data = """[{"Name":"HASTINGS Amy","_id":"ObjectId(\"50c0340042a1295fc55f4783\")","Countryname":"US","testthis":true,"Population":311591917,"Sportname":"Track                 and Field","Sex":"F"},{"Name":"SARNOBAT Rahi","_id":"ObjectId(\"50c0340042a1295fc55f4784\")","Countryname":"India","Population":1241491960,"Sportname":"Shooting","Sex":"F"}]"""
+      parse(data) must beLike {
+        case Success(x) => ok
+      }
+    }
   }
 
   "terminating chunked JSON" should {

@@ -105,6 +105,7 @@ object TerminateJson {
         } else {
           stack.head match {
             case SkipChar =>
+              stack.pop()
             case ExpectValue =>
               if (!isWhitespace(c)) stack.pop()
               anyValue()
