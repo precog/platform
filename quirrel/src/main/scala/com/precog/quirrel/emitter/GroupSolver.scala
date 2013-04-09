@@ -332,6 +332,16 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           val resultM = actualM map { solveGroupCondition(b, _, free, sigma, dtrace) }
           resultM getOrElse sys.error("uh...?")
         }
+        
+        // TODO solve through functions that we deeply understand
+        case _ => {
+          val vars = listTicVars(Some(b), expr, sigma)
+          
+          if (vars.isEmpty)     // it's an independent extra; we're saved!
+            (Some(Extra(expr, dtrace)), Set())
+          else
+            (None, Set(Error(expr, UnableToSolveCriticalConditionAnon)))
+        }
       }
     }
 
@@ -391,6 +401,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       case Let(_, _, _, _, right) => isTranspecable(right, from, sigma)
       
       case Relate(_, _, _, in) => isTranspecable(in, from, sigma)
+      
+      case Cond(_, pred, left, right) =>
+        isTranspecable(pred, from, sigma) && isTranspecable(left, from, sigma) && isTranspecable(right, from, sigma)
       
       case to @ Dispatch(_, id, actuals) => {
         to.binding match {

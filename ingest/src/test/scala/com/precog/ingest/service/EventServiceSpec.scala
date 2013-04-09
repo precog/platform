@@ -94,30 +94,23 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => content.validated[Long]("content-length") must_== Success(37L)
+        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
       }
     }
 
     "track synchronous batch event with bad row" in {
-      val msg = JParser.parseUnsafe("""{
-          "total": 2,
-          "ingested": 1,
-          "failed": 1,
-          "skipped": 0,
-          "errors": [ {
-            "line": 0,
-            "reason": "expected whitespace or eof got # (line 1, column 7)"
-          } ]
-        }""")
-
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("178234#!!@#$\n", """{ "testing": 321 }""")
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
-          msg mustEqual msg2
-          events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
+        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
+          msg \ "total" mustEqual JNum(3)
+          msg \ "ingested" mustEqual JNum(2)
+          msg \ "failed" mustEqual JNum(1)
+          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
+
+          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
       }
     }
 
@@ -197,8 +190,12 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _), _) =>
-          msg must startWith("Cannot ingest values with more than 1024 primitive fields.")
+        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(fields)), _), _) =>
+          val JArray(errors) = fields("errors")
+            errors.exists {
+              case JString(msg) => msg.startsWith("Cannot ingest values with more than 1024 primitive fields.")
+              case _ => false
+            } must_== true
       }
     }
 

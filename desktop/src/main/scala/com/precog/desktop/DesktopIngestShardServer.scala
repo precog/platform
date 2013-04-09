@@ -116,6 +116,8 @@ object DesktopIngestShardServer
           logger.debug("Loaded icon: " + iconUrl)
           appFrame.setIconImage(Toolkit.getDefaultToolkit.getImage(iconUrl))
 
+          appFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+
           appFrame.setVisible(true)
         }
       })

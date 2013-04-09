@@ -1,6 +1,6 @@
 <configuration scan="true">
   <property name="SERVICE" value="shard-v2" />
-  <property name="LOG_DIR" value="${installer:log_dir}" />
+  <property name="LOG_DIR" value="logs" />
 
   <appender name="SERVERLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${LOG_DIR}/${SERVICE}.server.log</file>

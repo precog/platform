@@ -178,15 +178,15 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
 
                 val numFeatures = featureColumns.size
 
-                // TODO: Make faster with fast isDefined checking.
-                val filtered = filteredRange(includedModel)
+                val filtered = filteredRange(includedModel).toArray
+                val len = filtered.length
 
                 val resultArray = {
-                  var k = 0
-                  val arr = new Array[String](range.end)
+                  var k = range.start
+                  val arr = new Array[String](range.end - range.start)
 
-                  while (k < filtered.length) {
-                    val row: Int = (filtered.toList)(k)
+                  while (k < len) {
+                    val row: Int = filtered(k)
 
                     val feature = new Array[Double](numFeatures)
                     var i = 0

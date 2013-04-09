@@ -329,10 +329,14 @@ abstract class KafkaShardIngestActor(shardId: String,
           (batch, checkpoint)
 
         case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _)) :: tail =>
-          val newCheckpoint = records.foldLeft(checkpoint) {
-            // TODO: This nested pattern match indicates that checkpoints are too closely
-            // coupled to the representation of event IDs.
-            case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
+          val newCheckpoint = if (records.isEmpty) {
+            checkpoint.skipTo(offset)
+          } else {
+            records.foldLeft(checkpoint) {
+              // TODO: This nested pattern match indicates that checkpoints are too closely
+              // coupled to the representation of event IDs.
+              case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
+            }
           }
 
           buildBatch(tail, batch :+ (offset, event), newCheckpoint)
@@ -373,9 +377,9 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       val eventMessages: List[Validation[Error, (Long, EventMessage.EventMessageExtraction)]] =
         msTime({t => logger.debug("Raw kafka deserialization of %d events in %d ms".format(rawMessages.size, t)) }) {
-          rawMessages.toList.map { msgAndOffset =>
+          rawMessages.par.map { msgAndOffset =>
             EventMessageEncoding.read(msgAndOffset.message.payload) map { (msgAndOffset.offset, _) }
-          }
+          }.toList
         }
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =

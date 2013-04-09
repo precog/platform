@@ -75,10 +75,10 @@ extends DelegatingService[A, Validation[String, APIKey] => Future[B], A, APIKey 
     }
   }
 
-  val metadata =
-    Some(AboutMetadata(
-      ParameterMetadata('apiKey, None),
-      DescriptionMetadata("A valid Precog API key is required for the use of this service.")))
+  val metadata = AboutMetadata(
+    ParameterMetadata('apiKey, None),
+    DescriptionMetadata("A valid Precog API key is required for the use of this service.")
+  )
 }
 
 class APIKeyRequiredService[A, B](keyFinder: APIKey => Future[Option[APIKey]], val delegate: HttpService[A, Validation[String, APIKey] => Future[B]])
@@ -99,8 +99,8 @@ extends DelegatingService[A, Future[B], A, Validation[String, APIKey] => Future[
     }
   }
 
-  val metadata =
-    Some(AboutMetadata(
-      ParameterMetadata('apiKey, None),
-      DescriptionMetadata("A Precog API key is required for the use of this service.")))
+  val metadata = AboutMetadata(
+    ParameterMetadata('apiKey, None),
+    DescriptionMetadata("A Precog API key is required for the use of this service.")
+  )
 }

@@ -61,9 +61,5 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] wit
     }
   }
 
-  val metadata = Some(DescriptionMetadata(
-    """
-      This service can be used to archive all data at the given path.
-    """
-  ))
+  val metadata = DescriptionMetadata("""This service can be used to delete all data at the given path. Note: This does not imply recursive deletion by default.""")
 }

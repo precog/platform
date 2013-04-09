@@ -132,16 +132,16 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
     }.toMap
   }
 
-  def load(paths: List[ColumnRef]): ValidationNEL[IOException, List[(ColumnRef, List[Segment])]] = {
-    segmentsByRef.toValidationNEL flatMap { (segsByRef: Map[ColumnRef, List[File]]) =>
+  def load(paths: List[ColumnRef]): ValidationNel[IOException, List[(ColumnRef, List[Segment])]] = {
+    segmentsByRef.toValidationNel flatMap { (segsByRef: Map[ColumnRef, List[File]]) =>
       paths.map { path =>
-        val v: ValidationNEL[IOException, List[Segment]] = segsByRef.getOrElse(path, Nil).map { file =>
+        val v: ValidationNel[IOException, List[Segment]] = segsByRef.getOrElse(path, Nil).map { file =>
           read(file) { channel =>
-            segmentFormat.reader.readSegment(channel).toValidationNEL
+            segmentFormat.reader.readSegment(channel).toValidationNel
           }
-        }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, Segment]
+        }.sequence[({ type λ[α] = ValidationNel[IOException, α] })#λ, Segment]
         v map (path -> _)
-      }.sequence[({ type λ[α] = ValidationNEL[IOException, α] })#λ, (ColumnRef, List[Segment])]
+      }.sequence[({ type λ[α] = ValidationNel[IOException, α] })#λ, (ColumnRef, List[Segment])]
     }
   }
 }

@@ -57,8 +57,8 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M8.2"
-  val scalazVersion = "7.0.0-M8"
+  val blueeyesVersion = "1.0.0-SNAPSHOT"
+  val scalazVersion = "7.0.0-RC1"
 
   val commonSettings = Seq(
     organization := "com.precog",
@@ -191,7 +191,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   lazy val gjallerhorn = Project(id = "gjallerhorn", base = file("gjallerhorn")).
-    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(quirrel, daze, yggdrasil % "compile->test", ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   lazy val performance = Project(id = "performance", base = file("performance")).
     settings(commonNexusSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard, logging % "test->test")

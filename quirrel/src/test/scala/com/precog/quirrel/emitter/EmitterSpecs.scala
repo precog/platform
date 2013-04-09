@@ -48,7 +48,7 @@ object EmitterSpecs extends Specification
 
   def compileEmit(input: String) = {
     val tree = compileSingle(input.stripMargin)
-    tree.errors must beEmpty
+    tree.errors filterNot isWarning must beEmpty
     emit(tree)
   }
 
@@ -2079,6 +2079,57 @@ object EmitterSpecs extends Specification
         |   minimum
         | 
         | buckets
+        | """.stripMargin
+        
+      emit(compileSingle(input)) must not(throwA[Throwable])
+    }
+    
+    "not explode on cond in solve" in {
+      val input = """
+        | foo := //foo
+        | solve 'a
+        |   foo where (if foo.a then foo.b else foo.c) = 'a""".stripMargin
+        
+      testEmit(input)(
+        Vector(
+          PushString("/foo"),
+          Morph1(BuiltInMorphism1(expandGlob)),
+          LoadLocal,
+          Dup,
+          Dup,
+          Dup,
+          Dup,
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          FilterMatch,
+          Swap(1),
+          PushString("c"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Map1(Comp),
+          FilterMatch,
+          IUnion,
+          KeyPart(1),
+          Swap(1),
+          Group(0),
+          Split,
+          PushGroup(0),
+          Merge))
+    }
+    
+    "not explode on an assert inside a solve" in {
+      val input = """
+        | data := //clicks
+        |  
+        | solve 'minexp
+        |   assert true
+        |   data where data = 'minexp
         | """.stripMargin
         
       emit(compileSingle(input))

@@ -25,6 +25,7 @@ import collection.immutable.Stack
 import java.nio.CharBuffer
 
 object RecoverJson {
+
   sealed trait Balanced
   case class Colon(v: Balanced) extends Balanced
   case class Key(v: Colon) extends Balanced

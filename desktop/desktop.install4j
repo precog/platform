@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <install4j version="5.1.5" transformSequenceNumber="4">
-  <directoryPresets config="./installer_files/icons" />
-  <application name="Precog Labcoat desktop" distributionSourceDir="" applicationId="1594-7033-8032-8358" mediaDir="../../installer" mediaFilePattern="${compiler:sys.shortName}_${compiler:sys.platform}_${compiler:sys.version}_${compiler:sys.withJre}" compression="9" lzmaCompression="true" pack200Compression="false" excludeSignedFromPacking="true" commonExternalFiles="false" createMd5Sums="true" shrinkRuntime="true" shortName="PrecogLabcoat" publisher="Precog" publisherWeb="www.precog.com" version="1.0" allPathsRelative="true" backupOnSave="false" autoSave="true" convertDotsToUnderscores="true" macSignature="????" installerName="" javaMinVersion="1.6" javaMaxVersion="" allowBetaVM="false" jdkMode="runtimeJre" jdkName="">
+  <directoryPresets config="./installer_files/shard-v2.conf" />
+  <application name="Precog Labcoat desktop" distributionSourceDir="" applicationId="6958-6823-3963-1107" mediaDir="../../installer" mediaFilePattern="${compiler:sys.shortName}_${compiler:sys.platform}_${compiler:sys.version}${compiler:sys.withJre}" compression="6" lzmaCompression="true" pack200Compression="false" excludeSignedFromPacking="true" commonExternalFiles="false" createMd5Sums="true" shrinkRuntime="false" shortName="PrecogLabcoat" publisher="Precog" publisherWeb="http://www.precog.com" version="1.0.2" allPathsRelative="true" backupOnSave="true" autoSave="false" convertDotsToUnderscores="true" macSignature="????" installerName="" javaMinVersion="1.6" javaMaxVersion="" allowBetaVM="false" jdkMode="runtimeJre" jdkName="">
     <languages skipLanguageSelection="false" languageSelectionInPrincipalLanguage="false">
       <principalLanguage id="en" customLocalizationFile="" />
       <additionalLanguages />
@@ -15,67 +15,58 @@
     <mergedProjects />
     <codeSigning macEnabled="false" macPkcs12File="" windowsEnabled="false" windowsKeySource="pkcs12" windowsPvkFile="" windowsSpcFile="" windowsPkcs12File="" />
   </application>
-  <files keepModificationTimes="false" missingFilesStrategy="warn" globalExcludeSuffixes="" defaultOverwriteMode="4" defaultUninstallMode="0" launcherOverwriteMode="3" defaultFileMode="644" defaultDirMode="755">
-    <filesets />
+  <files keepModificationTimes="false" missingFilesStrategy="warn" globalExcludeSuffixes="" defaultOverwriteMode="4" defaultUninstallMode="0" launcherOverwriteMode="3" defaultFileMode="644" defaultDirMode="777">
+    <filesets>
+      <fileset name="Configurable" id="22" customizedId="" />
+      <fileset name="unix-package" id="67" customizedId="" />
+      <fileset name="mac-package" id="187" customizedId="" />
+    </filesets>
     <roots>
-      <root id="593" fileset="" location="${installer:base_dir}" />
+      <root id="23" fileset="22" location="" />
+      <root id="24" fileset="22" location="${installer:base_dir}" />
+      <root id="68" fileset="67" location="" />
+      <root id="188" fileset="187" location="" />
     </roots>
     <mountPoints>
-      <mountPoint id="22" root="" location="" mode="755" />
-      <mountPoint id="665" root="593" location="config" mode="755" />
-      <mountPoint id="594" root="593" location="" mode="755" />
+      <mountPoint id="25" root="" location="" mode="755" />
+      <mountPoint id="26" root="24" location="config" mode="755" />
+      <mountPoint id="27" root="24" location="data" mode="755" />
+      <mountPoint id="28" root="24" location="zookeeper" mode="755" />
+      <mountPoint id="29" root="24" location="kafka" mode="755" />
+      <mountPoint id="30" root="24" location="logs" mode="755" />
+      <mountPoint id="69" root="68" location="config" mode="755" />
+      <mountPoint id="101" root="68" location="" mode="755" />
+      <mountPoint id="190" root="188" location="config" mode="755" />
+      <mountPoint id="189" root="188" location="" mode="755" />
     </mountPoints>
     <entries>
-      <fileEntry mountPoint="22" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="665" file="./installer_files/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="665" file="./installer_files/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
-      <fileEntry mountPoint="594" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="25" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="25" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="26" file="./installer_files/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="26" file="./installer_files/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="69" file="./installer_files/unix-conf/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="69" file="./installer_files/unix-conf/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="101" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="101" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="190" file="./installer_files/mac-conf/shard-v2.conf" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="190" file="./installer_files/mac-conf/shard-v2.logging.xml" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="189" file="./precog/precog-desktop.jar" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
+      <fileEntry mountPoint="189" file="./installer_files/README.txt" overwriteMode="4" shared="false" fileMode="644" uninstallMode="0" overrideFileMode="false" overrideOverwriteMode="false" overrideUninstallMode="false" />
     </entries>
     <components />
   </files>
   <launchers>
-    <launcher name="Labcoat" id="391" customizedId="" external="false" excludeFromMenu="false" unixMode="755" menuName="" icnsFile="./installer_files/icons/lc_icon48.icns" customMacBundleIdentifier="false" macBundleIdentifier="" swtApp="false" fileset="" macBundleBinary="JavaApplicationStub" addMacEntitlements="false" macEntitlementsFile="">
-      <executable name="Labcoat" type="1" iconSet="true" iconFile="" executableDir="" redirectStderr="true" stderrFile="error.log" stderrMode="append" redirectStdout="true" stdoutFile="output.log" stdoutMode="append" failOnStderrOutput="true" executableMode="1" changeWorkingDirectory="true" workingDirectory="." singleInstance="false" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="true" globalSingleInstance="false">
+    <launcher name="Labcoat" id="32" customizedId="" external="false" excludeFromMenu="false" unixMode="755" menuName="" icnsFile="./installer_files/icons/lc_icon48.icns" customMacBundleIdentifier="false" macBundleIdentifier="" swtApp="false" fileset="" macBundleBinary="JavaApplicationStub" addMacEntitlements="false" macEntitlementsFile="">
+      <executable name="Labcoat" type="1" iconSet="true" iconFile="" executableDir="" redirectStderr="true" stderrFile="error.log" stderrMode="overwrite" redirectStdout="false" stdoutFile="output.log" stdoutMode="overwrite" failOnStderrOutput="true" executableMode="1" changeWorkingDirectory="true" workingDirectory="." singleInstance="true" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="false" globalSingleInstance="false">
         <versionInfo include="false" fileVersion="" fileDescription="" legalCopyright="" internalName="" productName="" />
       </executable>
-      <splashScreen show="false" autoOff="true" alwaysOnTop="true" width="0" height="0" bitmapFile="" java6SplashScreen="false">
+      <splashScreen show="true" autoOff="true" alwaysOnTop="true" width="0" height="0" bitmapFile="./installer_files/icons/LargeIcon.png" java6SplashScreen="false">
         <text>
           <statusLine x="20" y="20" text="" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
-          <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
+          <versionLine x="20" y="40" text="" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
         </text>
       </splashScreen>
-      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="" arguments="--configFile=${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
-        <classPath>
-          <archive location="precog-desktop.jar" failOnError="false" />
-        </classPath>
-        <nativeLibraryDirectories />
-      </java>
-      <includedFiles />
-      <unextractableFiles />
-      <vmOptionsFile mode="none" overwriteMode="0" fileMode="644">
-        <content />
-      </vmOptionsFile>
-      <customScript mode="1" file="">
-        <content />
-      </customScript>
-      <infoPlist mode="1" file="">
-        <content />
-      </infoPlist>
-      <iconImageFiles>
-        <file path="./installer_files/icons/lc_icon48.png" />
-      </iconImageFiles>
-    </launcher>
-    <launcher name="Precog-service" id="770" customizedId="" external="false" excludeFromMenu="true" unixMode="755" menuName="" icnsFile="./installer_files/icons/P.icns" customMacBundleIdentifier="false" macBundleIdentifier="" swtApp="false" fileset="" macBundleBinary="JavaApplicationStub" addMacEntitlements="false" macEntitlementsFile="">
-      <executable name="PrecogServer" type="1" iconSet="true" iconFile="" executableDir="" redirectStderr="false" stderrFile="error.log" stderrMode="append" redirectStdout="false" stdoutFile="output.log" stdoutMode="append" failOnStderrOutput="true" executableMode="3" changeWorkingDirectory="false" workingDirectory="." singleInstance="true" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="true" globalSingleInstance="false">
-        <versionInfo include="false" fileVersion="" fileDescription="" legalCopyright="" internalName="" productName="" />
-      </executable>
-      <splashScreen show="false" autoOff="true" alwaysOnTop="true" width="0" height="0" bitmapFile="./platform/desktop/installer_files/icons/logo-precog.png" java6SplashScreen="false">
-        <text>
-          <statusLine x="20" y="20" text="" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
-          <versionLine x="20" y="40" text="version ${compiler:sys.version}" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
-        </text>
-      </splashScreen>
-      <java mainClass="com.precog.shard.desktop.DesktopIngestShardServer" vmParameters="&quot;-Dlogback.configurationFile=${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.logging.xml&quot;" arguments="--configFile ${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="server" bundleRuntime="true">
+      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="-Dlogback.configurationFile=&quot;${installer:base_dir}/config/shard-v2.logging.xml&quot;" arguments="--configFile ${installer:base_dir}/config/shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
         <classPath>
           <archive location="precog-desktop.jar" failOnError="false" />
         </classPath>
@@ -93,12 +84,49 @@
         <content />
       </infoPlist>
       <iconImageFiles>
-        <file path="./installer_files/icons/P.png" />
+        <file path="./installer_files/icons/lc_icon.16.png" />
+        <file path="./installer_files/icons/lc_icon.32.png" />
+        <file path="./installer_files/icons/lc_icon.48.png" />
+      </iconImageFiles>
+    </launcher>
+    <launcher name="Labcoat-app" id="76" customizedId="" external="false" excludeFromMenu="false" unixMode="755" menuName="" icnsFile="./installer_files/icons/lc_icon48.icns" customMacBundleIdentifier="false" macBundleIdentifier="" swtApp="false" fileset="67" macBundleBinary="JavaApplicationStub" addMacEntitlements="false" macEntitlementsFile="">
+      <executable name="Labcoat" type="1" iconSet="true" iconFile="" executableDir="" redirectStderr="true" stderrFile="error.log" stderrMode="overwrite" redirectStdout="false" stdoutFile="output.log" stdoutMode="overwrite" failOnStderrOutput="true" executableMode="1" changeWorkingDirectory="true" workingDirectory="." singleInstance="true" serviceStartType="2" serviceDependencies="" serviceDescription="" jreLocation="" executionLevel="asInvoker" checkConsoleParameter="true" globalSingleInstance="false">
+        <versionInfo include="false" fileVersion="" fileDescription="" legalCopyright="" internalName="" productName="" />
+      </executable>
+      <splashScreen show="true" autoOff="true" alwaysOnTop="true" width="150" height="150" bitmapFile="./installer_files/icons/LargeIcon.png" java6SplashScreen="false">
+        <text>
+          <statusLine x="78" y="113" text="" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
+          <versionLine x="79" y="127" text="" font="Arial" fontSize="8" fontColor="0,0,0" fontWeight="500" />
+        </text>
+      </splashScreen>
+      <java mainClass="com.precog.shard.desktop.LaunchLabcoat" vmParameters="-Dlogback.configurationFile=config/shard-v2.logging.xml" arguments="--configFile config/shard-v2.conf" allowVMPassthroughParameters="true" preferredVM="" bundleRuntime="true">
+        <classPath>
+          <archive location="precog-desktop.jar" failOnError="false" />
+        </classPath>
+        <nativeLibraryDirectories />
+      </java>
+      <includedFiles />
+      <unextractableFiles />
+      <vmOptionsFile mode="template" overwriteMode="0" fileMode="644">
+        <content />
+      </vmOptionsFile>
+      <customScript mode="1" file="">
+        <content />
+      </customScript>
+      <infoPlist mode="1" file="">
+        <content />
+      </infoPlist>
+      <iconImageFiles>
+        <file path="./installer_files/icons/lc_icon.16.png" />
+        <file path="./installer_files/icons/lc_icon.32.png" />
+        <file path="./installer_files/icons/lc_icon.48.png" />
       </iconImageFiles>
     </launcher>
   </launchers>
   <installerGui installerType="1" addOnAppId="" suggestPreviousLocations="true" autoUpdateDescriptorUrl="" useAutoUpdateBaseUrl="false" autoUpdateBaseUrl="">
-    <customCode />
+    <customCode>
+      <file location="./installer_files/Validations.class" />
+    </customCode>
     <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
       <commentFiles />
       <customAttributes />
@@ -110,20 +138,22 @@
             <object class="com.install4j.runtime.beans.applications.InstallerApplication">
               <void property="customHeaderImage">
                 <object class="com.install4j.api.beans.ExternalFile">
-                  <string>./installer_files/icons/lc_icon48.png</string>
+                  <string>./installer_files/icons/logo-precog.png</string>
+                </object>
+              </void>
+              <void property="headerBackground">
+                <object class="java.awt.Color">
+                  <int>0</int>
+                  <int>0</int>
+                  <int>0</int>
+                  <int>255</int>
                 </object>
               </void>
             </object>
           </java>
         </serializedBean>
         <launcherIds />
-        <variables>
-          <variable name="config_dir" value="${installer:base_dir}${installer:sys.fileSeparator}config${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
-          <variable name="zookeeper_dir" value="${installer:base_dir}${installer:sys.fileSeparator}zookeeper${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
-          <variable name="kafka_dir" value="${installer:base_dir}${installer:sys.fileSeparator}kafka${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
-          <variable name="log_dir" value="${installer:base_dir}${installer:sys.fileSeparator}logs${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
-          <variable name="data_dir" value="${installer:base_dir}${installer:sys.fileSeparator}data${installer:sys.fileSeparator}" description="" category="" valueClass="string" />
-        </variables>
+        <variables />
         <startup>
           <screen name="" id="1" customizedId="" beanClass="com.install4j.runtime.beans.screens.StartupScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
@@ -136,7 +166,7 @@
             <preActivation />
             <postActivation />
             <actions>
-              <action name="" id="791" customizedId="" beanClass="com.install4j.runtime.beans.actions.misc.RequestPrivilegesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="13" customizedId="" beanClass="com.install4j.runtime.beans.actions.misc.RequestPrivilegesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.misc.RequestPrivilegesAction" />
@@ -144,7 +174,7 @@
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="664" customizedId="" beanClass="com.install4j.runtime.beans.actions.control.SetVariableAction" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="33" customizedId="" beanClass="com.install4j.runtime.beans.actions.control.SetVariableAction" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.control.SetVariableAction">
@@ -158,7 +188,7 @@ MacOS X: ~/Library/Application Support/Labcoat
 */
 String platform=context.getCompilerVariable("sys.platform");
 if (platform.startsWith("windows")){
-    return context.getVariable("sys.userHome")+"\\AppData\\Local\\Labcoat\\";
+    return context.getVariable("sys.userHome")+"/AppData/Local/Labcoat";
 } else if (platform.startsWith("macos")){
     return context.getVariable("sys.userHome")+"/Library/Application Support/Labcoat/";
 } else { //unix
@@ -227,18 +257,7 @@ if (platform.startsWith("windows")){
           <screen name="" id="4" customizedId="" beanClass="com.install4j.runtime.beans.screens.InstallationDirectoryScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
-                <object class="com.install4j.runtime.beans.screens.InstallationDirectoryScreen">
-                  <void property="allowNewFolderCreation">
-                    <boolean>true</boolean>
-                  </void>
-                  <void property="validationScript">
-                    <object class="com.install4j.api.beans.ScriptProperty">
-                      <void property="value">
-                        <string />
-                      </void>
-                    </object>
-                  </void>
-                </object>
+                <object class="com.install4j.runtime.beans.screens.InstallationDirectoryScreen" />
               </java>
             </serializedBean>
             <condition>!context.getBooleanVariable("sys.confirmedUpdateInstallation")</condition>
@@ -272,9 +291,6 @@ if (platform.startsWith("windows")){
                   <void property="programGroupName">
                     <string>${compiler:sys.fullName}</string>
                   </void>
-                  <void property="showWarningIfExists">
-                    <boolean>true</boolean>
-                  </void>
                 </object>
               </java>
             </serializedBean>
@@ -285,7 +301,7 @@ if (platform.startsWith("windows")){
             <actions />
             <formComponents />
           </screen>
-          <screen name="" id="317" customizedId="" beanClass="com.install4j.runtime.beans.screens.FormScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
+          <screen name="" id="34" customizedId="" beanClass="com.install4j.runtime.beans.screens.FormScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
                 <object class="com.install4j.runtime.beans.screens.FormScreen">
@@ -304,7 +320,7 @@ if (platform.startsWith("windows")){
             <postActivation />
             <actions />
             <formComponents>
-              <formComponent name="Data dir" id="318" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Data dir" id="35" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.DirectoryChooserComponent">
@@ -331,7 +347,7 @@ if (platform.startsWith("windows")){
               </formComponent>
             </formComponents>
           </screen>
-          <screen name="" id="8" customizedId="" beanClass="com.install4j.runtime.beans.screens.InstallationScreen" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="true" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
+          <screen name="" id="8" customizedId="" beanClass="com.install4j.runtime.beans.screens.InstallationScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="true" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
                 <object class="com.install4j.runtime.beans.screens.InstallationScreen" />
@@ -342,7 +358,7 @@ if (platform.startsWith("windows")){
             <preActivation />
             <postActivation />
             <actions>
-              <action name="" id="9" customizedId="" beanClass="com.install4j.runtime.beans.actions.InstallFilesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="2" errorMessage="${i18n:FileCorrupted}">
+              <action name="" id="9" customizedId="" beanClass="com.install4j.runtime.beans.actions.InstallFilesAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="2" errorMessage="${i18n:FileCorrupted}">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.InstallFilesAction" />
@@ -374,25 +390,10 @@ if (platform.startsWith("windows")){
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="769" customizedId="" beanClass="com.install4j.runtime.beans.actions.services.InstallServiceAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="4" errorMessage="Failed to install Precog Service">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.actions.services.InstallServiceAction">
-                      <void property="description">
-                        <string>Precog analytics service</string>
-                      </void>
-                      <void property="launcherId">
-                        <string>770</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <condition />
-              </action>
             </actions>
             <formComponents />
           </screen>
-          <screen name="Port selection" id="308" customizedId="" beanClass="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
+          <screen name="Port selection" id="36" customizedId="" beanClass="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
                 <object class="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" />
@@ -404,7 +405,7 @@ if (platform.startsWith("windows")){
             <postActivation />
             <actions />
             <formComponents>
-              <formComponent name="Labcoat" id="309" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Labcoat" id="37" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent">
@@ -420,14 +421,18 @@ if (platform.startsWith("windows")){
                       <void property="inputVerifier">
                         <object class="com.install4j.api.beans.ScriptProperty">
                           <void property="value">
-                            <string>int port = Integer.parseInt(text);
-if (0&lt; port &amp;&amp; port&lt;65535){
-    return true;
+                            <string>if (Validations.isPortNumberValid(text)){
+    int port = Integer.parseInt(text); 
+    if (Validations.isPortUsed(port)){
+        Util.showErrorMessage("Port appears to be already in use");
+        return false;
+    } else {
+        return true;
+    }
 } else {
     Util.showErrorMessage("Port must be between 0 and 65534");
-    return false;    
-}
-</string>
+    return false;
+} </string>
                           </void>
                         </object>
                       </void>
@@ -449,7 +454,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 <initScript />
                 <visibilityScript />
               </formComponent>
-              <formComponent name="Precog" id="344" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Precog" id="38" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent">
@@ -465,14 +470,18 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                       <void property="inputVerifier">
                         <object class="com.install4j.api.beans.ScriptProperty">
                           <void property="value">
-                            <string>int port = Integer.parseInt(text);
-if (0&lt; port &amp;&amp; port&lt;65535){
-    return true;
+                            <string>if (Validations.isPortNumberValid(text)){
+    int port = Integer.parseInt(text); 
+    if (Validations.isPortUsed(port)){
+        Util.showErrorMessage("Port appears to be already in use");
+        return false;
+    } else {
+        return true;
+    }
 } else {
     Util.showErrorMessage("Port must be between 0 and 65534");
-    return false;    
-}
-</string>
+    return false;
+} </string>
                           </void>
                         </object>
                       </void>
@@ -494,7 +503,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 <initScript />
                 <visibilityScript />
               </formComponent>
-              <formComponent name="Zookeeper" id="310" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Zookeeper" id="39" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent">
@@ -510,14 +519,18 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                       <void property="inputVerifier">
                         <object class="com.install4j.api.beans.ScriptProperty">
                           <void property="value">
-                            <string>int port = Integer.parseInt(text);
-if (0&lt; port &amp;&amp; port&lt;65535){
-    return true;
+                            <string>if (Validations.isPortNumberValid(text)){
+    int port = Integer.parseInt(text); 
+    if (Validations.isPortUsed(port)){
+        Util.showErrorMessage("Port appears to be already in use");
+        return false;
+    } else {
+        return true;
+    }
 } else {
     Util.showErrorMessage("Port must be between 0 and 65534");
-    return false;    
-}
-</string>
+    return false;
+} </string>
                           </void>
                         </object>
                       </void>
@@ -539,7 +552,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 <initScript />
                 <visibilityScript />
               </formComponent>
-              <formComponent name="Kafka global" id="311" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Kafka global" id="40" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.IntegerTextfieldComponent">
@@ -555,14 +568,18 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                       <void property="inputVerifier">
                         <object class="com.install4j.api.beans.ScriptProperty">
                           <void property="value">
-                            <string>int port = Integer.parseInt(text);
-if (0&lt; port &amp;&amp; port&lt;65535){
-    return true;
+                            <string>if (Validations.isPortNumberValid(text)){
+    int port = Integer.parseInt(text); 
+    if (Validations.isPortUsed(port)){
+        Util.showErrorMessage("Port appears to be already in use");
+        return false;
+    } else {
+        return true;
+    }
 } else {
     Util.showErrorMessage("Port must be between 0 and 65534");
-    return false;    
-}
-</string>
+    return false;
+} </string>
                           </void>
                         </object>
                       </void>
@@ -611,7 +628,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
             <preActivation />
             <postActivation />
             <actions>
-              <action name="" id="313" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="4" errorMessage="Failed to update the configuration files.">
+              <action name="" id="41" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="4" errorMessage="Failed to update the configuration files.">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.text.ReplaceInstallerVariablesAction">
@@ -619,15 +636,10 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                         <boolean>true</boolean>
                       </void>
                       <void property="files">
-                        <array class="java.io.File" length="2">
+                        <array class="java.io.File" length="1">
                           <void index="0">
                             <object class="java.io.File">
-                              <string>${installer:config_dir}shard-v2.conf</string>
-                            </object>
-                          </void>
-                          <void index="1">
-                            <object class="java.io.File">
-                              <string>${installer:config_dir}shard-v2.logging.xml</string>
+                              <string>${installer:base_dir}/config/shard-v2.conf</string>
                             </object>
                           </void>
                         </array>
@@ -640,7 +652,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="467" customizedId="" beanClass="com.install4j.runtime.beans.actions.files.AddWindowsFileRightsAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="44" customizedId="" beanClass="com.install4j.runtime.beans.actions.files.AddWindowsFileRightsAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.files.AddWindowsFileRightsAction">
@@ -667,7 +679,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="666" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.FixCrLfAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="42" customizedId="" beanClass="com.install4j.runtime.beans.actions.text.FixCrLfAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.text.FixCrLfAction">
@@ -675,7 +687,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                         <array class="java.io.File" length="1">
                           <void index="0">
                             <object class="java.io.File">
-                              <string>${installer:base_dir}/README.txt</string>
+                              <string>README.txt</string>
                             </object>
                           </void>
                         </array>
@@ -685,13 +697,13 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="268" customizedId="" beanClass="com.install4j.runtime.beans.actions.finish.ShowFileAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="43" customizedId="" beanClass="com.install4j.runtime.beans.actions.finish.ShowFileAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.finish.ShowFileAction">
                       <void property="file">
                         <object class="java.io.File">
-                          <string>${installer:base_dir}/README.txt</string>
+                          <string>README.txt</string>
                         </object>
                       </void>
                     </object>
@@ -699,24 +711,12 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition>!context.isUnattended()</condition>
               </action>
-              <action name="" id="773" customizedId="" beanClass="com.install4j.runtime.beans.actions.services.StartServiceAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
-                <serializedBean>
-                  <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.actions.services.StartServiceAction">
-                      <void property="launcherId">
-                        <string>770</string>
-                      </void>
-                    </object>
-                  </java>
-                </serializedBean>
-                <condition />
-              </action>
-              <action name="" id="784" customizedId="" beanClass="com.install4j.runtime.beans.actions.finish.ExecuteLauncherAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="45" customizedId="" beanClass="com.install4j.runtime.beans.actions.finish.ExecuteLauncherAction" enabled="true" commentSet="false" comment="" actionElevationType="none" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.actions.finish.ExecuteLauncherAction">
                       <void property="launcherId">
-                        <string>391</string>
+                        <string>32</string>
                       </void>
                     </object>
                   </java>
@@ -725,7 +725,7 @@ if (0&lt; port &amp;&amp; port&lt;65535){
               </action>
             </actions>
             <formComponents>
-              <formComponent name="Execute launcher" id="248" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.CheckboxComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+              <formComponent name="Execute launcher" id="46" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.CheckboxComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
                     <object class="com.install4j.runtime.beans.formcomponents.CheckboxComponent">
@@ -751,7 +751,21 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <application name="" id="uninstaller" customizedId="" beanClass="com.install4j.runtime.beans.applications.UninstallerApplication" enabled="true" commentSet="false" comment="" actionElevationType="none" fileset="" customIcnsFile="" customIcoFile="" macEntitlementsFile="" automaticLauncherIntegration="false" launchMode="startupFirstWindow" launchInNewProcess="false" launchSchedule="updateSchedule" allLaunchers="true">
         <serializedBean>
           <java class="java.beans.XMLDecoder">
-            <object class="com.install4j.runtime.beans.applications.UninstallerApplication" />
+            <object class="com.install4j.runtime.beans.applications.UninstallerApplication">
+              <void property="customHeaderImage">
+                <object class="com.install4j.api.beans.ExternalFile">
+                  <string>./installer_files/icons/logo-precog.png</string>
+                </object>
+              </void>
+              <void property="headerBackground">
+                <object class="java.awt.Color">
+                  <int>0</int>
+                  <int>0</int>
+                  <int>0</int>
+                  <int>255</int>
+                </object>
+              </void>
+            </object>
           </java>
         </serializedBean>
         <launcherIds />
@@ -816,6 +830,39 @@ if (0&lt; port &amp;&amp; port&lt;65535){
             <actions />
             <formComponents />
           </screen>
+          <screen name="" id="172" customizedId="" beanClass="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
+            <serializedBean>
+              <java class="java.beans.XMLDecoder">
+                <object class="com.install4j.runtime.beans.screens.AdditionalConfirmationsScreen" />
+              </java>
+            </serializedBean>
+            <condition />
+            <validation />
+            <preActivation />
+            <postActivation />
+            <actions />
+            <formComponents>
+              <formComponent name="Delete Data Files" id="171" customizedId="" beanClass="com.install4j.runtime.beans.formcomponents.CheckboxComponent" enabled="true" commentSet="false" comment="" insetTop="" insetLeft="" insetBottom="" insetRight="" resetInitOnPrevious="false">
+                <serializedBean>
+                  <java class="java.beans.XMLDecoder">
+                    <object class="com.install4j.runtime.beans.formcomponents.CheckboxComponent">
+                      <void property="checkboxText">
+                        <string>Delete data?</string>
+                      </void>
+                      <void property="initiallySelected">
+                        <boolean>true</boolean>
+                      </void>
+                      <void property="variableName">
+                        <string>deleteDataFilesAction</string>
+                      </void>
+                    </object>
+                  </java>
+                </serializedBean>
+                <initScript />
+                <visibilityScript />
+              </formComponent>
+            </formComponents>
+          </screen>
           <screen name="" id="16" customizedId="" beanClass="com.install4j.runtime.beans.screens.UninstallationScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="false" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
@@ -835,17 +882,26 @@ if (0&lt; port &amp;&amp; port&lt;65535){
                 </serializedBean>
                 <condition />
               </action>
-              <action name="" id="789" customizedId="" beanClass="com.install4j.runtime.beans.actions.services.StopServiceAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="false" failureStrategy="1" errorMessage="">
+              <action name="" id="59" customizedId="" beanClass="com.install4j.runtime.beans.actions.files.DeleteFileAction" enabled="true" commentSet="false" comment="" actionElevationType="elevated" rollbackBarrier="false" multiExec="true" failureStrategy="1" errorMessage="Failed to remove data files">
                 <serializedBean>
                   <java class="java.beans.XMLDecoder">
-                    <object class="com.install4j.runtime.beans.actions.services.StopServiceAction">
-                      <void property="launcherId">
-                        <string>770</string>
+                    <object class="com.install4j.runtime.beans.actions.files.DeleteFileAction">
+                      <void property="files">
+                        <array class="java.io.File" length="1">
+                          <void index="0">
+                            <object class="java.io.File">
+                              <string>${installer:base_dir}</string>
+                            </object>
+                          </void>
+                        </array>
+                      </void>
+                      <void property="recursive">
+                        <boolean>true</boolean>
                       </void>
                     </object>
                   </java>
                 </serializedBean>
-                <condition />
+                <condition>context.getBooleanVariable("deleteDataFilesAction") &amp;&amp; (!context.isUnattended())</condition>
               </action>
             </actions>
             <formComponents />
@@ -866,7 +922,21 @@ if (0&lt; port &amp;&amp; port&lt;65535){
           <screen name="" id="18" customizedId="" beanClass="com.install4j.runtime.beans.screens.UninstallSuccessScreen" enabled="true" commentSet="false" comment="" actionElevationType="inherit" rollbackBarrier="false" backButton="2" finishScreen="true" wizardIndexChangeType="unchanged" wizardIndexKey="">
             <serializedBean>
               <java class="java.beans.XMLDecoder">
-                <object class="com.install4j.runtime.beans.screens.UninstallSuccessScreen" />
+                <object class="com.install4j.runtime.beans.screens.UninstallSuccessScreen">
+                  <void property="bannerBackground">
+                    <object class="java.awt.Color">
+                      <int>0</int>
+                      <int>0</int>
+                      <int>0</int>
+                      <int>255</int>
+                    </object>
+                  </void>
+                  <void property="bannerImageFile">
+                    <object class="com.install4j.api.beans.ExternalFile">
+                      <string>./installer_files/icons/logo-precog.png</string>
+                    </object>
+                  </void>
+                </object>
               </java>
             </serializedBean>
             <condition />
@@ -881,11 +951,16 @@ if (0&lt; port &amp;&amp; port&lt;65535){
     </applications>
   </installerGui>
   <mediaSets>
-    <windows name="Windows" id="25" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
-      <excludedLaunchers />
+    <windows name="Windows" id="47" customizedId="" mediaFileName="" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="32" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
+      <excludedLaunchers>
+        <launcher id="76" />
+      </excludedLaunchers>
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_67" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
@@ -894,11 +969,16 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <excludedComponents />
       <includedDownloadableComponents />
     </windows>
-    <unixInstaller name="Unix Installer" id="33" customizedId="" mediaFileName="" installDir="precog-labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="" contentFilesType="1" downloadURL="">
-      <excludedLaunchers />
+    <unixInstaller name="Unix Installer" id="49" customizedId="" mediaFileName="" installDir="precog-labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="~" contentFilesType="1" downloadURL="">
+      <excludedLaunchers>
+        <launcher id="76" />
+      </excludedLaunchers>
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_67" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
@@ -910,50 +990,16 @@ if (0&lt; port &amp;&amp; port&lt;65535){
         <content />
       </installerScript>
     </unixInstaller>
-    <windows name="Windows (with JRE)" id="213" customizedId="" mediaFileName="${compiler:sys.shortName}_${compiler:sys.platform}_${compiler:sys.version}_JRE" installDir="Labcoat Desktop" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="windows-amd64-1.7.0_15" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
-      <excludedLaunchers />
-      <excludedBeans />
-      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
-      <variables />
-      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
-        <commentFiles />
-        <customAttributes />
-      </autoUpdate>
-      <excludedComponents />
-      <includedDownloadableComponents />
-    </windows>
-    <macos name="Mac OS X Single Bundle" id="402" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false" launcherId="391">
-      <excludedBeans />
-      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
-      <variables />
-      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
-        <commentFiles />
-        <customAttributes />
-      </autoUpdate>
-      <excludedComponents />
-      <includedDownloadableComponents />
-    </macos>
-    <macos name="Mac OS X Single Bundle (with JRE)" id="404" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="macosx-amd64-1.7.0_15" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false" launcherId="391">
-      <excludedBeans />
-      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
-      <variables />
-      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
-        <commentFiles />
-        <customAttributes />
-      </autoUpdate>
-      <excludedComponents />
-      <includedDownloadableComponents />
-    </macos>
-    <windows name="Windows 32" id="419" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="32" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
+    <windows name="Windows bundled JRE" id="51" customizedId="" mediaFileName="" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="32" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="windows-x86-1.7.0_15" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
       <excludedLaunchers>
-        <launcher id="328" />
+        <launcher id="76" />
       </excludedLaunchers>
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_67" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
@@ -962,11 +1008,16 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <excludedComponents />
       <includedDownloadableComponents />
     </windows>
-    <windows name="Windows 32 (with JRE)" id="472" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="32" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="windows-x86-1.7.0_15" manualJREEntry="false" bundleType="1" jreURL="" jreShared="true" directDownload="false" installOnlyIfNecessary="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
-      <excludedLaunchers />
+    <windows name="Windows 64" id="54" customizedId="" mediaFileName="" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
+      <excludedLaunchers>
+        <launcher id="76" />
+      </excludedLaunchers>
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_67" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
@@ -975,11 +1026,16 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       <excludedComponents />
       <includedDownloadableComponents />
     </windows>
-    <macosFolder name="Mac OS X Folder" id="858" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="true" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false">
-      <excludedLaunchers />
+    <windows name="Windows 64 bundled JRE" id="57" customizedId="" mediaFileName="" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="64" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="windows-amd64-1.7.0_15" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" verifyIntegrity="true">
+      <excludedLaunchers>
+        <launcher id="76" />
+      </excludedLaunchers>
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_67" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
@@ -987,30 +1043,101 @@ if (0&lt; port &amp;&amp; port&lt;65535){
       </autoUpdate>
       <excludedComponents />
       <includedDownloadableComponents />
-    </macosFolder>
-    <macosFolder name="Mac OS X Folder (with JRE)" id="859" customizedId="" mediaFileName="" installDir="Precog Labcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="macosx-amd64-1.7.0_17" manualJREEntry="false" bundleType="1" jreURL="" jreShared="false" directDownload="false" installOnlyIfNecessary="false" appleJre="false" customInstallBaseDir="" contentFilesType="1" downloadURL="" signLaunchers="false">
-      <excludedLaunchers />
+    </windows>
+    <macosArchive name="Mac OS X Single Bundle Archive" id="85" customizedId="" mediaFileName="" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" appleJre="true" launcherId="76">
       <excludedBeans />
       <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
-      <exclude />
+      <exclude>
+        <entry location=".i4j_fileset_" fileType="regular" />
+        <entry location=".i4j_fileset_22" fileType="regular" />
+        <entry location=".i4j_fileset_67" fileType="regular" />
+      </exclude>
       <variables />
       <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
         <commentFiles />
         <customAttributes />
       </autoUpdate>
-      <excludedComponents />
-      <includedDownloadableComponents />
-    </macosFolder>
+    </macosArchive>
+    <linuxDeb name="Linux Deb Archive" id="87" customizedId="" mediaFileName="" installDir="/opt/PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" bzip="true" description="Precog Labcoat desktop edition" dependencies="" maintainerEmail="support@precog.com">
+      <excludedLaunchers>
+        <launcher id="32" />
+      </excludedLaunchers>
+      <excludedBeans />
+      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
+      <exclude>
+        <entry location=".i4j_fileset_" fileType="regular" />
+        <entry location=".i4j_fileset_22" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
+      <variables />
+      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
+        <commentFiles />
+        <customAttributes />
+      </autoUpdate>
+      <preInstallScript mode="1" file="">
+        <content />
+      </preInstallScript>
+      <postInstallScript mode="1" file="">
+        <content>chmod 777 zookeeper
+chomd 777 kafka
+chmod 777 logs</content>
+      </postInstallScript>
+      <preUninstallScript mode="1" file="">
+        <content />
+      </preUninstallScript>
+      <postUninstallScript mode="1" file="">
+        <content />
+      </postUninstallScript>
+    </linuxDeb>
+    <linuxRPM name="Linux RPM" id="91" customizedId="" mediaFileName="" installDir="/opt/PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" os="linux" arch="i386">
+      <excludedLaunchers>
+        <launcher id="32" />
+      </excludedLaunchers>
+      <excludedBeans />
+      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
+      <exclude>
+        <entry location=".i4j_fileset_" fileType="regular" />
+        <entry location=".i4j_fileset_22" fileType="regular" />
+        <entry location=".i4j_fileset_187" fileType="regular" />
+      </exclude>
+      <variables />
+      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
+        <commentFiles />
+        <customAttributes />
+      </autoUpdate>
+      <preInstallScript mode="1" file="">
+        <content />
+      </preInstallScript>
+      <postInstallScript mode="1" file="">
+        <content />
+      </postInstallScript>
+      <preUninstallScript mode="1" file="">
+        <content />
+      </preUninstallScript>
+      <postUninstallScript mode="1" file="">
+        <content />
+      </postUninstallScript>
+    </linuxRPM>
+    <macosArchive name="Copy of Mac OS X Single Bundle Archive" id="276" customizedId="" mediaFileName="${compiler:sys.shortName}_${compiler:sys.platform}_${compiler:sys.version}${compiler:sys.withJre}-1.7" installDir="PrecogLabcoat" overridePrincipalLanguage="false" jreBitType="all" runPostProcessor="false" postProcessor="" failOnPostProcessorError="false" useLegacyMediaFileIds="false" legacyMediaFileIds="" includedJRE="" manualJREEntry="false" appleJre="false" launcherId="76">
+      <excludedBeans />
+      <overriddenPrincipalLanguage id="en" customLocalizationFile="" />
+      <exclude>
+        <entry location=".i4j_fileset_" fileType="regular" />
+        <entry location=".i4j_fileset_22" fileType="regular" />
+        <entry location=".i4j_fileset_67" fileType="regular" />
+      </exclude>
+      <variables />
+      <autoUpdate useMinUpdatableVersion="false" minUpdatableVersion="" useMaxUpdatableVersion="false" maxUpdatableVersion="">
+        <commentFiles />
+        <customAttributes />
+      </autoUpdate>
+    </macosArchive>
   </mediaSets>
-  <buildIds buildAll="false">
-    <mediaSet refId="25" />
-    <mediaSet refId="33" />
-    <mediaSet refId="213" />
-    <mediaSet refId="419" />
-    <mediaSet refId="472" />
-    <mediaSet refId="858" />
-    <mediaSet refId="859" />
+  <buildIds buildAll="true">
+    <mediaSet refId="47" />
+    <mediaSet refId="54" />
+    <mediaSet refId="276" />
   </buildIds>
-  <buildOptions verbose="false" faster="true" disableSigning="false" debug="false" />
+  <buildOptions verbose="false" faster="false" disableSigning="false" debug="false" />
 </install4j>
 

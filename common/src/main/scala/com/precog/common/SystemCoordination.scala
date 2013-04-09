@@ -115,6 +115,7 @@ object ProducerState {
 
 case class YggCheckpoint(offset: Long, messageClock: VectorClock) {
   def update(newOffset: Long, newPid: Int, newSid: Int) = this.copy(offset max newOffset, messageClock.update(newPid, newSid))
+  def skipTo(newOffset: Long) = this.copy(offset max newOffset, messageClock)
 }
 
 object YggCheckpoint {
