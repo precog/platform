@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit
 
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
+import org.eclipse.jetty.http.MimeTypes
 import org.eclipse.jetty.server.{Handler, Request, Server}
 import org.eclipse.jetty.server.handler.{AbstractHandler, DefaultHandler, HandlerList, HandlerWrapper, ResourceHandler}
 
@@ -95,7 +96,13 @@ trait StandaloneShardServer
       caveatMessage.foreach(logger.warn(_))
 
       val server = new Server(serverPort)
+
+      // Jetty doesn't map application/json by default
+      val mimeTypes = new MimeTypes
+      mimeTypes.addMimeMapping("json", "application/json")
+
       val resourceHandler = new ResourceHandler
+      resourceHandler.setMimeTypes(mimeTypes)
       resourceHandler.setDirectoriesListed(false)
       resourceHandler.setWelcomeFiles(new Array[String](0))
       resourceHandler.setResourceBase(this.getClass.getClassLoader.getResource("web").toString)
