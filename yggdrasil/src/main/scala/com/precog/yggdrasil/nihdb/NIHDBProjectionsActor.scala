@@ -67,8 +67,6 @@ case class AccessProjection(path: Path, apiKey: APIKey)
 
 case class FindChildren(path: Path, apiKey: APIKey)
 
-case class FindStructure(path: Path)
-
 sealed trait ProjectionUpdate {
   def path: Path
 }
@@ -109,8 +107,6 @@ class NIHDBProjectionsActor(
   private var projections = Map.empty[Path, Map[Authorities, NIHDBActorProjection]]
 
   private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
-
-  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
 
   override def preStart() = {
     logger.debug("Starting projections actor with base = " + activeDir)
