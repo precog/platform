@@ -23,6 +23,7 @@ package daze
 import com.precog.common._
 import bytecode.RandomLibrary
 import yggdrasil._
+import com.precog.util.Identifier
 
 import org.specs2.execute.Result
 import org.specs2.mutable._
@@ -118,7 +119,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       case Distinct(parent) => extractLoads(parent)
 
-      case Split(spec, child) => merge(extractSpecLoads(spec), extractLoads(child))
+      case Split(spec, child, _) => merge(extractSpecLoads(spec), extractLoads(child))
       
       case _: SplitGroup | _: SplitParam => Map() 
     }
@@ -437,8 +438,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       def clicks = LoadLocal(Const(CString("/file"))(line))(line)
+      
+      val id = new Identifier
 
-      lazy val input: Split =
+      val input =
         Split(
           Group(
             1,
@@ -449,11 +452,11 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
                 Const(CString("column0"))(line))(line))),
           Join(Add, CrossLeftSort,
             Join(DerefObject, CrossLeftSort,
-              SplitParam(0)(input)(line),
+              SplitParam(0, id)(line),
               Const(CString("column1"))(line))(line),
             Join(DerefObject, CrossLeftSort,
-              SplitGroup(1, clicks.identities)(input)(line),
-              Const(CString("column2"))(line))(line))(line))(line)
+              SplitGroup(1, clicks.identities, id)(line),
+              Const(CString("column2"))(line))(line))(line), id)(line)
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -472,8 +475,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       def clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
+      val id = new Identifier
+      
       // clicks := //clicks forall 'user { user: 'user, num: count(clicks.user where clicks.user = 'user) }
-      lazy val input: Split =
+      val input =
         Split(
           Group(0,
             Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line),
@@ -484,11 +489,11 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
           Join(JoinObject, CrossLeftSort,
             Join(WrapObject, CrossLeftSort,
               Const(CString("user"))(line),
-              SplitParam(1)(input)(line))(line),
+              SplitParam(1, id)(line))(line),
             Join(WrapObject, CrossLeftSort,
               Const(CString("num"))(line),
               Reduce(Count,
-                SplitGroup(0, clicks.identities)(input)(line))(line))(line))(line))(line)
+                SplitGroup(0, clicks.identities, id)(line))(line))(line))(line), id)(line)
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -505,8 +510,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       def clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
+      val id = new Identifier
+      
       // clicks := //clicks forall 'user { user: 'user, age: clicks.age, num: count(clicks.user where clicks.user = 'user) }
-      lazy val input: Split =
+      val input =
         Split(
           Group(0,
             Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line),
@@ -518,16 +525,16 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
             Join(JoinObject, CrossLeftSort,
               Join(WrapObject, CrossLeftSort,
                 Const(CString("user"))(line),
-                SplitParam(1)(input)(line))(line),
+                SplitParam(1, id)(line))(line),
               Join(WrapObject, CrossLeftSort,
                 Const(CString("num"))(line),
                 Reduce(Count,
-                  SplitGroup(0, clicks.identities)(input)(line))(line))(line))(line),
+                  SplitGroup(0, clicks.identities, id)(line))(line))(line))(line),
             Join(WrapObject, CrossLeftSort,
               Const(CString("age"))(line),
               Join(DerefObject, CrossLeftSort,
                 clicks,
-                Const(CString("age"))(line))(line))(line))(line))(line)
+                Const(CString("age"))(line))(line))(line))(line), id)(line)
 
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
@@ -588,17 +595,19 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       
       val clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
+      val id = new Identifier
+      
       val clicksTime =
         Join(DerefObject, CrossLeftSort,
           clicks,
           Const(CString("time"))(line))(line)
       
-      lazy val split: dag.Split =
+      val split =
         Split(
           Group(0, clicks, UnfixedSolution(1, clicksTime)),
           Join(WrapObject, CrossLeftSort,
             Const(CString("foo"))(line),
-            SplitGroup(0, Identities.Specs(Vector(LoadIds("/clicks"))))(split)(line))(line))(line)
+            SplitGroup(0, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line), id)(line)
             
       val input =
         Join(DerefObject, CrossLeftSort,

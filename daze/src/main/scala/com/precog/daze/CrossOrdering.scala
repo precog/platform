@@ -29,89 +29,85 @@ trait CrossOrdering extends DAG {
   def orderCrosses(node: DepGraph): DepGraph = {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
-    def memoizedSpec(spec: BucketSpec, splits: => Map[dag.Split, dag.Split]): BucketSpec = spec match {
+    def memoizedSpec(spec: BucketSpec): BucketSpec = spec match {
       case UnionBucketSpec(left, right) =>
-        UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+        UnionBucketSpec(memoizedSpec(left), memoizedSpec(right))
       
       case IntersectBucketSpec(left, right) =>
-        IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+        IntersectBucketSpec(memoizedSpec(left), memoizedSpec(right))
       
       case dag.Group(id, target, child) =>
-        dag.Group(id, memoized(target, splits), memoizedSpec(child, splits))
+        dag.Group(id, memoized(target), memoizedSpec(child))
       
       case UnfixedSolution(id, target) =>
-        UnfixedSolution(id, memoized(target, splits))
+        UnfixedSolution(id, memoized(target))
       
       case dag.Extra(target) =>
-        dag.Extra(memoized(target, splits))
+        dag.Extra(memoized(target))
     }
     
-    def memoized(node: DepGraph, _splits: => Map[dag.Split, dag.Split]): DepGraph = {
-      lazy val splits = _splits
-      
+    def memoized(node: DepGraph): DepGraph = {
       def inner(node: DepGraph): DepGraph = node match {
         // not using extractors due to bug
         case node: SplitParam =>
-          SplitParam(node.id)(splits(node.parent))(node.loc)
+          SplitParam(node.id, node.parentId)(node.loc)
         
         // not using extractors due to bug
         case node: SplitGroup =>
-          SplitGroup(node.id, node.identities)(splits(node.parent))(node.loc)
+          SplitGroup(node.id, node.identities, node.parentId)(node.loc)
         
         case node @ Const(_) => node
 
         case node @ Undefined() => node
         
         case node @ dag.New(parent) =>
-          dag.New(memoized(parent, splits))(node.loc)
+          dag.New(memoized(parent))(node.loc)
         
         case node @ dag.LoadLocal(parent, tpe) =>
-          dag.LoadLocal(memoized(parent, splits), tpe)(node.loc)
+          dag.LoadLocal(memoized(parent), tpe)(node.loc)
 
         case node @ Operate(op, parent) =>
-          Operate(op, memoized(parent, splits))(node.loc)
+          Operate(op, memoized(parent))(node.loc)
         
         case node @ dag.Morph1(m, parent) =>
-          dag.Morph1(m, memoized(parent, splits))(node.loc)
+          dag.Morph1(m, memoized(parent))(node.loc)
         
         case node @ dag.Morph2(m, left, right) =>
-          dag.Morph2(m, memoized(left, splits), memoized(right, splits))(node.loc)
+          dag.Morph2(m, memoized(left), memoized(right))(node.loc)
         
         case node @ dag.Distinct(parent) =>
-          dag.Distinct(memoized(parent, splits))(node.loc)
+          dag.Distinct(memoized(parent))(node.loc)
                 
         case node @ dag.Reduce(red, parent) =>
-          dag.Reduce(red, memoized(parent, splits))(node.loc)
+          dag.Reduce(red, memoized(parent))(node.loc)
         
         case dag.MegaReduce(reds, parent) =>
-          dag.MegaReduce(reds, memoized(parent, splits))
+          dag.MegaReduce(reds, memoized(parent))
 
-        case s @ dag.Split(spec, child) => {
-          lazy val splits2 = splits + (s -> result)
-          lazy val spec2 = memoizedSpec(spec, splits2)
-          lazy val child2 = memoized(child, splits2)
-          lazy val result: dag.Split = dag.Split(spec2, child2)(s.loc)
-          result
+        case s @ dag.Split(spec, child, id) => {
+          val spec2 = memoizedSpec(spec)
+          val child2 = memoized(child)
+          dag.Split(spec2, child2, id)(s.loc)
         }
         
         case node @ dag.Assert(pred, child) =>
-          dag.Assert(memoized(pred, splits), memoized(child, splits))(node.loc)
+          dag.Assert(memoized(pred), memoized(child))(node.loc)
         
         case node @ dag.Cond(pred, left, leftJoin, right, rightJoin) =>
-          dag.Cond(memoized(pred, splits), memoized(left, splits), leftJoin, memoized(right, splits), rightJoin)(node.loc)
+          dag.Cond(memoized(pred), memoized(left), leftJoin, memoized(right), rightJoin)(node.loc)
         
         case node @ dag.Observe(data, samples) =>
-          dag.Observe(memoized(data, splits), memoized(samples, splits))(node.loc)
+          dag.Observe(memoized(data), memoized(samples))(node.loc)
         
         case node @ IUI(union, left, right) =>
-          IUI(union, memoized(left, splits), memoized(right, splits))(node.loc)
+          IUI(union, memoized(left), memoized(right))(node.loc)
         
         case node @ Diff(left, right) =>
-          Diff(memoized(left, splits), memoized(right, splits))(node.loc)
+          Diff(memoized(left), memoized(right))(node.loc)
         
         case node @ Join(op, ValueSort(id), left, right) => {
-          val left2 = memoized(left, splits)
-          val right2 = memoized(right, splits)
+          val left2 = memoized(left)
+          val right2 = memoized(right)
           
           def resortLeft = ReSortBy(left2, id)
           def resortRight = ReSortBy(right2, id)
@@ -125,8 +121,8 @@ trait CrossOrdering extends DAG {
         }
 
         case node @ Join(op, IdentitySort, left, right) => {
-          val left2 = memoized(left, splits)
-          val right2 = memoized(right, splits)
+          val left2 = memoized(left)
+          val right2 = memoized(right)
           
           val (leftIndices, rightIndices) = determineSort(left2, right2)
           
@@ -158,28 +154,28 @@ trait CrossOrdering extends DAG {
         
         case node @ Join(op, CrossLeftSort | CrossRightSort, left, right) => {
           if (right.isSingleton)
-            Join(op, CrossLeftSort, memoized(left, splits), memoized(right, splits))(node.loc)
+            Join(op, CrossLeftSort, memoized(left), memoized(right))(node.loc)
           else if (left.isSingleton)
-            Join(op, CrossRightSort, memoized(left, splits), memoized(right, splits))(node.loc)
+            Join(op, CrossRightSort, memoized(left), memoized(right))(node.loc)
           else {
-            val right2 = memoized(right, splits)
+            val right2 = memoized(right)
             
             right2 match {
               case _: Memoize | _: Sort | _: SortBy | _: ReSortBy | _: LoadLocal =>
-                Join(op, CrossLeftSort, memoized(left, splits), right2)(node.loc)
+                Join(op, CrossLeftSort, memoized(left), right2)(node.loc)
               
               case _ =>
-                Join(op, CrossLeftSort, memoized(left, splits), Memoize(right2, 100))(node.loc)
+                Join(op, CrossLeftSort, memoized(left), Memoize(right2, 100))(node.loc)
             }
           }
         }
 
         case node @ Join(op, joinSort, left, right) =>
-          Join(op, joinSort, memoized(left, splits), memoized(right, splits))(node.loc)
+          Join(op, joinSort, memoized(left), memoized(right))(node.loc)
         
         case node @ Filter(ValueSort(id), target, boolean) => {
-          val target2 = memoized(target, splits)
-          val boolean2 = memoized(boolean, splits)
+          val target2 = memoized(target)
+          val boolean2 = memoized(boolean)
           
           def resortTarget  = ReSortBy(target2, id)
           def resortBoolean = ReSortBy(boolean2, id)
@@ -193,8 +189,8 @@ trait CrossOrdering extends DAG {
         }
           
         case node @ Filter(IdentitySort, target, boolean) => {
-          val target2 = memoized(target, splits)
-          val boolean2 = memoized(boolean, splits)
+          val target2 = memoized(target)
+          val boolean2 = memoized(boolean)
           
           val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
           
@@ -224,17 +220,17 @@ trait CrossOrdering extends DAG {
         }
 
         case node @ Filter(joinSort, target, boolean) =>
-          Filter(joinSort, memoized(target, splits), memoized(boolean, splits))(node.loc)
+          Filter(joinSort, memoized(target), memoized(boolean))(node.loc)
         
-        case Sort(parent, _) => memoized(parent, splits)
+        case Sort(parent, _) => memoized(parent)
         
         case SortBy(parent, sortField, valueField, id) =>
-          SortBy(memoized(parent, splits), sortField, valueField, id)
+          SortBy(memoized(parent), sortField, valueField, id)
         
         case ReSortBy(parent, id) =>
-          ReSortBy(memoized(parent, splits), id)
+          ReSortBy(memoized(parent), id)
         
-        case Memoize(parent, priority) => Memoize(memoized(parent, splits), priority)
+        case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }
   
       memotable.get(node) getOrElse {
@@ -244,7 +240,7 @@ trait CrossOrdering extends DAG {
       }
     }
     
-    memoized(node, Map())
+    memoized(node)
   }
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
