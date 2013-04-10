@@ -2437,7 +2437,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = eval(input)
       results must_== Set(SDecimal(4))
-      System.err.println(results)
     }
     
     "correctly filter the results of a non-trivial solve" in {

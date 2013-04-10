@@ -968,10 +968,7 @@ object GroupSolverSpecs extends Specification
         |   {bin: 'bins, count: count(result2.action where result2.action = "Online"  & 'bins >= result2.startBin & 'bins <=result2.endBin)}
         | """.stripMargin
       
-      val start = System.currentTimeMillis
       compileSingle(input).errors must beEmpty
-      val end = System.currentTimeMillis
-      println("time: " + (end - start))
     }
      
     "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
