@@ -141,7 +141,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {

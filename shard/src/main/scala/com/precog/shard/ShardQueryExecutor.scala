@@ -97,12 +97,12 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         JObject(JField("lineNum", JNum(line.line)), JField("colNum", JNum(line.col)), JField("detail", JString(line.text)))
       }
     }
-    
+
     lazy val report = queryReport contramap { (l: instructions.Line) =>
       Option(FaultPosition(l.line, l.col, l.text))
     }
 
-    def queryReport: QueryLogger[N, Option[FaultPosition]] 
+    def queryReport: QueryLogger[N, Option[FaultPosition]]
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
@@ -115,13 +115,13 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       // this as a def, and use within an N.point.
 
       def solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
-        val (faults, bytecode) = asBytecode(query) 
-        
+        val (faults, bytecode) = asBytecode(query)
+
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
           ((systemError _) <-: (StackException(_)) <-: decorate(instrs).disjunction.validation) map { dag =>
             applyQueryOptions(opts) {
               logger.debug("[QID:%d] Evaluating query".format(qid))
-              
+
               if (queryLogger.isDebugEnabled) {
                 eval(dag, evaluationContext, true) map {
                   _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
@@ -134,12 +134,12 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
             }
           }
         } getOrElse {
-          // compilation errors will be reported as warnings, but there are no results so 
+          // compilation errors will be reported as warnings, but there are no results so
           // we just return an empty stream as the success
           success(N.point(Table.empty))
         }
 
-        resultVN map { nt => 
+        resultVN map { nt =>
           StreamT.wrapEffect {
             faults map {
               case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
@@ -158,8 +158,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
             }
           }
         }
-      } 
-      
+      }
+
       N point {
         ((systemError _) <-: solution) flatMap {
           identity[Validation[EvaluationError, StreamT[N, CharBuffer]]]
@@ -204,17 +204,17 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
         constr(Some(FaultPosition(loc.lineNum, loc.colNum, loc.line)), tp.toString)
       }
-      
+
       try {
         val forest = compile(query)
         val validForest = forest filter { tree =>
           tree.errors forall isWarning
         }
-        
+
         if (validForest.size == 1) {
           val tree = validForest.head
           val faults = tree.errors map renderError
-          
+
           (faults, Some(emit(validForest.head)))
         } else if (validForest.size > 1) {
           (Set(Fault.Error(None, "Ambiguous parse results.")), None)

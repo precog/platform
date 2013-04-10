@@ -100,7 +100,7 @@ final class MongoJobManager(database: Database, settings: MongoJobManagerSetting
     val state = started map (Started(_, NotStarted)) getOrElse NotStarted
     val job = Job(id, apiKey, name, jobType, data, state)
     database(insert(job.serialize.asInstanceOf[JObject]).into(settings.jobs)) map { _ =>
-      logger.info("Job %s created in %f ms".format(id, (System.nanoTime - start) / 1000.0))
+      logger.info("Job %s created in %f ms".format(id, (System.nanoTime - start) / 1000000.0))
       job
     }
   }
