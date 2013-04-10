@@ -197,8 +197,6 @@ trait LinearRegressionLibModule[M[+_]]
             }
             countAcc
           }
-          //println("range: " + range)
-          //println("count: " + count)
 
           val (xs, y0) = makeArrays(features, range)
 
@@ -332,8 +330,6 @@ trait LinearRegressionLibModule[M[+_]]
         val colDim = errors.product.getColumnDimension
 
         val degOfFreedom = coeffs.count - colDim
-        //println("coeffs.count: "+ coeffs.count)
-        //println("colDim: "+ colDim)
         val varianceEst = errors.rss / degOfFreedom  //sqrt(varianceEst) = residual standard error
         
         val inverse = errors.product.inverse()
@@ -466,7 +462,7 @@ trait LinearRegressionLibModule[M[+_]]
       }
     }
 
-    object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with PredictionBase {
+    object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with LinearPredictionBase {
       val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
       override val retainIds = true
