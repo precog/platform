@@ -2669,7 +2669,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must not(beEmpty)
     }
     
-    "not explode" in {
+    "not explode on multiply-used solve" in {
       val input = """
         | travlex := //clicks
         | 
@@ -2680,8 +2680,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | summarize(travlex, 2)
         | """.stripMargin
 
-      eval(input)
-      true mustEqual true
+      eval(input) must not(throwA[Throwable])
     }
   }
 }
