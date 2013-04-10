@@ -6,7 +6,6 @@ import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.json._
 import com.precog.common.security._
-import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 import Schema._
@@ -76,9 +75,9 @@ object JDBCColumnarTableModule {
     }
   }
 }
-  
 
-trait JDBCColumnarTableModule 
+
+trait JDBCColumnarTableModule
     extends BlockStoreColumnarTableModule[Future] {
   import JDBCColumnarTableModule._
 
@@ -105,7 +104,7 @@ trait JDBCColumnarTableModule
 
   protected def unescapeColumnNames: Boolean
 
-  private def truncateString(input: String) = 
+  private def truncateString(input: String) =
     if (input.length > 43) {
       input.take(40) + "..."
     } else {
@@ -119,7 +118,7 @@ trait JDBCColumnarTableModule
     import Types._
 
     meta.getColumnType(index) match {
-      case BIT | BOOLEAN         => 
+      case BIT | BOOLEAN         =>
         val column = ArrayBoolColumn.empty
         val update = (rs: ResultSet, rowId: Int) => if (notNull(rs, index)) { column.update(rowId, rs.getBoolean(index)) }
         SingleDBColumn(ColumnRef(selector, CBoolean), column, update)
@@ -184,7 +183,7 @@ trait JDBCColumnarTableModule
 
             def extract(rs: ResultSet, rowId: Int) = rs.getObject(index) match {
               case pgo: PGobject => pgo.getType match {
-                case "hstore" => 
+                case "hstore" =>
                   pgo.getValue.split(",|=>").toList.map { v => val t = v.trim; t.substring(1, t.length - 1) }.grouped(2).foreach {
                     case List(key, value) =>
                       val hsRef = ColumnRef(selector \ key, CString)
@@ -196,14 +195,14 @@ trait JDBCColumnarTableModule
 
                 case "json"   =>
                   JParser.parseFromString(pgo.getValue) match {
-                    case Success(jv) => 
+                    case Success(jv) =>
                       buildColumns = Slice.withIdsAndValues(jv, buildColumns, rowId, yggConfig.maxSliceSize, Some(selector \ CPath(_)))
 
-                    case Failure(error) => 
+                    case Failure(error) =>
                       logger.error("Failure parsing JSON column value (%s): %s".format(truncateString(pgo.getValue), error.getMessage))
                   }
 
-                case other    => 
+                case other    =>
                   logger.warn("Unsupportd PostgreSQL type: " + other)
               }
 
@@ -240,7 +239,7 @@ trait JDBCColumnarTableModule
       }.toSet.flatten
 
       case JObjectFixedT(fields)                      => fields.map {
-        case (name, childType) => 
+        case (name, childType) =>
           val newPaths = if (current.nonEmpty) {
             current.map { s => s + "." + name }
           } else {
@@ -270,14 +269,14 @@ trait JDBCColumnarTableModule
         val idSpec = InnerObjectConcat(Leaf(Source), WrapObject(WrapArray(Scan(Leaf(Source), freshIdScanner)), TransSpecModule.paths.Key.name))
 
         Table(
-          StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) { 
-            case InLoad(connGen, query, skip, remaining) => 
+          StreamT.unfoldM[Future, Slice, LoadState](InitialLoad(paths.toList)) {
+            case InLoad(connGen, query, skip, remaining) =>
               M.point {
                 val (slice, nextSkip) = makeSlice(connGen, query, skip)
                 Some((slice, nextSkip.map(InLoad(connGen, query, _, remaining)).getOrElse(InitialLoad(remaining))))
               }
 
-            case InitialLoad(path :: xs) => 
+            case InitialLoad(path :: xs) =>
               path.elements.toList match {
                 case dbName :: tableName :: Nil =>
                   M.point {
@@ -298,7 +297,7 @@ trait JDBCColumnarTableModule
                         throw new Exception("Database %s is not configured" format dbName)
                       }
                     } catch {
-                      case t => 
+                      case t =>
                         logger.error("Failure during JDBC query: " + t.getMessage)
                         // FIXME: We should be able to throw here and terminate the query, but something in BlueEyes is hanging when we do so
                         //throw new Exception("Failure during JDBC query: " + t.getMessage)
@@ -306,7 +305,7 @@ trait JDBCColumnarTableModule
                     }
                   }
 
-                case err => 
+                case err =>
                   sys.error("JDBC path " + path.path + " does not have the form /dbName/tableName; rollups not yet supported.")
               }
 
