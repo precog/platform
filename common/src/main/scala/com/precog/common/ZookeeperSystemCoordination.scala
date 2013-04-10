@@ -71,7 +71,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
 
   // Make it difficult to accidentally enable this
   logger.debug("Testing for create with " + createIfMissingFlag)
-  val createOk = createIfMissingFlag.map(_ == "absolutely").getOrElse(false)
+  val createOk = createIfMissingFlag.exists(_ == "absolutely")
 
   lazy val basePath = delimeter + "precog-" + uid.systemId
 
