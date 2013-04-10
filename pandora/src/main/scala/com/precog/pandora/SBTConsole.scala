@@ -59,8 +59,7 @@ trait Platform extends muspelheim.ParseEvalStack[Future]
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with StandaloneActorProjectionSystem
-    with LongIdMemoryDatasetConsumer[Future]
-    with PrettyPrinter { self =>
+    with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
 
@@ -149,11 +148,6 @@ object SBTConsole {
       val tree = validForest.head
       val Right(dag) = decorate(emit(tree))
       dag
-    }
-
-    def printDAG(str: String) = {
-      val dag = produceDAG(str)
-      prettyPrint(dag)
     }
 
     def startup() {
