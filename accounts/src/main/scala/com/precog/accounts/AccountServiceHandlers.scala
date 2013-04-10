@@ -115,12 +115,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
       Success {
         request.parameters.get('email) match {
-          case Some(email) => accountManager.findAccountByEmail(email).map {
-            case Some(account) =>
-              HttpResponse(HttpStatus(OK), content = Some(JObject(jfield("accountId", account.accountId))))
-
-            case None =>
-              Responses.failure(NotFound, "No account found for address " + email)
+          case Some(email) => accountManager.findAccountByEmail(email).map { found =>
+            HttpResponse(HttpStatus(OK), content = found.map { account => JArray(JObject("accountId" -> account.accountId.serialize)) }.orElse { Some(JArray()) })
           }
 
           case None =>

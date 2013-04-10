@@ -20,6 +20,7 @@
 package com.precog.heimdall
 
 import com.precog.common.jobs._
+import com.precog.common.services.CORSHeaderHandler
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -87,33 +88,36 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
           }
         } ->
         request { case JobServiceState(_, jobs, auth, clock) =>
-          path("/jobs/") {
-            path("'jobId") {
-              path("/result") {
-                put(new CreateResultHandler(jobs)) ~
-                get(new GetResultHandler(jobs))
-              }
-            }
-          } ~
-          jsonp[ByteChunk] {
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*", executionContext) {
             path("/jobs/") {
-              get(new ListJobsHandler(jobs)) ~
-              post(new CreateJobHandler(jobs, auth, clock)) ~
               path("'jobId") {
-                get(new GetJobHandler(jobs)) ~
-                path("/status") {
-                  get(new GetJobStatusHandler(jobs)) ~
-                  put(new UpdateJobStatusHandler(jobs))
-                } ~
-                path("/state") {
-                  get(new GetJobStateHandler(jobs)) ~
-                  put(new PutJobStateHandler(jobs))
-                } ~
-                path("/messages/") {
-                  get(new ListChannelsHandler(jobs)) ~
-                  path("'channel") {
-                    post(new AddMessageHandler(jobs)) ~
-                    get(new ListMessagesHandler(jobs))
+                path("/result") {
+                  put(new CreateResultHandler(jobs)) ~
+                  get(new GetResultHandler(jobs))
+                }
+              }
+            } ~
+            jsonp[ByteChunk] {
+              path("/jobs/") {
+                get(new ListJobsHandler(jobs)) ~
+                post(new CreateJobHandler(jobs, auth, clock)) ~
+                path("'jobId") {
+                  get(new GetJobHandler(jobs)) ~
+                  path("/status") {
+                    get(new GetJobStatusHandler(jobs)) ~
+                    put(new UpdateJobStatusHandler(jobs))
+                  } ~
+                  path("/state") {
+                    get(new GetJobStateHandler(jobs)) ~
+                    put(new PutJobStateHandler(jobs))
+                  } ~
+                  path("/messages/") {
+                    get(new ListChannelsHandler(jobs)) ~
+                    path("'channel") {
+                      post(new AddMessageHandler(jobs)) ~
+                      get(new ListMessagesHandler(jobs))
+                    }
                   }
                 }
               }

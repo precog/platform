@@ -25,6 +25,7 @@ import com.precog.common.NetUtils
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.security.service._
+import com.precog.common.services.CORSHeaderHandler
 
 import blueeyes._
 import blueeyes.bkka._
@@ -128,40 +129,43 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           }
         } ->
         request { case State(handlers, _) =>
+          import CORSHeaderHandler.allowOrigin
           import handlers._
-          jsonp[ByteChunk] {
-            transcode {
-              path("/accounts/") {
-                path("'accountId/password/reset") {
-                  path("/'resetToken") {
-                    post(PasswordResetHandler)
+          allowOrigin("*", executionContext) {
+            jsonp[ByteChunk] {
+              transcode {
+                path("/accounts/") {
+                  path("'accountId/password/reset") {
+                    path("/'resetToken") {
+                      post(PasswordResetHandler)
+                    } ~
+                    post(GenerateResetTokenHandler)
                   } ~
-                  post(GenerateResetTokenHandler)
-                } ~
-                path("search") {
-                  get(SearchAccountHandler)
-                } ~
-                post(PostAccountHandler) ~
-                path("search") {
-                  parameter('email) {
-                    get(SearchAccountsHandler) 
-                  }
-                } ~
-                auth(handlers.accountManager) {
-                  get(ListAccountsHandler) ~
-                  path("'accountId") {
-                    get(GetAccountDetailsHandler) ~
-                    delete(DeleteAccountHandler) ~
-                    path("/password") {
-                      put(PutAccountPasswordHandler)
-                    } ~
-                    path("/grants/") {
-                      post(CreateAccountGrantHandler)
-                    } ~
-                    path("/plan") {
-                      get(GetAccountPlanHandler) ~
-                      put(PutAccountPlanHandler) ~
-                      delete(DeleteAccountPlanHandler)
+                  path("search") {
+                    get(SearchAccountHandler)
+                  } ~
+                  post(PostAccountHandler) ~
+                  path("search") {
+                    parameter('email) {
+                      get(SearchAccountsHandler)
+                    }
+                  } ~
+                  auth(handlers.accountManager) {
+                    get(ListAccountsHandler) ~
+                    path("'accountId") {
+                      get(GetAccountDetailsHandler) ~
+                      delete(DeleteAccountHandler) ~
+                      path("/password") {
+                        put(PutAccountPasswordHandler)
+                      } ~
+                      path("/grants/") {
+                        post(CreateAccountGrantHandler)
+                      } ~
+                      path("/plan") {
+                        get(GetAccountPlanHandler) ~
+                        put(PutAccountPlanHandler) ~
+                        delete(DeleteAccountPlanHandler)
+                      }
                     }
                   }
                 }

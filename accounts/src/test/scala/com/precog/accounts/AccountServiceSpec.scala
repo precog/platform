@@ -351,15 +351,15 @@ class AccountServiceSpec extends TestAccountService with Tags {
       val accountId = createAccountAndGetId(user, pass).copoint
 
       getAccountByEmail(user).copoint must beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(jv), _) =>
-          val JString(id) = jv \ "accountId"
+        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(results)), _) =>
+          val JString(id) = results.head \ "accountId"
           id must_== accountId
       }
     }
 
     "not find a non-existent account by email address" in {
       getAccountByEmail("nobodyhome@precog.com").copoint must beLike {
-        case HttpResponse(HttpStatus(NotFound, _), _, _, _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(Nil)), _) => ok
       }
     }
   }
