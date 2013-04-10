@@ -46,7 +46,7 @@ import scalaz.syntax.std.option._
 
 import shapeless._
 
-import java.io.{DataInputStream, DataOutputStream, File, FileInputStream, FileOutputStream, IOException}
+import java.io._
 import java.nio.file.Files
 import java.util.UUID
 
@@ -90,12 +90,14 @@ class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Mona
 
   private[this] def newJobId: JobId = UUID.randomUUID().toString.toLowerCase.replace("-", "")
 
-  private[this] def jobFile(jobId: JobId) = new File(workDir, jobId + ".job")
-  private[this] def resultFile(jobId: JobId) = new File(workDir, jobId + ".result")
+  private final val JOB_SUFFIX = ".job"
+  private final val RESULT_SUFFIX = ".result"
+
+  private[this] def jobFile(jobId: JobId) = new File(workDir, jobId + JOB_SUFFIX)
+  private[this] def resultFile(jobId: JobId) = new File(workDir, jobId + RESULT_SUFFIX)
 
   private[this] def saveJob(jobId: JobId, jobState: FileJobState) = {
     cache += (jobId -> jobState)
-    // FIXME: Why can't this find the decomposer implicitly?
     IOUtils.safeWriteToFile(jobState.serialize.renderCompact,  jobFile(jobId)).unsafePerformIO
   }
 
@@ -122,18 +124,26 @@ class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Mona
     loadJob(jobId).map(_.job)
   }
 
+  private val jobFileFilter = new FilenameFilter {
+    def accept(dir: File, name: String) = name.endsWith(JOB_SUFFIX)
+  }
+
   def listJobs(apiKey: APIKey): M[Seq[Job]] = M.point {
+    // Load all jobs from the workDir that aren't in the cache
+    Option(workDir.list(jobFileFilter)).foreach { names =>
+      names.foreach { name => loadJob(name.substring(0, name.length - JOB_SUFFIX.length)) }
+    }
     cache.values.collect {
       case FileJobState(job, _, _) if job.apiKey == apiKey => job
     }.toSeq
   }
 
   def listChannels(jobId: JobId): M[Seq[ChannelId]] = M.point {
-    cache.get(jobId).map(_.messages.keys.toSeq).getOrElse(Seq.empty)
+    loadJob(jobId).map(_.messages.keys.toSeq).getOrElse(Seq.empty)
   }
 
   def addMessage(jobId: JobId, channel: ChannelId, value: JValue): M[Message] = M.point {
-    cache.get(jobId) match {
+    loadJob(jobId) match {
       case Some(js @ FileJobState(_, _, messages)) =>
         val prior: List[Message] = messages.get(channel).getOrElse(Nil)
         val message = Message(jobId, prior.size, channel, value)

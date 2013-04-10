@@ -59,7 +59,7 @@ class FileJobManagerSpec extends Specification {
 
   include(new JobManagerSpec[Id] {
     val validAPIKey = "Anything should work!"
-    val jobs = new FileJobManager[Id](tempDir, Id.id)
+    val jobs = FileJobManager[Id](tempDir, Id.id)
     val M: Monad[Id] with Comonad[Id] = implicitly
   })
 
