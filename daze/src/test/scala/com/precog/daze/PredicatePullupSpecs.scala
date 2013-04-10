@@ -2,6 +2,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.util.Identifier
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
@@ -29,10 +30,12 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         | """.stripMargin
 
       val loc = instructions.Line(1, 1, "")
-
-      val load = LoadLocal(Const(CString("/clicks"))(loc))(loc) 
       
-      lazy val split: Split =
+      val load = LoadLocal(Const(CString("/clicks"))(loc))(loc)
+      
+      val id = new Identifier
+      
+      val split =
         Split(
           Group(0,
             load,
@@ -59,16 +62,16 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Join(instructions.JoinObject,CrossLeftSort,
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("userId"))(loc),
-              SplitParam(1)(split)(loc)
+              SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("time"))(loc),
               Join(instructions.DerefObject,CrossLeftSort,
-                SplitGroup(0, load.identities)(split)(loc),
+                SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
             )(loc)
-          )(loc)
+          )(loc), id
         )(loc)
         
       val filteredLoad =
@@ -86,7 +89,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           )(loc)
         )(loc)
             
-      lazy val expected: Split =
+      val expected =
         Split(
           Group(0,
             filteredLoad,
@@ -100,16 +103,16 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Join(instructions.JoinObject,CrossLeftSort,
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("userId"))(loc),
-              SplitParam(1)(expected)(loc)
+              SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("time"))(loc),
               Join(instructions.DerefObject,CrossLeftSort,
-                SplitGroup(0,load.identities)(expected)(loc),
+                SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
             )(loc)
-          )(loc)
+          )(loc), id
         )(loc)
 
       predicatePullups(split, ctx) mustEqual expected
@@ -127,12 +130,14 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         |   clicks' := clicks where clicks.time <= upperBound & clicks.time >= extraLB & clicks.userId = 'userId & clicks.pageId = 'pageId
         |   {userId: 'userId, time: clicks'.time}
         | """.stripMargin
+        
+      val id = new Identifier
 
       val loc = instructions.Line(1, 1, "")
 
       val load = LoadLocal(Const(CString("/clicks"))(loc))(loc) 
       
-      lazy val split : Split =
+      val split =
         Split(
           Group(0,
             load,
@@ -164,16 +169,16 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Join(instructions.JoinObject,CrossLeftSort,
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("userId"))(loc),
-              SplitParam(1)(split)(loc)
+              SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("time"))(loc),
               Join(instructions.DerefObject,CrossLeftSort,
-                SplitGroup(0,load.identities)(split)(loc),
+                SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
             )(loc)
-          )(loc)
+          )(loc), id
         )(loc)
         
         val filteredLoad =
@@ -191,7 +196,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
             )(loc)
           )(loc)
               
-        lazy val expected: Split = 
+        val expected = 
           Split(
             Group(0,
               filteredLoad,
@@ -213,16 +218,16 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
             Join(instructions.JoinObject,CrossLeftSort,
               Join(instructions.WrapObject,CrossLeftSort,
                 Const(CString("userId"))(loc),
-                SplitParam(1)(expected)(loc)
+                SplitParam(1, id)(loc)
               )(loc),
               Join(instructions.WrapObject,CrossLeftSort,
                 Const(CString("time"))(loc),
                 Join(instructions.DerefObject,CrossLeftSort,
-                  SplitGroup(0,load.identities)(expected)(loc),
+                  SplitGroup(0, load.identities, id)(loc),
                   Const(CString("time"))(loc)
                 )(loc)
               )(loc)
-            )(loc)
+            )(loc), id
           )(loc)
 
       predicatePullups(split, ctx) mustEqual expected
@@ -239,11 +244,14 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         |     medals' where medals'.Weight = 'weight
         | """.stripMargin
         
+      val id1 = new Identifier
+      val id2 = new Identifier
+        
       val loc = instructions.Line(1, 1, "")
       
       val load = LoadLocal(Const(CString("/summer_games/london_medals"))(loc))(loc)
       
-      lazy val split: Split =
+      lazy val split =
         Split(
           Group(0,
             load,
@@ -259,21 +267,23 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               )
             )
           ),
-          innerSplit
+          innerSplit,
+          id1
         )(loc)
         
-      lazy val innerSplit: Split =
+      lazy val innerSplit =
         Split(
           Group(2,
-            SplitGroup(0, load.identities)(split)(loc),
+            SplitGroup(0, load.identities, id1)(loc),
             UnfixedSolution(3,
               Join(instructions.DerefObject,CrossLeftSort,
-                SplitGroup(0, load.identities)(split)(loc),
+                SplitGroup(0, load.identities, id1)(loc),
                 Const(CString("Weight"))(loc)
               )(loc)
             )
           ),
-          SplitGroup(2, load.identities)(innerSplit)(loc)
+          SplitGroup(2, load.identities, id2)(loc),
+          id2
         )(loc)
       
       val filteredLoad =
@@ -285,37 +295,38 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           )(loc)
         )(loc)
 
-        lazy val expected: Split =  
-          Split(
-            Group(0,
-              filteredLoad,
-              UnfixedSolution(1,
-                Join(instructions.DerefObject,CrossLeftSort,
-                  filteredLoad,
-                  Const(CString("Gender"))(loc)
-                )(loc)
-              )
-            ),
-            expectedInner
-          )(loc)
-          
-        lazy val expectedInner: Split =  
-          Split(
-            Group(2,
-              SplitGroup(0,
-                load.identities
-              )(expected)(loc),
-              UnfixedSolution(3,
-                Join(instructions.DerefObject,CrossLeftSort,
-                  SplitGroup(0,
-                    load.identities
-                  )(expected)(loc),
-                  Const(CString("Weight"))(loc)
-                )(loc)
-              )
-            ),
-            SplitGroup(2,load.identities)(expectedInner)(loc)
-          )(loc)
+      lazy val expected =  
+        Split(
+          Group(0,
+            filteredLoad,
+            UnfixedSolution(1,
+              Join(instructions.DerefObject,CrossLeftSort,
+                filteredLoad,
+                Const(CString("Gender"))(loc)
+              )(loc)
+            )
+          ),
+          expectedInner,
+          id1
+        )(loc)
+        
+      lazy val expectedInner =  
+        Split(
+          Group(2,
+            SplitGroup(0,
+              load.identities,
+              id1
+            )(loc),
+            UnfixedSolution(3,
+              Join(instructions.DerefObject,CrossLeftSort,
+                SplitGroup(0, load.identities, id1)(loc),
+                Const(CString("Weight"))(loc)
+              )(loc)
+            )
+          ),
+          SplitGroup(2, load.identities, id2)(loc),
+          id2
+        )(loc)
         
       predicatePullups(split, ctx) mustEqual expected
     }
@@ -329,11 +340,13 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         |   { gender1: 'gender, gender2: medals.Gender, gender3: medals'.Gender }
         | """.stripMargin
         
+      val id = new Identifier
+      
       val loc = instructions.Line(1, 1, "")
 
       val load = LoadLocal(Const(CString("/summer_games/london_medals"))(loc))(loc) 
         
-      lazy val split: Split =
+      val split =
         Split(
           Group(0,
             load,
@@ -352,7 +365,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Join(instructions.JoinObject,CrossLeftSort,
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("gender1"))(loc),
-              SplitParam(1)(split)(loc)
+              SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.JoinObject,IdentitySort,
               Join(instructions.WrapObject,CrossLeftSort,
@@ -365,12 +378,12 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               Join(instructions.WrapObject,CrossLeftSort,
                 Const(CString("gender3"))(loc),
                 Join(instructions.DerefObject,CrossLeftSort,
-                  SplitGroup(0,load.identities)(split)(loc),
+                  SplitGroup(0,load.identities, id)(loc),
                   Const(CString("Gender"))(loc)
                 )(loc)
               )(loc)
             )(loc)
-          )(loc)
+          )(loc), id
         )(loc)
       
       val filteredLoad =
@@ -382,7 +395,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           )(loc)
         )(loc)
         
-      lazy val expected: Split =
+      val expected =
         Split(
           Group(0,
             filteredLoad,
@@ -396,7 +409,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Join(instructions.JoinObject,CrossLeftSort,
             Join(instructions.WrapObject,CrossLeftSort,
               Const(CString("gender1"))(loc),
-              SplitParam(1)(expected)(loc)
+              SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.JoinObject,IdentitySort,
               Join(instructions.WrapObject,CrossLeftSort,
@@ -409,12 +422,12 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               Join(instructions.WrapObject,CrossLeftSort,
                 Const(CString("gender3"))(loc),
                 Join(instructions.DerefObject,CrossLeftSort,
-                  SplitGroup(0,load.identities)(expected)(loc),
+                  SplitGroup(0, load.identities, id)(loc),
                   Const(CString("Gender"))(loc)
                 )(loc)
               )(loc)
             )(loc)
-          )(loc)
+          )(loc), id
         )(loc)
         
       predicatePullups(split, ctx) mustEqual expected

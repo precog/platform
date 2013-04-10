@@ -951,7 +951,7 @@ object GroupSolverSpecs extends Specification
       
       compileSingle(input).errors must beEmpty
     }
-    
+     
     "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
       val input = """
         | clicks := //clicks

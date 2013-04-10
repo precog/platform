@@ -24,7 +24,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(CNum(45.14))(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "detect and resolve operations at depth" in {
@@ -38,7 +38,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(CNum(48.28))(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "produce CUndefined in cases where the operation is undefined" in {
@@ -50,7 +50,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(CUndefined)(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "propagate through static computations CUndefined when produced at depth" in {
@@ -64,7 +64,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
         
       val expected = Const(CUndefined)(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+      inlineStatics(input, defaultEvaluationContext) mustEqual expected
     }
     
     "propagate through non-singleton computations CUndefined when produced at depth" >> {
@@ -79,7 +79,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           
         val expected = Const(CUndefined)(line)
         
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+        inlineStatics(input, defaultEvaluationContext) mustEqual expected
       }
       
       "right" >> {
@@ -91,7 +91,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           
         val expected = Const(CUndefined)(line)
         
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual expected
+        inlineStatics(input, defaultEvaluationContext) mustEqual expected
       }
     }
     
@@ -103,7 +103,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           dag.LoadLocal(Const(CString("/foo"))(line))(line),
           Const(CTrue)(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual dag.LoadLocal(Const(CString("/foo"))(line))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual dag.LoadLocal(Const(CString("/foo"))(line))(line)
       }
       
       "false" >> {
@@ -111,7 +111,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           dag.LoadLocal(Const(CString("/foo"))(line))(line),
           Const(CBoolean(false))(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CUndefined)(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CUndefined)(line)
       }
     }
 
@@ -121,25 +121,25 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "wrap" >> {
         val input = Operate(WrapArray, Const(CBoolean(false))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CBoolean(false)))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(RArray(CBoolean(false)))(line)
       }
 
       "deref" >> {
         val input = Join(DerefArray, CrossLeftSort, Const(RArray(CBoolean(false), CTrue))(line), Const(CNum(1))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CTrue)(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CTrue)(line)
       }
 
       "join" >> {
         val input = Join(JoinArray, CrossLeftSort, Const(RArray(CTrue))(line), Const(RArray(CBoolean(false)))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CTrue, CBoolean(false)))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(RArray(CTrue, CBoolean(false)))(line)
       }
 
       "swap" >> {
         val input = Join(ArraySwap, CrossLeftSort, Const(RArray(CTrue, CBoolean(false), CString("TEST")))(line), Const(CNum(1))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RArray(CBoolean(false), CTrue, CString("TEST")))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(RArray(CBoolean(false), CTrue, CString("TEST")))(line)
       }
     }
 
@@ -149,19 +149,19 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "wrap" >> {
         val input = Join(WrapObject, CrossLeftSort, Const(CString("k"))(line), Const(CTrue)(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RObject("k" -> CTrue))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(RObject("k" -> CTrue))(line)
       }
 
       "deref" >> {
         val input = Join(DerefObject, CrossLeftSort, Const(RObject("k" -> CBoolean(false)))(line), Const(CString("k"))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CBoolean(false))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CBoolean(false))(line)
       }
 
       "join" >> {
         val input = Join(JoinObject, CrossLeftSort, Const(RObject("k" -> CTrue))(line), Const(RObject("l" -> CBoolean(false)))(line))(line)
 
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(RObject("k" -> CTrue, "l" -> CBoolean(false)))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(RObject("k" -> CTrue, "l" -> CBoolean(false)))(line)
       }
     }
     
@@ -171,19 +171,19 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       "const true" >> {
         val input = Cond(Const(CBoolean(true))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
         
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CString("j"))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CString("j"))(line)
       }
       
       "const false" >> {
         val input = Cond(Const(CBoolean(false))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
         
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Const(CString("k"))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CString("k"))(line)
       }
       
       "invalid const" >> {
         val input = Cond(Const(CString("fubar"))(line), Const(CString("j"))(line), CrossLeftSort, Const(CString("k"))(line), CrossLeftSort)(line)
         
-        inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual Undefined(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual Undefined(line)
       }
     }
     
@@ -193,7 +193,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val side = Const(CString("j"))(line)
       val input = IUI(true, side, side)(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+      inlineStatics(input, defaultEvaluationContext) mustEqual side
     }
     
     "detect and resove intersect with identical left/right" in {
@@ -202,7 +202,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val side = Const(CString("j"))(line)
       val input = IUI(false, side, side)(line)
       
-      inlineStatics(input, defaultEvaluationContext, Set.empty) mustEqual side
+      inlineStatics(input, defaultEvaluationContext) mustEqual side
     }
   }
 }
