@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.util.Identifier
 import org.specs2.mutable._
 import bytecode._
 import com.precog.yggdrasil._
@@ -154,14 +155,14 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
               UnfixedSolution(1, Const(CTrue))),
             IUI(true, 
               sg: SplitGroup,
-              sp: SplitParam))) => {
+              sp: SplitParam), id)) => {
               
           sp.id mustEqual 1
           sg.id mustEqual 2
           sg.identities mustEqual Identities.Specs(Vector())
           
-          sp.parent mustEqual s
-          sg.parent mustEqual s
+          sp.parentId mustEqual id
+          sg.parentId mustEqual id
         }
       }
     }
@@ -195,20 +196,20 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
               dag.Group(4, sp1: SplitParam, UnfixedSolution(3, sg1: SplitGroup)),
               IUI(true,
                 sg2: SplitGroup,
-                sp2: SplitParam)))) => {
+                sp2: SplitParam), id2), id1)) => {
           
           sp1.id mustEqual 1
           sg1.id mustEqual 2
           sg1.identities mustEqual Identities.Specs(Vector())
           
-          sp1.parent mustEqual s1
-          sg1.parent mustEqual s1
+          sp1.parentId mustEqual id1
+          sg1.parentId mustEqual id1
           
           sp2.id mustEqual 3
           sp2.identities mustEqual Identities.Specs(Vector())
           
-          sp2.parent mustEqual s2
-          sg2.parent mustEqual s2
+          sp2.parentId mustEqual id2
+          sg2.parentId mustEqual id2
         }
       }
     }
@@ -246,7 +247,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
                 Join(Add, CrossLeftSort,
                   sg1: SplitGroup,
                   sp1: SplitParam),
-                sg2: SplitGroup)))) => {
+                sg2: SplitGroup), id2), id1)) => {
           
           sp1.id mustEqual 1
           sg1.id mustEqual 2
@@ -255,10 +256,10 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
           sg2.id mustEqual 4
           sg2.identities mustEqual Identities.Specs(Vector())
           
-          sp1.parent mustEqual s1
-          sg1.parent mustEqual s1
+          sp1.parentId mustEqual id1
+          sg1.parentId mustEqual id1
           
-          sg2.parent mustEqual s2
+          sg2.parentId mustEqual id2
         }
       }
     }
@@ -292,14 +293,14 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
                   UnfixedSolution(1, Const(CLong(3))))),
               IUI(true,
                 sg: SplitGroup,
-                sp: SplitParam))) => {
+                sp: SplitParam), id)) => {
                   
             sp.id mustEqual 1
             sg.id mustEqual 3
             sg.identities mustEqual Identities.Specs(Vector())
             
-            sg.parent mustEqual s
-            sp.parent mustEqual s
+            sg.parentId mustEqual id
+            sp.parentId mustEqual id
           }
         }
       }
@@ -332,14 +333,14 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
                   UnfixedSolution(1, Const(CLong(3))))),
               IUI(true,
                 sg: SplitGroup,
-                sp: SplitParam))) => {
+                sp: SplitParam), id)) => {
             
             sp.id mustEqual 1
             sg.id mustEqual 3
             sg.identities mustEqual Identities.Specs(Vector())
             
-            sg.parent mustEqual s
-            sp.parent mustEqual s
+            sg.parentId mustEqual id
+            sp.parentId mustEqual id
           }
         }
       }
@@ -378,7 +379,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
               sg2: SplitGroup,
               IUI(true,
                 sg1: SplitGroup,
-                sp1: SplitParam)))) => {
+                sp1: SplitParam)), id)) => {
           
           sp1.id mustEqual 1
           sg1.id mustEqual 3
@@ -387,9 +388,9 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
           sg2.id mustEqual 2
           sg2.identities mustEqual Identities.Specs(Vector())
                   
-          sg1.parent mustEqual s
-          sp1.parent mustEqual s
-          sg2.parent mustEqual s
+          sg1.parentId mustEqual id
+          sp1.parentId mustEqual id
+          sg2.parentId mustEqual id
         }
       }
     }
@@ -415,11 +416,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
             dag.Group(2, Const(CNull), UnfixedSolution(1, Const(CTrue))),
             Join(Add, IdentitySort,
               Const(CLong(42)),
-              sg: SplitGroup))) => {
+              sg: SplitGroup), id)) => {
           
           sg.id mustEqual 2
           sg.identities mustEqual Identities.Specs(Vector())
-          sg.parent mustEqual s
+          sg.parentId mustEqual id
         }
       }
     }
@@ -427,7 +428,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
     "determine a histogram of a composite key of revenue and campaign" in {
       val line = Line(1, 1, "")
 
-      val result = decorate(Vector(
+      val result @ Right(dag.Split(_, _, id)) = decorate(Vector(
         Line(1, 1, ""),
         PushString("/organizations"),
         instructions.LoadLocal,
@@ -474,41 +475,41 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         Map2Cross(JoinObject),
         Merge))
 
-        val expectedSpec = IntersectBucketSpec(
-          IntersectBucketSpec(
-              dag.Group(0,
-                  Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
-                      Const(CString("revenue"))(line))(line),
-                  UnfixedSolution(1,
-                      Join(DerefObject,CrossLeftSort,
-                          dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
-                          Const(CString("revenue"))(line))(line))),
-              dag.Group(2,
-                  Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
-                      Const(CString("campaign"))(line))(line),
-                  UnfixedSolution(3,
-                      Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
-                      Const(CString("campaign"))(line))(line)))),
-          dag.Group(4,
+      val expectedSpec = IntersectBucketSpec(
+        IntersectBucketSpec(
+          dag.Group(0,
+            Join(DerefObject,CrossLeftSort,
+              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              Const(CString("revenue"))(line))(line),
+            UnfixedSolution(1,
+              Join(DerefObject,CrossLeftSort,
+                dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+                Const(CString("revenue"))(line))(line))),
+          dag.Group(2,
+            Join(DerefObject,CrossLeftSort,
+              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              Const(CString("campaign"))(line))(line),
+            UnfixedSolution(3,
+              Join(DerefObject,CrossLeftSort,
+              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              Const(CString("campaign"))(line))(line)))),
+        dag.Group(4,
+          dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
+          UnfixedSolution(3,
+            Join(DerefObject,CrossLeftSort,
               dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
-              UnfixedSolution(3,
-                  Join(DerefObject,CrossLeftSort,
-                      dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
-                      Const(CString("campaign"))(line))(line))))
-    
-    lazy val expectedSplit: dag.Split = dag.Split(expectedSpec, expectedTarget)(line)
+              Const(CString("campaign"))(line))(line))))
       
-    lazy val expectedTarget = Join(JoinObject,CrossLeftSort,
-      Join(WrapObject,CrossLeftSort,
-        Const(CString("revenue"))(line),
-        SplitParam(1)(expectedSplit)(line))(line),
-      Join(WrapObject,CrossLeftSort,
-        Const(CString("num"))(line),
-        dag.Reduce(Reduction(Vector(), "count", 0x002000),SplitGroup(4,Identities.Specs(Vector(LoadIds("/campaigns"))))(expectedSplit)(line))(line))(line))(line)
-
+      val expectedTarget = Join(JoinObject,CrossLeftSort,
+        Join(WrapObject,CrossLeftSort,
+          Const(CString("revenue"))(line),
+          SplitParam(1, id)(line))(line),
+        Join(WrapObject,CrossLeftSort,
+          Const(CString("num"))(line),
+          dag.Reduce(Reduction(Vector(), "count", 0x002000),
+            SplitGroup(4, Identities.Specs(Vector(LoadIds("/campaigns"))), id)(line))(line))(line))(line)
+    
+      val expectedSplit = dag.Split(expectedSpec, expectedTarget, id)(line)
 
       result mustEqual Right(expectedSplit)
     }
@@ -811,7 +812,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
     "accept merge with reduced (but reordered) stack" in {
       val line = Line(1, 1, "")
       
-      val result = decorate(Vector(
+      val result @ Right(IUI(_, _, dag.Split(_, _, id))) = decorate(Vector(
         line,
         PushTrue,
         PushFalse,
@@ -827,11 +828,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         Merge,
         IIntersect))
       
-      lazy val split: dag.Split = dag.Split(
+      val split = dag.Split(
         dag.Group(2, Const(CLong(12))(line), UnfixedSolution(1, Const(CLong(42))(line))),
         IUI(true,
-          SplitGroup(2, Identities.Specs(Vector()))(split)(line),
-          Const(CTrue)(line))(line))(line)
+          SplitGroup(2, Identities.Specs(Vector()), id)(line),
+          Const(CTrue)(line))(line), id)(line)
       
       val expect = IUI(false, Const(CFalse)(line), split)(line)
         
@@ -874,9 +875,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val line = Line(1, 1, "")
       val load = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1, load, UnfixedSolution(0, load)),
-        SplitParam(0)(input)(line))(line)
+        SplitParam(0, id)(line), id)(line)
         
       val result = input.mapDown { recurse => {
         case graph @ dag.LoadLocal(Const(CString(path)), tpe) =>
@@ -884,7 +887,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       }}
       
       result must beLike {
-        case dag.Split(dag.Group(_, load1, UnfixedSolution(_, load2)), _) =>
+        case dag.Split(dag.Group(_, load1, UnfixedSolution(_, load2)), _, _) =>
           load1 must be(load2)
       }
     }
@@ -895,9 +898,11 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val line = Line(1, 1, "")
       val load = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
-      lazy val input: dag.Split = dag.Split(
+      val id = new Identifier
+      
+      val input = dag.Split(
         dag.Group(1, load, UnfixedSolution(0, load)),
-        SplitParam(0)(input)(line))(line)
+        SplitParam(0, id)(line), id)(line)
         
       import scalaz.std.anyVal._
       val result = input.foldDown[Int](true) {

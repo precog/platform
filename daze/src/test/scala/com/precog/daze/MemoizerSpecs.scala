@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.util.Identifier
 import com.precog.bytecode.StaticLibrary
 import com.precog.yggdrasil._
 import org.specs2.mutable._
@@ -30,7 +31,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
   import dag._
 
   type Lib = StaticLibrary
-  val library = new StaticLibrary{}
+  val library = new StaticLibrary {}
   import library._
 
   "dag memoization" should {
@@ -78,12 +79,14 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
     "insert memoization nodes for split referenced by morph1 and cross" in {
       val line = Line(1, 1, "")
       
+      val id = new Identifier
+      
       val clicks = 
         dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
       
-      lazy val split: dag.Split = dag.Split(
+      val split = dag.Split(
         dag.Group(0, clicks, UnfixedSolution(1, clicks)),
-        SplitParam(1)(split)(line))(line)
+        SplitParam(1, id)(line), id)(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -107,6 +110,8 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
     "insert memoization nodes for reduce parenting a split" in {
       val line = Line(1, 1, "")
       
+      val id = new Identifier
+      
       val clicks = 
         dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
       
@@ -117,10 +122,10 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
             clicks,
             clicks)(line))(line)
             
-      lazy val split: dag.Split = dag.Split(
+      val split = dag.Split(
         dag.Group(0, join, UnfixedSolution(1, join)),
-        SplitParam(1)(split)(line))(line)
-            
+        SplitParam(1, id)(line), id)(line)
+        
       val memoClicks = Memoize(clicks, 3)
       
       val expectedJoin =
@@ -130,9 +135,9 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
             memoClicks,
             memoClicks)(line))(line)
             
-      lazy val expectedSplit: dag.Split = dag.Split(
+      val expectedSplit = dag.Split(
         dag.Group(0, expectedJoin, UnfixedSolution(1, expectedJoin)),
-        SplitParam(1)(expectedSplit)(line))(line)
+        SplitParam(1, id)(line), id)(line)
         
       memoize(split) mustEqual expectedSplit
     }

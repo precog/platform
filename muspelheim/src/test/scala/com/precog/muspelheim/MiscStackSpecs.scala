@@ -2437,7 +2437,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = eval(input)
       results must_== Set(SDecimal(4))
-      System.err.println(results)
     }
     
     "correctly filter the results of a non-trivial solve" in {
@@ -2687,6 +2686,20 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       eval(input) must not(beEmpty)
+    }
+    
+    "not explode on multiply-used solve" in {
+      val input = """
+        | travlex := //clicks
+        | 
+        | summarize(data, n) := solve data = 'qualifier
+        |   'qualifier + n
+        | 
+        | summarize(travlex, 1) union
+        | summarize(travlex, 2)
+        | """.stripMargin
+
+      eval(input) must not(throwA[Throwable])
     }
   }
 }

@@ -22,8 +22,9 @@ package daze
 
 import scala.collection.mutable
 
-import bytecode._
-import yggdrasil._
+import com.precog.bytecode._
+import com.precog.yggdrasil._
+import com.precog.util.Identifier
 
 trait TypeInferencer extends DAG {
   import instructions.{
@@ -37,31 +38,31 @@ trait TypeInferencer extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
 
     def collectTypes(universe: JType, graph: DepGraph): Map[DepGraph, Set[JType]] = {
-      def collectSpecTypes(typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
+      def collectSpecTypes(typing: Map[DepGraph, Set[JType]], splits: Map[Identifier, Split], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
         case UnionBucketSpec(left, right) =>
-          collectSpecTypes(collectSpecTypes(typing, left), right) 
+          collectSpecTypes(collectSpecTypes(typing, splits, left), splits, right) 
         
         case IntersectBucketSpec(left, right) =>
-          collectSpecTypes(collectSpecTypes(typing, left), right) 
+          collectSpecTypes(collectSpecTypes(typing, splits, left), splits, right)
         
         case Group(id, target, child) =>
-          collectSpecTypes(inner(None, typing, target), child)
+          collectSpecTypes(inner(None, typing, splits, target), splits, child)
         
         case UnfixedSolution(id, target) =>
-          inner(Some(universe), typing, target)
+          inner(Some(universe), typing, splits, target)
         
         case Extra(target) =>
-          inner(Some(universe), typing, target)
+          inner(Some(universe), typing, splits, target)
       }
     
-      def inner(jtpe: Option[JType], typing: Map[DepGraph, Set[JType]], graph: DepGraph): Map[DepGraph, Set[JType]] = {
+      def inner(jtpe: Option[JType], typing: Map[DepGraph, Set[JType]], splits: Map[Identifier, Split], graph: DepGraph): Map[DepGraph, Set[JType]] = {
         graph match {
           case _: Root => typing 
     
-          case New(parent) => inner(jtpe, typing, parent)
+          case New(parent) => inner(jtpe, typing, splits, parent)
     
           case ld @ LoadLocal(parent, _) =>
-            val typing0 = inner(Some(JTextT), typing, parent)
+            val typing0 = inner(Some(JTextT), typing, splits, parent)
             jtpe map { jtpe0 =>
               typing0 get ld map { jtpes =>
                 typing + (ld -> (jtpes + jtpe0))
@@ -70,22 +71,23 @@ trait TypeInferencer extends DAG {
               }
             } getOrElse typing
   
-          case Operate(op, parent) => inner(Some(op.tpe.arg), typing, parent)
+          case Operate(op, parent) => inner(Some(op.tpe.arg), typing, splits, parent)
     
-          case Reduce(red, parent) => inner(Some(red.tpe.arg), typing, parent)
+          case Reduce(red, parent) => inner(Some(red.tpe.arg), typing, splits, parent)
 
           case MegaReduce(_, _) =>
             sys.error("Cannot infer type of MegaReduce. MegaReduce optimization must come after inferTypes.")
     
-          case Morph1(m, parent) => inner(Some(m.tpe.arg), typing, parent)
+          case Morph1(m, parent) => inner(Some(m.tpe.arg), typing, splits, parent)
     
-          case Morph2(m, left, right) => inner(Some(m.tpe.arg1), inner(Some(m.tpe.arg0), typing, left), right)
+          case Morph2(m, left, right) =>
+            inner(Some(m.tpe.arg1), inner(Some(m.tpe.arg0), typing, splits, left), splits, right)
     
           case Join(DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
-            inner(jtpe map { jtpe0 => JObjectFixedT(Map(str -> jtpe0)) }, typing, left)
+            inner(jtpe map { jtpe0 => JObjectFixedT(Map(str -> jtpe0)) }, typing, splits, left)
     
           case Join(DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
-            inner(jtpe map { jtpe0 => JArrayFixedT(Map(d.toInt -> jtpe0)) }, typing, left)
+            inner(jtpe map { jtpe0 => JArrayFixedT(Map(d.toInt -> jtpe0)) }, typing, splits, left)
     
           case Join(WrapObject, CrossLeftSort | CrossRightSort, ConstString(str), right) => {
             val jtpe2 = jtpe map {
@@ -95,7 +97,7 @@ trait TypeInferencer extends DAG {
               case _ => universe
             }
             
-            inner(jtpe2, typing, right)
+            inner(jtpe2, typing, splits, right)
           }
     
           case Join(ArraySwap, CrossLeftSort | CrossRightSort, left, right) => {
@@ -104,57 +106,57 @@ trait TypeInferencer extends DAG {
               case _ => Some(JArrayUnfixedT)
             }
             
-            inner(Some(JNumberT), inner(jtpe2, typing, left), right)
+            inner(Some(JNumberT), inner(jtpe2, typing, splits, left), splits, right)
           }
     
           case Join(op: BinaryOperation, _, left, right) =>
-            inner(Some(op.tpe.arg1), inner(Some(op.tpe.arg0), typing, left), right)
+            inner(Some(op.tpe.arg1), inner(Some(op.tpe.arg0), typing, splits, left), splits, right)
     
-          case Assert(pred, child) => inner(jtpe, inner(jtpe, typing, pred), child)
+          case Assert(pred, child) => inner(jtpe, inner(jtpe, typing, splits, pred), splits, child)
           
           case graph @ Cond(pred, left, _, right, _) =>
-            inner(jtpe, typing, graph.peer)
+            inner(jtpe, typing, splits, graph.peer)
           
-          case Observe(data, samples) => inner(jtpe, inner(jtpe, typing, data), samples)
+          case Observe(data, samples) => inner(jtpe, inner(jtpe, typing, splits, data), splits, samples)
           
-          case IUI(_, left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+          case IUI(_, left, right) => inner(jtpe, inner(jtpe, typing, splits, left), splits, right)
   
-          case Diff(left, right) => inner(jtpe, inner(jtpe, typing, left), right)
+          case Diff(left, right) => inner(jtpe, inner(jtpe, typing, splits, left), splits, right)
     
           case Filter(_, target, boolean) =>
-            inner(Some(JBooleanT), inner(jtpe, typing, target), boolean)
+            inner(Some(JBooleanT), inner(jtpe, typing, splits, target), splits, boolean)
     
-          case Sort(parent, _) => inner(jtpe, typing, parent)
+          case Sort(parent, _) => inner(jtpe, typing, splits, parent)
     
-          case SortBy(parent, _, _, _) => inner(jtpe, typing, parent)
+          case SortBy(parent, _, _, _) => inner(jtpe, typing, splits, parent)
           
-          case ReSortBy(parent, _) => inner(jtpe, typing, parent)
+          case ReSortBy(parent, _) => inner(jtpe, typing, splits, parent)
   
-          case Memoize(parent, _) => inner(jtpe, typing, parent)
+          case Memoize(parent, _) => inner(jtpe, typing, splits, parent)
     
-          case Distinct(parent) => inner(jtpe, typing, parent)
+          case Distinct(parent) => inner(jtpe, typing, splits, parent)
     
-          case s @ Split(spec, child) =>
-            inner(jtpe, collectSpecTypes(typing, spec), child)
+          case s @ Split(spec, child, id) =>
+            inner(jtpe, collectSpecTypes(typing, splits, spec), splits + (id -> s), child)
           
           // not using extractors due to bug
           case s: SplitGroup => {
-            val Split(spec, _) = s.parent
-            findGroup(spec, s.id) map { inner(jtpe, typing, _) } getOrElse typing
+            val Split(spec, _, _) = splits(s.parentId)
+            findGroup(spec, s.id) map { inner(jtpe, typing, splits, _) } getOrElse typing
           }
           
           // not using extractors due to bug
           case s: SplitParam => {
-            val Split(spec, _) = s.parent
+            val Split(spec, _, _) = splits(s.parentId)
             
             findParams(spec, s.id).foldLeft(typing) { (typing, graph) =>
-              inner(jtpe, typing, graph)
+              inner(jtpe, typing, splits, graph)
             }
           }
         }
       }
       
-      inner(Some(universe), Map(), graph)
+      inner(Some(universe), Map(), Map(), graph)
     }
 
     def applyTypes(typing: Map[DepGraph, JType], graph: DepGraph): DepGraph = {

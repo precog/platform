@@ -25,7 +25,7 @@ import bytecode._
 import blueeyes.json.JNum
 
 import com.precog.common._
-import com.precog.util.IdGen
+import com.precog.util.{IdGen, Identifier}
 import com.precog.yggdrasil._
 
 import scala.collection.mutable
@@ -217,7 +217,7 @@ trait DAG extends Instructions {
         case instructions.Split => {
           roots match {
             case Left(spec) :: tl =>
-              loop(loc, tl, OpenSplit(loc, spec, tl) :: splits, stream.tail)
+              loop(loc, tl, OpenSplit(loc, spec, tl, new Identifier) :: splits, stream.tail)
             
             case Right(_) :: _ => Left(OperationOnBucket(instructions.Split)).point[Trampoline]
             case _ => Left(StackUnderflow(instructions.Split)).point[Trampoline]
@@ -226,15 +226,14 @@ trait DAG extends Instructions {
         
         case Merge => {
           val (eitherRoots, splits2) = splits match {
-            case (open @ OpenSplit(loc, spec, oldTail)) :: splitsTail => {
+            case (open @ OpenSplit(loc, spec, oldTail, id)) :: splitsTail => {
               roots match {
                 case Right(child) :: tl => {
                   val oldTailSet = Set(oldTail: _*)
                   val newTailSet = Set(tl: _*)
                   
                   if ((oldTailSet & newTailSet).size == newTailSet.size) {
-                    val split = Split(spec, child)(loc)
-                    open.result = split
+                    val split = Split(spec, child, id)(loc)
                     
                     (Right(Right(split) :: tl), splitsTail)
                   } else {
@@ -303,7 +302,7 @@ trait DAG extends Instructions {
         case PushKey(id) => {
           val openPoss = splits find { open => findGraphWithId(id)(open.spec).isDefined }
           openPoss map { open =>
-            loop(loc, Right(SplitParam(id)(open.result)(loc)) :: roots, splits, stream.tail)
+            loop(loc, Right(SplitParam(id, open.id)(loc)) :: roots, splits, stream.tail)
           } getOrElse Left(UnableToLocateSplitDescribingId(id)).point[Trampoline]
         }
         
@@ -311,7 +310,7 @@ trait DAG extends Instructions {
           val openPoss = splits find { open => findGraphWithId(id)(open.spec).isDefined }
           openPoss map { open =>
             val graph = findGraphWithId(id)(open.spec).get
-            loop(loc, Right(SplitGroup(id, graph.identities)(open.result)(loc)) :: roots, splits, stream.tail)
+            loop(loc, Right(SplitGroup(id, graph.identities, open.id)(loc)) :: roots, splits, stream.tail)
           } getOrElse Left(UnableToLocateSplitDescribingId(id)).point[Trampoline]
         }
 
@@ -406,9 +405,7 @@ trait DAG extends Instructions {
     case dag.Extra(_) => None
   }
   
-  private case class OpenSplit(loc: Line, spec: dag.BucketSpec, oldTail: List[Either[dag.BucketSpec, DepGraph]]) {
-    var result: dag.Split = _           // gross!
-  }
+  private case class OpenSplit(loc: Line, spec: dag.BucketSpec, oldTail: List[Either[dag.BucketSpec, DepGraph]], id: Identifier)
 
   sealed trait Identities {
     def ++(other: Identities): Identities = (this, other) match {
@@ -449,97 +446,88 @@ trait DAG extends Instructions {
     
     def containsSplitArg: Boolean
 
-    /**
-     * NOTE: Does ''not'' work with `Split` rewrites!  Do not attempt!  Do not
-     * even ''think'' of attempting!  The badness that follows will be...bewildering.
-     *
-     * If body takes a Split child, it can be rewritten by giving its parents as `splits`.
-     */
-    def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph], splits: Set[dag.Split] = Set.empty): DepGraph = {
+    def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
       val memotable = mutable.Map[DepGraph, DepGraph]()
 
-      def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {
-        lazy val splits = _splits
-        lazy val pf: PartialFunction[DepGraph, DepGraph] = body(memoized(splits))
+      def memoized(node: DepGraph): DepGraph = {
+        lazy val pf: PartialFunction[DepGraph, DepGraph] = body(memoized)
 
         def inner(graph: DepGraph): DepGraph = graph match {
           case x if pf isDefinedAt x => pf(x)
           
           // not using extractors due to bug
           case s: dag.SplitParam =>
-            dag.SplitParam(s.id)(splits(s.parent))(s.loc)
+            dag.SplitParam(s.id, s.parentId)(s.loc)
 
           // not using extractors due to bug
           case s: dag.SplitGroup =>
-            dag.SplitGroup(s.id, s.identities)(splits(s.parent))(s.loc)
+            dag.SplitGroup(s.id, s.identities, s.parentId)(s.loc)
           
           case dag.Const(_) => graph
 
           case dag.Undefined() => graph
 
-          case graph @ dag.New(parent) => dag.New(memoized(splits)(parent))(graph.loc)
+          case graph @ dag.New(parent) => dag.New(memoized(parent))(graph.loc)
           
-          case graph @ dag.Morph1(m, parent) => dag.Morph1(m, memoized(splits)(parent))(graph.loc)
+          case graph @ dag.Morph1(m, parent) => dag.Morph1(m, memoized(parent))(graph.loc)
 
-          case graph @ dag.Morph2(m, left, right) => dag.Morph2(m, memoized(splits)(left), memoized(splits)(right))(graph.loc)
+          case graph @ dag.Morph2(m, left, right) => dag.Morph2(m, memoized(left), memoized(right))(graph.loc)
 
-          case graph @ dag.Distinct(parent) => dag.Distinct(memoized(splits)(parent))(graph.loc)
+          case graph @ dag.Distinct(parent) => dag.Distinct(memoized(parent))(graph.loc)
 
-          case graph @ dag.LoadLocal(parent, jtpe) => dag.LoadLocal(memoized(splits)(parent), jtpe)(graph.loc)
+          case graph @ dag.LoadLocal(parent, jtpe) => dag.LoadLocal(memoized(parent), jtpe)(graph.loc)
 
-          case graph @ dag.Operate(op, parent) => dag.Operate(op, memoized(splits)(parent))(graph.loc)
+          case graph @ dag.Operate(op, parent) => dag.Operate(op, memoized(parent))(graph.loc)
 
-          case graph @ dag.Reduce(red, parent) => dag.Reduce(red, memoized(splits)(parent))(graph.loc)
+          case graph @ dag.Reduce(red, parent) => dag.Reduce(red, memoized(parent))(graph.loc)
 
-          case dag.MegaReduce(reds, parent) => dag.MegaReduce(reds, memoized(splits)(parent))
+          case dag.MegaReduce(reds, parent) => dag.MegaReduce(reds, memoized(parent))
   
-          case s @ dag.Split(spec, child) => {
-            lazy val splits2 = splits + (s -> result)
-            lazy val spec2 = memoizedSpec(spec, splits2)
-            lazy val child2 = memoized(splits2)(child)
-            lazy val result: dag.Split = dag.Split(spec2, child2)(s.loc)
-            result
+          case s @ dag.Split(spec, child, id) => {
+            val spec2 = memoizedSpec(spec)
+            val child2 = memoized(child)
+            dag.Split(spec2, child2, id)(s.loc)
           }
             
-          case graph @ dag.Assert(pred, child) => dag.Assert(memoized(splits)(pred), memoized(splits)(child))(graph.loc)
+          case graph @ dag.Assert(pred, child) => dag.Assert(memoized(pred), memoized(child))(graph.loc)
           
           case graph @ dag.Cond(pred, left, leftJoin, right, rightJoin) =>
-            dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(graph.loc)
+            dag.Cond(memoized(pred), memoized(left), leftJoin, memoized(right), rightJoin)(graph.loc)
 
-          case graph @ dag.Observe(data, samples) => dag.Observe(memoized(splits)(data), memoized(splits)(samples))(graph.loc)
+          case graph @ dag.Observe(data, samples) => dag.Observe(memoized(data), memoized(samples))(graph.loc)
 
-          case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(graph.loc)
+          case graph @ dag.IUI(union, left, right) => dag.IUI(union, memoized(left), memoized(right))(graph.loc)
 
-          case graph @ dag.Diff(left, right) => dag.Diff(memoized(splits)(left), memoized(splits)(right))(graph.loc)
+          case graph @ dag.Diff(left, right) => dag.Diff(memoized(left), memoized(right))(graph.loc)
 
-          case graph @ dag.Join(op, joinSort, left, right) => dag.Join(op, joinSort, memoized(splits)(left), memoized(splits)(right))(graph.loc)
+          case graph @ dag.Join(op, joinSort, left, right) => dag.Join(op, joinSort, memoized(left), memoized(right))(graph.loc)
 
-          case graph @ dag.Filter(joinSort, target, boolean) => dag.Filter(joinSort, memoized(splits)(target), memoized(splits)(boolean))(graph.loc)
+          case graph @ dag.Filter(joinSort, target, boolean) => dag.Filter(joinSort, memoized(target), memoized(boolean))(graph.loc)
 
-          case dag.Sort(parent, indexes) => dag.Sort(memoized(splits)(parent), indexes)
+          case dag.Sort(parent, indexes) => dag.Sort(memoized(parent), indexes)
 
-          case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(splits)(parent), sortField, valueField, id)
+          case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
 
-          case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(splits)(parent), id)
+          case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(parent), id)
 
-          case dag.Memoize(parent, priority) => dag.Memoize(memoized(splits)(parent), priority)
+          case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
         }
 
-        def memoizedSpec(spec: dag.BucketSpec, splits: => Map[dag.Split, dag.Split]): dag.BucketSpec = spec match {  //TODO generalize?
+        def memoizedSpec(spec: dag.BucketSpec): dag.BucketSpec = spec match {  //TODO generalize?
           case dag.UnionBucketSpec(left, right) =>
-            dag.UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+            dag.UnionBucketSpec(memoizedSpec(left), memoizedSpec(right))
           
           case dag.IntersectBucketSpec(left, right) =>
-            dag.IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+            dag.IntersectBucketSpec(memoizedSpec(left), memoizedSpec(right))
           
           case dag.Group(id, target, child) =>
-            dag.Group(id, memoized(splits)(target), memoizedSpec(child, splits))
+            dag.Group(id, memoized(target), memoizedSpec(child))
           
           case dag.UnfixedSolution(id, target) =>
-            dag.UnfixedSolution(id, memoized(splits)(target))
+            dag.UnfixedSolution(id, memoized(target))
           
           case dag.Extra(target) =>
-            dag.Extra(memoized(splits)(target))
+            dag.Extra(memoized(target))
         }
   
         memotable.get(node) getOrElse {
@@ -549,7 +537,7 @@ trait DAG extends Instructions {
         }
       }
 
-      memoized(splits.zip(splits)(collection.breakOut))(this)
+      memoized(this)
     }
     
     trait ScopeUpdate[S] {
@@ -605,19 +593,10 @@ trait DAG extends Instructions {
       import ScopeUpdate._
       import EditUpdate._
       
-      class SubstitutionState(val inScope: Boolean, val rewrittenScope: Option[S], splits0: => Map[dag.Split, dag.Split]) { outer =>
-        lazy val splits = splits0
-        
-        def copy(inScope: Boolean = outer.inScope, rewrittenScope: Option[S] = outer.rewrittenScope, splits: => Map[dag.Split, dag.Split] = outer.splits) =
-          new SubstitutionState(inScope, rewrittenScope, splits)
-      }
-      
-      object SubstitutionState {
-        def apply(inScope: Boolean, rewrittenScope: Option[S] = None, splits: => Map[dag.Split, dag.Split] = Map.empty) = new SubstitutionState(inScope, rewrittenScope, splits)
-      }
+      case class SubstitutionState(inScope: Boolean, rewrittenScope: Option[S])
       
       val monadState = StateT.stateMonad[SubstitutionState]
-      val init = SubstitutionState(this == scope)
+      val init = SubstitutionState(this == scope, None)
       
       val memotable = mutable.Map.empty[DepGraph, State[SubstitutionState, DepGraph]]
       
@@ -638,11 +617,11 @@ trait DAG extends Instructions {
                 (_: DepGraph) match {
                   // not using extractors due to bug
                   case s: dag.SplitParam =>
-                    for { state <- monadState.gets(identity) } yield dag.SplitParam(s.id)(state.splits(s.parent))(s.loc)
+                    for { state <- monadState.gets(identity) } yield dag.SplitParam(s.id, s.parentId)(s.loc)
         
                   // not using extractors due to bug
                   case s: dag.SplitGroup =>
-                    for { state <- monadState.gets(identity) } yield dag.SplitGroup(s.id, s.identities)(state.splits(s.parent))(s.loc)
+                    for { state <- monadState.gets(identity) } yield dag.SplitGroup(s.id, s.identities, s.parentId)(s.loc)
                   
                   case graph @ dag.Const(_) =>
                     for { _ <- monadState.gets(identity) } yield graph
@@ -677,15 +656,11 @@ trait DAG extends Instructions {
                   case dag.MegaReduce(reds, parent) =>
                     for { newParent <- memoized(parent) } yield dag.MegaReduce(reds, newParent)
           
-                  case s @ dag.Split(spec, child) => {
-                    lazy val result: State[SubstitutionState, dag.Split] = 
-                      for {
-                        _ <- monadState.modify(st => st.copy(splits = st.splits + (s -> result.eval(init))))
-                        newSpec <- memoizedSpec(spec)
-                        newChild <- memoized(child)
-                      } yield dag.Split(newSpec, newChild)(s.loc)
-                    
-                    result
+                  case s @ dag.Split(spec, child, id) => {
+                    for {
+                      newSpec <- memoizedSpec(spec)
+                      newChild <- memoized(child)
+                    } yield dag.Split(newSpec, newChild, id)(s.loc)
                   }
                   
                   case graph @ dag.Assert(pred, child) => 
@@ -831,9 +806,9 @@ trait DAG extends Instructions {
       }
 
       def foldDown0(node: DepGraph, acc: Z): Z = node match {
-        case dag.SplitParam(_) => acc
+        case dag.SplitParam(_, _) => acc
 
-        case dag.SplitGroup(_, identities) => acc
+        case dag.SplitGroup(_, identities, _) => acc
 
         case node @ dag.Const(_) => acc
 
@@ -857,7 +832,7 @@ trait DAG extends Instructions {
 
         case node @ dag.MegaReduce(_, parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.Split(specs, child) =>
+        case dag.Split(specs, child, _) =>
           val specsAcc = foldThroughSpec(specs, acc)
           if (enterSplitChild)
             foldDown0(child, specsAcc |+| f(child))
@@ -927,9 +902,7 @@ trait DAG extends Instructions {
     }
     
     //tic variable node
-    case class SplitParam(id: Int)(_parent: => Split)(val loc: Line) extends DepGraph {
-      lazy val parent = _parent
-      
+    case class SplitParam(id: Int, parentId: Identifier)(val loc: Line) extends DepGraph {
       val identities = Identities.Specs.empty
       
       val sorting = IdentitySort
@@ -940,9 +913,7 @@ trait DAG extends Instructions {
     }
     
     //grouping node (e.g. foo where foo.a = 'b)
-    case class SplitGroup(id: Int, identities: Identities)(_parent: => Split)(val loc: Line) extends DepGraph {
-      lazy val parent = _parent
-      
+    case class SplitGroup(id: Int, identities: Identities, parentId: Identifier)(val loc: Line) extends DepGraph {
       val sorting = IdentitySort
       
       val isSingleton = false
@@ -1078,7 +1049,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class Split(spec: BucketSpec, child: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
+    case class Split(spec: BucketSpec, child: DepGraph, id: Identifier)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       
       val sorting = IdentitySort

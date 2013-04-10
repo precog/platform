@@ -25,8 +25,6 @@ import parser.AST
 import typer.{Binder, ProvenanceChecker}
 import bytecode.Instructions
 
-import com.precog.util._
-
 import scalaz.{StateT, Id, Bind, Monoid, NonEmptyList => NEL}
 import scalaz.Scalaz._
 

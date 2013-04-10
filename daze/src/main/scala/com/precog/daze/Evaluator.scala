@@ -110,16 +110,16 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       if (optimize) funcs.reverse.map(Endo[DepGraph]).suml.run else identity
 
     // Have to be idempotent on subgraphs
-    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext, splits: Set[dag.Split]): DepGraph => DepGraph = {
+    def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
       composeOptimizations(optimize, List(
-        inlineStatics(_, ctx, splits),
-        optimizeJoins(_, splits),
-        rewriteConditionals(_, splits)
+        inlineStatics(_, ctx),
+        optimizeJoins(_),
+        rewriteConditionals(_)
       ))
     }
 
     def fullRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
-      stagedRewriteDAG(optimize, ctx, Set.empty) andThen
+      stagedRewriteDAG(optimize, ctx) andThen
         (orderCrosses _) andThen
         composeOptimizations(optimize, List[DepGraph => DepGraph](
           // TODO: Predicate pullups break a SnapEngage query (see PLATFORM-951)
@@ -141,7 +141,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
 
-      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
+      def resolveTopLevelGroup(spec: BucketSpec, splits: Map[Identifier, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => 
           for {
             leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -195,7 +195,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       //** only used in resolveTopLevelGroup **/
-      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
+      def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[Identifier, Int => N[Table]]): StateT[N, EvaluatorState, GroupKeySpec] = forest match {
         case UnionBucketSpec(left, right) =>
           for {
             leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -233,7 +233,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           sys.error("assertion error")
       }
 
-      def prepareEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
+      def prepareEval(graph: DepGraph, splits: Map[Identifier, Int => N[Table]]): StateT[N, EvaluatorState, PendingTable] = {
         evalLogger.trace("Loop on %s".format(graph))
 
         val startTime = System.nanoTime
@@ -367,7 +367,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           
           // not using extractors due to bug
           case s: SplitGroup => 
-            val f = splits(s.parent)
+            val f = splits(s.parentId)
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id) }
           
           case Const(value) =>
@@ -544,11 +544,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               wrapped = result transform buildConstantWrapSpec(Leaf(Source))
             } yield PendingTable(wrapped, graph, TransSpec1.Id)
           
-          case s @ dag.Split(spec, child) => 
+          case s @ dag.Split(spec, child, id) => 
             val idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
           
             val params = child.foldDown(true) {
-              case param: dag.SplitParam if param.parent == s => Set(param)
+              case param: dag.SplitParam if param.parentId == id => Set(param)
             }
 
             val table = for {
@@ -556,14 +556,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               state <- monadState.gets(identity)
               grouping2 <- transState liftM grouping
               result <- transState liftM mn(Table.merge(grouping2) { (key, map) =>
-                val splits2 = splits + (s -> (map andThen mn))
+                val splits2 = splits + (id -> (map andThen mn))
                 val rewritten = params.foldLeft(child) {
                   case (child, param) =>
                     val subKey = key \ param.id.toString
-                    replaceNode(child, param, Const(subKey)(param.loc), splits2.keys.toSet)
+                    replaceNode(child, param, Const(subKey)(param.loc))
                 }
 
-                val back = fullEval(rewritten, splits2, s :: splits.keys.toList)
+                val back = fullEval(rewritten, splits2, id :: splits.keys.toList)
                 back.eval(state)
               })
             } yield {
@@ -791,7 +791,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
        * graph is considered to be a special forcing point, but as it is the endpoint,
        * it will perforce be evaluated last.
        */
-      def fullEval(graph: DepGraph, splits: Map[dag.Split, Int => N[Table]], parentSplits: List[dag.Split]): StateT[N, EvaluatorState, Table] = {
+      def fullEval(graph: DepGraph, splits: Map[Identifier, Int => N[Table]], parentSplits: List[Identifier]): StateT[N, EvaluatorState, Table] = {
         import scalaz.syntax.monoid._
         
         type EvaluatorStateT[+A] = StateT[N, EvaluatorState, A]
@@ -806,7 +806,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             optBack = optPoint map { point =>
               for {
                 _ <- prepareEval(point, splits)
-                rewritten <- stagedOptimizations(graph, ctx, optimize, splitNodes)
+                rewritten <- stagedOptimizations(graph, ctx, optimize)
+                
                 toEval = listStagingPoints(Queue(rewritten)) filter referencesOnlySplit(parentSplits)
                 result <- stage(toEval, rewritten)
               } yield result
@@ -833,11 +834,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       resultTable map { _ paged maxSliceSize compact DerefObjectStatic(Leaf(Source), paths.Value) }
     }
   
-    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean, splits: Set[dag.Split]) =
+    private[this] def stagedOptimizations(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean) =
       for {
         reductions <- monadState.gets(_.reductions)
-      } yield stagedRewriteDAG(optimize, ctx, splits)(reductions.toList.foldLeft(graph) {
-        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result, splits)
+      } yield stagedRewriteDAG(optimize, ctx)(reductions.toList.foldLeft(graph) {
+        case (graph, (from, Some(result))) if optimize => inlineNodeValue(graph, from, result)
         case (graph, _) => graph
       })
 
@@ -845,7 +846,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * Takes a graph, a node and a value. Replaces the node (and
      * possibly its parents) with the value into the graph.
      */
-    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: RValue, splits: Set[dag.Split]) = {
+    def inlineNodeValue(graph: DepGraph, from: DepGraph, result: RValue) = {
       val replacements = graph.foldDown(true) {
         case join@Join(
           DerefArray,
@@ -863,17 +864,15 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       }
 
       replacements.foldLeft(graph) {
-        case (graph, (from, to)) => replaceNode(graph, from, to, splits)
+        case (graph, (from, to)) => replaceNode(graph, from, to)
       }
     }
 
-    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph, splits: Set[dag.Split]) =
-      graph.mapDown(
-        recurse => {
-          case `from` => to
-        },
-        splits
-      )
+    private[this] def replaceNode(graph: DepGraph, from: DepGraph, to: DepGraph) = {
+      graph mapDown { recurse => {
+        case `from` => to
+      }}
+    }
 
     /**
      * Returns all forcing points in the graph, ordered topologically.
@@ -914,7 +913,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case dag.Reduce(_, parent) => queue2 enqueue parent
             case dag.MegaReduce(_, parent) => queue2 enqueue parent
             
-            case dag.Split(specs, child) => queue2 enqueue child enqueue listParents(specs)
+            case dag.Split(specs, child, _) => queue2 enqueue child enqueue listParents(specs)
             
             case dag.Assert(pred, child) => queue2 enqueue pred enqueue child
             case dag.Cond(pred, left, _, right, _) => queue2 enqueue pred enqueue left enqueue right
@@ -947,10 +946,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   
     // Takes a list of Splits, head is the current Split, which must be referenced.
     // The rest of the referenced Splits must be in the the list.
-    private def referencesOnlySplit(parentSplits: List[dag.Split])(graph: DepGraph): Boolean = {
+    private def referencesOnlySplit(parentSplits: List[Identifier])(graph: DepGraph): Boolean = {
       val referencedSplits = graph.foldDown(false) {
-        case s: dag.SplitParam => Set(s.parent)
-        case s: dag.SplitGroup => Set(s.parent)
+        case s: dag.SplitParam => Set(s.parentId)
+        case s: dag.SplitGroup => Set(s.parentId)
       }
 
       val currentIsReferenced = parentSplits.headOption.map(referencedSplits.contains(_)).getOrElse(true)
@@ -1025,7 +1024,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case dag.Reduce(_, parent) => Set(parent)
       case MegaReduce(_, parent) => Set(parent)
       
-      case dag.Split(spec, _) => enumerateSpecParents(spec).toSet
+      case dag.Split(spec, _, _) => enumerateSpecParents(spec).toSet
       
       case IUI(_, left, right) => Set(left, right)
       case Diff(left, right) => Set(left, right)

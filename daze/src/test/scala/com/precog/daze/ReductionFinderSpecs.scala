@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.util.Identifier
 import bytecode._
 import org.specs2.mutable._
 import com.precog.yggdrasil._
@@ -442,31 +443,33 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val nums = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
       
       val reduction = Max
+      
+      val id = new Identifier
 
-      lazy val input: dag.Split = dag.Split(
+      val input = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(Add, CrossLeftSort,
-          SplitGroup(1, nums.identities)(input)(line),
+          SplitGroup(1, nums.identities, id)(line),
           dag.Reduce(reduction, 
             Filter(IdentitySort,
               nums,
               Join(Lt, CrossLeftSort,
                 nums,
-                SplitParam(0)(input)(line))(line))(line))(line))(line))(line)
+                SplitParam(0, id)(line))(line))(line))(line))(line), id)(line)
 
       val parent = Filter(IdentitySort,
         nums,
         Join(Lt, CrossLeftSort,
           nums,
-          SplitParam(0)(input)(line))(line))(line)  //TODO need a window function
+          SplitParam(0, id)(line))(line))(line)  //TODO need a window function
 
       val megaR = MegaReduce(List((trans.Leaf(trans.Source), List(reduction))), parent)
 
       val expected = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(Add, CrossLeftSort,
-          SplitGroup(1, nums.identities)(input)(line),
-          joinDeref(megaR, 0, 0, line))(line))(line)
+          SplitGroup(1, nums.identities, id)(line),
+          joinDeref(megaR, 0, 0, line))(line), id)(line)
 
       megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
@@ -483,8 +486,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       // histogram
       
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      
+      val id = new Identifier
        
-      lazy val input: dag.Split = dag.Split(
+      val input = dag.Split(
         dag.Group(1,
           Join(DerefObject, CrossLeftSort, clicks, Const(CString("foo"))(line))(line),
           UnfixedSolution(0,
@@ -494,18 +499,18 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
-            SplitParam(0)(input)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(JoinObject, CrossLeftSort,
             Join(WrapObject, CrossLeftSort,
               Const(CString("min"))(line),
               dag.Reduce(Min,
-                SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))))(input)(line))(line))(line),
+                SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line))(line),
             Join(WrapObject, CrossLeftSort,
               Const(CString("max"))(line),
               dag.Reduce(Max,
-                SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))))(input)(line))(line))(line))(line))(line))(line)
+                SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line))(line))(line))(line), id)(line)
 
-      val parent = SplitGroup(1, clicks.identities)(input)(line)
+      val parent = SplitGroup(1, clicks.identities, id)(line)
       val red1 = dag.Reduce(Min, parent)(line)
       val red2 = dag.Reduce(Max, parent)(line)
       val megaR = MegaReduce(List((trans.Leaf(trans.Source), List(red1.red, red2.red))), parent)
@@ -520,14 +525,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
-            SplitParam(0)(input)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(JoinObject, CrossLeftSort,
             Join(WrapObject, CrossLeftSort,
               Const(CString("min"))(line),
               joinDeref(megaR, 0, 1, line))(line),
             Join(WrapObject, CrossLeftSort,
               Const(CString("max"))(line),
-              joinDeref(megaR, 0, 0, line))(line))(line))(line))(line)
+              joinDeref(megaR, 0, 0, line))(line))(line))(line), id)(line)
 
       megaReduce(input, findReductions(input, ctx)) mustEqual expected
     }
@@ -641,12 +646,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       val red = Count
       val count = dag.Reduce(red, clicks)(line)
+      
+      val id = new Identifier
 
-      lazy val input: dag.Split = dag.Split(
+      val input = dag.Split(
         dag.Group(1,
           clicks,
           UnfixedSolution(0, count)),
-        SplitParam(1)(input)(line))(line)
+        SplitParam(1, id)(line), id)(line)
         
       val expected = MegaReduceState(
         Map(count -> clicks),
@@ -701,16 +708,18 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       // sums
 
       val nums = dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line)
+      
+      val id = new Identifier
 
-      lazy val j = Join(Lt, CrossLeftSort, nums, SplitParam(0)(input)(line))(line)
+      lazy val j = Join(Lt, CrossLeftSort, nums, SplitParam(0, id)(line))(line)
       lazy val parent = Filter(IdentitySort, nums, j)(line)
 
-      lazy val splitGroup = SplitGroup(1, nums.identities)(input)(line)
+      lazy val splitGroup = SplitGroup(1, nums.identities, id)(line)
       lazy val r = dag.Reduce(Max, parent)(line)
 
       lazy val group = dag.Group(1, nums, UnfixedSolution(0, nums))
       lazy val join = Join(Add, CrossLeftSort, splitGroup, r)(line)
-      lazy val input: dag.Split = dag.Split(group, join)(line)
+      lazy val input = dag.Split(group, join, id)(line)
 
       lazy val expected = MegaReduceState(
         Map(r -> parent),
@@ -745,8 +754,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val clicksFoo = Join(DerefObject, CrossLeftSort, clicks, fooRoot)(line)
       val clicksUser = Join(DerefObject, CrossLeftSort, clicks, userRoot)(line)
       val group1 = dag.Group(1, clicksFoo, UnfixedSolution(0, clicksUser))
+      
+      val id = new Identifier
 
-      lazy val parent = SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))))(input)(line)
+      lazy val parent = SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line)
       lazy val r1 = dag.Reduce(Min, parent)(line)
       lazy val r2 = dag.Reduce(Max, parent)(line)
 
@@ -755,10 +766,10 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         Join(JoinObject, CrossLeftSort,
           Join(WrapObject, CrossLeftSort,
             userRoot,
-            SplitParam(0)(input)(line))(line),
+            SplitParam(0, id)(line))(line),
           Join(JoinObject, CrossLeftSort,
             Join(WrapObject, CrossLeftSort, minRoot, r1)(line),
-            Join(WrapObject, CrossLeftSort, maxRoot, r2)(line))(line))(line))(line)
+            Join(WrapObject, CrossLeftSort, maxRoot, r2)(line))(line))(line), id)(line)
 
       val expected = MegaReduceState(
         Map(r1 -> parent, r2 -> parent),
