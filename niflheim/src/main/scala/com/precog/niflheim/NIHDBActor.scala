@@ -47,7 +47,6 @@ import scalaz.effect.IO
 import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
-import java.nio.file.Files
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicLong
 
@@ -202,7 +201,9 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
 
   def initDirs(f: File) {
     if (!f.isDirectory) {
-      Files.createDirectories(f.toPath)
+      if (!f.mkdirs) {
+        throw new Exception("Failed to create dir: " + f)
+      }
     }
   }
 

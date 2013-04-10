@@ -51,7 +51,7 @@ trait JobManager[M[+_]] { self =>
    */
   def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]): M[Job]
 
-  /** 
+  /**
    * Returns the Job with the given ID if it exists.
    */
   def findJob(job: JobId): M[Option[Job]]
@@ -78,20 +78,20 @@ trait JobManager[M[+_]] { self =>
    * channels are created on a demand by `addMessage`, so this is not a
    * definitive list of channels, just what existed at the time.
    */
-  def listChannels(job: JobId): M[Seq[String]]
+  def listChannels(job: JobId): M[Seq[ChannelId]]
 
   /**
    * Add a message to a job's channel. If the channel does not exist, it will
    * be created.
    */
-  def addMessage(job: JobId, channel: String, value: JValue): M[Message]
+  def addMessage(job: JobId, channel: ChannelId, value: JValue): M[Message]
 
   /**
    * Returns all the messages posted to a job's channel since some specified
    * message. If no previous message is given, then all messages posted to the
    * given channel are returned.
    */
-  def listMessages(job: JobId, channel: String, since: Option[MessageId]): M[Seq[Message]]
+  def listMessages(job: JobId, channel: ChannelId, since: Option[MessageId]): M[Seq[Message]]
 
   /**
    * Starts a job if it is in the `NotStarted` state, otherwise an error string
@@ -148,11 +148,11 @@ trait JobManager[M[+_]] { self =>
 
     def getStatus(job: JobId): N[Option[Status]] = t(self.getStatus(job))
 
-    def listChannels(job: JobId): N[Seq[String]] = t(self.listChannels(job))
+    def listChannels(job: JobId): N[Seq[ChannelId]] = t(self.listChannels(job))
 
-    def addMessage(job: JobId, channel: String, value: JValue): N[Message] = t(self.addMessage(job, channel, value))
+    def addMessage(job: JobId, channel: ChannelId, value: JValue): N[Message] = t(self.addMessage(job, channel, value))
 
-    def listMessages(job: JobId, channel: String, since: Option[MessageId]): N[Seq[Message]] = t(self.listMessages(job, channel, since))
+    def listMessages(job: JobId, channel: ChannelId, since: Option[MessageId]): N[Seq[Message]] = t(self.listMessages(job, channel, since))
 
     def start(job: JobId, startedAt: DateTime = new DateTime): N[Either[String, Job]] = t(self.start(job, startedAt))
 

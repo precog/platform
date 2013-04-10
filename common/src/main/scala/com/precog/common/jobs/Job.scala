@@ -65,6 +65,11 @@ object Status {
   import JobManager._
   import scalaz.syntax.apply._
 
+  implicit val iso = Iso.hlist(Status.apply _, Status.unapply _)
+  val schemaV1 = "job" :: "id" :: "message" :: "progress" :: "unit" :: "info" :: HNil
+  implicit val decomposerV1: Decomposer[Status] = decomposerV[Status](schemaV1, Some("1.0"))
+  implicit val extractorV1: Extractor[Status] = extractorV[Status](schemaV1, Some("1.0"))
+
   def fromMessage(message: Message): Option[Status] = {
     (message.channel == channels.Status) option {
       ((message.value \ "message").validated[String] |@|

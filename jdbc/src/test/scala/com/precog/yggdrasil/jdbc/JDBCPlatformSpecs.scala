@@ -287,7 +287,7 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
 
 /*
 // These are disabled for now because getting SQL tables to hold our JSON datasets
-// is too onerous at this point, and won't show us anything that the JDBM and Mongo
+// is too onerous at this point, and won't show us anything that the NIHDB and Mongo
 // specs don't already
 
 class JDBCBasicValidationSpecs extends BasicValidationSpecs with JDBCPlatformSpecs
