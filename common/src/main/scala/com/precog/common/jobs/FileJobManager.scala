@@ -197,10 +197,7 @@ class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Mona
   }
 
   def getStatus(jobId: JobId): M[Option[Status]] = M.point {
-    cache get jobId match {
-      case Some(jobState) => jobState.status
-      case _ => None
-    }
+    loadJob(jobId).flatMap(_.status)
   }
 
   def transition(jobId: JobId)(t: JobState => Either[String, JobState]): M[Either[String, Job]] = M.point {
