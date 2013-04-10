@@ -21,7 +21,7 @@ package com.precog.auth
 
 import com.precog.common.security._
 import com.precog.common.security.service._
-import com.precog.common.services.PathServiceCombinators
+import com.precog.common.services.{CORSHeaderHandler, PathServiceCombinators}
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -59,43 +59,46 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
           M.point(State(new SecurityServiceHandlers(apiKeyManager, clock), stoppable))
         } ->
         request { case State(handlers, stoppable) =>
+          import CORSHeaderHandler.allowOrigin
           import handlers._
-          jsonp[ByteChunk] {
-            transcode {
-              path("/apikeys/'apikey") {
-                get(ReadAPIKeyDetailsHandler) ~
-                delete(DeleteAPIKeyHandler) ~
-                path("/grants/") {
-                  get(ReadAPIKeyGrantsHandler) ~
-                  post(CreateAPIKeyGrantHandler) ~
-                  path("'grantId") {
-                    delete(DeleteAPIKeyGrantHandler)
-                  }
-                }
-              } ~
-              path("/grants/'grantId") {
-                get(ReadGrantDetailsHandler) ~
-                path("/children/") {
-                  get(ReadGrantChildrenHandler)
-                }
-              } ~
-              jsonAPIKey(k => handlers.apiKeyManager.findAPIKey(k).map(_.map(_.apiKey))) {
-                path("/apikeys/") {
-                  get(ReadAPIKeysHandler) ~
-                  post(CreateAPIKeyHandler)
-                } ~
-                path("/grants/") {
-                  get(ReadGrantsHandler) ~
-                  post(CreateGrantHandler) ~
-                  path("'grantId") {
-                    delete(DeleteGrantHandler) ~
-                    path("/children/") {
-                      post(CreateGrantChildHandler)
+          allowOrigin("*", executionContext) {
+            jsonp[ByteChunk] {
+              transcode {
+                path("/apikeys/'apikey") {
+                  get(ReadAPIKeyDetailsHandler) ~
+                  delete(DeleteAPIKeyHandler) ~
+                  path("/grants/") {
+                    get(ReadAPIKeyGrantsHandler) ~
+                    post(CreateAPIKeyGrantHandler) ~
+                    path("'grantId") {
+                      delete(DeleteAPIKeyGrantHandler)
                     }
                   }
                 } ~
-                dataPath("/permissions/fs") {
-                  get(ReadPermissionsHandler)
+                path("/grants/'grantId") {
+                  get(ReadGrantDetailsHandler) ~
+                  path("/children/") {
+                    get(ReadGrantChildrenHandler)
+                  }
+                } ~
+                jsonAPIKey(k => handlers.apiKeyManager.findAPIKey(k).map(_.map(_.apiKey))) {
+                  path("/apikeys/") {
+                    get(ReadAPIKeysHandler) ~
+                    post(CreateAPIKeyHandler)
+                  } ~
+                  path("/grants/") {
+                    get(ReadGrantsHandler) ~
+                    post(CreateGrantHandler) ~
+                    path("'grantId") {
+                      delete(DeleteGrantHandler) ~
+                      path("/children/") {
+                        post(CreateGrantChildHandler)
+                      }
+                    }
+                  } ~
+                  dataPath("/permissions/fs") {
+                    get(ReadPermissionsHandler)
+                  }
                 }
               }
             }
