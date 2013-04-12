@@ -30,6 +30,12 @@ import bytecode._
 
 import common.json._
 
+import Jama._
+import Jama.Matrix._
+
+import org.apache.commons._
+import math3.distribution._
+
 import scalaz._
 import Scalaz._
 import scalaz.std.anyVal._
@@ -43,86 +49,127 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
   import trans._
   import trans.constants._
 
-  trait PredictionSupport extends ColumnarTableLib with ModelSupport {
-    trait PredictionBase extends ModelBase {
-      protected def morph1Apply(models: Models, function: Double => Double): Morph1Apply = new Morph1Apply {
+  trait PredictionSupport extends ColumnarTableLib with ModelSupport with RegressionSupport {
+    val confIntvStr = "confidenceInterval"
+    val predIntvStr = "predictionInterval"
+    val fitStr = "fit"
+
+    trait LinearPredictionBase extends LinearModelBase {
+      protected def morph1Apply(models: Models, trans: Double => Double): Morph1Apply = new Morph1Apply {
         def scanner(modelSet: ModelSet): CScanner = new CScanner {
           type A = Unit
           def init: A = ()
 
           def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-            def included(model: Model): Map[ColumnRef, Column] = {
-              val featurePaths = model.featureValues.keySet
-
-              val res = cols filter { case (ColumnRef(cpath, ctype), col) =>
-                featurePaths.contains(cpath)
-              }
-
-              val resPaths = res map { case (ColumnRef(cpath, _), _) => cpath } toSet
-
-              if (resPaths == featurePaths) res
-              else Map.empty[ColumnRef, Column]
-            }
-
-            def defined(cols: Map[ColumnRef, Column]): BitSet = {
-              val columns = cols map { case (_, col) => col }
-
-              BitSetUtil.filteredRange(range) { i =>
-                if (columns.isEmpty) false
-                else columns.forall(_ isDefinedAt i)
-              }
-            }
-
-            def filteredRange(cols: Map[ColumnRef, Column]) = range.filter(defined(cols).apply)
-
             val result: Set[Map[ColumnRef, Column]] = {
-
               val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
-                val includedModel = included(model)
-                val definedModel = defined(includedModel)
+                val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
+                val resultArray = scannerPrelims.resultArray
+                val definedModel = scannerPrelims.definedModel
 
-                val resultArray = filteredRange(includedModel).foldLeft(new Array[Double](range.end)) { case (arr, i) =>
-                  val cpaths = includedModel.map { case (ColumnRef(cpath, _), _) => cpath }.toSeq sorted
+                val dist = new TDistribution(model.degOfFreedom)
+                val prob = 0.975
+                val tStat = dist.inverseCumulativeProbability(prob)
 
-                  val modelDoubles = cpaths map { model.featureValues(_) }
+                val varCovarMatrix = new Matrix(model.varCovar)
 
-                  val includedCols = includedModel.collect { case (ColumnRef(cpath, _), col: DoubleColumn) => (cpath, col) }.toMap
-                  val includedDoubles = cpaths map { includedCols(_).apply(i) }
+                case class Intervals(confidence: Array[Double], prediction: Array[Double])
 
-                  assert(modelDoubles.length == includedDoubles.length)
-                  val res = (modelDoubles.zip(includedDoubles)).map { case (d1, d2) => d1 * d2 }.sum + model.constant
+                val res = ModelLike.filteredRange(scannerPrelims.includedModel, range).foldLeft(Intervals(new Array[Double](range.end), new Array[Double](range.end))) { case (Intervals(arrConf, arrPred), i) =>
+                  val includedDoubles = 1.0 +: (scannerPrelims.cpaths map { scannerPrelims.includedCols(_).apply(i) })
+                  val includedMatrix = new Matrix(Array(includedDoubles.toArray))
 
-                  arr(i) = function(res)
-                  arr
+                  val prod = includedMatrix.times(varCovarMatrix).times(includedMatrix.transpose()).getArray
+
+                  val inner = {
+                    if (prod.length == 1 && prod.head.length == 1) prod(0)(0)
+                    else sys.error("matrix of wrong shape")
+                  }
+
+                  val conf = math.sqrt(inner)
+                  val pred = math.sqrt(math.pow(model.resStdErr, 2.0) + inner)
+
+                  arrConf(i) = tStat * conf
+                  arrPred(i) = tStat * pred
+
+                  Intervals(arrConf, arrPred)
                 }
 
-                Map(ColumnRef(CPath(TableModule.paths.Value, CPathField(model.name)), CDouble) -> ArrayDoubleColumn(definedModel, resultArray))
-              } 
-              
-              val identitiesResult: Map[ColumnRef, Column] = {
-                val featureCols = cols collect { 
-                  case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) => 
-                    val path = Seq(TableModule.paths.Key, CPathIndex(idx))
-                    (ColumnRef(CPath(path: _*), ctype), col)
-                  case c @ (ColumnRef(CPath(TableModule.paths.Key), _), _) => c
+                val confidenceUpper = arraySum(resultArray, res.confidence)
+                val confidenceLower = arraySum(resultArray, res.confidence map { -_ })
+
+                val predictionUpper = arraySum(resultArray, res.prediction)
+                val predictionLower = arraySum(resultArray, res.prediction map { -_ })
+
+                def makeCPath(field: String, index: Int) = {
+                  CPath(TableModule.paths.Value, CPathField(model.name), CPathField(field), CPathIndex(index))
                 }
 
-                val shift = featureCols.size
-                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
+                // the correct model name gets added to the CPath here
+                val pathFit = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(fitStr))
+                val pathConfidenceLower = makeCPath(confIntvStr, 0)
+                val pathConfidenceUpper = makeCPath(confIntvStr, 1)
+                val pathPredictionLower = makeCPath(predIntvStr, 0)
+                val pathPredictionUpper = makeCPath(predIntvStr, 1)
 
-                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) => 
-                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx + shift)), CLong), Column.const(id))
-                } toMap
-
-                modelCols ++ featureCols
+                Map(
+                  ColumnRef(pathFit, CDouble) -> ArrayDoubleColumn(definedModel, resultArray),
+                  ColumnRef(pathConfidenceUpper, CDouble) -> ArrayDoubleColumn(definedModel, confidenceUpper),
+                  ColumnRef(pathConfidenceLower, CDouble) -> ArrayDoubleColumn(definedModel, confidenceLower),
+                  ColumnRef(pathPredictionUpper, CDouble) -> ArrayDoubleColumn(definedModel, predictionUpper),
+                  ColumnRef(pathPredictionLower, CDouble) -> ArrayDoubleColumn(definedModel, predictionLower))
               }
+
+              val identitiesResult = ModelLike.idRes(cols, modelSet)
 
               modelsResult ++ Set(identitiesResult)
             }
 
             implicit val semigroup = Column.unionRightSemigroup
             val monoidCols = implicitly[Monoid[Map[ColumnRef, Column]]]
+            val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
+            ((), reduced)
+          }
+        }
+
+        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+          val scanners: Seq[TransSpec1] = models map { model => WrapArray(Scan(TransSpec1.Id, scanner(model))) }
+          val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
+
+          val forcedTable = table.transform(spec).force
+          val tables0 = Range(0, scanners.size) map { i => forcedTable.map(_.transform(DerefArrayStatic(TransSpec1.Id, CPathIndex(i)))) }
+          val tables: M[Seq[Table]] = (tables0.toList).sequence
+
+          tables.map(_.reduceOption { _ concat _ } getOrElse Table.empty)
+        }
+      }
+    }
+
+    trait LogisticPredictionBase extends LogisticModelBase {
+      protected def morph1Apply(models: Models, trans: Double => Double): Morph1Apply = new Morph1Apply {
+        def scanner(modelSet: ModelSet): CScanner = new CScanner {
+          type A = Unit
+          def init: A = ()
+
+          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+            val result: Set[Map[ColumnRef, Column]] = {
+              val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
+                val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
+
+                // the correct model name gets added to the CPath here
+                val pathFit = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(fitStr))
+
+                Map(ColumnRef(pathFit, CDouble) -> ArrayDoubleColumn(scannerPrelims.definedModel, scannerPrelims.resultArray))
+              }
+              
+              val identitiesResult = ModelLike.idRes(cols, modelSet)
+
+              modelsResult ++ Set(identitiesResult)
+            }
+
+            implicit val semigroup = Column.unionRightSemigroup
+            val monoidCols = implicitly[Monoid[Map[ColumnRef, Column]]]
             val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
             ((), reduced)
