@@ -40,6 +40,7 @@ import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.data.ByteChunk._
 import blueeyes.core.http._
+import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
 import blueeyes.BlueEyesServiceBuilder
 
@@ -180,6 +181,7 @@ trait ShardService extends
       path("/analytics") {
         jsonAPIKey(state.apiKeyFinder) {
           path("/queries") {
+            // async handler *always* returns a JSON object containing the job ID
             shardService[({ type λ[+α] = (APIKey => α) })#λ] {
               asyncQuery(post(asyncQueryService(state)))
             }
