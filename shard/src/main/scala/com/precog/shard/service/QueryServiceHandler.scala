@@ -59,7 +59,7 @@ final class QueryServiceNotAvailable(implicit M: Monad[Future])
 }
 
 object QueryServiceHandler {
-  type Service = HttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] 
+  type Service = HttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 }
 
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
@@ -87,7 +87,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 
     opts.output match {
       case CSVOutput => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
-      case _ => response
+      case _ => response.copy(headers = response.headers + `Content-Type`(application/json))
     }
   }
 

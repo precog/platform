@@ -29,7 +29,7 @@ import scalaz.{Monad, Success}
 
 object CORSHeaders {
   def genHeaders(
-    methods: Seq[String] = Seq("GET", "POST", "OPTIONS", "DELETE"),
+    methods: Seq[String] = Seq("GET", "POST", "OPTIONS", "DELETE", "PUT"),
     origin: String = "*",
     headers: Seq[String] = Seq("Origin", "X-Requested-With", "Content-Type", "X-File-Name", "X-File-Size", "X-File-Type", "X-Precog-Path", "X-Precog-Service", "X-Precog-Token", "X-Precog-Uuid", "Accept")): HttpHeaders = {
 
