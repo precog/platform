@@ -9,7 +9,7 @@ import akka.dispatch.ExecutionContext
 import blueeyes._
 import blueeyes.core.data._
 import blueeyes.core.http._
-import blueeyes.core.http.MimeTypes._
+import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
 import blueeyes.core.service.RestPathPattern._
@@ -71,6 +71,7 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
         request { case JobServiceState(_, jobs, auth, clock) =>
           import CORSHeaderHandler.allowOrigin
           allowOrigin("*", executionContext) {
+            // Content type is set by the ResultHandler
             path("/jobs/") {
               path("'jobId") {
                 path("/result") {
@@ -80,24 +81,26 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
               }
             } ~
             jsonp[ByteChunk] {
-              path("/jobs/") {
-                get(new ListJobsHandler(jobs)) ~
-                post(new CreateJobHandler(jobs, auth, clock)) ~
-                path("'jobId") {
-                  get(new GetJobHandler(jobs)) ~
-                  path("/status") {
-                    get(new GetJobStatusHandler(jobs)) ~
-                    put(new UpdateJobStatusHandler(jobs))
-                  } ~
-                  path("/state") {
-                    get(new GetJobStateHandler(jobs)) ~
-                    put(new PutJobStateHandler(jobs))
-                  } ~
-                  path("/messages/") {
-                    get(new ListChannelsHandler(jobs)) ~
-                    path("'channel") {
-                      post(new AddMessageHandler(jobs)) ~
-                      get(new ListMessagesHandler(jobs))
+              produce(MimeTypes.application / MimeTypes.json) {
+                path("/jobs/") {
+                  get(new ListJobsHandler(jobs)) ~
+                  post(new CreateJobHandler(jobs, auth, clock)) ~
+                  path("'jobId") {
+                    get(new GetJobHandler(jobs)) ~
+                    path("/status") {
+                      get(new GetJobStatusHandler(jobs)) ~
+                      put(new UpdateJobStatusHandler(jobs))
+                    } ~
+                    path("/state") {
+                      get(new GetJobStateHandler(jobs)) ~
+                      put(new PutJobStateHandler(jobs))
+                    } ~
+                    path("/messages/") {
+                      get(new ListChannelsHandler(jobs)) ~
+                      path("'channel") {
+                        post(new AddMessageHandler(jobs)) ~
+                        get(new ListMessagesHandler(jobs))
+                      }
                     }
                   }
                 }
