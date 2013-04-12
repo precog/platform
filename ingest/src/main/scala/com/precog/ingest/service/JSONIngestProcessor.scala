@@ -23,6 +23,7 @@ package service
 import akka.dispatch.{ExecutionContext, Future, Promise}
 
 import blueeyes.core.data.ByteChunk
+import blueeyes.json._
 import blueeyes.json.AsyncParser
 
 import com.precog.common.Path
@@ -36,7 +37,11 @@ import java.nio.ByteBuffer
 
 import scalaz._
 
-final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorities, maxFields: Int, ingest: IngestStore)(implicit M: Monad[Future], val executor: ExecutionContext)
+sealed trait JsonRecordStyle
+case object JsonValueStyle extends JsonRecordStyle
+case object JsonStreamStyle extends JsonRecordStyle
+
+final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorities, recordStyle: JsonRecordStyle, maxFields: Int, ingest: IngestStore)(implicit M: Monad[Future], val executor: ExecutionContext)
  extends IngestProcessor with Logging {
 
   case class JSONParseState(parser: AsyncParser, jobId: Option[JobId], ingested: Int, errors: Seq[(Int, String)]) {
@@ -51,12 +56,23 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
         // Dup and rewind to ensure we have something to parse
         val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
         logger.trace("Async parse on " + toParse)
-        val (result, updatedParser) = parser(Some(toParse))
-        if (result.values.size > 0) {
-          val toIngest = result.values.takeWhile { jv => jv.flattenWithPath.size <= maxFields }
-          if (toIngest.size == result.values.size) {
-            ingest.store(apiKey, path, authorities, result.values, jobId) flatMap { _ =>
-              ingestJSONChunk(state.update(updatedParser, result.values.size, result.errors.map { pe => (pe.line, pe.msg) }), rest)
+        val (parsed, updatedParser) = parser(Some(toParse))
+        val records = recordStyle match {
+          case JsonValueStyle => 
+            parsed.values flatMap {
+              case JArray(elements) => elements
+              case value => Seq(value)
+            }
+
+          case JsonStreamStyle => 
+            parsed.values
+        }
+
+        if (records.size > 0) {
+          val toIngest = records.takeWhile { jv => jv.flattenWithPath.size <= maxFields }
+          if (toIngest.size == records.size) {
+            ingest.store(apiKey, path, authorities, records, jobId) flatMap { _ =>
+              ingestJSONChunk(state.update(updatedParser, records.size, parsed.errors.map { pe => (pe.line, pe.msg) }), rest)
             }
           } else {
             ingest.store(apiKey, path, authorities, toIngest, jobId) map { _ =>
@@ -64,8 +80,8 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
             }
           }
         } else {
-          logger.warn("Async parse of chunk resulted in zero values, %d errors".format(result.errors.size))
-          ingestJSONChunk(state.update(updatedParser, 0, result.errors.map { pe => (pe.line, pe.msg) }), rest)
+          logger.warn("Async parse of chunk resulted in zero values, %d errors".format(parsed.errors.size))
+          ingestJSONChunk(state.update(updatedParser, 0, parsed.errors.map { pe => (pe.line, pe.msg) }), rest)
         }
 
       case None => Promise.successful {

@@ -55,6 +55,7 @@ import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatus
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.MimeType
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
@@ -71,6 +72,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
   val testValue: JValue = JObject(List(JField("testing", JNum(123))))
 
   val JSON = MimeTypes.application/MimeTypes.json
+  val JSON_STREAM = MimeType("application", "x-json-stream")
   val CSV = MimeTypes.text/MimeTypes.csv
 
   def bb(s: String) = ByteBuffer.wrap(s.getBytes("UTF-8"))
@@ -88,6 +90,36 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
     }
 
+    "expand top-level arrays" in {
+      val t1: JValue = JObject("t1" -> JNum(1))
+      val t2: JValue = JObject("t2" -> JNum(2))
+      val t3: JValue = JObject("t3" -> JNum(3))
+
+      val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true) {
+        JArray(t1, t2, t3)
+      }
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+          values must containAllOf(t1 :: t2 :: t3 :: Nil).only
+      }
+    }
+
+    "not expand top-level arrays with JSON_STREAM" in {
+      val t1 = JObject("t1" -> JNum(1))
+      val t2 = JObject("t2" -> JNum(2))
+      val t3 = JObject("t3" -> JNum(3))
+      val arr: JValue = JArray(t1, t2, t3)
+
+      val result = track[JValue](JSON_STREAM, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true) {
+        arr
+      }
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+          values must contain(arr).only
+      }
+    }
     "track asynchronous event with valid API key" in {
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
         chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")

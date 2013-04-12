@@ -23,6 +23,7 @@ package service
 import akka.dispatch.{ExecutionContext, Future}
 
 import blueeyes.core.data.ByteChunk
+import blueeyes.core.http.MimeType
 import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.HttpRequest
 import blueeyes.core.http.MimeTypes._
@@ -45,6 +46,10 @@ trait IngestProcessor {
 }
 
 class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: IngestStore)(implicit M: Monad[Future], executor: ExecutionContext){
+  val JSON = application/json
+  val JSON_STREAM = MimeType("application", "x-json-stream")
+  val CSV = text/csv
+
   /** Chain of responsibility used to determine a IngestProcessor strategy */
   trait IngestProcessorSelector {
     def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[IngestProcessor]
@@ -52,11 +57,9 @@ class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: Inge
 
   class MimeIngestProcessorSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends IngestProcessorSelector {
     def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[IngestProcessor] = {
-      val JSON = application/json
-      val CSV = text/csv
-
       parseDirectives collectFirst {
-        case MimeDirective(JSON) => new JSONIngestProcessor(apiKey, path, authorities, maxFields, ingestStore)
+        case MimeDirective(JSON) => new JSONIngestProcessor(apiKey, path, authorities, JsonValueStyle, maxFields, ingestStore)
+        case MimeDirective(JSON_STREAM) => new JSONIngestProcessor(apiKey, path, authorities, JsonStreamStyle, maxFields, ingestStore)
         case MimeDirective(CSV) => new CSVIngestProcessor(apiKey, path, authorities, batchSize, ingestStore)
       }
     }
@@ -65,7 +68,12 @@ class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: Inge
   class JsonIngestProcessorSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends IngestProcessorSelector {
     def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[IngestProcessor] = {
       val (AsyncParse(errors, values), parser) = JParser.parseAsync(ByteBuffer.wrap(partialData))
-      (errors.isEmpty && !values.isEmpty) option { new JSONIngestProcessor(apiKey, path, authorities, maxFields, ingestStore) }
+      if (errors.isEmpty && !values.isEmpty) {
+        parseDirectives collectFirst {
+          case MimeDirective(JSON_STREAM) => new JSONIngestProcessor(apiKey, path, authorities, JsonStreamStyle, maxFields, ingestStore)
+          case _ => new JSONIngestProcessor(apiKey, path, authorities, JsonValueStyle, maxFields, ingestStore)
+        } 
+      } else None
     }
   }
 
