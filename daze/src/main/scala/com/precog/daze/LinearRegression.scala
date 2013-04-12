@@ -330,7 +330,7 @@ trait LinearRegressionLibModule[M[+_]]
         val colDim = errors.product.getColumnDimension
 
         val degOfFreedom = coeffs.count - colDim
-        val varianceEst = errors.rss / degOfFreedom  //sqrt(varianceEst) = residual standard error
+        val varianceEst = errors.rss / degOfFreedom
         
         val inverse = errors.product.inverse()
         val varianceCovariance = inverse.times(varianceEst)
@@ -366,7 +366,6 @@ trait LinearRegressionLibModule[M[+_]]
         val varCovarRv = RArray(varCovarArr map { arr => RArray(arr.map(CNum(_)): _*) }: _*)
         val varCovarTable0 = Table.fromRValues(Stream(varCovarRv))
 
-        //todo change this string to "covarianceOfCoefficients", perhaps?, so we know what it's the covariance of...
         val varCovarTable = varCovarTable0.transform(trans.WrapObject(Leaf(Source), "varianceCovarianceMatrix"))
 
         val coeffsTable = thetaInSchema.transform(trans.WrapObject(Leaf(Source), "coefficients"))
@@ -382,7 +381,6 @@ trait LinearRegressionLibModule[M[+_]]
         val rSquaredTable0 = Table.fromRValues(Stream(CNum(rSquared)))
         val rSquaredTable = rSquaredTable0.transform(trans.WrapObject(Leaf(Source), "RSquared"))
 
-        //todo make all these crosses easier to see
         val result2 = coeffsTable.cross(rSquaredTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         val result1 = result2.cross(varCovarTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         val result = result1.cross(stdErrorTable)(InnerObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
