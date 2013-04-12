@@ -56,6 +56,34 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
   }
 
   "linear regression" should {
+    "not produce an exception in a corner case" in {
+      val input = """
+        | clicks := //clicks20k
+        | std::stats::linearRegression(clicks.customer.age, clicks.product.price)
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)
+
+      result must haveAllElementsLike {
+        case (ids, SObject(elems)) => {
+          ids must haveSize(0)
+          elems.keys mustEqual Set("model1")
+
+          val SObject(fields) = elems("model1")
+
+          val SArray(arr) = fields("coefficients")
+          val rSquared = fields("RSquared")
+
+          arr(0) must beLike { case SObject(obj) => handleCoeffs(obj) }
+
+          arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
+
+          rSquared must beLike { case SDecimal(_) => ok }
+        }
+      }
+    }
+
     "handle a constant x-values" in {
       val input = """
         | medals := //summer_games/london_medals

@@ -137,6 +137,8 @@ trait Slice { source =>
       as
     }
 
+    def loopForall[A <: Column](cols: Array[A])(row: Int) = !cols.isEmpty && Loop.forall(cols)(_ isDefinedAt row)
+
     val columns: Map[ColumnRef, Column] = {
       Map(
         (ColumnRef(CPath(CPathArray), CArrayType(tpe0)),
@@ -148,7 +150,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Long] = longcols map { col => col.apply _ }
 
                 val tpe = CArrayType(CLong)
-                def isDefinedAt(row: Int) = Loop.forall(longcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[LongColumn](longcols)(row)
                 def apply(row: Int): Array[Long] = inflate(cols, row)
               }
             case CDouble =>
@@ -157,7 +159,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Double] = doublecols map { x => x(_) }
 
                 val tpe = CArrayType(CDouble)
-                def isDefinedAt(row: Int) = Loop.forall(doublecols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[DoubleColumn](doublecols)(row)
                 def apply(row: Int): Array[Double] = inflate(cols, row)
               }
             case CNum =>
@@ -166,7 +168,7 @@ trait Slice { source =>
                 private val cols: Array[Int => BigDecimal] = numcols map { x => x(_) }
 
                 val tpe = CArrayType(CNum)
-                def isDefinedAt(row: Int) = Loop.forall(numcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[NumColumn](numcols)(row)
                 def apply(row: Int): Array[BigDecimal] = inflate(cols, row)
               }
             case CBoolean =>
@@ -175,7 +177,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Boolean] = boolcols map { x => x(_) }
 
                 val tpe = CArrayType(CBoolean)
-                def isDefinedAt(row: Int) = Loop.forall(boolcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[BoolColumn](boolcols)(row)
                 def apply(row: Int): Array[Boolean] = inflate(cols, row)
               }
             case CString =>
@@ -184,7 +186,7 @@ trait Slice { source =>
                 private val cols: Array[Int => String] = strcols map { x => x(_) }
 
                 val tpe = CArrayType(CString)
-                def isDefinedAt(row: Int) = Loop.forall(strcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[StrColumn](strcols)(row)
                 def apply(row: Int): Array[String] = inflate(cols, row)
               }
             case _ => sys.error("unsupported type")
