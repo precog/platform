@@ -99,7 +99,9 @@ if [ -z "$SKIPSETUP" ]; then
 
     run_sbt "${SCCT}compile"
 
-    run_sbt "${SCCTTEST}test:compile"
+    if [ -z "$SKIPTEST" ]; then
+        run_sbt "${SCCTTEST}test:compile"
+    fi
 else
     echo "Skipping clean/compile"
 fi
@@ -111,6 +113,7 @@ fi
 # For the runs, we don't want to terminate early if a particular project fails
 if [ -z "$FAILFAST" ]
 then
+    echo "Build will fail on first failed subproject"
 	set +e
 fi
 
@@ -123,6 +126,8 @@ if [ -z "$SKIPTEST" ]; then
     if [ -n "$COVERAGE" ]; then
 	run_sbt scct-merge-report
     fi
+else
+    echo "Skipping test:compile/test"
 fi
 
 if [ $SUCCESS -eq 0 ]; then
