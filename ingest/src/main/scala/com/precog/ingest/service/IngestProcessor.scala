@@ -71,7 +71,8 @@ class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: Inge
       if (errors.isEmpty && !values.isEmpty) {
         parseDirectives collectFirst {
           case MimeDirective(JSON_STREAM) => new JSONIngestProcessor(apiKey, path, authorities, JsonStreamStyle, maxFields, ingestStore)
-          case _ => new JSONIngestProcessor(apiKey, path, authorities, JsonValueStyle, maxFields, ingestStore)
+        } orElse {
+          Some(new JSONIngestProcessor(apiKey, path, authorities, JsonValueStyle, maxFields, ingestStore))
         } 
       } else None
     }
