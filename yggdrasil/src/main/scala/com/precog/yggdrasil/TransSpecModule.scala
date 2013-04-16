@@ -125,7 +125,7 @@ trait TransSpecModule extends FNModule {
           child match {
             case node @ RootNode(seq) => concatChildren(node, leaf)
             case node @ FieldNode(CPathField(name), _) => trans.WrapObject(concatChildren(node, leaf), name)
-            case node @ IndexNode(CPathIndex(_), _) => trans.WrapArray(concatChildren(node, leaf))
+            case node @ IndexNode(CPathIndex(_), _) => trans.WrapArray(concatChildren(node, leaf)) //assuming that indices received in order
             case LeafNode(idx) => trans.DerefArrayStatic(leaf, CPathIndex(idx))
           }
         }

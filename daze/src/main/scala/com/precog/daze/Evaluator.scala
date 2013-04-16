@@ -129,6 +129,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
+      //println("DAG: " + rewrittenDAG)
 
       def resolveTopLevelGroup(spec: BucketSpec, splits: Map[Identifier, Int => N[Table]]): StateT[N, EvaluatorState, N[GroupingSpec]] = spec match {
         case UnionBucketSpec(left, right) => 
@@ -574,13 +575,21 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           returns an array (to be dereferenced later) containing the result of each reduction
           */
           case m @ MegaReduce(reds, parent) => 
+            //println("reds: " + reds)
+            //println("parent: " + parent)
             val firstCoalesce = reds.map {
               case (_, reductions) => coalesce(reductions.map((_, None)))
             }
 
-            val reduction = coalesce(firstCoalesce.zipWithIndex map { case (r, j) => (r, Some(j)) })
+            def makeJArray(idx: Int)(tpe: JType): JType = JArrayFixedT(Map(idx -> tpe))
+
+            val original = firstCoalesce.zipWithIndex map { case (red, idx) =>
+              (red, Some(makeJArray(idx) _))
+            }
+            val reduction = coalesce(original)
 
             val spec = combineTransSpecs(reds.map(_._1))
+            //println("spec: " + spec)
 
             for {
               pendingTable <- prepareEval(parent, splits)
@@ -589,10 +598,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               result = mn(pendingTable.table
                 .transform(liftedTrans)
                 .transform(DerefObjectStatic(Leaf(Source), paths.Value))
-                .transform(spec)
+                .transform(spec)//.printer("original")
                 .reduce(reduction.reducer(ctx))(reduction.monoid))
 
-              table = result.map(reduction.extract)
+              table = result.map(r => reduction.extract(r))//.printer("table2").transform(TransSpec1.Id))
 
               keyWrapped = trans.WrapObject(
                 trans.ConstLiteral(

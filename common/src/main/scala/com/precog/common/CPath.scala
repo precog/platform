@@ -235,6 +235,7 @@ object CPath {
     val size: Int = path.length
   }
   
+  //todo remove assert below and require Seq[(CPath, A)], or use Option since we have the `if else`
   def makeTree[A](cpaths0: Seq[CPath], values: Seq[A]): CPathTree[A] = {
     if (cpaths0.isEmpty) {
       values.headOption match {

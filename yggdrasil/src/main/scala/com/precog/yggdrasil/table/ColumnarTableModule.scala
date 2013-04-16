@@ -684,9 +684,9 @@ trait ColumnarTableModule[M[+_]]
       )
     }
 
-    def compact(spec: TransSpec1): Table = {
+    def compact(spec: TransSpec1, definedness: Definedness = AnyDefined): Table = {
       val specTransform = SliceTransform.composeSliceTransform(spec)
-      val compactTransform = SliceTransform.composeSliceTransform(Leaf(Source)).zip(specTransform) { (s1, s2) => s1.compact(s2, AnyDefined) }
+      val compactTransform = SliceTransform.composeSliceTransform(Leaf(Source)).zip(specTransform) { (s1, s2) => s1.compact(s2, definedness) }
       Table(Table.transformStream(compactTransform, slices), size).normalize
     }
 

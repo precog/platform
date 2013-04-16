@@ -128,24 +128,24 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
     }
 
-    def coalesce(reductions: List[(Reduction, Option[Int])]): Reduction
+    def coalesce(reductions: List[(Reduction, Option[JType => JType])]): Reduction
   }
 }
 
 trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTableModule[M] {
   trait ColumnarTableLib extends TableLib {
-    class WrapArrayTableReduction(val r: Reduction, val idx: Option[Int]) extends Reduction(r.namespace, r.name) {
+    class WrapArrayTableReduction(val r: Reduction, val jtypef: Option[JType => JType]) extends Reduction(r.namespace, r.name) {
       type Result = r.Result
       val tpe = r.tpe
 
       def monoid = r.monoid
       def reducer(ctx: EvaluationContext) = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
-          idx match {
-            case Some(jdx) =>
+          jtypef match {
+            case Some(f) =>
               val cols0 = new CSchema {
                 def columnRefs = schema.columnRefs
-                def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
+                def columns(tpe: JType) = schema.columns(f(tpe))
               }
               r.reducer(ctx).reduce(cols0, range)
             case None => 
@@ -154,70 +154,68 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
         }
       }
 
-      def extract(res: Result): Table = {
+      def extract(res: Result): Table =
         r.extract(res).transform(trans.WrapArray(trans.Leaf(trans.Source)))
-      }
 
       def extractValue(res: Result) = r.extractValue(res)
     }
 
-    def coalesce(reductions: List[(Reduction, Option[Int])]): Reduction = {
-      def rec(reductions: List[(Reduction, Option[Int])], acc: Reduction): Reduction = {
+    def coalesce(reductions: List[(Reduction, Option[JType => JType])]): Reduction = {
+      def rec(reductions: List[(Reduction, Option[JType => JType])], acc: Reduction): Reduction = {
         reductions match {
-          case (x, idx) :: xs =>
-              val impl = new Reduction(Vector(), "") {
-              type Result = (x.Result, acc.Result) 
+          case (x, jtypef) :: xs => {
+            val impl = new Reduction(Vector(), "") {
+            type Result = (x.Result, acc.Result)
 
-              def reducer(ctx: EvaluationContext) = new CReducer[Result] {
-                def reduce(schema: CSchema, range: Range): Result = {
-                  idx match {
-                    case Some(jdx) =>
-                      val cols0 = new CSchema {
-                        def columnRefs = schema.columnRefs
-                        def columns(tpe: JType) = schema.columns(JArrayFixedT(Map(jdx -> tpe)))
-                      }
-                      val (a, b) = (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(schema, range))
-                      (a, b)
-                    case None => 
-                      (x.reducer(ctx).reduce(schema, range), acc.reducer(ctx).reduce(schema, range))
-                  }
+            def reducer(ctx: EvaluationContext) = new CReducer[Result] {
+              def reduce(schema: CSchema, range: Range): Result = {
+                jtypef match {
+                  case Some(f) =>
+                    val cols0 = new CSchema {
+                      def columnRefs = schema.columnRefs
+                      def columns(tpe: JType) = schema.columns(f(tpe))
+                    }
+                    (x.reducer(ctx).reduce(cols0, range), acc.reducer(ctx).reduce(schema, range))
+                  case None => 
+                    (x.reducer(ctx).reduce(schema, range), acc.reducer(ctx).reduce(schema, range))
                 }
               }
+            }
 
-              implicit val monoid: Monoid[Result] = new Monoid[Result] {
-                def zero = (x.monoid.zero, acc.monoid.zero)
-                def append(r1: Result, r2: => Result): Result = {
-                  (x.monoid.append(r1._1, r2._1), acc.monoid.append(r1._2, r2._2))
-                }
+            implicit val monoid: Monoid[Result] = new Monoid[Result] {
+              def zero = (x.monoid.zero, acc.monoid.zero)
+              def append(r1: Result, r2: => Result): Result = {
+                (x.monoid.append(r1._1, r2._1), acc.monoid.append(r1._2, r2._2))
               }
+            }
 
-              def extract(r: Result): Table = {
-                import trans._
-                
-                val left = x.extract(r._1)
-                val right = acc.extract(r._2)
-                
-                left.cross(right)(OuterArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
-              }
+            def extract(r: Result): Table = {
+              import trans._
 
-              // TODO: Can't translate this into a CValue. Evaluator
-              // won't inline the results. See call to inlineNodeValue
-              def extractValue(res: Result) = None
+              val left = x.extract(r._1)
+              val right = acc.extract(r._2)
 
-              val tpe = UnaryOperationType(
-                JUnionT(x.tpe.arg, acc.tpe.arg), 
-                JArrayUnfixedT
-              ) 
+              left.cross(right)(OuterArrayConcat(WrapArray(Leaf(SourceLeft)), Leaf(SourceRight)))
+            }
+
+            // TODO: Can't translate this into a CValue. Evaluator
+            // won't inline the results. See call to inlineNodeValue
+            def extractValue(res: Result) = None
+
+            val tpe = UnaryOperationType(
+              JUnionT(x.tpe.arg, acc.tpe.arg), 
+              JArrayUnfixedT)
             }
 
             rec(xs, impl)
+          }
 
           case Nil => acc
         }
       }
     
-      val (impl1, idx1) = reductions.head
-      rec(reductions.tail, new WrapArrayTableReduction(impl1, idx1))
+      val (impl1, jtype1) = reductions.head
+      rec(reductions.tail, new WrapArrayTableReduction(impl1, jtype1))
     }
   }
 }
@@ -225,7 +223,7 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
 trait StdLibModule[M[+_]] 
     extends InfixLibModule[M]
     with UnaryLibModule[M]
-    with ReductionLibModule[M]
+    with SummaryLibModule[M]
     with ArrayLibModule[M]
     with TimeLibModule[M]
     with MathLibModule[M]
@@ -243,7 +241,7 @@ trait StdLibModule[M[+_]]
   trait StdLib
       extends InfixLib
       with UnaryLib
-      with ReductionLib
+      with SummaryLib
       with ArrayLib
       with TimeLib
       with MathLib

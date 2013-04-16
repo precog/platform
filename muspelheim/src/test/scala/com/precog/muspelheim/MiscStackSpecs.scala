@@ -27,7 +27,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
-    "return count of empty set as 0 in body of solve" in {
+    "return count of empty set as 0 in body of solve (2)" in {
       val input = """
         | data := new {a: "down", b: 13}
         |
@@ -388,6 +388,234 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
 
       actual must contain(true).only
+    }
+
+    def summaryHeight(obj: Map[String, SValue]) = {
+      obj("count") must beLike { case SDecimal(d) =>
+        d.toDouble mustEqual 993
+      }
+      obj("mean") must beLike { case SDecimal(d) =>
+        d.toDouble mustEqual 176.4370594159114
+      }
+      obj("min") must beLike { case SDecimal(d) =>
+        d.toDouble mustEqual 140
+      }
+      obj("max") must beLike { case SDecimal(d) =>
+        d.toDouble mustEqual 208
+      }
+      obj("stdDev") must beLike { case SDecimal(d) =>
+        d.toDouble mustEqual 11.56375193112367
+      }
+    }
+
+    "find simple summary" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | summary(medals.HeightIncm)
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      result must haveSize(1)
+      
+      result must haveAllElementsLike {
+        case (ids, SObject(model)) => {
+          ids must haveSize(0)
+          model.keySet mustEqual Set("model1")
+
+          val SObject(obj) = model("model1")
+
+          summaryHeight(obj)
+        }
+        case _ => ko
+      }
+    }
+
+    "find summary and another reduction on the same dataset" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | height := medals.HeightIncm
+        | summary(height).model1 with { sqVariance: variance(height) ^ 2 }
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      result must haveSize(1)
+      
+      result must haveAllElementsLike {
+        case (ids, SObject(obj)) => {
+          ids must haveSize(0)
+
+          summaryHeight(obj)
+
+          obj("sqVariance") must beLike { case SDecimal(d) =>
+            d.toDouble mustEqual 17881.13433742673
+          }
+        }
+        case _ => ko
+      }
+    }
+
+    def makeObject(query: String): Map[String, SValue] = {
+      val result = evalE(query) collect { case (_, SObject(values)) => values("model1") }
+      val SObject(obj) = result.head
+      obj
+    }
+
+    "find summary of arrays, objects, and values" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | height := { height: medals.HeightIncm }
+        | weight := [medals.Weight]
+        | age := medals.Age
+        | data := height union weight union age
+        | summary(data)
+      """.stripMargin
+
+      val weight = """
+        | medals := //summer_games/london_medals
+        | summary(medals.Weight)
+      """.stripMargin
+
+      val height = """
+        | medals := //summer_games/london_medals
+        | summary(medals.HeightIncm)
+      """.stripMargin
+
+      val age = """
+        | medals := //summer_games/london_medals
+        | summary(medals.Age)
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      val weightResult = makeObject(weight)
+      val heightResult = makeObject(height)
+      val ageResult = makeObject(age)
+
+      result must haveSize(1)
+      
+      result must haveAllElementsLike {
+        case (ids, SObject(models)) => {
+          ids must haveSize(0)
+          models.keySet mustEqual Set("model1", "model2", "model3")
+
+          def testModels(sv: SValue) = sv must beLike {
+            case SObject(model) if model.keySet == Set("height") => {
+              val SObject(summary) = model("height")
+              summary mustEqual heightResult
+            }
+
+            case SObject(summary) => 
+              summary mustEqual ageResult
+
+            case SArray(model) => {
+              model must haveSize(1)
+              val SObject(summary) = model(0)
+              summary mustEqual weightResult
+            }
+
+            case _ => ko
+          }
+
+          testModels(models("model1"))
+          testModels(models("model2"))
+          testModels(models("model3"))
+
+        }
+      }
+    }
+
+    "find summary with object" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        | data := {height: [medals.HeightIncm], weight: medals.Weight, age: medals.Age}
+        | summary(data)
+      """.stripMargin
+
+      val schema1 = """
+        | medals := //summer_games/london_medals
+        | result :=
+        |   { 
+        |     age: medals.Age where std::type::isNumber(medals.Age)
+        |   }
+        | summary(result)
+      """.stripMargin
+
+      val schema2 = """
+        | medals := //summer_games/london_medals
+        | result :=
+        |   {
+        |     age: medals.Age where std::type::isNumber(medals.Age),
+        |     height: [medals.HeightIncm] where std::type::isNumber(medals.HeightIncm)
+        |   }
+        | summary(result)
+      """.stripMargin
+
+      val schema3 = """
+        | medals := //summer_games/london_medals
+        | result :=
+        |   {
+        |     age: medals.Age where std::type::isNumber(medals.Age),
+        |     weight: medals.Weight where std::type::isNumber(medals.Weight)
+        |   }
+        | summary(result)
+      """.stripMargin
+
+      val schema4 = """
+        | medals := //summer_games/london_medals
+        | result :=
+        |   {
+        |     age: medals.Age where std::type::isNumber(medals.Age),
+        |     height: [medals.HeightIncm] where std::type::isNumber(medals.HeightIncm),
+        |     weight: medals.Weight where std::type::isNumber(medals.Weight)
+        |   }
+        | summary(result)
+      """.stripMargin
+
+      val result = evalE(input) 
+
+      result must haveSize(1)
+
+      def makeObject(query: String): Map[String, SValue] = {
+        val result = evalE(query) collect { case (_, SObject(values)) => values("model1") }
+        val SObject(obj) = result.head
+        obj
+      }
+
+      val obj1 = makeObject(schema1)
+      val obj2 = makeObject(schema2)
+      val obj3 = makeObject(schema3)
+      val obj4 = makeObject(schema4)
+
+      def testModel(model: SValue) = {
+        val SObject(obj) = model
+
+        if (Set("age", "height", "weight").subsetOf(obj.keySet))
+          obj mustEqual obj4
+        else if (Set("age", "height").subsetOf(obj.keySet))
+          obj mustEqual obj2
+        else if (Set("age", "weight").subsetOf(obj.keySet))
+          obj mustEqual obj3
+        else if (Set("age").subsetOf(obj.keySet))
+          obj mustEqual obj1
+        else 
+          ko
+      }
+
+      result must haveAllElementsLike {
+        case (ids, SObject(models)) => {
+          ids must haveSize(0)
+          models.keySet mustEqual Set("model1", "model2", "model3", "model4")
+
+          testModel(models("model1"))
+          testModel(models("model2"))
+          testModel(models("model3"))
+          testModel(models("model4"))
+        }
+
+        case _ => ko
+      }
     }
 
     "recognize the datetime parse function" in {
