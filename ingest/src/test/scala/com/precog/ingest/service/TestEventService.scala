@@ -121,7 +121,8 @@ trait TestEventService extends
       new EventStore[Future] {
         def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
       },
-      new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
+      new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l],
+      new HttpClient.EchoClient(_.content)
     )
 
     (deps, Stoppable.Noop)

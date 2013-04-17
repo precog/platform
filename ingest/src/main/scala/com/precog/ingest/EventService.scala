@@ -35,6 +35,7 @@ import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
+import blueeyes.core.service._
 import blueeyes.core.service.RestPathPattern._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
@@ -50,20 +51,34 @@ import org.streum.configrity.Configuration
 import org.joda.time.Instant
 
 import scalaz._
+import scalaz.std.function._
 import scalaz.syntax.monad._
+import scalaz.syntax.std.option._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 import com.precog.common.Path
 
-case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
+case class EventServiceState(
+  accessControl: APIKeyFinder[Future], 
+  ingestHandler: IngestServiceHandler, 
+  fileCreateHandler: FileCreateHandler,
+  archiveHandler: ArchiveServiceHandler[ByteChunk], 
+  shardClient: HttpClient[ByteChunk],
+  stop: Stoppable)
 
 case class EventServiceDeps[M[+_]](
     apiKeyFinder: APIKeyFinder[M],
     accountFinder: AccountFinder[M],
     eventStore: EventStore[M],
-    jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
+    jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ],
+    shardClient: HttpClient[ByteChunk])
+
+object EventService {
+  val X_QUIRREL_SCRIPT = MimeType("text", "x-quirrel-script")
+}
 
 trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators {
+  import EventService._
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -75,45 +90,38 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
     requestLogging { help("/docs/api") {
       healthMonitor("/health", defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
+          import context._
           Future {
-            import context._
-
             val (deps, stoppable) = configureEventService(config)
             val permissionsFinder = new PermissionsFinder(deps.apiKeyFinder, deps.accountFinder, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
 
             val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
             val ingestBatchSize = config[Int]("ingest.batch_size", 500)
-            val ingestMaxFields = config[Int]("ingest.max_fields", 1024) // Because tixxit says so
+            val ingestMaxFields = config[Int]("ingest.max_fields", 1024) // Because kjn says so
 
             val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
 
             val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
             val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, Clock.System, deleteTimeout)
+            val createHandler = new FileCreateHandler(Clock.System)
 
-            EventServiceState(deps.apiKeyFinder, ingestHandler, archiveHandler, stoppable)
+            EventServiceState(deps.apiKeyFinder, ingestHandler, createHandler, archiveHandler, deps.shardClient, stoppable)
           }
         } ->
         request { (state: EventServiceState) =>
           import CORSHeaderHandler.allowOrigin
+          implicit val FR = M.compose[({ type l[a] = Function2[APIKey, Path, a] })#l] 
+
           allowOrigin("*", executionContext) {
-            jsonp {
+            encode[ByteChunk, Future[HttpResponse[JValue]], Future[HttpResponse[ByteChunk]]] {
               produce(application / json) {
-                (jsonAPIKey(state.accessControl) {
-                  dataPath("/fs") {
-                    post(state.ingestHandler) ~
-                    delete(state.archiveHandler)
-                  } ~ //legacy handler
-                  path("/(?<sync>a?sync)") {
-                    dataPath("/fs") {
-                      post(state.ingestHandler) ~
-                      delete(state.archiveHandler)
-                    }
-                  }
-                }) map {
-                  _ map { _ map jvalueToChunk }
-                }
+                //jsonp {
+                  fsService(state) ~
+                  dataService(state)
+                //}
               }
-            }
+            } ~ 
+            shardProxy(state.shardClient)
           }
         } ->
         stop { state =>
@@ -121,5 +129,53 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         }
       }
     }}
+  }
+
+  def fsService(state: EventServiceState): AsyncHttpService[ByteChunk, JValue] = {
+    jsonAPIKey(state.accessControl) {
+      dataPath("/fs") {
+        post(state.ingestHandler) ~
+        delete(state.archiveHandler)
+      } ~ //legacy handler
+      path("/(?<sync>a?sync)") {
+        dataPath("/fs") {
+          post(state.ingestHandler) ~
+          delete(state.archiveHandler)
+        }
+      }
+    }
+  }
+
+  def dataService(state: EventServiceState): AsyncHttpService[ByteChunk, JValue] = {
+    import HttpRequestHandlerImplicits._
+    jsonAPIKey(state.accessControl) {
+      path("/data") {
+        dataPath("/fs") {
+          post {
+            accept(application/json, MimeType("application", "x-json-stream")) {
+              state.ingestHandler
+            } ~
+            accept(X_QUIRREL_SCRIPT) {
+              state.fileCreateHandler
+            }
+          } ~ 
+          patch {
+            accept(application/json, MimeType("application", "x-json-stream")) {
+              state.ingestHandler
+            }
+          } 
+        } 
+      }
+    }
+  }
+
+  def shardProxy(shardClient: HttpClient[ByteChunk]): AsyncHttpService[ByteChunk, ByteChunk] = {
+    path("/data/fs/'path") {
+      get {
+        accept(X_QUIRREL_SCRIPT) {
+          proxy(shardClient) { _ => true }
+        }
+      }
+    } 
   }
 }

@@ -93,10 +93,8 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 
   lazy val service = (request: HttpRequest[Future[JValue]]) => {
     success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
-      case Command("ls", arg) => list(apiKey, Path(arg.trim))
-      case Command("list", arg) => list(apiKey, Path(arg.trim))
-      case Command("ds", arg) => describe(apiKey, Path(arg.trim))
-      case Command("describe", arg) => describe(apiKey, Path(arg.trim))
+      case Command("ls"|"list", arg) => list(apiKey, Path(arg.trim))
+      case Command("ds"|"describe", arg) => describe(apiKey, Path(arg.trim))
       case qt =>
         platform.executorFor(apiKey) flatMap {
           case Success(executor) =>

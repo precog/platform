@@ -48,6 +48,8 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class StressTest {
+  import AsyncParser._
+
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
   def makechef = new Chef(
@@ -115,7 +117,7 @@ class StressTest {
         val n = ch.read(bb)
         bb.flip()
 
-        val input = if (n >= 0) Some(bb) else None
+        val input = if (n >= 0) More(bb) else Done
         val (AsyncParse(errors, results), parser) = p(input)
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
@@ -129,7 +131,7 @@ class StressTest {
       }
 
       try {
-        loop(AsyncParser())
+        loop(AsyncParser(false))
       } finally {
         ch.close()
       }

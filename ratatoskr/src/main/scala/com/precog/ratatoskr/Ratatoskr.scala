@@ -809,10 +809,12 @@ object ImportTools extends Command with Logging {
     }
 
     import shardModule._
+    import AsyncParser._
 
     val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
+
     config.input.foreach {
       case (db, input) =>
 
@@ -827,7 +829,7 @@ object ImportTools extends Command with Logging {
           val n = ch.read(bb)
           bb.flip()
 
-          val input = if (n >= 0) Some(bb) else None
+          val input = if (n >= 0) More(bb) else Done
           val (AsyncParse(errors, results), parser) = p(input)
           if (!errors.isEmpty) {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
@@ -842,7 +844,7 @@ object ImportTools extends Command with Logging {
         }
 
         try {
-          loop(AsyncParser())
+          loop(AsyncParser(true))
         } finally {
           ch.close()
         }

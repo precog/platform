@@ -120,15 +120,17 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
           values must contain(arr).only
       }
     }
-    "track asynchronous event with valid API key" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
-        chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
-      }
 
-      result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
-      }
-    }
+    // TODO: this test should be rewritten to address global durability
+    // "track asynchronous event with valid API key" in {
+    //   val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
+    //     chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
+    //   }
+
+    //   result.copoint must beLike {
+    //     case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
+    //   }
+    // }
 
     "track synchronous batch event with bad row" in {
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
@@ -223,11 +225,16 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(fields)), _), _) =>
-          val JArray(errors) = fields("errors")
-            errors.exists {
-              case JString(msg) => msg.startsWith("Cannot ingest values with more than 1024 primitive fields.")
-              case _ => false
-            } must_== true
+          fields("errors") must beLike {
+            case JArray(errors) =>
+              atLeastOnce(errors) {
+                case JObject(fields) => 
+                  fields("reason") must beLike {
+                    case JString(s) => s must startWith("Cannot ingest values with more than 1024 primitive fields.") 
+                  }
+                case _ => ko
+              }
+          }
       }
     }
 
