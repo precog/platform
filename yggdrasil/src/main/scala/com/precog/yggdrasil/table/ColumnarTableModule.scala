@@ -348,72 +348,13 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
-      rv.flattenWithPath.foldLeft(into) {
-        case (acc, (cpath, CUndefined)) => acc
-        case (acc, (cpath, cvalue)) =>
-          val ref = ColumnRef(cpath, (cvalue.cType))
-          
-          val updatedColumn: ArrayColumn[_] = cvalue match {
-            case CBoolean(b) =>
-              acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
-              
-            case CLong(d) =>
-              acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
-
-            case CDouble(d) =>
-              acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
-
-            case CNum(d) =>
-              acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
-
-            case CString(s) =>
-              acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
-
-            case CDate(d) =>
-              acc.getOrElse(ref, ArrayDateColumn.empty(sliceSize)).asInstanceOf[ArrayDateColumn].tap { c => c.update(sliceIndex, d) }
-
-            case CPeriod(p) =>
-              acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
-
-            case CArray(arr, cType) =>
-              acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(cType)).asInstanceOf[ArrayHomogeneousArrayColumn[cType.tpe]].tap { c => c.update(sliceIndex, arr) }
-              
-            case CEmptyArray =>
-              acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
-              
-            case CEmptyObject =>
-              acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
-              
-            case CNull =>
-              acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
-          }
-          
-          acc + (ref -> updatedColumn)
-      }
-    }
-
     def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
       
       def makeSlice(data: Stream[RValue]): (Slice, Stream[RValue]) = {
         val (prefix, suffix) = data.splitAt(sliceSize)
-  
-        @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
-          from match {
-            case jv #:: xs =>
-              val refs = updateRefs(jv, into, sliceIndex, sliceSize)
-              buildColArrays(xs, refs, sliceIndex + 1)
-            case _ =>
-              (into, sliceIndex)
-          }
-        }
-    
-        val slice = new Slice {
-          val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
-        }
-    
-        (slice, suffix)
+
+        (Slice.fromRValues(prefix), suffix)
       }
 
       Table(

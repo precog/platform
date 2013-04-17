@@ -74,23 +74,29 @@ trait SamplableColumnarTableModule[M[+_]]
       def build(states: Seq[SampleState], slices: StreamT[M, Slice]): M[Seq[Table]] = {
         slices.uncons flatMap {
           case Some((origSlice, tail)) =>
-            val nextStates = states map { case SampleState(maybePrevInserters, len, transform) =>
+            val nextStates = states map { case SampleState(maybePrevInserters, len0, transform) =>
             
               val (nextTransform, slice) = transform advance origSlice
 
               val inserter = maybePrevInserters map { _.withSource(slice) } getOrElse RowInserter(sampleSize, slice)
+
+              val defined = slice.definedAt
             
               @tailrec
-              def loop(i: Int): Int = if (i < slice.size) {
+              def loop(i: Int, len: Int): Int = if (i < slice.size) {
                 // `k` is a number between 0 and number of rows we've seen
-                val k = rng.nextInt(len + i + 1)
-                if (k < sampleSize) {
-                  inserter.insert(src=i, dest=k)
+                if (!defined(i)) {
+                  loop(i + 1, len)
+                } else {
+                  val k = rng.nextInt(len + 1)
+                  if (k < sampleSize) {
+                    inserter.insert(src=i, dest=k)
+                  }
+                  loop(i + 1, len + 1)
                 }
-                loop(i + 1)
-              } else i
+              } else len
 
-              val newLength = len + loop(0)
+              val newLength = loop(0, len0)
 
               SampleState(Some(inserter), newLength, nextTransform)
             }
@@ -128,11 +134,6 @@ trait SamplableColumnarTableModule[M[+_]]
       var k = 0
       while (k < ops.length) {
         val col = ops(k)
-        var i = size - 1
-        while (i > dest) {
-          col.move(i - 1, i)
-          i -= 1
-        }
         col.insert(src, dest)
 
         k += 1

@@ -490,6 +490,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             _ typed tpe
           }
 
+        case TypedSubsumes(source, tpe) =>
+          composeSliceTransform2(source) map {
+            _ typedSubsumes tpe
+          }
+
         case IsType(source, tpe) =>
           composeSliceTransform2(source) map {
             _ isType tpe

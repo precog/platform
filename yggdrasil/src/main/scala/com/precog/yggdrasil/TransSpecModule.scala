@@ -111,8 +111,11 @@ trait TransSpecModule extends FNModule {
     case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Int) extends TransSpec[A]
     
     // Filter out all the source columns whose selector and CType are not specified by the supplied JType
-    // if the set of columns does not cover the JType specified, this will return the empty slice.
     case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done
+
+    // Filter out all the source columns whose selector and CType are not specified by the supplied JType
+    // if the set of columns does not cover the JType specified, this will return the empty slice.
+    case class TypedSubsumes[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done
     
     // return a Boolean column 
     // returns true for a given row when all of the columns specified by the supplied JType are defined
@@ -199,6 +202,7 @@ trait TransSpecModule extends FNModule {
           case trans.ArraySwap(source, index) => trans.ArraySwap(mapSources(source)(f), index)
           
           case Typed(source, tpe) => Typed(mapSources(source)(f), tpe)
+          case TypedSubsumes(source, tpe) => TypedSubsumes(mapSources(source)(f), tpe)
           case IsType(source, tpe) => IsType(mapSources(source)(f), tpe)
           
           case trans.Equal(left, right) => trans.Equal(mapSources(left)(f), mapSources(right)(f))
@@ -244,6 +248,7 @@ trait TransSpecModule extends FNModule {
         case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
         
         case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
+        case TypedSubsumes(source, tpe) => TypedSubsumes(deepMap(source)(f), tpe)
         case IsType(source, tpe) => IsType(deepMap(source)(f), tpe)
         
         case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
