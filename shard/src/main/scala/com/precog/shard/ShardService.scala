@@ -189,7 +189,7 @@ trait ShardService extends
   }
 
   private def syncHandler(state: ShardState) = {
-    jsonp[ByteChunk] {
+    jsonp {
       jsonAPIKey(state.apiKeyFinder) {
         dataPath("/analytics/fs") {
           query[ByteChunk, HttpResponse[ByteChunk]] {
@@ -237,4 +237,30 @@ trait ShardService extends
       }
     }
   }
+
+/*
+  lazy val analysisService = this.service("analysis", "1.0") {
+    requestLogging(timeout) {
+      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
+        startup {
+
+        } ->
+        request { state =>
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*", executionContext) {
+            path("/analysis") {
+              dataPath("/fs") {
+                get {
+                }
+              }
+            }
+          }
+        } ->
+        stop { state: ShardState =>
+          state.stoppable
+        }
+      }
+    }
+  }
+  */
 }
