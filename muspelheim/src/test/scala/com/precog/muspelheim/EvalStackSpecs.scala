@@ -12,5 +12,3 @@ trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
   def evalE(str: String, debug: Boolean = false): Set[(Vector[IdType], SValue)]
 }
-
-// vim: set ts=4 sw=4 et:
