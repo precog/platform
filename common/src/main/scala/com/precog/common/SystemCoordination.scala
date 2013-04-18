@@ -1,6 +1,5 @@
 package com.precog.common
 
-import com.precog.common.json._
 import com.precog.util.VectorClock
 
 import blueeyes.json._
@@ -8,6 +7,7 @@ import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
 
 import com.weiglewilczek.slf4s._
 
@@ -67,7 +67,7 @@ object IdSequenceBlock {
   implicit val iso = Iso.hlist(IdSequenceBlock.apply _ , IdSequenceBlock.unapply _)
   val schemaV1 = "producerId" :: "firstSequenceId" :: "lastSequenceId" :: HNil
   val extractorPreV = extractorV[IdSequenceBlock](schemaV1, None)
-  val (decomposerV1, extractorV1) = serializationV[IdSequenceBlock](schemaV1, Some("1.0"))
+  val (decomposerV1, extractorV1) = serializationV[IdSequenceBlock](schemaV1, Some("1.0".v))
   implicit val decomposer = decomposerV1
   implicit val extractor = extractorV1 <+> extractorPreV
 }
@@ -82,7 +82,7 @@ object EventRelayState {
   implicit val iso = Iso.hlist(EventRelayState.apply _ , EventRelayState.unapply _)
   val schemaV1 = "offset" :: "nextSequenceId" :: "idSequenceBlock" :: HNil
   val extractorPreV = extractorV[EventRelayState](schemaV1, None)
-  val (decomposerV1, extractorV1) = serializationV[EventRelayState](schemaV1, Some("1.0"))
+  val (decomposerV1, extractorV1) = serializationV[EventRelayState](schemaV1, Some("1.0".v))
   implicit val decomposer = decomposerV1
   implicit val extractor = extractorV1 <+> extractorPreV
 }
@@ -110,7 +110,7 @@ object YggCheckpoint {
   val schemaV1 = "offset" :: "messageClock" :: HNil
 
   val extractorPreV = extractorV[YggCheckpoint](schemaV1, None)
-  val (decomposerV1, extractorV1) = serializationV[YggCheckpoint](schemaV1, Some("1.0"))
+  val (decomposerV1, extractorV1) = serializationV[YggCheckpoint](schemaV1, Some("1.0".v))
 
   implicit val decomposer = decomposerV1
   implicit val extractor = extractorV1 <+> extractorPreV

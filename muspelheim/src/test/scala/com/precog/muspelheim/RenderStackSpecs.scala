@@ -4,7 +4,7 @@ package muspelheim
 import akka.dispatch.Future
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.daze._
 import com.precog.yggdrasil.table.ColumnarTableModule
 
