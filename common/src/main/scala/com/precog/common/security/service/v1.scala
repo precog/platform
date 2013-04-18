@@ -2,7 +2,6 @@ package com.precog.common
 package security
 package service
 
-import com.precog.common.json._
 import com.precog.common.accounts._
 import com.precog.common.security._
 
@@ -16,6 +15,7 @@ import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => 
 import blueeyes.json.serialization.JodaSerializationImplicits.InstantDecomposer
 import blueeyes.json.serialization.JodaSerializationImplicits.InstantExtractor
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
 
 import org.joda.time.DateTime
 import org.joda.time.Instant
