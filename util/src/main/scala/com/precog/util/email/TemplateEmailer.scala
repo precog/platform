@@ -64,7 +64,7 @@ abstract class TemplateEmailer(defaultParameters: Map[String, String], javaMailP
     }
 
     if (transformed.size > 1) {
-      val multi = new MimeMultipart
+      val multi = new MimeMultipart("alternative")
       transformed.foreach {
         case (content, mimetype) =>
           val bodyPart = new MimeBodyPart
