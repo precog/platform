@@ -25,7 +25,7 @@ now = datetime.now()
 logformat = re.compile('(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d).*Inserting \d+ rows, skipping \d+ rows at offset \d+ for /srv/shard/data/data/(\d{10})/.*')
 
 active = set()
-filtered = set(['0000000056', '0000000069'])
+filtered = set(['0000000056', '0000000069', '0000000070', '0000000071'])
 
 with open(sys.argv[1]) as input:
     for line in input:
