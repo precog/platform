@@ -26,7 +26,7 @@ import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.util.CPathUtils._
 import com.precog.common.Path
-import com.precog.common.json._
+
 import com.precog.util.IOUtils
 
 import org.specs2.mutable._

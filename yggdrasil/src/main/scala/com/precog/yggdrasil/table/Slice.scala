@@ -28,8 +28,6 @@ import com.precog.bytecode._
 import com.precog.util._
 import com.precog.yggdrasil.util._
 
-import com.precog.common.json._
-
 import TransSpecModule._
 
 import blueeyes.json._

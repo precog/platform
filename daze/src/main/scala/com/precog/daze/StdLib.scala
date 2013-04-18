@@ -30,8 +30,6 @@ import bytecode.Op1Like
 import bytecode.Op2Like
 import bytecode.ReductionLike
 
-import common.json._
-
 import com.precog.common._
 import yggdrasil._
 import yggdrasil.table._

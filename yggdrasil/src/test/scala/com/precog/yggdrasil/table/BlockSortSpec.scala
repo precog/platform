@@ -20,7 +20,7 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.json._
+
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.util._

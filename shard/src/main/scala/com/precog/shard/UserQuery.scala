@@ -21,7 +21,7 @@ package com.precog.shard
 
 import com.precog.yggdrasil.TableModule.{ DesiredSortOrder, SortAscending, SortDescending }
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.daze._
 
 import blueeyes.json._

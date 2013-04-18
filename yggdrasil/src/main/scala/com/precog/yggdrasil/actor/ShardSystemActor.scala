@@ -23,7 +23,6 @@ package actor
 import com.precog.common.{ CheckpointCoordination, YggCheckpoint, Path }
 import com.precog.common.security.PermissionsFinder
 import com.precog.common.ingest._
-import com.precog.common.json._
 import com.precog.util.FilesystemFileOps
 
 import akka.actor._
@@ -46,6 +45,8 @@ import scalaz.syntax.std.boolean._
 import scalaz.std.option._
 import scalaz.std.map._
 import scalaz.std.vector._
+
+// type ShardSystemActor
 
 trait ShardConfig extends BaseConfig {
   type IngestConfig

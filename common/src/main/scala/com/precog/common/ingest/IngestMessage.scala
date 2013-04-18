@@ -23,13 +23,13 @@ package ingest
 import accounts.AccountId
 import security._
 import jobs.JobId
-import json._
 
 import blueeyes.json.{ JValue, JParser }
 import blueeyes.json.serialization.{ Extractor, Decomposer }
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
 import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor, InstantDecomposer}
 
 import java.nio.ByteBuffer
@@ -75,7 +75,7 @@ object EventId {
 
   val schemaV1 = "producerId" :: "sequenceId" :: HNil
 
-  implicit val (decomposerV1, extractorV1) = serializationV[EventId](schemaV1, Some("1.0"))
+  implicit val (decomposerV1, extractorV1) = serializationV[EventId](schemaV1, Some("1.0".v))
 
   def fromLong(id: Long): EventId = EventId(producerId(id), sequenceId(id))
 
@@ -90,7 +90,7 @@ object IngestRecord {
 
   val schemaV1 = "eventId" :: "jvalue" :: HNil
 
-  implicit val (decomposerV1, extractorV1) = serializationV[IngestRecord](schemaV1, Some("1.0"))
+  implicit val (decomposerV1, extractorV1) = serializationV[IngestRecord](schemaV1, Some("1.0".v))
 }
 
 /**
@@ -117,9 +117,9 @@ object IngestMessage {
   val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
-  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0".v))
   val extractorV1: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
-    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.0"))
+    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.0".v))
     override def validated(jv: JValue) = extractor.validated(jv).map(\/.right(_))
   }
 
@@ -156,8 +156,8 @@ object ArchiveMessage {
 
   val schemaV1 = "apiKey" :: "path" :: "jobId" :: "eventId" :: "timestamp" :: HNil
 
-  val decomposerV1: Decomposer[ArchiveMessage] = decomposerV[ArchiveMessage](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[ArchiveMessage] = extractorV[ArchiveMessage](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[ArchiveMessage] = decomposerV[ArchiveMessage](schemaV1, Some("1.0".v))
+  val extractorV1: Extractor[ArchiveMessage] = extractorV[ArchiveMessage](schemaV1, Some("1.0".v))
   val extractorV0: Extractor[ArchiveMessage] = new Extractor[ArchiveMessage] {
     override def validated(obj: JValue): Validation[Error, ArchiveMessage] = {
       (obj.validated[Int]("producerId") |@|

@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.util._
 

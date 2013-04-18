@@ -28,7 +28,6 @@ import org.joda.time.format.DateTimeFormat
 import java.io._
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.util._
 
 private[niflheim] object RawLoader {

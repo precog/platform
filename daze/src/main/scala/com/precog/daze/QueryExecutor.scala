@@ -22,7 +22,7 @@ package daze
 
 import com.precog.yggdrasil.TableModule
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 
 import blueeyes.json._

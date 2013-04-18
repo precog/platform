@@ -21,7 +21,7 @@ package com.precog.shard
 
 import com.precog.common._
 import com.precog.common.jobs._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._

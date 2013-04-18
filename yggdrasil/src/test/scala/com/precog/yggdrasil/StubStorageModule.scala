@@ -28,7 +28,7 @@ import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.util._
-import com.precog.common.json._
+
 import com.precog.util._
 
 import akka.actor.ActorSystem

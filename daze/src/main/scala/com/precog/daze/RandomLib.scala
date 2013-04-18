@@ -28,7 +28,7 @@ import TransSpecModule._
 
 import com.precog.util.{BitSet, BitSetUtil}
 import com.precog.util.BitSetUtil.Implicits._
-import com.precog.common.json._
+
 
 import scalaz._
 import scalaz.std.anyVal._

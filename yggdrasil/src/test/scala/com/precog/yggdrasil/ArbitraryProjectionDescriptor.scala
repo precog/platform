@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 
 import com.precog.common._
 import com.precog.common.util._
-import com.precog.common.json._
+
 import blueeyes.json.JPath
 
 import scala.collection.immutable.ListMap

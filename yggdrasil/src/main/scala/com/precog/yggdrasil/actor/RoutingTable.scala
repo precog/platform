@@ -26,7 +26,6 @@ import util.CPathUtils
 import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
-import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.yggdrasil.nihdb._
 

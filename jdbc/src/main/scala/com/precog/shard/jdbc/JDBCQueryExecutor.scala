@@ -26,7 +26,7 @@ import DefaultSerialization._
 
 import com.precog.common._
 import com.precog.common.jobs._
-import com.precog.common.json._
+
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.daze._

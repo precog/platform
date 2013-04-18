@@ -27,7 +27,7 @@ import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.util._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.util.{IOUtils, IdGen, Identifier}
 import com.precog.bytecode._

@@ -25,7 +25,6 @@ import org.joda.time.DateTime
 import java.io._
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.util._
 
 object RawHandler {

@@ -22,7 +22,6 @@ package com.precog.niflheim
 import com.precog.common._
 import com.precog.common.accounts.AccountId
 import com.precog.common.ingest.EventId
-import com.precog.common.json._
 import com.precog.common.security.Authorities
 import com.precog.util._
 

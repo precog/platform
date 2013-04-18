@@ -21,7 +21,6 @@ package com.precog.common
 package security
 
 import accounts.AccountId
-import json._
 
 import org.joda.time.Instant
 import org.joda.time.DateTime
@@ -33,6 +32,7 @@ import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
 import blueeyes.json.serialization.JodaSerializationImplicits.{ InstantExtractor, InstantDecomposer }
+import blueeyes.json.serialization.Versioned._
 
 import shapeless._
 
@@ -75,8 +75,8 @@ object Grant extends Logging {
 
   val schemaV1 =     "grantId" :: "name" :: "description" :: ("issuerKey" ||| "(undefined)") :: "parentIds" :: "permissions" :: ("createdAt" ||| new Instant(0L)) :: "expirationDate" :: HNil
   
-  val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0"))
-  val extractorV2: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[Grant] = decomposerV[Grant](schemaV1, Some("1.0".v))
+  val extractorV2: Extractor[Grant] = extractorV[Grant](schemaV1, Some("1.0".v))
   val extractorV1: Extractor[Grant] = extractorV[Grant](schemaV1, None)
 
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")

@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
-import com.precog.common.json._
 
 import blueeyes.json._
 import org.joda.time.DateTime

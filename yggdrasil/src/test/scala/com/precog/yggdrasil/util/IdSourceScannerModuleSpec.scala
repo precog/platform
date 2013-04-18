@@ -23,7 +23,7 @@ package util
 import com.precog.common._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.table._
-import com.precog.common.json._
+
 
 import org.specs2.mutable._
 
