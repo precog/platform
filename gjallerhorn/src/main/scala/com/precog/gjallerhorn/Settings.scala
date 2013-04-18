@@ -101,6 +101,7 @@ object Settings {
       authPath = Some("apikeys"),
       ingestPath = Some("ingest"),
       shardPath = Some("meta"),
+      jobsPath = Some("jobs/v1"),
       secure = Some(false))
     
     val ps = lines.foldLeft(defaults) { (ps, s) =>
