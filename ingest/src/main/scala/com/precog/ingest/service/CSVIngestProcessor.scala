@@ -97,8 +97,12 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
   }
 
   @tailrec final def readBatch(reader: CSVReader, batch: Vector[Array[String]]): Vector[Array[String]] = {
-    val nextRow = reader.readNext()
-    if (nextRow == null || batch.size >= batchSize) batch else readBatch(reader, batch :+ nextRow)
+    if (batch.size >= batchSize) {
+      batch 
+    } else {
+      val nextRow = reader.readNext()
+      if (nextRow == null) batch else readBatch(reader, batch :+ nextRow)
+    }
   }
 
   /**

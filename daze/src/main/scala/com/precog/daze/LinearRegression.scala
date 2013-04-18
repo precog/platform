@@ -180,10 +180,16 @@ trait LinearRegressionLibModule[M[+_]]
           else values.suml(betaMonoid)
         }
 
-        val xs = arrays map { _ map { arr => 1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1)) } }
-        val y0 = arrays map { _ map { _.last } }
+        val xs = arrays collect { case mx if !mx.isEmpty =>
+          mx collect { case arr if !arr.isEmpty => 
+            1.0 +: (java.util.Arrays.copyOf(arr, arr.length - 1))
+          }
+        }
+        val y0 = arrays collect { case mx if !mx.isEmpty =>
+          mx collect { case arr if !arr.isEmpty => arr.last }
+        }
 
-        (xs, y0)
+        (xs map { _.toArray }, y0 map { _.toArray })
       }
 
       def coefficientReducer: Reducer[CoeffAcc] = new Reducer[CoeffAcc] {
@@ -200,7 +206,7 @@ trait LinearRegressionLibModule[M[+_]]
 
           val (xs, y0) = makeArrays(features, range)
 
-          val matrixX0 = xs map { case arr => new Matrix(arr) }
+          val matrixX0 = xs map { arr => new Matrix(arr) }
 
           // FIXME ultimately we do not want to throw an IllegalArgumentException here
           // once the framework is in place, we will return the empty set and issue a warning to the user

@@ -22,6 +22,7 @@ package accounts
 
 import com.precog.common.security.APIKey
 
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Versioned._
@@ -41,17 +42,18 @@ case class AccountDetails(
   apiKey: APIKey,
   rootPath: Path,
   plan: AccountPlan,
-  lastPasswordChangeTime: Option[DateTime] = None)
+  lastPasswordChangeTime: Option[DateTime] = None,
+  profile: Option[JValue] = None)
 
 object AccountDetails {
   def from(account: Account): AccountDetails = {
     import account._
-    AccountDetails(accountId, email, accountCreationDate, apiKey, rootPath, plan, lastPasswordChangeTime)
+    AccountDetails(accountId, email, accountCreationDate, apiKey, rootPath, plan, lastPasswordChangeTime, profile)
   }
 
   implicit val accountDetailsIso = Iso.hlist(AccountDetails.apply _, AccountDetails.unapply _)
 
-  val schema = "accountId" :: "email" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "lastPasswordChangeTime" :: HNil
+  val schema = "accountId" :: "email" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "lastPasswordChangeTime" :: "profile" :: HNil
 
   implicit val accountDetailsDecomposer = decomposerV[AccountDetails](schema, None)
   implicit val accountDetailsExtractor = extractorV[AccountDetails](schema, None)

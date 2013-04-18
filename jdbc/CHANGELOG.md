@@ -1,6 +1,21 @@
 Precog for PostgreSQL ChangeLog
 ===============================
 
+Version 1.2.0
+-------------
+* Numerous bug fixes and performance improvements
+* A small change to the configuration file format:
+
+The lines
+
+        query {
+          v1 {
+
+need to change to
+
+        analytics {
+          v2 {
+
 Version 1.1.0
 -------------
 * Added support for hstore and json columns
