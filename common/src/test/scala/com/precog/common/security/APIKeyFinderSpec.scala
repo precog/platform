@@ -91,7 +91,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       } yield (key0.apiKey, key1.apiKey, grant.grantId, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
-        keyFinder.addGrant(key0, key1, grantId).copoint must beTrue
+        keyFinder.addGrant(key1, grantId).copoint must beTrue
         keyFinder.hasCapability(key1, permissions, None).copoint must beTrue
       }
     }
@@ -144,7 +144,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       } yield (key0.apiKey, key1.apiKey, grant.grantId, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
-        keyFinder.addGrant(key0, key1, grantId).copoint must beTrue
+        keyFinder.addGrant(key1, grantId).copoint must beTrue
         keyFinder.hasCapability(key1, permissions, Some(beforeExpiration)).copoint must beTrue
         keyFinder.hasCapability(key1, permissions, Some(afterExpiration)).copoint must beFalse
       }

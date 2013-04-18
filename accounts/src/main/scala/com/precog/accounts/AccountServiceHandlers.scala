@@ -251,8 +251,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     val metadata = DescriptionMetadata("Returns a set of account IDs that correspond to the specified query parameters.")
   }
 
-  object CreateAccountGrantHandler extends CustomHttpService[Future[JValue], Account =>  Future[HttpResponse[JValue]]] {
-    val service: HttpRequest[Future[JValue]] => Validation[NotServed, Account => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => Success { (auth: Account) =>
+  object CreateAccountGrantHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
+    val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => Success { 
         // cannot use withAccountAdmin here because of the ability to add grants to others' accounts.
         request.parameters.get('accountId) map { accountId =>
           accountManager.findAccountById(accountId) flatMap {
@@ -261,13 +261,13 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                 futureContent flatMap { jvalue =>
                   jvalue.validated[GrantId]("grantId") match {
                     case Success(grantId) =>
-                      apiKeyFinder.addGrant(auth.apiKey, account.apiKey, grantId) map {
+                      apiKeyFinder.addGrant(account.apiKey, grantId) map {
                         case true =>
-                          logger.info("Grant created by %s (%s): %s".format(auth.accountId, remoteIpFrom(request), grantId))
+                          logger.info("Grant added to %s (from %s): %s".format(accountId, remoteIpFrom(request), grantId))
                           HttpResponse(Created)
 
                         case false =>
-                          logger.error("Grant creation by %s (%s) failed for %s".format(auth.accountId, remoteIpFrom(request), grantId))
+                          logger.error("Grant added to %s (from %s) failed for %s".format(accountId, remoteIpFrom(request), grantId))
                           HttpResponse(InternalServerError, content = Some(JString("Grant creation failed; please contact support.")))
                       }
 

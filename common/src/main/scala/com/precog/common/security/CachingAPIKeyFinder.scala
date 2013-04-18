@@ -70,6 +70,6 @@ class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPI
   def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = 
     delegate.newAPIKey(accountId, path, keyName, keyDesc)
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] = 
-    delegate.addGrant(authKey, accountKey, grantId)
+  def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean] = 
+    delegate.addGrant(accountKey, grantId)
 }

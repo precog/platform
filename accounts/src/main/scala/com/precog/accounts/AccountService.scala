@@ -152,6 +152,9 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                         get(SearchAccountsHandler)
                       }
                     } ~
+                    path("'accountId/grants/") {
+                      post(CreateAccountGrantHandler)
+                    } ~
                     auth(handlers.accountManager) {
                       get(ListAccountsHandler) ~
                       path("'accountId") {
@@ -159,9 +162,6 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                         delete(DeleteAccountHandler) ~
                         path("/password") {
                           put(PutAccountPasswordHandler)
-                        } ~
-                        path("/grants/") {
-                          post(CreateAccountGrantHandler)
                         } ~
                         path("/plan") {
                           get(GetAccountPlanHandler) ~

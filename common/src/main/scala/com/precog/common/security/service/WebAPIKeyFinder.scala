@@ -161,11 +161,11 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
     }
   }
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): Response[Boolean] = {
+  def addGrant(accountKey: APIKey, grantId: GrantId): Response[Boolean] = {
     val requestBody = jobject(JField("grantId", JString(grantId)))
 
     withJsonClient { client =>
-      eitherT(client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
+      eitherT(client.post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => right(true)
         case _ => right(false)
       })
