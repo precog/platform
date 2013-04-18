@@ -56,7 +56,7 @@ class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extend
     throw new UnsupportedOperationException("API key management unavailable for standalone system.")
   }
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] = {
+  def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean] = {
     throw new UnsupportedOperationException("Grant management unavailable for standalone system.")
   }
 
