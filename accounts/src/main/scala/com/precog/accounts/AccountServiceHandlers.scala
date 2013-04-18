@@ -224,7 +224,8 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
                 } yield accountResponse
 
               case _ =>
-                val errmsg = "Missing email and/or password fiedlds from request body."
+                val errmsg = "Missing email and/or password fields from request body."
+                logger.warn(errmsg + ": " + jv)
                 Future(HttpResponse[JValue](HttpStatus(BadRequest, errmsg), content = Some(JString(errmsg))))
             }
           }
