@@ -22,7 +22,7 @@ class Service(object):
 
     def __init__(self, d):
         self.basedir = d.get('basedir')
-        self.accountid = d.get('id')
+        self.account = d.get('id')
         self.apikey = d.get('token')
 
         self.accountsport = d.get('accounts')
