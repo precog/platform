@@ -186,6 +186,10 @@ class NIHDBProjectionsActor(
         fileOps.moveDir(current, timeStampedArchive).map { _ =>
           logger.info("Completed archive on %s (%s => %s)".format(path, current, timeStampedArchive)); PrecogUnit
         }
+      }.flatMap { _ =>
+        logger.info("Cleaning directories under " + current)
+        // Now we need to clean up any empty dirs between here and the root
+        IOUtils.recursiveDeleteEmptyDirs(current.getParentFile, activeDir)
       }
     } else {
       IO { logger.warn("Base dir " + path + " doesn't exist, skipping archive"); PrecogUnit }
