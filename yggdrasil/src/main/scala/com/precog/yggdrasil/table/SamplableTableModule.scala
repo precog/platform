@@ -87,6 +87,9 @@ trait SamplableColumnarTableModule[M[+_]]
                 // `k` is a number between 0 and number of rows we've seen
                 if (!defined(i)) {
                   loop(i + 1, len)
+                } else if (len < sampleSize) {
+                  inserter.insert(src=i, dest=len)
+                  loop(i + 1, len + 1)
                 } else {
                   val k = rng.nextInt(len + 1)
                   if (k < sampleSize) {
@@ -135,7 +138,6 @@ trait SamplableColumnarTableModule[M[+_]]
       while (k < ops.length) {
         val col = ops(k)
         col.insert(src, dest)
-
         k += 1
       }
     }
