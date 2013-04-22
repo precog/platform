@@ -47,7 +47,6 @@ import scalaz.syntax.std.option._
 import shapeless._
 
 import java.io._
-import java.nio.file.Files
 import java.util.UUID
 
 import scala.collection.mutable
@@ -256,8 +255,8 @@ class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Mona
 
   def remove(file: String): M[Unit] = M.point {
     val target = resultFile(file)
-    if (target.exists) {
-      Files.delete(target.toPath)
+    if (target.exists && ! target.delete) {
+      throw new IOException("Failed to delete job file: " + target.getCanonicalPath)
     }
   }
 }
