@@ -50,7 +50,7 @@ sealed trait EventMessage {
   def path: Path
   def jobId: Option[JobId]
   def timestamp: Instant
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A
 }
 
 object EventMessage {
@@ -98,7 +98,7 @@ object IngestRecord {
  * accept records for processing in the local queue.
  */
 case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
   def split: List[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
@@ -147,7 +147,7 @@ object IngestMessage {
 }
 
 case class ArchiveMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = am(this)
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = am(this)
 }
 
 object ArchiveMessage {
@@ -171,3 +171,45 @@ object ArchiveMessage {
   implicit val Decomposer: Decomposer[ArchiveMessage] = decomposerV1
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
+
+case class StoreFileMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, content: String, encoding: ContentEncoding, timestamp: Instant) extends EventMessage {
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
+}
+
+object StoreFileMessage {
+  implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
+
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| UncompressedEncoding) :: "timestamp" :: HNil
+
+  val decomposerV1: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0"))
+
+  val extractorV1: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0"))
+}
+
+trait ContentEncoding {
+  def id: String
+  def compress(raw: String): String
+  def uncompress(compressed: String): String
+}
+
+object ContentEncoding {
+  val decomposerV1: Decomposer[ContentEncoding] = versioned(new Decomposer[ContentEncoding] {
+    def decompose(ce: ContentEncoding) = JObject("encoding" -> ce.id.serialize)
+  }, Some("1.0"))
+
+  val extractorV1: Extractor[ContentEncoding] = versioned(new Extractor[ContentEncoding] {
+    override def validated(obj: JValue): Validation[Error, ContentEncoding] = {
+      obj.validated[String]("encoding").flatMap {
+        case "uncompressed" => Success(UncompressedEncoding)
+        case invalid => Failure(Invalid("Unknown encoding " + invalid))
+      }
+    }
+  }, Some("1.0"))
+}
+
+object UncompressedEncoding extends ContentEncoding {
+  val id = "uncompressed"
+  def compress(raw: String) = raw
+  def uncompress(compressed: String) = compressed
+}
+
