@@ -156,7 +156,7 @@ trait RandomForestSpecs extends EvalStackSpecs {
         data0 := //iris
         data := data0 with { rand: observe(data0, std::random::uniform(42)) } 
 
-        pt := 0.8
+        pt := 0.9
 
         trainingData0 := data where data.rand <= pt
         trainingData := {predictors: trainingData0.features, dependent: trainingData0.species}
@@ -179,7 +179,7 @@ trait RandomForestSpecs extends EvalStackSpecs {
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) =>
-          println("pred rate classification: " + d.toDouble)
+          // println("pred rate classification: " + d.toDouble)
           d.toDouble must be_>(0.5)
         }
       }
@@ -223,8 +223,8 @@ trait RandomForestSpecs extends EvalStackSpecs {
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) => 
-          println("r^2 regression: " + d)
-          d.toDouble must be_>(0.2)
+          // println("r^2 regression: " + d)
+          d.toDouble must be_>(0.4)
         }
       }
     }

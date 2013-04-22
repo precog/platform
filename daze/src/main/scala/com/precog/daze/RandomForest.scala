@@ -41,6 +41,7 @@ import scalaz.std.list._
 
 import scala.annotation.tailrec
 import scala.util.Random.nextInt
+import scala.collection.JavaConverters._
 
 
 private object MissingSpireOps {
@@ -79,7 +80,7 @@ case class Leaf[/*@specialized(Double) */A](value: A, error: Double) extends Dec
 
 case class TreeMakerOptions(features: Int, featuresSampled: Int, minSplitSize: Int) {
   // Probability that we'll see a feature at least once if we sample features maxTries times.
-  private val q = 0.9 
+  private val q = 0.95
   private val p = featuresSampled / features.toDouble
 
   val maxTries = math.ceil(math.log(1 - q) / math.log(p))
@@ -88,10 +89,11 @@ case class TreeMakerOptions(features: Int, featuresSampled: Int, minSplitSize: I
 trait TreeMaker[/*@specialized(Double) */A] {
 
   protected trait RegionLike {
-    def +(k: A): Region
-    def -(k: A): Region
+    def +=(k: A): Unit
+    def -=(k: A): Unit
     def error: Double
     def value: A
+    def copy(): Region
   }
 
   protected trait RegionCompanion {
@@ -117,7 +119,7 @@ trait TreeMaker[/*@specialized(Double) */A] {
     }
 
     def region(members: Array[Int]): Region = {
-      var region = Region.empty
+      val region = Region.empty
       var i = 0
       while (i < members.length) {
         region += dependent(members(i))
@@ -128,8 +130,38 @@ trait TreeMaker[/*@specialized(Double) */A] {
 
     // case class Subset(left: Int, right: Int)
 
+    val bitset: BitSet = BitSetUtil.create()
+
+    // This creates a new `order` with only members from `split` retained.
+    // The order of the elements in the returned array will be the same as they
+    // were in `order`.
+    def splitOrder(split: Array[Int], order: Array[Int]): Array[Int] = {
+      var i = 0
+      while (i < split.length) {
+        bitset.set(split(i))
+        i += 1
+      }
+
+      val newOrder = new Array[Int](split.length)
+      var j = 0
+      i = 0
+      while (i < newOrder.length && j < order.length) {
+        val m = order(j)
+        if (bitset(m)) {
+          bitset.clear(m)
+          newOrder(i) = m
+          i += 1
+        }
+        j += 1
+      }
+
+      newOrder
+    }
+
     // members are the indices into the dependent & independent arrays
-    def growTree(members: Array[Int], tries: Int = 0): DecisionTree[A] = {
+    def growTree(orders: Array[Array[Int]], tries: Int = 0): DecisionTree[A] = {
+      val members = orders(0)
+
       if (members.size < opts.minSplitSize || tries > opts.maxTries) {
         val r = region(members)
         Leaf(r.value, r.error)
@@ -143,16 +175,16 @@ trait TreeMaker[/*@specialized(Double) */A] {
         var f = 0
         while (f < vars.length) {
           var leftRegion = Region.empty
-          var rightRegion = region0
+          var rightRegion = region0.copy()
           val axis = vars(f)
-          members.qsortBy(independent(_)(axis))
+          val order = orders(axis)
 
           var j = 0
-          while (j < members.length - 1) {
-            leftRegion += dependent(j)
-            rightRegion -= dependent(j)
+          while (j < order.length - 1) {
+            leftRegion += dependent(order(j))
+            rightRegion -= dependent(order(j))
             val error = (leftRegion.error * (j + 1) +
-                         rightRegion.error * (members.length - j - 1)) / members.length
+                         rightRegion.error * (order.length - j - 1)) / order.length
             if (error < minError) {
               minError = error
               minVar = axis
@@ -166,27 +198,43 @@ trait TreeMaker[/*@specialized(Double) */A] {
         }
 
         if (minIdx < 0) {
-          growTree(members, tries + 1)
+          growTree(orders, tries + 1)
         } else {
-          // We could do this in a single linear scan, but this is an example.
+          val featureOrder = orders(minVar)
+          val leftSplit = featureOrder take (minIdx + 1)
+          val rightSplit = featureOrder drop (minIdx + 1)
 
-          if (minVar != vars(vars.length - 1)) { // Try to avoid a sort if we can.
-            members.qsortBy(independent(_)(minVar))
+          var leftOrders = new Array[Array[Int]](orders.length)
+          var rightOrders = new Array[Array[Int]](orders.length)
+
+          leftOrders(minVar) = leftSplit
+          rightOrders(minVar) = rightSplit
+
+          var i = 0
+          while (i < orders.length) {
+            if (i != minVar) {
+              leftOrders(i) = splitOrder(leftSplit, orders(i))
+              rightOrders(i) = splitOrder(rightSplit, orders(i))
+            }
+            i += 1
           }
 
           // We split the region directly between the left's furthest right point
           // and the right's furthest left point.
 
-          val boundary = (independent(members(minIdx))(minVar) +
-                          independent(members(minIdx + 1))(minVar)) / 2
-          val left = members take (minIdx + 1)
-          val right = members drop (minIdx + 1)
-          Split(minVar, boundary, growTree(left), growTree(right), minError)
+          val boundary = (independent(featureOrder(minIdx))(minVar) +
+                          independent(featureOrder(minIdx + 1))(minVar)) / 2
+          Split(minVar, boundary, growTree(leftOrders), growTree(rightOrders), minError)
         }
       }
     }
 
-    growTree((0 until dependent.length).toArray)
+    val orders = (0 until opts.features).map { i =>
+      val order = (0 until dependent.length).toArray
+      order.qsortBy(independent(_)(i))
+      order
+    }.toArray
+    growTree(orders)
   }
 }
 
@@ -194,11 +242,23 @@ class RegressionTreeMaker extends TreeMaker[Double] {
 
   // TODO: Use incremental mean.
 
-  protected final class SquaredError(sum: Double, sumSq: Double, count: Int) extends RegionLike {
-    def +(k: Double) = new SquaredError(sum + k, sumSq + (k * k), count + 1)
-    def -(k: Double) = new SquaredError(sum - k, sumSq - (k * k), count - 1)
+  protected final class SquaredError(var sum: Double, var sumSq: Double, var count: Int) extends RegionLike {
+    def +=(k: Double) {
+      sum += k
+      sumSq += (k * k)
+      count += 1
+    }
+
+    def -=(k: Double) {
+      sum -= k
+      sumSq -= (k * k)
+      count -= 1
+    }
+
     def error: Double = sumSq / count - math.pow((sum / count), 2)  // Error = variance.
     def value: Double = sum / count
+
+    def copy(): SquaredError = new SquaredError(sum, sumSq, count)
   }
 
   protected type Region = SquaredError
@@ -210,22 +270,44 @@ class RegressionTreeMaker extends TreeMaker[Double] {
 
 class ClassificationTreeMaker[K] extends TreeMaker[K] {
 
-  protected final class GiniIndex(m: Map[K, Int]) extends RegionLike {
-    def +(k: K) = new GiniIndex(m + (k -> (m.getOrElse(k, 0) + 1)))
-    def -(k: K) = new GiniIndex(m + (k -> (m.getOrElse(k, 0) - 1)))
-    def error: Double = {
-      val n = m.foldLeft(0)(_ + _._2).toDouble
-      m.foldLeft(0D) { case (gidx, (_, cnt)) =>
-        gidx + (cnt.toDouble / n)
+  protected final class GiniIndex(m: java.util.HashMap[K, Int], var n: Int) extends RegionLike {
+    def +=(k: K) {
+      val cnt = if (m containsKey k) m.get(k) + 1 else 1
+      m.put(k, cnt)
+      n += 1
+    }
+
+    def -=(k: K) {
+      if (m containsKey k) {
+        val cnt = m.get(k) - 1
+        if (cnt == 0) {
+          m.remove(k)
+        } else {
+          m.put(k, cnt)
+        }
+        n -= 1
       }
     }
-    def value: K = m.maxBy(_._2)._1
+
+    def error: Double = {
+      val iter = m.values().iterator()
+      var sumSqP = 0D
+      while (iter.hasNext) {
+        val p = iter.next().toDouble / n
+        sumSqP += p * p
+      }
+      1D - sumSqP
+    }
+
+    def value: K = m.asScala.maxBy(_._2)._1
+
+    def copy(): GiniIndex = new GiniIndex(new java.util.HashMap(m), n)
   }
 
   protected type Region = GiniIndex
 
   object Region extends RegionCompanion {
-    def empty = new GiniIndex(Map.empty)
+    def empty = new GiniIndex(new java.util.HashMap[K, Int](), 0)
   }
 }
 
@@ -353,7 +435,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
         val featuresSampled = math.max(2, math.sqrt(dimension).toInt)
 
         val opts = TreeMakerOptions(dimension, featuresSampled, 3)
-        
+
         treeMaker.makeTreeInitial(dependent, independent, opts)
       }
 
@@ -442,7 +524,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
       val numChunks = 10
       val varianceThreshold = 0.01
       val sampleSize = 1000
-      val maxForestSize = 5000
+      val maxForestSize = 2000
 
       val independentSpec = trans.DerefObjectStatic(TransSpec1.Id, CPathField(independent))
       val dependentSpec = trans.DerefObjectStatic(TransSpec1.Id, CPathField(dependent))
