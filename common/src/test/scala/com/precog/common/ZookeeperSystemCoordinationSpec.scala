@@ -41,7 +41,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val result = sc.registerRelayAgent("test_agent", 10000)
 
       result must beLike {
-        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok
       }
     }
 
@@ -53,9 +53,9 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val result = sc.renewEventRelayState("test_agent", 0L, 0, 10000)
 
       result must beLike {
-        case Success(EventRelayState(0, 10001, IdSequenceBlock(0, 10001, 20000))) => ok 
+        case Success(EventRelayState(0, 10001, IdSequenceBlock(0, 10001, 20000))) => ok
       }
-    } 
+    }
 
     "save and restore relay agent state" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
@@ -66,22 +66,22 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val result1 = sc1.saveEventRelayState("test_agent", lastState)
 
       result1 must beLike {
-        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok
       }
 
       sc1.close
-      
+
       val client2 = factory()
       val sc2 = newSystemCoordination(client2)
 
       val result2 = sc2.registerRelayAgent("test_agent", 10000)
-      
+
       sc2.close
 
       result2 must beLike {
-        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok
       }
-    } 
+    }
 
     "restore relay agent state" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
@@ -92,38 +92,38 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       sc1.unregisterRelayAgent("test_agent", lastState)
 
       sc1.close()
-      
+
       val client2 = factory()
       val sc2 = newSystemCoordination(client2)
 
       val result = sc2.registerRelayAgent("test_agent", 10000)
 
       result must beLike {
-        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok
       }
-    } 
+    }
 
     "relay agent registration retries in case of stale registration" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
 
       val result1 = sc1.registerRelayAgent("test_agent", 10000)
-      
+
       result1 must beLike {
-        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok
       }
 
       sc1.close()
-      
+
       val client2 = factory()
       val sc2 = newSystemCoordination(client2)
 
       val result2 = sc2.registerRelayAgent("test_agent", 10000)
 
       result2 must beLike {
-        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok 
+        case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok
       }
-    } 
+    }
 
     "relay agent registration fails after reasonable attempt to detect stale registration" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
@@ -131,7 +131,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
 
       val result1 = sc1.registerRelayAgent("test_agent", 10000)
       result1 must beLike {
-        case Success(_) => ok 
+        case Success(_) => ok
       }
 
       val client2 = factory()
@@ -139,9 +139,9 @@ class ZookeeperSystemCoordinationSpec extends Specification {
 
       val result2 = sc2.registerRelayAgent("test_agent", 10000)
       result2 must beLike {
-        case Failure(_) => ok 
+        case Failure(_) => ok
       }
-    } 
+    }
 
     "distinguish between normal and abnormal relay agent shutdown" in {
       todo
@@ -154,7 +154,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     "not load a missing checkpoint (checkpoints for new shards should be inserted manually via YggUtils)" in TestZookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
-      
+
       val checkpoints = sc.loadYggCheckpoint("shard")
 
       checkpoints must beLike {
@@ -165,24 +165,24 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     "persist checkpoints between sessions" in TestZookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
-      
+
       // TODO: This has a side effect via createPersistent if the path doesn't exist. Refactor.
       sc1.loadYggCheckpoint("shard")
 
       val clock = VectorClock.empty.update(1,10).update(2,20)
       val in = YggCheckpoint(123, clock)
       sc1.saveYggCheckpoint("shard", in)
-      
+
       sc1.close
 
       val client2 = factory()
       val sc2 = newSystemCoordination(client2)
 
       val result = sc2.loadYggCheckpoint("shard")
-      
+
       result must beLike {
-        case Some(Success(out)) => 
-          in must_== out 
+        case Some(Success(out)) =>
+          in must_== out
       }
     }
 
@@ -191,8 +191,8 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     }
   }
 
-  def newSystemCoordination(client: ZkClient) = new ZookeeperSystemCoordination(client, ServiceUID("test", "hostId", ""), true) 
-    
+  def newSystemCoordination(client: ZkClient) = new ZookeeperSystemCoordination(client, ServiceUID("test", "hostId", ""), true, None)
+
   type ClientFactory = () => ZkClient
 
   case class TestZookeeperClient(zkHosts: String = "127.0.0.1:2181") extends AroundOutside[ClientFactory] {
@@ -207,7 +207,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     private def zookeeperAvailable(): Boolean = {
       try {
         val client = factory()
-        var result = client != null 
+        var result = client != null
         client.close
         result
       } catch {
@@ -229,7 +229,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     }
 
     def around[T <% Result](t: =>T): Result = {
-      validatedFactory().map{ _ => 
+      validatedFactory().map{ _ =>
         try {
           t: Result
         } finally {
@@ -237,8 +237,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         }
       }.getOrElse(offline)
     }
-    
-    def outside: ClientFactory = factory 
+
+    def outside: ClientFactory = factory
   }
 }
-

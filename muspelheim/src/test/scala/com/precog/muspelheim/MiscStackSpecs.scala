@@ -27,6 +27,36 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "return count of empty set as 0 in body of solve" in {
+      val input = """
+        | data := new {a: "down", b: 13}
+        |
+        | solve 'b
+        |   xyz := data where data.b = 'b
+        |   count(xyz where xyz.a = "up")
+      """.stripMargin
+
+      val result = evalE(input)
+      result must haveSize(1)
+
+      result must haveAllElementsLike { 
+        case (ids, SDecimal(d)) =>
+          ids must haveSize(1)
+          d mustEqual(0)
+      }
+    }
+
+    "return count of empty set as 0 in body of solve" in {
+      val input = """
+        | data := new {a: "down", b: 13}
+        |
+        | solve 'b
+        |   count(data where data.b = 'b & data.a = "up")
+      """.stripMargin
+
+      evalE(input) must beEmpty
+    }
+
     "join arrays after a relate" in {
       val input = """
         medals' := //summer_games/london_medals
@@ -2407,7 +2437,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val results = eval(input)
       results must_== Set(SDecimal(4))
-      System.err.println(results)
     }
     
     "correctly filter the results of a non-trivial solve" in {
@@ -2657,6 +2686,20 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       eval(input) must not(beEmpty)
+    }
+    
+    "not explode on multiply-used solve" in {
+      val input = """
+        | travlex := //clicks
+        | 
+        | summarize(data, n) := solve data = 'qualifier
+        |   'qualifier + n
+        | 
+        | summarize(travlex, 1) union
+        | summarize(travlex, 2)
+        | """.stripMargin
+
+      eval(input) must not(throwA[Throwable])
     }
   }
 }

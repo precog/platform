@@ -99,7 +99,8 @@ class IngestStress(settings: Settings) extends Task(settings) {
 object IngestStress {
   def main(args: Array[String]) {
     try {
-      val settings = Settings.fromFile(new java.io.File(args.head))
+      val path = args.headOption.getOrElse("shard.out")
+      val settings = Settings.fromFile(new java.io.File(path))
       new IngestStress(settings)
     } finally {
       Http.shutdown()

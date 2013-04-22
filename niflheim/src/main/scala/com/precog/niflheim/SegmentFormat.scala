@@ -20,7 +20,6 @@
 package com.precog.niflheim
 
 import com.precog.util.PrecogUnit
-import com.precog.common.json._
 
 import java.io.{ File, IOException }
 import java.nio.channels.{ ReadableByteChannel, WritableByteChannel }

@@ -37,6 +37,7 @@ import Permission._
 class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extends APIKeyFinder[M] with Logging { self =>
   private val permissions = Set[Permission](
     ReadPermission(Path("/"), WrittenByAny),
+    WritePermission(Path("/"), WriteAs.any),
     DeletePermission(Path("/"), WrittenByAny)
   )
 
@@ -55,7 +56,7 @@ class StaticAPIKeyFinder[M[+_]](apiKey: APIKey)(implicit val M: Monad[M]) extend
     throw new UnsupportedOperationException("API key management unavailable for standalone system.")
   }
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): M[Boolean] = {
+  def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean] = {
     throw new UnsupportedOperationException("Grant management unavailable for standalone system.")
   }
 

@@ -22,8 +22,10 @@ package table
 
 import com.precog.common._
 import com.precog.bytecode.JType
-import com.precog.common.json._
+
 import com.precog.util._
+import com.precog.util.{BitSetUtil, BitSet, Loop}
+import com.precog.util.BitSetUtil.Implicits._
 
 import akka.actor.ActorSystem
 
@@ -32,12 +34,10 @@ import blueeyes.json._
 import scala.annotation.tailrec
 
 import scalaz._
+import scalaz.std.anyVal._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
-import scalaz.std.anyVal._
 
-import com.precog.util.{BitSetUtil, BitSet, Loop}
-import com.precog.util.BitSetUtil.Implicits._
 
 import TableModule._
 
@@ -46,40 +46,36 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
 
   def defaultSliceSize = 10
 
+  private def makeSlice(sampleData: Stream[JValue], sliceSize: Int): (Slice, Stream[JValue]) = {
+    @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+      from match {
+        case jv #:: xs =>
+          val refs = Slice.withIdsAndValues(jv, into, sliceIndex, sliceSize)
+          buildColArrays(xs, refs, sliceIndex + 1)
+        case _ =>
+          (into, sliceIndex)
+      }
+    }
+
+    val (prefix, suffix) = sampleData.splitAt(sliceSize)
+    val slice = new Slice {
+      val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
+    }
+
+    (slice, suffix)
+  }
+  
   // production-path code uses fromRValues, but all the tests use fromJson
   // this will need to be changed when our tests support non-json such as CDate and CPeriod
   def fromJson0(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
   
-    def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
-      val (prefix, suffix) = sampleData.splitAt(sliceSize)
-  
-      @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
-        from match {
-          case jv #:: xs =>
-            val refs = Table.withIdsAndValues(jv, into, sliceIndex, sliceSize)
-            buildColArrays(xs, refs, sliceIndex + 1)
-          case _ =>
-            (into, sliceIndex)
-        }
-      }
-  
-      // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-      // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-      // Slice#typed to fail unless it allows for vacuous success
-      val slice = new Slice {
-        val (columns, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
-      }
-  
-      (slice, suffix)
-    }
-    
     Table(
       StreamT.unfoldM(values) { events =>
         M.point {
           (!events.isEmpty) option {
-            makeSlice(events.toStream)
-          }
+            makeSlice(events.toStream, sliceSize)
+          } 
         }
       },
       ExactSize(values.length)

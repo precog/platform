@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -348,10 +347,6 @@ trait ColumnarTableModule[M[+_]]
         }
       }
     }
-
-    def withIdsAndValues(jv: JValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int, remapPath: Option[JPath => CPath] = None): Map[ColumnRef, ArrayColumn[_]] =
-      Slice.withIdsAndValues(jv, into, sliceIndex, sliceSize, remapPath) // TODO: refactor and remove this
-
 
     def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
       rv.flattenWithPath.foldLeft(into) {
@@ -1384,37 +1379,43 @@ trait ColumnarTableModule[M[+_]]
       }
 
       // Collects all possible schemas from some slices.
-      def collectSchemas(schemas: Set[JType], slices: StreamT[M, Slice]): M[Set[JType]] = slices.uncons flatMap {
-        case Some((slice, slices)) =>
+      def collectSchemas(schemas: Set[JType], slices: StreamT[M, Slice]): M[Set[JType]] = {
+        def buildMasks(cols: Array[Column], sliceSize: Int): List[Array[Int]] = {
           import java.util.Arrays.copyOf
+          val mask = RawBitSet.create(cols.length) 
 
-          val (refs0, cols0) = slice.columns.unzip
-          val cols: Array[Column] = cols0.toArray
-          val refs: List[(ColumnRef, Int)] = refs0.zipWithIndex.toList
+          @tailrec def build0(row: Int, masks: List[Array[Int]]): List[Array[Int]] = {
+            if (row < sliceSize) {
+              RawBitSet.clear(mask)
 
-          var masks: List[Array[Int]] = Nil
-          val mask: Array[Int] = RawBitSet.create(cols.length)
-          Loop.range(0, slice.size) { row =>
-            RawBitSet.clear(mask)
+              var j = 0
+              while (j < cols.length) {
+                if (cols(j) isDefinedAt row) RawBitSet.set(mask, j)
+                j += 1
+              }
 
-            var i = 0
-            while (i < cols.length) {
-              if (cols(i) isDefinedAt row)
-                RawBitSet.set(mask, i)
-              i += 1
-            }
-
-            if (!contains(masks, mask) && !isZero(mask)) {
-              masks = copyOf(mask, mask.length) :: masks
-            }
+              build0(row + 1, if (!contains(masks, mask) && !isZero(mask)) copyOf(mask, mask.length) :: masks else masks)
+            } else masks
           }
 
-          collectSchemas(schemas ++ (masks flatMap { schemaMask =>
-            mkSchema(refs collect { case (ref, i) if RawBitSet.get(schemaMask, i) => ref })
-          }), slices)
+          build0(0, Nil)
+        }
 
-        case None =>
-          M.point(schemas)
+        slices.uncons flatMap {
+          case Some((slice, slices)) =>
+            val (refs0, cols0) = slice.columns.unzip
+            
+            val masks = buildMasks(cols0.toArray, slice.size)
+            val refs: List[(ColumnRef, Int)] = refs0.zipWithIndex.toList
+            val next = masks flatMap { schemaMask =>
+              mkSchema(refs collect { case (ref, i) if RawBitSet.get(schemaMask, i) => ref })
+            }
+
+            collectSchemas(schemas ++ next, slices)
+
+          case None =>
+            M.point(schemas)
+        }
       }
 
       collectSchemas(Set.empty, slices)

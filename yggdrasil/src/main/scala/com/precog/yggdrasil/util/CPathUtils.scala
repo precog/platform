@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package util
 
 import com.precog.common._
-import com.precog.common.json._
 import blueeyes.json._
 
 import scala.collection.mutable

@@ -35,10 +35,11 @@ import blueeyes.bkka.Stoppable
 import blueeyes.core.data._
 import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
+import blueeyes.core.service.RestPathPattern._
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
 import blueeyes.util.Clock
-
+import blueeyes.json.JValue
 import DefaultBijections._
 import MimeTypes._
 import ByteChunk._
@@ -52,6 +53,7 @@ import scalaz._
 import scalaz.syntax.monad._
 
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
+import com.precog.common.Path
 
 case class EventServiceState(accessControl: APIKeyFinder[Future], ingestHandler: IngestServiceHandler, archiveHandler: ArchiveServiceHandler[ByteChunk], stop: Stoppable)
 
@@ -61,20 +63,22 @@ case class EventServiceDeps[M[+_]](
     eventStore: EventStore[M],
     jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ])
 
-trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with DecompressCombinators {
+trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators {
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
-  def configure(config: Configuration): (EventServiceDeps[Future], Stoppable)
+  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)
+
+  def eventOptionsResponse = CORSHeaders.apply[JValue, Future](M)
 
   val eventService = this.service("ingest", "2.0") {
-    requestLogging {
-      healthMonitor(defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
+    requestLogging { help("/docs/api") {
+      healthMonitor("/health", defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
           Future {
             import context._
 
-            val (deps, stoppable) = configure(config)
+            val (deps, stoppable) = configureEventService(config)
             val permissionsFinder = new PermissionsFinder(deps.apiKeyFinder, deps.accountFinder, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
 
             val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
@@ -90,21 +94,24 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           }
         } ->
         request { (state: EventServiceState) =>
-          decompress {
+          import CORSHeaderHandler.allowOrigin
+          allowOrigin("*", executionContext) {
             jsonp {
-              (jsonAPIKey(state.accessControl) {
-                dataPath("/fs") {
-                  post(state.ingestHandler) ~
-                  delete(state.archiveHandler)
-                } ~ //legacy handler
-                path("/(?<sync>a?sync)") {
+              produce(application / json) {
+                (jsonAPIKey(state.accessControl) {
                   dataPath("/fs") {
                     post(state.ingestHandler) ~
                     delete(state.archiveHandler)
+                  } ~ //legacy handler
+                  path("/(?<sync>a?sync)") {
+                    dataPath("/fs") {
+                      post(state.ingestHandler) ~
+                      delete(state.archiveHandler)
+                    }
                   }
+                }) map {
+                  _ map { _ map jvalueToChunk }
                 }
-              }) map {
-                _ map { _ map jvalueToChunk }
               }
             }
           }
@@ -113,6 +120,6 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           state.stop
         }
       }
-    }
+    }}
   }
 }

@@ -22,7 +22,7 @@ package service
 
 import com.precog.daze._
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.muspelheim._
 
@@ -50,7 +50,7 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
     val result: Future[Validation[(HttpStatusCode, NonEmptyList[String]), JObject]] = request.parameters.get('type).map(_.toLowerCase) match {
       case Some("size") =>
         metadataClient.size(apiKey, path) map { v =>
-          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JNum => JObject("size" -> a) } 
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JNum => JObject("size" -> a) }
         }
 
       case Some("children") =>
@@ -60,34 +60,37 @@ extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]
 
       case Some("structure") =>
         val cpath = request.parameters.get('property).map(CPath(_)).getOrElse(CPath.Identity)
-        metadataClient.structure(apiKey, path, cpath) map { v => 
-          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { o: JObject => JObject("structure" -> o) } 
+        metadataClient.structure(apiKey, path, cpath) map { v =>
+          {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { o: JObject => JObject("structure" -> o) }
         }
 
       case _ =>
-        (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map { 
+        (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map {
           case ((sizeV, childrenV), structureV) =>
-            {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: { 
-              (sizeV.toValidationNEL |@| childrenV.toValidationNEL |@| structureV.toValidationNEL) { (size, children, structure) =>
+            {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: {
+              (sizeV.toValidationNel |@| childrenV.toValidationNel |@| structureV.toValidationNel) { (size, children, structure) =>
                 JObject("size" -> size, "children" -> children, "structure" -> structure)
               }
             }
         }
     }
 
-    result map {
+    result.map {
       _ map { jobj =>
         HttpResponse[QueryResult](OK, content = Some(Left(jobj)))
-      } valueOr { 
+      } valueOr {
         case (code, errors) =>
           HttpResponse[QueryResult](code, content = Some(Left(errors.list.distinct.serialize)))
       }
+    }.map { resp =>
+      // Force proper content type here
+      import blueeyes.core.http.HttpHeaders._
+      import blueeyes.core.http.DispositionTypes._
+      import blueeyes.core.http.MimeTypes._
+
+      resp.copy(headers = resp.headers + `Content-Type`(application/json))
     }
   })
 
-  val metadata = Some(DescriptionMetadata(
-"""
-Browse the children of the given path. 
-"""
-  ))
+  val metadata = DescriptionMetadata("""Browse the children of the given path.""")
 }

@@ -20,11 +20,11 @@
 package com.precog.common
 
 import com.precog.util._
-import com.precog.common.json._
 
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Versioned._
 
 import org.joda.time.DateTime
 import org.joda.time.Period

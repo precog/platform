@@ -89,9 +89,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
       val rewritten = inlineNodeValue(
         optimizedDAG,
         megaReduce.get,
-        CNum(42),
-        Set.empty
-      )
+        CNum(42))
 
       val hasMegaReduce = rewritten.foldDown(false) {
         case m@MegaReduce(_, _) => true

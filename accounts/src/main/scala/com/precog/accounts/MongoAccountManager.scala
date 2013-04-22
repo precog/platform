@@ -21,7 +21,8 @@ package com.precog.accounts
 
 import com.precog.common.Path
 import com.precog.common.accounts._
-import com.precog.common.security._
+import com.precog.common.security.{TZDateTimeDecomposer => _, _}
+import com.precog.util.PrecogUnit
 
 import blueeyes._
 import blueeyes.bkka._
@@ -72,6 +73,9 @@ trait MongoAccountManagerSettings {
   def accounts: String
   def deletedAccounts: String
   def timeout: Timeout
+
+  def resetTokens: String
+  def resetTokenExpirationMinutes: Int
 }
 
 abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: MongoAccountManagerSettings)(implicit val M: Monad[Future])
@@ -86,10 +90,12 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
   database(ensureIndex("apiKey_index").on(".apiKey").in(settings.accounts))
   database(ensureIndex("accountId_index").on(".accountId").in(settings.accounts))
   database(ensureIndex("email_index").on(".email").in(settings.accounts))
+  // Ensure reset token lookup by token Id
+  database(ensureIndex("reset_token_index").on(".tokenId").in(settings.resetTokens))
 
   def newAccountId: Future[String]
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId] = None)(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId], profile: Option[JValue])(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
@@ -101,7 +107,7 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
           saltAndHashSHA256(password, salt), salt,
           creationDate,
           apiKey, path, plan,
-          parent)
+          parent, Some(creationDate), profile)
 
         database(insert(account0.serialize.asInstanceOf[JObject]).into(settings.accounts)) map {
           _ => account0
@@ -127,6 +133,30 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
       _.map(_.deserialize(extract)).toSeq
     }
 
+  def generateResetToken(account: Account): Future[ResetTokenId] =
+    generateResetToken(account, (new DateTime).plusMinutes(settings.resetTokenExpirationMinutes))
+
+  def generateResetToken(account: Account, expiration: DateTime): Future[ResetTokenId] = {
+    val tokenId = java.util.UUID.randomUUID.toString.replace("-","")
+
+    val token = ResetToken(tokenId, account.accountId, account.email, expiration)
+
+    logger.debug("Saving new reset token " + token)
+    database(insert(token.serialize.asInstanceOf[JObject]).into(settings.resetTokens)).map { _ =>
+      logger.debug("Save complete on reset token " + token)
+      tokenId
+    }
+  }
+
+  def markResetTokenUsed(tokenId: ResetTokenId): Future[PrecogUnit] = {
+    logger.debug("Marking reset token %s as used".format(tokenId))
+    database(update(settings.resetTokens).set("usedAt" set (new DateTime).serialize).where("tokenId" === tokenId)).map {
+      _ => logger.debug("Reset token %s marked as used".format(tokenId)); PrecogUnit
+    }
+  }
+
+  def findResetToken(accountId: AccountId, tokenId: ResetTokenId): Future[Option[ResetToken]] =
+    findOneMatching[ResetToken]("tokenId", tokenId, settings.resetTokens)
 
   def findAccountByAPIKey(apiKey: String) = findOneMatching[Account]("apiKey", apiKey, settings.accounts).map(_.map(_.accountId))
 

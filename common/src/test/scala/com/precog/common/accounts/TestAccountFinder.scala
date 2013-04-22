@@ -22,6 +22,8 @@ package accounts
 
 import security._
 
+import blueeyes.json._
+
 import org.joda.time.DateTime
 import scalaz._
 import scalaz.syntax.monad._
@@ -38,7 +40,7 @@ extends AccountFinder[M] {
 object TestAccounts {
   def newAccountId() = java.util.UUID.randomUUID.toString.toUpperCase
 
-  def newAccount[M[+_]: Monad](email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId])(f: (AccountId, Path) => M[APIKey]): M[Account] = {
+  def newAccount[M[+_]: Monad](email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId], profile: Option[JValue])(f: (AccountId, Path) => M[APIKey]): M[Account] = {
     for {
       accountId <- newAccountId().point[M]
       path = Path(accountId)
@@ -49,7 +51,7 @@ object TestAccounts {
         accountId, email,
         Account.saltAndHashSHA256(password, salt), salt,
         creationDate,
-        apiKey, path, plan)
+        apiKey, path, plan, None, None, profile)
     }
   }
 }

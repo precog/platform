@@ -22,7 +22,7 @@ import AssemblyKeys._
 name := "ratatoskr"
 
 libraryDependencies ++= Seq(
-  "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1"
+  "com.github.scopt"            %  "scopt_2.9.1"        % "2.1.0"
 )
 
 fork := true

@@ -58,8 +58,8 @@ extends DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Acco
     }
   }
 
-  val metadata =
-    Some(AboutMetadata(
-      ParameterMetadata('ownerAccountId, None),
-      DescriptionMetadata("An explicit or implicit Precog account Id is required for the use of this service.")))
+  val metadata = AboutMetadata(
+    ParameterMetadata('ownerAccountId, None),
+    DescriptionMetadata("An explicit or implicit Precog account Id is required for the use of this service.")
+  )
 }

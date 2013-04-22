@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
-import com.precog.common.json._
 import com.precog.common.Path
 import com.precog.util.VectorCase
 import com.precog.bytecode.{ JType, JBooleanT, JObjectUnfixedT, JArrayUnfixedT }
@@ -452,7 +451,6 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             val typed = Typed(elements.head, JArrayUnfixedT)
             composeSliceTransform2(typed)
           } else {
-            try {
             elements.map(composeSliceTransform2).reduceLeft { (l0, r0) =>
               l0.zip(r0) { (sl, sr) =>
                 new Slice {
@@ -479,11 +477,6 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                   }
                 }
               }
-            }
-            } catch {
-              case t: StackOverflowError =>
-                println(spec)
-                throw t
             }
           }
 

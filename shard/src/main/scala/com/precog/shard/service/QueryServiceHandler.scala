@@ -22,7 +22,7 @@ package service
 
 import com.precog.daze._
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
@@ -41,6 +41,7 @@ import akka.dispatch.ExecutionContext
 import com.weiglewilczek.slf4s.Logging
 
 import java.nio.CharBuffer
+import java.io.{ StringWriter, PrintWriter }
 
 import scalaz._
 import scalaz.Validation.{ success, failure }
@@ -54,11 +55,11 @@ final class QueryServiceNotAvailable(implicit M: Monad[Future])
     })
   }
 
-  val metadata = Some(DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query."))
+  val metadata = DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query.")
 }
 
 object QueryServiceHandler {
-  type Service = HttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] 
+  type Service = HttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]]
 }
 
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
@@ -86,7 +87,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 
     opts.output match {
       case CSVOutput => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
-      case _ => response
+      case _ => response.copy(headers = response.headers + `Content-Type`(application/json))
     }
   }
 
@@ -115,12 +116,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     })
   }
 
-  def metadata = Some(DescriptionMetadata(
-    """
-Takes a quirrel query and returns the result of evaluating the query.
-    """
-  ))
-
+  def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 
   def list(apiKey: APIKey, p: Path) = {
     platform.metadataClient.browse(apiKey, p).map {
@@ -162,6 +158,9 @@ class SyncQueryServiceHandler(
   import scalaz.std.option._
   import JobManager._
 
+  def ensureTermination(data0: StreamT[Future, CharBuffer]) =
+    TerminateJson.ensure(silenceShardQueryExceptions(data0))
+
   def extractResponse(request: HttpRequest[Future[JValue]], result: (Option[JobId], StreamT[Future, CharBuffer])): HttpResponse[QueryResult] = {
     import SyncResultFormat._
 
@@ -176,16 +175,17 @@ class SyncQueryServiceHandler(
         HttpResponse[QueryResult](HttpStatus(BadRequest, msg))
 
       case (Right(Simple), _, data) =>
-        HttpResponse[QueryResult](OK, content = Some(Right(data)))
+        HttpResponse[QueryResult](OK, content = Some(Right(ensureTermination(data))))
 
-      case (Right(Detailed), None, data) =>
+      case (Right(Detailed), None, data0) =>
+        val data = ensureTermination(data0)
         val prefix = CharBuffer.wrap("""{"errors":[],"warnings":[{"message":"Job service is down; errors/warnings are disabled."}],"data":""")
         val result: StreamT[Future, CharBuffer] = (prefix :: data) ++ (CharBuffer.wrap("}") :: StreamT.empty[Future, CharBuffer])
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
 
       case (Right(Detailed), Some(jobId), data0) =>
         val prefix = CharBuffer.wrap("""{ "data" : """)
-        val data = silenceShardQueryExceptions(data0)
+        val data = ensureTermination(data0)
         val result = StreamT.unfoldM(some(prefix :: data)) {
           case Some(stream) =>
             stream.uncons flatMap {
@@ -194,10 +194,12 @@ class SyncQueryServiceHandler(
               case None =>
                 val warningsM = jobManager.listMessages(jobId, channels.Warning, None)
                 val errorsM = jobManager.listMessages(jobId, channels.Error, None)
-                (warningsM |@| errorsM) { (warnings, errors) =>
-                  val suffix = """, "errors": %s, "warnings": %s }""" format (
+                val serverErrorsM = jobManager.listMessages(jobId, channels.ServerError, None)
+                (warningsM |@| errorsM |@| serverErrorsM) { (warnings, errors, serverErrors) =>
+                  val suffix = """, "errors": %s, "warnings": %s, "serverErrors": %s }""" format (
                     JArray(errors.toList map (_.value)).renderCompact,
-                    JArray(warnings.toList map (_.value)).renderCompact
+                    JArray(warnings.toList map (_.value)).renderCompact,
+                    JArray(serverErrors.toList map (_.value)).renderCompact
                   )
                   Some((CharBuffer.wrap(suffix), None))
                 }
@@ -224,6 +226,11 @@ class SyncQueryServiceHandler(
         case _: QueryCancelledException =>
           StreamT.Done
         case _: QueryExpiredException =>
+          StreamT.Done
+        case ex =>
+          val msg = new StringWriter()
+          ex.printStackTrace(new PrintWriter(msg))
+          logger.error("Error executing shard query:\n" + msg.toString())
           StreamT.Done
       })
     }

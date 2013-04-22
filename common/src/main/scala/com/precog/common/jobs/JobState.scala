@@ -20,7 +20,6 @@
 package com.precog.common
 package jobs
 
-import com.precog.common.json._
 import com.precog.common.security._
 
 import blueeyes.json._

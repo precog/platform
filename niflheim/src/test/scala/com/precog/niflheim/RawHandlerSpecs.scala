@@ -22,7 +22,7 @@ package com.precog.niflheim
 import java.io._
 import blueeyes.json._
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.util.BitSet
 
 import org.specs2.mutable._

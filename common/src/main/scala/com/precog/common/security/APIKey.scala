@@ -20,12 +20,11 @@
 package com.precog.common
 package security
 
-import json._
-
 import blueeyes.json.JValue
 import blueeyes.json.serialization.{ Decomposer, Extractor }
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeDecomposer => _, DateTimeExtractor => _, _ }
+import blueeyes.json.serialization.Versioned._
 
 import scalaz.Scalaz._
 import scalaz.Validation
@@ -48,8 +47,8 @@ object APIKeyRecord {
   @deprecated("V0 serialization schemas should be removed when legacy data is no longer needed", "2.1.5")
   val schemaV0 =       "tid"     :: "name" :: "description" :: ("cid" ||| "(undefined)") :: "gids" :: ("isRoot" ||| false) :: HNil
 
-  val decomposerV1: Decomposer[APIKeyRecord]= decomposerV[APIKeyRecord](schemaV1, Some("1.0"))
-  val extractorV2: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[APIKeyRecord]= decomposerV[APIKeyRecord](schemaV1, Some("1.0".v))
+  val extractorV2: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, Some("1.0".v))
   val extractorV1: Extractor[APIKeyRecord] = extractorV[APIKeyRecord](schemaV1, None)
   val extractorV0: Extractor[APIKeyRecord]  = extractorV[APIKeyRecord](schemaV0, None)
 

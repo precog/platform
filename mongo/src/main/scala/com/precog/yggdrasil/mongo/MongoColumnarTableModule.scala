@@ -22,10 +22,9 @@ package table
 package mongo
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.bytecode._
-import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 import Schema._
@@ -55,9 +54,6 @@ import org.bson.types.ObjectId
 import java.io.File
 import java.util.SortedMap
 import java.util.Comparator
-
-import org.apache.jdbm.DBMaker
-import org.apache.jdbm.DB
 
 import org.joda.time.DateTime
 
@@ -196,7 +192,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
     def makeSlice(cursorGen: () => DBCursor, skip: Int): (Slice, Option[Int]) = {
       import TransSpecModule.paths._
 
-      // Sort by _id always to mimic JDBM
+      // Sort by _id always to mimic NIHDB
       val cursor = cursorGen().sort(new BasicDBObject("_id", 1)).skip(skip).limit(yggConfig.maxSliceSize + 1)
       val objects = cursor.toArray
       cursor.close()

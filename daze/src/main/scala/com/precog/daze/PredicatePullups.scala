@@ -40,7 +40,7 @@ trait PredicatePullupsModule[M[+_]] extends TransSpecableModule[M] {
     def predicatePullups(graph: DepGraph, ctx: EvaluationContext): DepGraph = {
       val edits =
         graph.foldDown(true) {
-          case s @ Split(g @ Group(id, target, gchild), schild) =>
+          case s @ Split(g @ Group(id, target, gchild), schild, _) =>
             
             def extractFilter(spec: dag.BucketSpec): Option[(List[DepGraph], List[dag.BucketSpec])] = spec match {
               case dag.IntersectBucketSpec(left, right) =>

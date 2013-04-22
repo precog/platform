@@ -55,13 +55,13 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
 object WebAPIKeyFinder {
-  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNEL[String, APIKeyFinder[Response]] = {
+  def apply(config: Configuration)(implicit executor: ExecutionContext): ValidationNel[String, APIKeyFinder[Response]] = {
     val serviceConfig = config.detach("service")
     serviceConfig.get[String]("hardcoded_rootKey") map { apiKey =>
       implicit val M = ResponseMonad(new FutureMonad(executor))
       success(new StaticAPIKeyFinder[Response](apiKey))
     } getOrElse {
-      (config.get[String]("rootKey").toSuccess("Configuration property \"rootKey\" is required").toValidationNEL |@|
+      (config.get[String]("rootKey").toSuccess("Configuration property \"rootKey\" is required").toValidationNel |@|
        serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property \"service.protocol\" is required")) |@|
        serviceConfig.get[String]("host").toSuccess(NEL("Configuration property \"service.host\" is required")) |@|
        serviceConfig.get[Int]("port").toSuccess(NEL("Configuration property \"service.port\" is required")) |@|
@@ -161,11 +161,11 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
     }
   }
 
-  def addGrant(authKey: APIKey, accountKey: APIKey, grantId: GrantId): Response[Boolean] = {
+  def addGrant(accountKey: APIKey, grantId: GrantId): Response[Boolean] = {
     val requestBody = jobject(JField("grantId", JString(grantId)))
 
     withJsonClient { client =>
-      eitherT(client.query("apiKey", authKey).post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
+      eitherT(client.post[JValue]("apikeys/" + accountKey + "/grants/")(requestBody) map {
         case HttpResponse(HttpStatus(Created, _), _, None, _) => right(true)
         case _ => right(false)
       })

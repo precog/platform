@@ -55,6 +55,7 @@ import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatus
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.MimeType
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
@@ -71,6 +72,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
   val testValue: JValue = JObject(List(JField("testing", JNum(123))))
 
   val JSON = MimeTypes.application/MimeTypes.json
+  val JSON_STREAM = MimeType("application", "x-json-stream")
   val CSV = MimeTypes.text/MimeTypes.csv
 
   def bb(s: String) = ByteBuffer.wrap(s.getBytes("UTF-8"))
@@ -88,36 +90,59 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
     }
 
+    "expand top-level arrays" in {
+      val t1: JValue = JObject("t1" -> JNum(1))
+      val t2: JValue = JObject("t2" -> JNum(2))
+      val t3: JValue = JObject("t3" -> JNum(3))
+
+      val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true) {
+        JArray(t1, t2, t3)
+      }
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+          values must containAllOf(t1 :: t2 :: t3 :: Nil).only
+      }
+    }
+
+    "not expand top-level arrays with JSON_STREAM" in {
+      val t1 = JObject("t1" -> JNum(1))
+      val t2 = JObject("t2" -> JNum(2))
+      val t3 = JObject("t3" -> JNum(3))
+      val arr: JValue = JArray(t1, t2, t3)
+
+      val result = track[JValue](JSON_STREAM, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = true) {
+        arr
+      }
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+          values must contain(arr).only
+      }
+    }
     "track asynchronous event with valid API key" in {
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
         chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => content.validated[Long]("content-length") must_== Success(37L)
+        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
       }
     }
 
     "track synchronous batch event with bad row" in {
-      val msg = JParser.parseUnsafe("""{
-          "total": 2,
-          "ingested": 1,
-          "failed": 1,
-          "skipped": 0,
-          "errors": [ {
-            "line": 0,
-            "reason": "expected whitespace or eof got # (line 1, column 7)"
-          } ]
-        }""")
-
       val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
         chunk("178234#!!@#$\n", """{ "testing": 321 }""")
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(msg2), _), events) =>
-          msg mustEqual msg2
-          events flatMap (_.data) mustEqual JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil
+        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
+          msg \ "total" mustEqual JNum(3)
+          msg \ "ingested" mustEqual JNum(2)
+          msg \ "failed" mustEqual JNum(1)
+          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
+
+          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
       }
     }
 
@@ -197,8 +222,12 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JString(msg)), _), _) =>
-          msg must startWith("Cannot ingest values with more than 1024 primitive fields.")
+        case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(fields)), _), _) =>
+          val JArray(errors) = fields("errors")
+            errors.exists {
+              case JString(msg) => msg.startsWith("Cannot ingest values with more than 1024 primitive fields.")
+              case _ => false
+            } must_== true
       }
     }
 

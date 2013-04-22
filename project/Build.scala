@@ -57,8 +57,8 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M8.2"
-  val scalazVersion = "7.0.0-M8"
+  val blueeyesVersion = "1.0.0-M8.7"
+  val scalazVersion = "7.0.0-RC1"
 
   val commonSettings = Seq(
     organization := "com.precog",
@@ -140,7 +140,7 @@ object PlatformBuild extends Build {
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
   lazy val standalone = Project(id = "standalone", base = file("standalone")).
-    settings((commonAssemblySettings  ++ jettySettings): _*) dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, shard, muspelheim % "compile->compile;test->test", logging % "test->test", auth, accounts, ingest)
+    settings((commonAssemblySettings  ++ jettySettings): _*) dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, shard, muspelheim % "compile->compile;test->test", logging % "test->test", auth, accounts, ingest, heimdall)
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).

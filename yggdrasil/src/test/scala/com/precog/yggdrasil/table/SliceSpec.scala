@@ -25,7 +25,7 @@ import scala.util.Random
 
 import com.precog.common._
 import com.precog.util.VectorCase
-import com.precog.common.json._
+
 import com.precog.common.security._
 
 import org.specs2.mutable._

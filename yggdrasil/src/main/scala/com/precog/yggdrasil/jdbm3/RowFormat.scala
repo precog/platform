@@ -20,27 +20,21 @@
 package com.precog.yggdrasil
 package jdbm3
 
-import scalaz._
-
+import table._
 import com.precog.common._
-import com.precog.common.json._
-import com.precog.yggdrasil.table._
 import com.precog.util._
-
-import org.joda.time.{DateTime, Period}
-
-import scala.collection.mutable.ListBuffer
-
-import java.nio.ByteBuffer
-
-//import scala.collection.immutable.BitSet
-import scala.collection.mutable
 import com.precog.util.BitSet
 import com.precog.util.BitSetUtil
 import com.precog.util.BitSetUtil.Implicits._
 
+import org.joda.time.{DateTime, Period}
+import java.nio.ByteBuffer
+
 import scala.annotation.tailrec
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.{ specialized => spec }
+import scalaz._
 
 
 trait ColumnEncoder {

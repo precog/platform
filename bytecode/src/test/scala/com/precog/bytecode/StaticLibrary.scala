@@ -33,6 +33,8 @@ trait StaticLibrary extends Library {
     Reduction(Vector(), "stdDev", 0x2007),
     Reduction(Vector(), "median", 0x2008),
     Reduction(Vector(), "mode", 0x2009),
+    Reduction(Vector(), "exists", 0x2010),
+    Reduction(Vector(), "forall", 0x2011),
     Reduction(Vector("std", "lib"), "sum", 0x0010),
     Reduction(Vector("ack"), "ook", 0x0011),
     Reduction(Vector("one", "two", "three"), "qnd", 0x0012))

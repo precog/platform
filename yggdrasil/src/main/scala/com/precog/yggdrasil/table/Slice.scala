@@ -28,8 +28,6 @@ import com.precog.bytecode._
 import com.precog.util._
 import com.precog.yggdrasil.util._
 
-import com.precog.common.json._
-
 import TransSpecModule._
 
 import blueeyes.json._
@@ -37,8 +35,12 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 import org.joda.time.{DateTime, Period}
 
+import org.slf4j.LoggerFactory
+
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
+
+import com.weiglewilczek.slf4s.Logging
 
 import scala.annotation.{switch, tailrec}
 
@@ -133,6 +135,8 @@ trait Slice { source =>
       as
     }
 
+    def loopForall[A <: Column](cols: Array[A])(row: Int) = !cols.isEmpty && Loop.forall(cols)(_ isDefinedAt row)
+
     val columns: Map[ColumnRef, Column] = {
       Map(
         (ColumnRef(CPath(CPathArray), CArrayType(tpe0)),
@@ -144,7 +148,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Long] = longcols map { col => col.apply _ }
 
                 val tpe = CArrayType(CLong)
-                def isDefinedAt(row: Int) = Loop.forall(longcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[LongColumn](longcols)(row)
                 def apply(row: Int): Array[Long] = inflate(cols, row)
               }
             case CDouble =>
@@ -153,7 +157,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Double] = doublecols map { x => x(_) }
 
                 val tpe = CArrayType(CDouble)
-                def isDefinedAt(row: Int) = Loop.forall(doublecols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[DoubleColumn](doublecols)(row)
                 def apply(row: Int): Array[Double] = inflate(cols, row)
               }
             case CNum =>
@@ -162,7 +166,7 @@ trait Slice { source =>
                 private val cols: Array[Int => BigDecimal] = numcols map { x => x(_) }
 
                 val tpe = CArrayType(CNum)
-                def isDefinedAt(row: Int) = Loop.forall(numcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[NumColumn](numcols)(row)
                 def apply(row: Int): Array[BigDecimal] = inflate(cols, row)
               }
             case CBoolean =>
@@ -171,7 +175,7 @@ trait Slice { source =>
                 private val cols: Array[Int => Boolean] = boolcols map { x => x(_) }
 
                 val tpe = CArrayType(CBoolean)
-                def isDefinedAt(row: Int) = Loop.forall(boolcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[BoolColumn](boolcols)(row)
                 def apply(row: Int): Array[Boolean] = inflate(cols, row)
               }
             case CString =>
@@ -180,7 +184,7 @@ trait Slice { source =>
                 private val cols: Array[Int => String] = strcols map { x => x(_) }
 
                 val tpe = CArrayType(CString)
-                def isDefinedAt(row: Int) = Loop.forall(strcols)(_ isDefinedAt row)
+                def isDefinedAt(row: Int) = loopForall[StrColumn](strcols)(row)
                 def apply(row: Int): Array[String] = inflate(cols, row)
               }
             case _ => sys.error("unsupported type")
@@ -934,7 +938,7 @@ trait Slice { source =>
             case CPathMeta(_) :: _ => target
 
             case CPathArray :: _ => sys.error("todo")
-            
+
             case Nil => {
               val node = SchemaNode.Leaf(ctype, col)
 
@@ -1230,17 +1234,17 @@ trait Slice { source =>
         def renderDate(date: DateTime) {
           renderString(date.toString)
         }
-        
+
         @inline
         def renderPeriod(period: Period) {
           renderString(period.toString)
         }
-        
+
         @inline
         def renderArray[A](array: Array[A]) {
           renderString(array.deep.toString)
         }
-        
+
         def traverseSchema(row: Int, schema: SchemaNode): Boolean = schema match {
           case obj: SchemaNode.Obj => {
             val keys = obj.keys
@@ -1447,10 +1451,10 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CPeriod => {
               val specCol = col.asInstanceOf[PeriodColumn]
-              
+
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderPeriod(specCol(row))
@@ -1459,10 +1463,10 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CArrayType(_) => {
               val specCol = col.asInstanceOf[HomogeneousArrayColumn[_]]
-              
+
               if (specCol.isDefinedAt(row)) {
                 flushIn()
                 renderArray(specCol(row))
@@ -1471,7 +1475,7 @@ trait Slice { source =>
                 false
               }
             }
-            
+
             case CUndefined => false
           }
         }
@@ -1589,7 +1593,7 @@ object Slice {
           acc + (ref -> ((offset, col) :: acc.getOrElse(ref, Nil)))
         }, offset + slice.size)
 
-      case  ((cols, offset), _) => (cols, offset)
+      case ((cols, offset), _) => (cols, offset)
     }
 
     val slice = new Slice {
@@ -1624,11 +1628,11 @@ object Slice {
       case (acc, (jpath, v)) =>
         val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
         val ref = ColumnRef(remapPath.map(_(jpath)).getOrElse(CPath(jpath)), ctype)
-        
+
         val updatedColumn: ArrayColumn[_] = v match {
           case JBool(b) =>
             acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
-            
+
           case JNum(d) => ctype match {
             case CLong =>
               acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
@@ -1641,24 +1645,24 @@ object Slice {
 
             case _ => sys.error("non-numeric type reached")
           }
-            
+
           case JString(s) =>
             acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
-            
+
           case JArray(Nil) =>
             acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
-            
+
           case JObject.empty =>
             acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
-            
+
           case JNull        =>
             acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
 
           case _ => sys.error("non-flattened value reached")
         }
-        
+
         acc + (ref -> updatedColumn)
-    }
+      }
   }
 
   private sealed trait SchemaNode
@@ -1686,6 +1690,8 @@ import com.precog.niflheim._
 case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: Long) extends Slice {
   import TransSpecModule.paths
 
+  val logger = LoggerFactory.getLogger("com.precog.yggdrasil.table.SegmentsWrapper")
+
   // FIXME: This should use an identity of Array[Long](projectionId,
   // blockId), but the evaluator will cry if we do that right now
   private def keyFor(row: Int): Long = {
@@ -1712,6 +1718,7 @@ case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: L
       ctype match {
         case CString => new ArrayStrColumn(defined, values)
         case CDate => new ArrayDateColumn(defined, values)
+        case CPeriod => new ArrayPeriodColumn(defined, values)
         case CNum => new ArrayNumColumn(defined, values)
         case CDouble => new ArrayDoubleColumn(defined, values)
         case CLong => new ArrayLongColumn(defined, values)
@@ -1739,6 +1746,13 @@ case class SegmentsWrapper(segments: Seq[Segment], projectionId: Int, blockId: L
 
   private val cols: Map[ColumnRef, Column] = buildMap(segments) + buildKeyColumn(segments.headOption map (_.length) getOrElse 0)
 
-  val size: Int = segments.foldLeft(0)(_ max _.length)
+  val size: Int = {
+    val sz = segments.foldLeft(0)(_ max _.length)
+    if (logger.isTraceEnabled) {
+      logger.trace("Computed size %d from:\n  %s".format(sz, segments.mkString("\n  ")))
+    }
+    sz
+  }
+
   def columns: Map[ColumnRef, Column] = cols
 }

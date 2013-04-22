@@ -48,17 +48,15 @@ trait Memoizer extends DAG {
     
     def numRefs(node: DepGraph) = refs get node map { _.size } getOrElse 0
     
-    def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {
-      lazy val splits = _splits
-      
+    def memoized(node: DepGraph): DepGraph = {
       def inner(target: DepGraph): DepGraph = target match {
         // not using extractors due to bug
         case s: dag.SplitParam =>
-          dag.SplitParam(s.id)(splits(s.parent))(s.loc)
+          dag.SplitParam(s.id, s.parentId)(s.loc)
         
         // not using extractors due to bug
         case s: dag.SplitGroup =>
-          dag.SplitGroup(s.id, s.identities)(splits(s.parent))(s.loc)
+          dag.SplitGroup(s.id, s.identities, s.parentId)(s.loc)
         
         case dag.Const(_) => target
 
@@ -66,57 +64,56 @@ trait Memoizer extends DAG {
         
         case target @ dag.New(parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.New(memoized(splits)(parent))(target.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.New(memoized(parent))(target.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.New(memoized(splits)(parent))(target.loc)
+            dag.New(memoized(parent))(target.loc)
         }
         
         case node @ dag.Morph1(m, parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Morph1(m, memoized(splits)(parent))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Morph1(m, memoized(parent))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Morph1(m, memoized(splits)(parent))(node.loc)
+            dag.Morph1(m, memoized(parent))(node.loc)
         }
         
         case node @ dag.Morph2(m, left, right) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Morph2(m, memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Morph2(m, memoized(left), memoized(right))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Morph2(m, memoized(splits)(left), memoized(splits)(right))(node.loc)
+            dag.Morph2(m, memoized(left), memoized(right))(node.loc)
         }
         
         case node @ dag.Distinct(parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Distinct(memoized(splits)(parent))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Distinct(memoized(parent))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Distinct(memoized(splits)(parent))(node.loc)
+            dag.Distinct(memoized(parent))(node.loc)
         }
         
         case target @ dag.LoadLocal(parent, jtpe) =>
-          dag.LoadLocal(memoized(splits)(parent), jtpe)(target.loc)
+          dag.LoadLocal(memoized(parent), jtpe)(target.loc)
         
         case target @ dag.Operate(op, parent) =>
-          dag.Operate(op, memoized(splits)(parent))(target.loc)
+          dag.Operate(op, memoized(parent))(target.loc)
         
         case node @ dag.Reduce(red, parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Reduce(red, memoized(splits)(parent))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Reduce(red, memoized(parent))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Reduce(red, memoized(splits)(parent))(node.loc)
+            dag.Reduce(red, memoized(parent))(node.loc)
         }
         
         case node @ dag.MegaReduce(reds, parent) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.MegaReduce(reds, memoized(splits)(parent)), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.MegaReduce(reds, memoized(parent)), scaleMemoPriority(numRefs(node)))
           else
-            dag.MegaReduce(reds, memoized(splits)(parent))
+            dag.MegaReduce(reds, memoized(parent))
         }
         
-        case s @ dag.Split(spec, child) => {
-          lazy val splits2 = splits + (s -> result)
-          lazy val spec2 = memoizedSpec(spec, splits2)
-          lazy val child2 = memoized(splits2)(child)
-          lazy val result: dag.Split = dag.Split(spec2, child2)(s.loc)
+        case s @ dag.Split(spec, child, id) => {
+          val spec2 = memoizedSpec(spec)
+          val child2 = memoized(child)
+          val result: dag.Split = dag.Split(spec2, child2, id)(s.loc)
           
           if (numRefs(s) > MemoThreshold)
             Memoize(result, scaleMemoPriority(numRefs(s)))
@@ -126,77 +123,77 @@ trait Memoizer extends DAG {
         
         case node @ dag.Assert(pred, child) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Assert(memoized(splits)(pred), memoized(splits)(child))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Assert(memoized(pred), memoized(child))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Assert(memoized(splits)(pred), memoized(splits)(child))(node.loc)
+            dag.Assert(memoized(pred), memoized(child))(node.loc)
         }
         
         case node @ dag.Cond(pred, left, leftJoin, right, rightJoin) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Cond(memoized(pred), memoized(left), leftJoin, memoized(right), rightJoin)(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Cond(memoized(splits)(pred), memoized(splits)(left), leftJoin, memoized(splits)(right), rightJoin)(node.loc)
+            dag.Cond(memoized(pred), memoized(left), leftJoin, memoized(right), rightJoin)(node.loc)
         }
         
         case node @ dag.Observe(data, samples) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Observe(memoized(splits)(data), memoized(splits)(samples))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Observe(memoized(data), memoized(samples))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Observe(memoized(splits)(data), memoized(splits)(samples))(node.loc)
+            dag.Observe(memoized(data), memoized(samples))(node.loc)
         }
         
         case node @ dag.IUI(union, left, right) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.IUI(union, memoized(left), memoized(right))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.IUI(union, memoized(splits)(left), memoized(splits)(right))(node.loc)
+            dag.IUI(union, memoized(left), memoized(right))(node.loc)
         }
         
         case node @ dag.Diff(left, right) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Diff(memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Diff(memoized(left), memoized(right))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Diff(memoized(splits)(left), memoized(splits)(right))(node.loc)
+            dag.Diff(memoized(left), memoized(right))(node.loc)
         }
         
         case node @ dag.Join(op, joinSort, left, right) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Join(op, joinSort, memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Join(op, joinSort, memoized(left), memoized(right))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Join(op, joinSort, memoized(splits)(left), memoized(splits)(right))(node.loc)
+            dag.Join(op, joinSort, memoized(left), memoized(right))(node.loc)
         }
         
         case node @ dag.Filter(joinSort, left, right) => {
           if (numRefs(node) > MemoThreshold)
-            Memoize(dag.Filter(joinSort, memoized(splits)(left), memoized(splits)(right))(node.loc), scaleMemoPriority(numRefs(node)))
+            Memoize(dag.Filter(joinSort, memoized(left), memoized(right))(node.loc), scaleMemoPriority(numRefs(node)))
           else
-            dag.Filter(joinSort, memoized(splits)(left), memoized(splits)(right))(node.loc)
+            dag.Filter(joinSort, memoized(left), memoized(right))(node.loc)
         }
 
-        case dag.Sort(parent, indexes) => dag.Sort(memoized(splits)(parent), indexes)
+        case dag.Sort(parent, indexes) => dag.Sort(memoized(parent), indexes)
 
-        case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(splits)(parent), sortField, valueField, id)
+        case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
 
-        case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(splits)(parent), id)
+        case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(parent), id)
 
-        case dag.Memoize(parent, priority) => dag.Memoize(memoized(splits)(parent), priority)
+        case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
       }
 
-      def memoizedSpec(spec: dag.BucketSpec, splits: => Map[dag.Split, dag.Split]): dag.BucketSpec = spec match {  //TODO generalize?
+      def memoizedSpec(spec: dag.BucketSpec): dag.BucketSpec = spec match {  //TODO generalize?
         case dag.UnionBucketSpec(left, right) =>
-          dag.UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+          dag.UnionBucketSpec(memoizedSpec(left), memoizedSpec(right))
         
         case dag.IntersectBucketSpec(left, right) =>
-          dag.IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+          dag.IntersectBucketSpec(memoizedSpec(left), memoizedSpec(right))
         
         case dag.Group(id, target, child) =>
-          dag.Group(id, memoized(splits)(target), memoizedSpec(child, splits))
+          dag.Group(id, memoized(target), memoizedSpec(child))
         
         case dag.UnfixedSolution(id, target) =>
-          dag.UnfixedSolution(id, memoized(splits)(target))
+          dag.UnfixedSolution(id, memoized(target))
         
         case dag.Extra(target) =>
-          dag.Extra(memoized(splits)(target))
+          dag.Extra(memoized(target))
       }
 
       memotable.get(node) getOrElse {
@@ -206,7 +203,7 @@ trait Memoizer extends DAG {
       }
     }
     
-    memoized(Map())(target)
+    memoized(target)
   }
   
   private def findForcingRefsInSpec(spec: BucketSpec, split: Split): Map[DepGraph, Set[OpSide]] = spec match {
@@ -255,7 +252,7 @@ trait Memoizer extends DAG {
     case MegaReduce(_, parent) =>
       updateMap(findForcingRefs(parent, OpSide.Center(graph)), graph, force)
     
-    case graph @ Split(spec, child) => {
+    case graph @ Split(spec, child, _) => {
       val childRefs = findForcingRefs(child, OpSide.Center(graph))    // TODO is this right?
       val specRefs = findForcingRefsInSpec(spec, graph)
       

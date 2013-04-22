@@ -23,6 +23,9 @@ package accounts
 import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
+import com.precog.util.PrecogUnit
+
+import blueeyes.json._
 
 import org.joda.time.DateTime
 
@@ -30,6 +33,7 @@ import scalaz._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.std.stream._
+import scalaz.syntax.std.option._
 
 trait AccountManager[M[+_]] extends AccountFinder[M] {
   import Account._
@@ -38,7 +42,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
 
   def findAccountById(accountId: AccountId): M[Option[Account]]
 
-  def findAccountDetailsById(accountId: AccountId): M[Option[AccountDetails]] = 
+  def findAccountDetailsById(accountId: AccountId): M[Option[AccountDetails]] =
     findAccountById(accountId).map(_.map(AccountDetails.from(_)))
 
   def updateAccount(account: Account): M[Boolean]
@@ -48,7 +52,49 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
     updateAccount(account.copy(passwordHash = saltAndHashSHA256(newPassword, salt), passwordSalt = salt, lastPasswordChangeTime = Some(new DateTime)))
   }
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
+  def resetAccountPassword(accountId: AccountId, tokenId: ResetTokenId, newPassword: String): M[String \/ Boolean] = {
+    findAccountByResetToken(accountId, tokenId).flatMap {
+      case errD @ -\/(error) => M.point(errD)
+      case \/-(account) =>
+        for {
+          updated <- updateAccountPassword(account, newPassword)
+          _       <- markResetTokenUsed(tokenId)
+        } yield \/-(updated)
+    }
+  }
+
+  def generateResetToken(accountId: Account): M[ResetTokenId]
+
+  def markResetTokenUsed(tokenId: ResetTokenId): M[PrecogUnit]
+
+  def findResetToken(accountId: AccountId, tokenId: ResetTokenId): M[Option[ResetToken]]
+
+  // The accountId is used here as a sanity/security check only, not for lookup
+  def findAccountByResetToken(accountId: AccountId, tokenId: ResetTokenId): M[String \/ Account] = {
+    logger.debug("Locating account for token id %s, account id %s".format(tokenId, accountId))
+    findResetToken(accountId, tokenId).flatMap {
+      case Some(token) =>
+        if (token.expiresAt.isBefore(new DateTime)) {
+          logger.warn("Located expired reset token: " + token)
+          M.point(-\/("Reset token %s has expired".format(tokenId)))
+        } else if (token.usedAt.nonEmpty) {
+          logger.warn("Reset attempted with previously used reset token: " + token)
+          M.point(-\/("Reset token %s has already been used".format(tokenId)))
+        } else if (token.accountId != accountId) {
+          logger.debug("Located reset token, but with the wrong account (expected %s): %s".format(accountId, token))
+          M.point(-\/("Reset token %s does not match provided account %s".format(tokenId, accountId)))
+        } else {
+          logger.debug("Located reset token " + token)
+          findAccountById(token.accountId).map(_.\/>("Could not find account by id " + token.accountId))
+        }
+
+      case None =>
+        logger.warn("Could not locate reset token for id " + tokenId)
+        M.point(-\/("No reset token found for id " + tokenId))
+    }
+  }
+
+  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None, profile: Option[JValue] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
 
   def findAccountByEmail(email: String) : M[Option[Account]]
 
@@ -60,7 +106,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
         findAccountById(id) flatMap {
           case None => false.point[M]
           case Some(`child`) => false.point[M] // avoid infinite loops
-          case Some(parent) => hasAncestor(parent, ancestor) 
+          case Some(parent) => hasAncestor(parent, ancestor)
         }
       } getOrElse {
         false.point[M]

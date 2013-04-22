@@ -141,7 +141,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, ShardStateOptions.NoOptions, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -282,6 +282,7 @@ class ShardServiceSpec extends TestShardService {
       } yield result
 
       val expected = JObject(
+        JField("serverErrors", JArray(Nil)) ::
         JField("warnings", JArray(Nil)) ::
         JField("errors", JArray(Nil)) ::
         JField("data", JArray(JNum(2) :: Nil)) ::

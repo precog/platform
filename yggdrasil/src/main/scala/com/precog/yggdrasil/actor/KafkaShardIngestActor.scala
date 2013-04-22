@@ -329,10 +329,14 @@ abstract class KafkaShardIngestActor(shardId: String,
           (batch, checkpoint)
 
         case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _)) :: tail =>
-          val newCheckpoint = records.foldLeft(checkpoint) {
-            // TODO: This nested pattern match indicates that checkpoints are too closely
-            // coupled to the representation of event IDs.
-            case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
+          val newCheckpoint = if (records.isEmpty) {
+            checkpoint.skipTo(offset)
+          } else {
+            records.foldLeft(checkpoint) {
+              // TODO: This nested pattern match indicates that checkpoints are too closely
+              // coupled to the representation of event IDs.
+              case (acc, IngestRecord(EventId(pid, sid), _)) => acc.update(offset, pid, sid)
+            }
           }
 
           buildBatch(tail, batch :+ (offset, event), newCheckpoint)
@@ -367,15 +371,15 @@ abstract class KafkaShardIngestActor(shardId: String,
       // read a fetch buffer worth of messages from kafka, deserializing each one
       // and recording the offset
 
-      val rawMessages = msTime({ t => logger.debug("Kafka fetch in %d ms".format(t))}) {
+      val rawMessages = msTime({ t => logger.debug("Kafka fetch from %s:%d in %d ms".format(topic, lastCheckpoint.offset, t))}) {
         consumer.fetch(req)
       }
 
       val eventMessages: List[Validation[Error, (Long, EventMessage.EventMessageExtraction)]] =
-        msTime({t => logger.debug("Raw kafka deserialization in %d ms".format(t)) }) {
-          rawMessages.toList.map { msgAndOffset =>
+        msTime({t => logger.debug("Raw kafka deserialization of %d events in %d ms".format(rawMessages.size, t)) }) {
+          rawMessages.par.map { msgAndOffset =>
             EventMessageEncoding.read(msgAndOffset.message.payload) map { (msgAndOffset.offset, _) }
-          }
+          }.toList
         }
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =

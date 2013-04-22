@@ -23,13 +23,13 @@ package ingest
 import accounts.AccountId
 import security._
 import jobs.JobId
-import json._
 
 import blueeyes.json.{ JPath, JValue, JUndefined }
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor.Error
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
+import blueeyes.json.serialization.Versioned._
 import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor, InstantDecomposer}
 
 import org.joda.time.Instant
@@ -77,8 +77,8 @@ object Ingest {
   val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
-  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0".v))
+  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0".v))
 
   // A transitionary format similar to V1 structure, but lacks a version number and only carries a single data element
   val extractorV1a = new Extractor[Ingest] {
@@ -118,8 +118,8 @@ object Archive {
   val schemaV1 = "apiKey" :: "path" :: "jobId" :: ("timestamp" ||| EventMessage.defaultTimestamp) :: HNil
   val schemaV0 = "tokenId" :: "path" :: Omit :: ("timestamp" ||| EventMessage.defaultTimestamp) :: HNil
 
-  val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0"))
-  val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0")) <+> extractorV1a
+  val decomposerV1: Decomposer[Archive] = decomposerV[Archive](schemaV1, Some("1.0".v))
+  val extractorV1: Extractor[Archive] = extractorV[Archive](schemaV1, Some("1.0".v)) <+> extractorV1a
 
   // Support un-versioned V1 schemas and out-of-order fields due to an earlier bug
   val extractorV1a: Extractor[Archive] = extractorV[Archive](schemaV1, None) map {

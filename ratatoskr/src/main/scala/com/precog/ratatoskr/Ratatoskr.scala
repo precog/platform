@@ -20,7 +20,7 @@
 package com.precog.ratatoskr
 
 import com.precog.common._
-import com.precog.common.json._
+
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
@@ -41,6 +41,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+import blueeyes.persistence.mongo.dsl._
 import blueeyes.util.Clock
 
 import akka.actor.{ActorRef,ActorSystem,Props}
@@ -55,11 +56,18 @@ import akka.routing.RoundRobinRouter
 import _root_.kafka.message._
 
 import au.com.bytecode.opencsv._
+
 import com.weiglewilczek.slf4s.Logging
+
 import org.joda.time._
+import org.joda.time.format.ISODateTimeFormat
+
 import org.streum.configrity._
+
 import org.I0Itec.zkclient._
+
 import org.apache.zookeeper.data.Stat
+
 import scopt.mutable.OptionParser
 
 import java.io._
@@ -70,24 +78,13 @@ import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.std.option._
 
 import scala.collection.SortedSet
 import scala.collection.SortedMap
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{Buffer, ListBuffer}
+import scala.collection.mutable.{ArrayBuffer, Buffer, ListBuffer}
 import scala.io.Source
-
-//trait RatatoskrCommon {
-//  def load(dataDir: String) = {
-//    val dir = new File(dataDir)
-//    for{
-//      d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")
-//      descriptor <- ProjectionDescriptor.fromFile(d).unsafePerformIO.toOption
-//    } yield {
-//      (d, descriptor)
-//    }
-//  }
-//}
 
 object Ratatoskr {
   def usage(message: String*): String = {
@@ -151,14 +148,23 @@ object KafkaTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils kafka") {
-      opt("r", "range", "<start:stop>", "show message range ie: 5:10 :100 10:", {s: String =>
+      opt("r", "range", "<start:stop>", "show message range, e.g.: 5:10 :100 10:", {s: String =>
         val range = MessageRange.parse(s)
         config.range = range.getOrElse(sys.error("Invalid range specification: " + s))
       })
-      opt("l", "local", "<local kafka file>", "local kafka file", {s: String => config.dumpLocal = Some(s) })
-      opt("c", "central", "<central kafka file>", "dump central kafka file", {s: String => config.dumpCentral = Some(s) })
-      opt("u", "unparsed", "<kafka file>", "dump raw JSON from kafka file", {s: String => config.dumpRaw = Some(s) })
-      opt("c2l", "centralToLocal", "<central kafka file>", "convert central kafka file to local kafak", {s: String => config.convertCentral = Some(s) })
+      intOpt("i", "trackInterval", "When running a usage report, stats will be emitted every <interval> messages. Default = 50000", { (i: Int) => config.trackInterval = i })
+      opt("l", "local", "dump local kafka file(s)", { config.operation = Some(DumpLocal) })
+      opt("c", "central", "dump central kafka file(s)", { config.operation = Some(DumpCentral) })
+      opt("u", "unparsed", "dump raw JSON from kafka file(s)", { config.operation = Some(DumpRaw) })
+      opt("z", "usageReport", "Run a usage report on the given file(s)", { config.operation = Some(UsageReport) })
+      opt("a", "trackArchives", "For the usage report, reset size for a given account when archive messages are encountered", { config.cumulative = false })
+      opt("k", "lookupDatabase", "accounts database name", "Use this database for email lookups in usage reports", { (s: String) => config.lookupDatabase = Some(s) })
+      opt("v2", "centralToLocal", "convert central kafka file(s) to local kafka format (.local is appended to the new filenames)", { config.operation = Some(ConvertCentral) })
+      opt("f", "reportFormat", "The format to use for usage reports. Either csv or json (default)", { (s: String) => s.toLowerCase match {
+        case format @ ("csv" | "json") => config.reportFormat = format
+        case other => sys.error("Invalid report format: " + other)
+      }})
+      arglist("<files>", "The files to process", { (s: String) => config.files = config.files :+ (new File(s)) })
     }
     if (parser.parse(args)) {
       process(config)
@@ -168,11 +174,9 @@ object KafkaTools extends Command {
   }
 
   def process(config: Config) {
-    import config._
-    dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) }
-    dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) }
-    dumpRaw.foreach { f => dump(new File(f), range, RawFormat) }
-    convertCentral.foreach { convert(_) }
+    config.operation.map { _.process(config, config.range) }.getOrElse {
+      println("No operation specified!")
+    }
   }
 
   def dump(file: File, range: MessageRange, format: Format) {
@@ -209,10 +213,222 @@ object KafkaTools extends Command {
     dest.close
   }
 
-  class Config(var convertCentral: Option[String] = None,
-               var dumpLocal: Option[String] = None,
-               var dumpCentral: Option[String] = None,
-               var dumpRaw: Option[String] = None,
+    sealed trait KafkaAction {
+      def process(config: Config, range: MessageRange): Unit
+    }
+
+    object ConvertCentral extends KafkaAction {
+      def process(config: Config, range: MessageRange) =
+        config.files.foreach { f => convert(f, new File(f.getParentFile, f.getName + ".local")) }
+    }
+
+    object DumpLocal extends KafkaAction {
+      def process(config: Config, range: MessageRange) =
+        config.files.foreach { dump(_, range, LocalFormat) }
+    }
+
+    object DumpCentral extends KafkaAction {
+      def process(config: Config, range: MessageRange) =
+        config.files.foreach { dump(_, range, CentralFormat) }
+    }
+
+    object DumpRaw extends KafkaAction {
+      def process(config: Config, range: MessageRange) =
+        config.files.foreach { dump(_, range, RawFormat) }
+    }
+
+    object UsageReport extends KafkaAction {
+      sealed trait TimeStamp
+      case class ExactTime(time: Long, index: Long) extends TimeStamp
+      case class Interpolated(index: Long) extends TimeStamp
+
+      // Default to September 25th, 2012 as a lower bound
+      var lastTimestamp: ExactTime = ExactTime(1348545600000L, -1L)
+      var pendingTimes: List[Interpolated] = Nil
+
+      var interpolationMap: Map[Interpolated, Long] = Map()
+
+      // TODO: This needs to take into account the Authorities as well
+      case class ReportState(index: Long, pathSize: Map[Path, Long]) {
+        def inc = this.copy(index = index + 1)
+      }
+
+      var trackedAccounts: List[AccountId] = Nil
+      val slices: ArrayBuffer[(TimeStamp, Map[AccountId,Long])] = ArrayBuffer.empty
+
+      def trackState(state: ReportState): Unit = {
+        val byAccount: Map[AccountId, Long] = state.pathSize.groupBy(_._1.elements.head).map {
+          case (account, sizes) => (account, sizes.map(_._2).sum)
+        }
+
+        import state.index
+
+        val timestamp = lastTimestamp match {
+          case ts @ ExactTime(_, `index`) => ts
+          case _ => Interpolated(index).tap { temp =>
+            //println("Adding %s to pending timestamps".format(temp))
+            pendingTimes ::= temp
+          }
+        }
+
+        trackedAccounts = trackedAccounts ++ (byAccount.keySet -- trackedAccounts)
+        slices += (timestamp -> byAccount)
+      }
+
+      def processIngest(trackInterval: Int, state: ReportState, msg: IngestMessage) = {
+        // Track timestamps
+        (if (msg.timestamp != EventMessage.defaultTimestamp) {
+          //println("Exact timestamp found: " + msg.timestamp)
+          Some(ExactTime(msg.timestamp.getMillis, state.index))
+        } else {
+          // see if we can deduce from the data (assuming Nathan's twitter feed or SE postings)
+          val timestamps = (msg.data.map (_.value \ "timeStamp") ++ msg.data.map(_.value \ "timestamp")).flatMap {
+            case JString(date) =>
+              // Dirty hack for trying variations of ISO8601 in use by customers
+              List(date, date.replaceFirst(":", "-").replaceFirst(":", "-")).flatMap { date => List(date, date + ".000Z") }
+            case _ => None
+          }.flatMap { date =>
+            try {
+              val ts = ISODateTimeFormat.dateTime.parseDateTime(date)
+              if (ts.getMillis > lastTimestamp.time) {
+                //println("Assigning new timestamp: " + ts)
+                Some(ts)
+              } else {
+                //println("%s is before %s".format(ts, new DateTime(lastTimestamp.time)))
+                None
+              }
+            } catch {
+              case t =>
+                //println("Error on datetime parse: " + t)
+                None
+            }
+          }
+
+          //println("Deducing timestamp from " + timestamps)
+
+          timestamps.headOption.map { ts => ExactTime(ts.getMillis, state.index) }
+        }).foreach { newTimestamp =>
+          if (newTimestamp.time <= System.currentTimeMillis) {
+            if (pendingTimes.nonEmpty) {
+              //println("Updating pending times: " + pendingTimes)
+              interpolationMap ++= pendingTimes.map { interp =>
+                val interpFraction = (interp.index - lastTimestamp.index).toDouble / (newTimestamp.index - lastTimestamp.index)
+                val timeSpanSize = newTimestamp.time - lastTimestamp.time
+                val interpTS = (interpFraction * timeSpanSize + lastTimestamp.time).toLong
+                (interp, interpTS)
+              }
+
+              //println("InterpolationMap now = " + interpolationMap)
+
+              pendingTimes = Nil
+            }
+
+            lastTimestamp = newTimestamp
+          }
+        }
+
+        import msg._
+        if (state.index % trackInterval == 0) { trackState(state) }
+
+        if (path.length > 0) {
+          val size = data.map(_.value.renderCompact.length).sum
+
+          ReportState(state.index + 1, state.pathSize + (path -> (state.pathSize.getOrElse(path, 0L) + size)))
+        } else {
+          state.inc
+        }
+      }
+
+      def process(config: Config, range: MessageRange) = {
+        val accountLookup: Map[String, String] = config.lookupDatabase.map { dbName =>
+          val mongo = RealMongo(Configuration.parse("servers = [localhost]"))
+          val database = mongo.database(dbName)
+          implicit val queryTimeout = Timeout(30000)
+
+          Await.result(database(selectAll.from("accounts")).map { results =>
+            val built = results.toList
+            built.map(_.deserialize[Account]).map { account =>
+              (account.accountId, account.email)
+            }
+          }, queryTimeout.duration).toMap
+        }.getOrElse {
+          Map.empty
+        }
+
+        //println("Got lookup DB:" + accountLookup)
+
+        val finalState = config.files.foldLeft(ReportState(0L, Map.empty)) { case (state, file) =>
+          val ms = new FileMessageSet(file, false)
+
+          ms.iterator.grouped(1000).flatMap { _.toSeq.par.map(parseEventMessage) }.foldLeft(state) {
+            case (state @ ReportState(index, currentPathSize), parsed) => parsed match {
+              case Success(imessage : IngestMessage) =>
+                processIngest(config.trackInterval, state, imessage)
+
+              case Success(ArchiveMessage(_, path, _, _, _)) =>
+                if (config.cumulative) {
+                  state.inc
+                } else {
+                  trackState(state)
+
+                  if (path.length > 0) {
+                    //println("Deleting from path " + path)
+                    ReportState(index + 1, currentPathSize + (path -> 0L)).tap { newState =>
+                      trackState(newState)
+                    }
+                  } else {
+                    state.inc
+                  }
+                }
+
+              case other =>
+                println("## Skipping undesired data: " + other)
+                //RawFormat.dump(0, msg)
+                state.inc
+            }
+          }
+        }
+
+        trackState(finalState)
+
+        if (config.reportFormat == "csv") {
+          println("index,total," + trackedAccounts.sorted.map { acct => "\"%s\"".format(accountLookup.getOrElse(acct, acct)) }.mkString(","))
+          slices.foreach { case (index, byAccount) =>
+              val accountTotals = trackedAccounts.sorted.map(byAccount.getOrElse(_, 0L))
+              (index match {
+                case ExactTime(time, _) => Some(time)
+                case i: Interpolated => interpolationMap.get(i)
+              }).foreach { timestamp =>
+                //println(index + " => " + timestamp)
+                println("%d,%d,%s".format(timestamp, accountTotals.sum, accountTotals.mkString(",")))
+              }
+          }
+        } else {
+          slices.foreach { case (index, byAccount) =>
+              (index match {
+                case ExactTime(time, _) => Some(time)
+                case i: Interpolated => interpolationMap.get(i)
+              }).foreach { timestamp =>
+                //println(index + " => " + timestamp)
+                println(JObject("index" -> JNum(timestamp), "account" -> JString("total"), "size" -> JNum(byAccount.map(_._2).sum)).renderCompact)
+                trackedAccounts.foreach { account =>
+                  if (byAccount.contains(account)) {
+                    println(JObject("index" -> JNum(timestamp), "account" -> JString(accountLookup.getOrElse(account, account)), "size" -> JNum(byAccount.getOrElse(account, 0L))).renderCompact)
+                  }
+                }
+              }
+          }
+        }
+        sys.exit(0) // due to BlueEyes holding things open for mongo
+      }
+    }
+
+  class Config(var operation: Option[KafkaAction] = None,
+               var files: List[File] = Nil,
+               var trackInterval: Int = 50000,
+               var cumulative: Boolean = true,
+               var lookupDatabase: Option[String] = None,
+               var reportFormat: String = "json",
                var range: MessageRange = MessageRange.ALL)
 
   case class MessageRange(start: Option[Int], finish: Option[Int]) {
@@ -256,6 +472,22 @@ object KafkaTools extends Command {
     }
   }
 
+  def parseEventMessage(msg: MessageAndOffset) = EventMessageEncoding.read(msg.message.payload).flatMap {
+    case \/-(parsed : IngestMessage) =>
+      Success(parsed)
+
+    case -\/((_, path, msgGen)) =>
+      path.elements.headOption.map { account =>
+        msgGen(Authorities(account)).asInstanceOf[IngestMessage]
+      }.toSuccess("Could not determine account from path")
+
+    case \/-(parsed: ArchiveMessage) =>
+      Success(parsed)
+
+    case other =>
+      Failure("Could not determine message from " + other)
+  }
+
   sealed trait Format {
     def dump(i: Int, msg: MessageAndOffset)
   }
@@ -278,7 +510,7 @@ object KafkaTools extends Command {
 
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
-      EventEncoding.read(msg.message.buffer) match {
+      EventEncoding.read(msg.message.payload) match {
         case Success(Ingest(apiKey, path, ownerAccountId, data, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
@@ -291,11 +523,15 @@ object KafkaTools extends Command {
 
   case object CentralFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
-      EventMessageEncoding.read(msg.message.buffer) match {
-        case Success(\/-(IngestMessage(apiKey, path, ownerAccountId, data, _, _))) =>
+      val parsed = parseEventMessage(msg)
+
+      parsed.foreach {
+        case IngestMessage(apiKey, path, ownerAccountId, data, _, _) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
+      }
 
+      parsed.valueOr {
         case other =>
           println("Message %d: %s was not an ingest request.".format(i+1, other.toString))
       }

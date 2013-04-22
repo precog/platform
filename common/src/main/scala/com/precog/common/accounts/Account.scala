@@ -21,12 +21,13 @@ package com.precog.common
 package accounts
 
 import com.precog.common.Path
-import com.precog.common.json._
 import com.precog.common.security.APIKey
 
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.Versioned._
 
 import com.google.common.base.Charsets
 import com.google.common.hash.Hashing
@@ -59,17 +60,18 @@ case class Account(accountId: AccountId,
                    rootPath: Path,
                    plan: AccountPlan,
                    parentId: Option[String] = None,
-                   lastPasswordChangeTime: Option[DateTime] = None)
+                   lastPasswordChangeTime: Option[DateTime] = None,
+                   profile: Option[JValue] = None)
 
 object Account {
   implicit val iso = Iso.hlist(Account.apply _, Account.unapply _)
-  val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: HNil
+  val schemaV1     = "accountId" :: "email" :: "passwordHash" :: "passwordSalt" :: "accountCreationDate" :: "apiKey" :: "rootPath" :: "plan" :: "parentId" :: "lastPasswordChangeTime" :: "profile" :: HNil
 
   val extractorPreV = extractorV[Account](schemaV1, None)
-  val extractorV1 = extractorV[Account](schemaV1, Some("1.0"))
+  val extractorV1 = extractorV[Account](schemaV1, Some("1.1".v))
   implicit val accountExtractor = extractorV1 <+> extractorPreV
 
-  implicit val decomposerV1 = decomposerV[Account](schemaV1, Some("1.0"))
+  implicit val decomposerV1 = decomposerV[Account](schemaV1, Some("1.1".v))
 
   private val randomSource = new java.security.SecureRandom
 
