@@ -61,7 +61,7 @@ object EventMessage {
 
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
-      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _)
+      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _, StoreFileMessage.Decomposer.apply _)
     }
   }
 }
@@ -184,6 +184,9 @@ object StoreFileMessage {
   val decomposerV1: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0"))
 
   val extractorV1: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0"))
+
+  implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV1
+  implicit val Extractor: Extractor[StoreFileMessage] = extractorV1
 }
 
 trait ContentEncoding {
