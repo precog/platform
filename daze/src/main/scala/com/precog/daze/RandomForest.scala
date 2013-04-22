@@ -62,9 +62,9 @@ import MissingSpireOps._
 sealed trait DecisionTree[/*@specialized(Double) */A] {
   def apply(v: Array[Double]): A = {
     @tailrec def loop(tree: DecisionTree[A]): A = tree match {
-      case Split(i, boundary, left, right, _) =>
+      case Split(i, boundary, left, right) =>
         if (v(i) <= boundary) loop(left) else loop(right)
-      case Leaf(k, _) =>
+      case Leaf(k) =>
         k
     }
 
@@ -73,9 +73,9 @@ sealed trait DecisionTree[/*@specialized(Double) */A] {
 }
 
 case class Split[/*@specialized(Double) */A](variable: Int, boundary: Double,
-    left: DecisionTree[A], right: DecisionTree[A], error: Double) extends DecisionTree[A]
+    left: DecisionTree[A], right: DecisionTree[A]) extends DecisionTree[A]
 
-case class Leaf[/*@specialized(Double) */A](value: A, error: Double) extends DecisionTree[A]
+case class Leaf[/*@specialized(Double) */A](value: A) extends DecisionTree[A]
 
 
 case class TreeMakerOptions(features: Int, featuresSampled: Int, minSplitSize: Int) {
@@ -163,8 +163,7 @@ trait TreeMaker[/*@specialized(Double) */A] {
       val members = orders(0)
 
       if (members.size < opts.minSplitSize || tries > opts.maxTries) {
-        val r = region(members)
-        Leaf(r.value, r.error)
+        Leaf(region(members).value)
       } else {
         val vars = predictors()
         val region0 = region(members)
@@ -224,7 +223,7 @@ trait TreeMaker[/*@specialized(Double) */A] {
 
           val boundary = (independent(featureOrder(minIdx))(minVar) +
                           independent(featureOrder(minIdx + 1))(minVar)) / 2
-          Split(minVar, boundary, growTree(leftOrders), growTree(rightOrders), minError)
+          Split(minVar, boundary, growTree(leftOrders), growTree(rightOrders))
         }
       }
     }
@@ -520,10 +519,10 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
 
       val independent = "predictors"
       val dependent = "dependent"
-      val chunkSize = 10
+      val chunkSize = 3
       val numChunks = 10
-      val varianceThreshold = 0.01
-      val sampleSize = 1000
+      val varianceThreshold = 0.001
+      val sampleSize = 10000
       val maxForestSize = 2000
 
       val independentSpec = trans.DerefObjectStatic(TransSpec1.Id, CPathField(independent))
