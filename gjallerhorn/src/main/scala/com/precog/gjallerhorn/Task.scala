@@ -32,17 +32,17 @@ abstract class Task(settings: Settings) extends Specification {
 
   def generateUserAndPassword = (text(12) + "@plastic-idolatry.com", text(12))
 
-  def accounts = host0(serviceHost, accountsPort) / "accounts"
+  def accounts = host0(serviceHost, accountsPort) / "accounts" / "v1" / "accounts"
 
-  def security = host0(serviceHost, authPort) / "apikeys"
+  def security = host0(serviceHost, authPort) / "security" / "v1" / "apikeys"
 
-  def grants = host0(serviceHost, authPort) / "grants"
+  def grants = host0(serviceHost, authPort) / "security" / "v1" / "grants"
   
-  def metadata = host0(serviceHost, shardPort) / "meta"
+  def metadata = host0(serviceHost, shardPort) / "analytics" / "v2" / "meta"
 
-  def ingest = host0(serviceHost, ingestPort)
+  def ingest = host0(serviceHost, ingestPort) / "ingest" / "v2"
 
-  def analytics = host0(serviceHost, shardPort) / "analytics"
+  def analytics = host0(serviceHost, shardPort) / "analytics" / "v2" / "analytics"
 
   def getjson(rb: RequestBuilder) =
     JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
@@ -80,8 +80,8 @@ abstract class Task(settings: Settings) extends Specification {
   def ingestFile(account: Account, path: String, file: File, contentType: String) {
     val req = ((ingest / "sync" / "fs" / path).POST
                 <:< List("Content-Type" -> contentType)
-                <<? List("apiKey" -> account.apiKey,
-                        "ownerAccountId" -> account.accountId)
+                <<? List("apiKey" -> account.apiKey/*,
+                        "ownerAccountId" -> account.accountId*/)
                 <<< file)
     Http(req OK as.String)()
   }
@@ -89,10 +89,9 @@ abstract class Task(settings: Settings) extends Specification {
   def ingestString(account: Account, data: String, contentType: String)(f: Req => Req) {
     val req = (f(ingest / "sync" / "fs").POST
                 <:< List("Content-Type" -> contentType)
-                <<? List("apiKey" -> account.apiKey,
-                        "ownerAccountId" -> account.accountId)
+                <<? List("apiKey" -> account.apiKey/*,
+                        "ownerAccountId" -> account.accountId*/)
                 << data)
-
     Http(req OK as.String)()
   }
 
@@ -102,7 +101,6 @@ abstract class Task(settings: Settings) extends Specification {
                 <<? List("apiKey" -> account.apiKey,
                         "ownerAccountId" -> account.accountId)
                 << data)
-
     Http(req OK as.String)()
   }
 

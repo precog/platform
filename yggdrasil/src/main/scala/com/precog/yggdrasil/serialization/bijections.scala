@@ -25,7 +25,6 @@ package object bijections {
       VectorCase.fromSeq(read(Vector.empty[Long]))
     }
   }
-  */
 
   implicit object booltoab extends Bijection[Boolean, Array[Byte]] {
     def apply(b : Boolean) = ByteBuffer.allocate(1).put(if (b) (0x1: Byte) else (0x0: Byte)).array
@@ -76,6 +75,7 @@ package object bijections {
       _unapply(0).map(identity[T])
     }
   }
+  */
 }
 
 // vim: set ts=4 sw=4 et:

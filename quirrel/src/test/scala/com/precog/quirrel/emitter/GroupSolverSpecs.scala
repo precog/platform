@@ -951,7 +951,7 @@ object GroupSolverSpecs extends Specification
       
       compileSingle(input).errors must beEmpty
     }
-    
+     
     "correctly identify commonality for constraint clause deriving from object def on non-constant fields" in {
       val input = """
         | clicks := //clicks
@@ -1110,6 +1110,17 @@ object GroupSolverSpecs extends Specification
         |   foo where (if foo.a then foo.b else foo.c) = 'a""".stripMargin
         
       compileSingle(input).errors must beEmpty
+    }
+    
+    "reject a reduction in an extra" in {
+      val input = """
+        | foo := //foo
+        | 
+        | solve 'a
+        |   foo where foo.a = 'a & exists(foo.b = "boo")
+        | """.stripMargin
+        
+      compileSingle(input).errors must not(beEmpty)
     }
   }
 }

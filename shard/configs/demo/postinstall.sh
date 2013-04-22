@@ -46,7 +46,7 @@ sleep 30
 
 echo "Running health checks"
 for PORT in 31150 31152 31154 31156; do
-    curl -v -f -G "http://localhost:$PORT/blueeyes/services/analytics/v2/health"
+    curl -v -f -G "http://localhost:$PORT/analytics/v2/health"
     echo ""
 done
 echo "Completed health checks"

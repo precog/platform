@@ -38,6 +38,9 @@ A few landmarks:
 
 * **shard** - BlueEyes services and final instantiation of ALL THE THINGS
 
+* **desktop** - Build scripts for standalone desktop version -- see local
+  README.rst.
+
 Thus, to work on the evaluator, one would be in the **daze** project, writing
 tests in the **daze** and **muspelheim** projects.  The tests in the **muspelheim**
 project would be run from the **pandora** project (*not* from **muspelheim**),

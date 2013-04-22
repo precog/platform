@@ -3,8 +3,10 @@ package com.precog.heimdall
 import com.precog.common.jobs._
 import com.precog.common.security.APIKey
 import com.precog.common.client._
+import com.precog.util.IOUtils
 
 import org.specs2.mutable._
+import org.specs2.specification.{Fragments, Step}
 
 import org.joda.time.DateTime
 
@@ -31,6 +33,18 @@ class InMemoryJobManagerSpec extends Specification {
     val jobs = new InMemoryJobManager[Id]
     val M: Monad[Id] with Comonad[Id] = implicitly
   })
+}
+
+class FileJobManagerSpec extends Specification {
+  val tempDir = IOUtils.createTmpDir("FileJobManagerSpec").unsafePerformIO
+
+  include(new JobManagerSpec[Id] {
+    val validAPIKey = "Anything should work!"
+    val jobs = FileJobManager[Id](tempDir, Id.id)
+    val M: Monad[Id] with Comonad[Id] = implicitly
+  })
+
+  override def map(fs: => Fragments) = Step { IOUtils.recursiveDelete(tempDir).unsafePerformIO } ^ fs
 }
 
 class WebJobManagerSpec extends TestJobService { self =>

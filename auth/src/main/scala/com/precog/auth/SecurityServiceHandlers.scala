@@ -1,7 +1,6 @@
 package com.precog.auth
 
 import com.precog.common.Path
-import com.precog.common.json._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
 
@@ -50,7 +49,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Retrieves the children of the authorizing API key.")
   }
 
   trait CreateHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
@@ -66,8 +65,6 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
         response.toEither.merge
       }
     }
-
-    val metadata = None
   }
 
   object CreateAPIKeyHandler extends CreateHandler {
@@ -93,6 +90,8 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     protected val missingContentMessage = "Missing new API key request body."
+
+    val metadata = DescriptionMetadata("Creates a new API key as a child of the specified authorizing API key.")
   }
 
   object ReadAPIKeyDetailsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -104,11 +103,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           if (k.isDefined) ok(k) else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
-        Promise successful badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the details of the API key specified in the path.")
   }
 
   object DeleteAPIKeyHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -118,11 +117,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           if (k.isDefined) noContent else notFound("Unable to find API key "+apiKey)
         }
       } getOrElse {
-        Promise successful badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Deletes the specified API key.")
   }
 
   object ReadAPIKeyGrantsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -133,11 +132,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           case None => notFound("The specified API key does not exist")
         }
       } getOrElse {
-        Promise successful badRequest("Missing API key from request URI.")
+        Promise successful badRequest("Missing API key from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the set of grants associated with the API key resource specified by the URL path.")
   }
 
   object CreateAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -155,14 +154,14 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     val service = (request: HttpRequest[Future[JValue]]) => Success {
-      val apiKeyV = request.parameters.get('apikey).toSuccess(badRequest("Missing API key from request URI"))
+      val apiKeyV = request.parameters.get('apikey).toSuccess(badRequest("Missing API key from request URL"))
       for {
         contentV <- request.content.toSuccess(badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
         response <- (for (apiKey <- apiKeyV; content <- contentV) yield create(apiKey, content)).sequence[Future, R]
       } yield response.toEither.merge
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Adds a new grant to the API key resource specified by the URL path.")
   }
 
   object DeleteAPIKeyGrantHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -173,11 +172,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           else badRequest("Invalid remove grant request.", Some("Unable to remove grant "+grantId+" from API key "+apiKey))
         }
       } getOrElse {
-        Promise successful badRequest("Missing API key or grant ID from request URI")
+        Promise successful badRequest("Missing API key or grant ID from request URL")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Deletes the grant resource specified by the URL path from the API key resource specified by the URL path.")
   }
 
   object ReadGrantsHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
@@ -187,7 +186,7 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the list of grants available to the authorizing API key.")
   }
 
   object CreateGrantHandler extends CreateHandler {
@@ -206,6 +205,8 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     protected val missingContentMessage = "Missing grant request body."
+
+    val metadata = DescriptionMetadata("Creates a new grant derived from permissions conferred by the grants of the authorizing API key.")
   }
 
   object ReadGrantDetailsHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -216,11 +217,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           else notFound("Unable to find grant " + grantId)
         }
       } getOrElse {
-        Promise successful badRequest("Missing grant ID from request URI.")
+        Promise successful badRequest("Missing grant ID from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the details of the grant resource specified in the request URL.")
   }
 
   object ReadGrantChildrenHandler extends CustomHttpService[Future[JValue], Future[R]] with Logging {
@@ -230,11 +231,11 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
           grants => ok(Some(grants map grantDetails))
         }
       } getOrElse {
-        Promise successful badRequest("Missing grant ID from request URI.")
+        Promise successful badRequest("Missing grant ID from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Returns the set of child grants derived from the grant resource specified in the request URL.")
   }
 
   object CreateGrantChildHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
@@ -252,14 +253,14 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
     }
 
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey) =>
-      val parentIdV = request.parameters.get('grantId).toSuccess(badRequest("Missing grant ID from request URI"))
+      val parentIdV = request.parameters.get('grantId).toSuccess(badRequest("Missing grant ID from request URL"))
       for {
         contentV <- request.content.toSuccess(badRequest("Missing body content for grant creation.")).sequence[Future, JValue]
         response <- (for (parentId <- parentIdV; content <- contentV) yield create(authAPIKey, parentId, content)).sequence[Future, R]
       } yield response.toEither.merge
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Creates a new grant as a child of the grant resource specified in the request URL, and deriving its permissions therefrom.")
   }
 
   object DeleteGrantHandler extends CustomHttpService[Future[JValue], APIKey => Future[R]] with Logging {
@@ -284,19 +285,19 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
             Promise successful badRequest("Unable to find grant " + grantId + " for deletion.")
         }
       } getOrElse {
-        Promise successful badRequest("Missing grant ID from request URI.")
+        Promise successful badRequest("Missing grant ID from request URL.")
       }
     }
 
-    val metadata = None
+    val metadata = DescriptionMetadata("Deletes the grant resource specified in the request URL.")
   }
 
   object ReadPermissionsHandler extends CustomHttpService[Future[JValue], (APIKey, Path) => Future[R]] with Logging {
     val service = (request: HttpRequest[Future[JValue]]) => Success { (authAPIKey: APIKey, path: Path) =>
       val atO: Option[Validation[Extractor.Error, DateTime]] = request.parameters.get('at).map(JString(_).validated[DateTime])
-      atO.sequence[({ type λ[α] = Validation[Extractor.Error, α] })#λ, DateTime] match {
+      atO.getOrElse(Success(clock.now())) match {
         case Success(at) =>
-          apiKeyManager.validGrants(authAPIKey, at) map { grants =>
+          apiKeyManager.validGrants(authAPIKey, Some(at)) map { grants =>
             val pathPermissions = grants flatMap (_.permissions) filter { perm =>
               (perm.path == path) || path.isChildOf(perm.path)
             }
@@ -309,6 +310,12 @@ class SecurityServiceHandlers(val apiKeyManager: APIKeyManager[Future], val cloc
       }
     }
 
-    val metadata = None
+    val metadata = AndMetadata(
+      AboutMetadata(
+        ParameterMetadata('at, Some("Defaults to the current time.")),
+        DescriptionMetadata("The timestamp against which permissions should be checked, in ISO8601 datetime format.")
+      ),
+      DescriptionMetadata("Retrieves the full set of permissions available to the authorizing API key.")
+    )
   }
 }

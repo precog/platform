@@ -3,7 +3,6 @@ package actor
 
 import com.precog.common._
 import com.precog.common.ingest._
-import com.precog.common.json._
 
 import akka.actor.{Actor,ActorRef,Props,Scheduler}
 import akka.dispatch.Await

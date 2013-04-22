@@ -5,7 +5,7 @@ import yggdrasil._
 import yggdrasil.table._
 
 import common._
-import common.json._
+
 
 import bytecode._
 import TableModule._
@@ -268,7 +268,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
       }
     }
 
-    object LogisticPrediction extends Morphism2(Stats2Namespace, "predictLogistic") with PredictionBase {
+    object LogisticPrediction extends Morphism2(Stats2Namespace, "predictLogistic") with LogisticPredictionBase {
       val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
       override val retainIds = true

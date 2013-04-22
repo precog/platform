@@ -10,7 +10,7 @@ import blueeyes.json._
 import com.precog.bytecode._
 import com.precog.common._
 import com.precog.common.ingest._
-import com.precog.common.json._
+
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
@@ -118,7 +118,7 @@ object JDBCPlatformSpecEngine extends Logging {
 
             JParser.parseManyFromFile(file) match {
               case Success(data) =>
-                val rows: Seq[Vector[(String, (String, String))]] = data.map { jv =>
+                val rows: Seq[Seq[(String, (String, String))]] = data.map { jv =>
                   jv.flattenWithPath.map { case (p, v) => (JDBCColumnarTableModule.escapePath(p.toString.drop(1)), jvToSQL(v)) }
                 }
 
@@ -268,7 +268,7 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
 
 /*
 // These are disabled for now because getting SQL tables to hold our JSON datasets
-// is too onerous at this point, and won't show us anything that the JDBM and Mongo
+// is too onerous at this point, and won't show us anything that the NIHDB and Mongo
 // specs don't already
 
 class JDBCBasicValidationSpecs extends BasicValidationSpecs with JDBCPlatformSpecs
