@@ -20,6 +20,8 @@
 package com.precog
 package yggdrasil
 
+import com.google.common.cache.RemovalCause
+
 import com.precog.common.json._
 
 import blueeyes.core.http._
@@ -31,9 +33,6 @@ import org.joda.time._
 import shapeless._
 import scalaz._
 
-
-
-
 object Resource {
   val QuirrelData = MimeType("application", "x-quirrel-data")
 }
@@ -41,20 +40,14 @@ object Resource {
 sealed trait Resource {
   def mimeType: Future[MimeType]
   def authorities: Future[Authorities]
+  def close: Future[PrecogUnit]
 }
 
-
-
-
-
-case class NIHDBResource(db: NIHDB)(implicit ec: ExecutionContext) {
+case class NIHDBResource(db: NIHDB)(implicit as: ActorSystem) extends Resource {
   def mimeType: Future[MimeType] = Future(Resource.QuirrelData)
   def authorities: Future[Authorities] = db.authorities
+  def close: Future[PrecogUnit] = db.close(as)
 }
-
-
-
-
 
 // We may want to add a checksum field.
 case class BlobMetadata(mimeType: MimeType, size: Long, created: DateTime, authorities: Authorities)
@@ -89,8 +82,9 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
         else if (read == bytes.length) Some(bytes)
         else Some(java.util.Arrays.copyOf(bytes, read)
 
-      } else {
-        readChunk(remaining)
+        } else {
+          readChunk(remaining)
+        }
       }
     }
 
@@ -102,6 +96,8 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
       }
     }
   }
+
+  def close = Promise.successful(PrecogUnit)
 }
 
 object Blob {
@@ -133,105 +129,15 @@ object ResourceError {
 //   def authorities(a: A): Authorities
 // }
 
+sealed trait PathOp
+case class Create[A, B <: Resource](data: A, id: ResourceId, auth: Option[APIKey]) extends PathOp
 
 /**
- * Used to access resources. This is needed because opening a NIHDB requires
- * more than just a basedir, but also things like the chef, txLogScheduler, etc.
- * This also goes for blobs, where the metadata log requires the txLogScheduler.
- */
-trait Resources {
-  def actorSystem: ActorSystem
-  def clock: Clock
-  def chef: ActorRef
-  def cookThreshold: Int
-  def storageTimeout: Timeout
-  def permissionsFinder: PermissionsFinder[Future]
-  def txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
-
-  import ResourceError._
-
-  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize,
-    new ThreadFactoryBuilder().setNameFormat("HOWL-sched-%03d").build())
-
-  def createNIHDB(baseDir: File, authorities: Authorities): IO[Validation[ResourceError, NIHDBResource]] = {
-    val dbIO = NIHDB.create(chef, authorities, baseDir,
-      cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-    dbIO map { dbV =>
-      fromExtractorError("Failed to create NIHDB") <-: (dbV map (NIHDBResource(_)(actorSystem.dispatcher)))
-    }
-  }
-
-  def openNIHDB(baseDir: File): IO[Validation[ResourceError, NIHDBResource]] = {
-    val dbIO = NIHDB.open(chef, baseDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-    dbIO map (_ map { dbV =>
-      val resV = dbV map (NIHDBResource(_)(actorSystem.dispatcher))
-      fromExtractorError("Failed to open NIHDB") <-: resV :-> (_._2)
-    }
-  }
-
-  /**
-   * Open the blob for reading in `baseDir`.
-   */
-  def openBlob(baseDir: File): IO[Validtion[ResourceError, Blob]] = IO {
-    val metadataStore = PersistentJValue(baseDir, "metadata")
-    val metadata = metadataStore.validated[BlobMetadata]
-    val resource = metadata map { metadata =>
-      Blob(metadata, new File(baseDir, "data"))(actorSystem.dispatcher)
-    }
-    fromExtractorError("Error reading metadata") <-: resource
-  }
-
-  /**
-   * Creates a blob from a data stream.
-   */
-  def createBlob[M[+_]: Monad](baseDir: File, mimeType: MimeType, authorities: Authorities,
-      data: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Blob]] = {
-
-    val file = new File(baseDir, "data")
-    val out = new FileOutputStream(file)
-    def write(size: Long, stream: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Long]] = {
-      stream.uncons flatMap {
-        case Some((bytes, tail)) =>
-          try {
-            out.write(bytes)
-            write(size + bytes.length, tail)
-          } catch { case (ioe: IOException) =>
-            out.close()
-            Failure(IOError(ioe)).point[M]
-          }
-
-        case None =>
-          out.close()
-          Success(size).point[M]
-      }
-    }
-
-    write(0L, data) map (_ flatMap { size =>
-      try {
-        val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
-        val metadataStore = PersistentJValue(baseDir, "metadata")
-        metadataStore.json = metadata.serialize
-        Success(Blob(metadata, file)(actorSystem.dispatcher))
-      } catch { case (ioe: IOException) =>
-        Failure(IOError(ioe))
-      }
-    })
-  }
-}
-
-
-trait ResourceCreator[A, B <: Resource] {
-  def create(baseDir: File, data: A): IO[Validation[ResourceError, B]]
-}
-
-
-
-
-
-sealed trait PathOp
-case class Create[A, B <: Resource](data: A, auth: Option[APIKey], creator: ResourceCreator[A, B]) extends PathOp
+  * Appends to a specified resource or the current resource, depending on the id field.
+  */
+case class Append[A, B <: Resource](data: A, id: Option[ResourceId], auth: Option[APIKey]) extends PathOp
+case class Replace(id: ResourceId, auth: Option[APIKey]) extends PathOp
 case class Read(auth: Option[APIKey]) extends PathOp
-case class Archive(auth: Option[APIKey]) extends PathOp
 case class Execute(auth: Option[APIKey]) extends PathOp
 case class Stat(auth: Option[APIKey]) extends PathOp
 
@@ -269,8 +175,12 @@ object VersionLog {
   }
 }
 
-final case class PathManagerActor(baseDir: File, resources: Resources) extends Actor {
-  private def versionSubdir(version: Long) = "v%020d" format version
+/**
+  * An actor that manages resources under a given path. The baseDir is the version
+  * subdir for the path.
+  */
+final case class PathManagerActor(baseDir: File, path: Path, resources: Resources) extends Actor {
+  private def versionSubdir(version: Long): File = new File(baseDir, "v%020d" format version)
 
   private val versionStore = PersistentJValue(baseDir, "versions")
   private var versions: VersionLog =
@@ -279,12 +189,92 @@ final case class PathManagerActor(baseDir: File, resources: Resources) extends A
   private def rollOver[A, B](f: File => Validation[A, B]): Validation[A, B] = {
     val v = versions.current
     val dir = versionSubdir(v)
-    val file = new File(baseDir, dir)
-    file.mkdirs()
-    f(file) map { b =>
-      versions += (v -> dir)
+    dir.mkdirs()
+    f(dir) map { b =>
+      versions += (v -> dir.getCanonicalPath)
       versionStore.json = versions.serialize
       b
+    }
+  }
+
+  // Keeps track of the open projections for a given version/authority pair
+  private val resources = Cache.simple[VersionId, Map[Authorities, Resource]](
+    OnRemoval {
+      case (_, resourceMap, cause) if cause != RemovalCause.REPLACED => resourceMap.foreach(_.close)
+    },
+    ExpireAfterAccess(Duration(30, TimeUnit.Minutes))
+  )
+
+  private def openProjections(version: VersionId): Option[IO[List[NIHDBResource]]] = {
+    resources.get(version).map { existing =>
+      logger.debug("Found cached projections for v" + version)
+      IO(existing.values.toList.collect { case nr: NIHDBResource => nr })
+    } orElse {
+      logger.debug("Opening new projections for v" + version)
+      resources.findDescriptorDirs(versionSubdir(version)).map { projDirs =>
+        projDirs.toList.map { bd =>
+          resources.openNIHDB(bd).map { dbv =>
+            dbv.map { nihdbResource =>
+              resources += (version.current -> (resources.getOrElse(version, Map()) + (nihdbResource.authorities -> nihdbResource)))
+              logger.debug("Cache for v%d updated to %s".format(version, resources.get(version)))
+              nihdbResource
+            }
+          }.valueOr { error => sys.error("An error occurred opening the NIHDB projection in %s: %s".format(bd, error.message)) }
+        }.sequence.map(_.flatten)
+      }
+    }
+  }
+
+  def aggregateProjections(version: VersionId, apiKey: Option[APIKey]): Future[Option[NIHDBResource]] = {
+    findProjections(version, apiKey).flatMap {
+      case Some(inputs) =>
+        inputs.toNel traverse { ps =>
+          if (ps.size == 1) {
+            logger.debug("Aggregate on v%d with key %s returns a single projection".format(version, apiKey))
+            Promise.successful(ps.head)(context.dispatcher)
+          } else {
+            logger.debug("Aggregate on v%d with key %s returns an aggregate projection".format(version, apiKey))
+            for {
+              authorities <- ps.traverse(_.authorities)
+              snaps <- ps.traverse(_.getSnapshot)
+            } yield {
+              new NIHDBResource(new NIHDBAggregate(authorities, snaps))
+            }
+          }
+        }
+
+      case None =>
+        logger.debug("No projections found for " + path)
+        Promise.successful(None)(context.dispatcher)
+    }
+  }
+
+  def findProjections(version: VersionId, apiKey: Option[APIKey]): Future[Option[List[NIHDBProjection]]] = {
+    import Permission._
+    openProjections(version).map(_.unsafePerformIO) match {
+      case None =>
+        logger.warn("No projections found at " + path)
+        Promise.successful(None)(context.dispatcher)
+
+      case Some(foundProjections) =>
+        logger.debug("Checking found projections on v" + version + " for access")
+        foundProjections traverse { proj =>
+          apiKey.map { key =>
+            proj.authorities.flatMap { authorities =>
+              // must have at a minimum a reduce permission from each authority
+              // TODO: get a Clock in here
+              authorities.accountIds.toList traverse { id =>
+                apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
+              } map {
+                _.forall(_ == true).option(proj)
+              }
+            }
+          } getOrElse {
+            Promise.successful(Some(proj))(context.dispatcher)
+          }
+        } map {
+          _.sequence
+        }
     }
   }
 
