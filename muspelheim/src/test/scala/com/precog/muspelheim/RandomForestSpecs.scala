@@ -190,6 +190,10 @@ trait RandomForestSpecs extends EvalStackSpecs {
         data0 := //auto-mpg
         features0 := data0.features
 
+        countryOfOrigin := distinct(features0[6])
+
+        features0 ~ countryOfOrigin
+
         features :=
           [
             features0[0],
@@ -197,26 +201,30 @@ trait RandomForestSpecs extends EvalStackSpecs {
             if (features0[2] = null) then mean(features0[2]) else features0[2],
             features0[3],
             features0[4],
-            features0[5]
+            features0[5],
+            std::stats::dummy(countryOfOrigin) where countryOfOrigin = features0[6]
           ]
 
-        data := {predictors: features, dependent: data0.mpg}
-        data' := data with { rand: observe(data0, std::random::uniform(112)) } 
+        features
 
-        pt := 0.9
-        trainingData := data' where data'.rand <= pt
-        predictionData := data' where data'.rand > pt
+        -- data := { predictors: features, dependent: data0.mpg }
+        -- data' := data with { rand: observe(data0, std::random::uniform(112)) } 
 
-        predictions := std::stats::rfRegression(trainingData, predictionData.predictors)
-        results := predictionData with predictions
+        -- pt := 0.9
+        -- trainingData := data' where data'.rand <= pt
+        -- predictionData := data' where data'.rand > pt
 
-        SSerr := sum((results.model1 - results.dependent)^2)
-        SStot := sum((results.dependent - mean(results.dependent))^2)
+        -- predictions := std::stats::rfRegression(trainingData, predictionData.predictors)
+        -- results := predictionData with predictions
 
-        1 - (SSerr / SStot)
+        -- SSerr := sum((results.model1 - results.dependent)^2)
+        -- SStot := sum((results.dependent - mean(results.dependent))^2)
+
+        -- 1 - (SSerr / SStot)
       """
 
       val results = evalE(input)
+      println(results)
 
       results must haveSize(1)
 

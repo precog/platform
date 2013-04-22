@@ -160,6 +160,28 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
     }.pendingUntilFixed
+
+    "assign dummy variables to loaded dataset" >> {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Dummy,
+        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 1 => d
+      }
+
+      result2 must_== Set(
+        Vector(SDecimal(0), SDecimal(0), SDecimal(0), SDecimal(0), SDecimal(1)),
+        Vector(SDecimal(0), SDecimal(0), SDecimal(0), SDecimal(1), SDecimal(0)),
+        Vector(SDecimal(0), SDecimal(0), SDecimal(1), SDecimal(0), SDecimal(0)),
+        Vector(SDecimal(0), SDecimal(1), SDecimal(0), SDecimal(0), SDecimal(0)),
+        Vector(SDecimal(1), SDecimal(0), SDecimal(0), SDecimal(0), SDecimal(0)))
+    }
     
     "compute rank" in {
       val line = Line(1, 1, "")
