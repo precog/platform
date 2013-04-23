@@ -125,7 +125,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
   private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Response[Set[Permission]] = {
     withJsonClient { client0 =>
       val client = at map (fmt.print(_)) map (client0.query("at", _)) getOrElse client0
-      eitherT(client.query("apiKey", apiKey).get[JValue]("permissions/fs" + URLEncoder.encode(path.path, "UTF-8")) map {
+      eitherT(client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path.urlEncode.path) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_:Extractor.Error).message) <-: jvalue.validated[Set[Permission]]).disjunction
         case res =>
