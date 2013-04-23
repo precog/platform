@@ -39,9 +39,11 @@ import akka.dispatch.Future
 import scalaz._
 import scalaz.syntax.monad._
 
-class FileCreateHandler(clock: Clock)(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] {
-  val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
-    Success((apiKey: APIKey, path: Path) => HttpResponse[JValue](InternalServerError, content = Some(JString("Not yet implemented."))).point[Future])
+class FileCreateHandler(clock: Clock, eventStore: EventStore[Future])(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] {
+  val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => Success {
+    (apiKey: APIKey, path: Path) => {
+      HttpResponse[JValue](InternalServerError, content = Some(JString("Not yet implemented."))).point[Future])
+    }
   }
 
   val metadata = NoMetadata

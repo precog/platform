@@ -43,16 +43,25 @@ import scalaz.syntax.validation._
 
 import shapeless._
 
+case class SplitMeta(idx: Int, total: Int)
+object SplitMeta {
+  implicit val splitMetaIso = Iso.hlist(SplitMeta.apply _, SplitMeta.unapply _)
+  val schemaV1 = "idx" :: "total" :: HNil
+  implicit def extractor = extractorV[SplitMeta](schemaV1, Some("1.0"))
+  implicit def decomposer = decomposerV[SplitMeta](schemaV1, Some("1.0"))
+}
+
 sealed trait Event {
-  def fold[A](ingest: Ingest => A, archive: Archive => A): A
+  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A
   def split(n: Int): List[Event]
   def length: Int
+  def splitMeta: Option[SplitMeta]
 }
 
 object Event {
   implicit val decomposer: Decomposer[Event] = new Decomposer[Event] {
     override def decompose(event: Event): JValue = {
-      event.fold(_.serialize, _.serialize)
+      event.fold(_.serialize, _.serialize, _.serialize)
     }
   }
 }
@@ -60,21 +69,21 @@ object Event {
 /**
  * If writeAs is None, then the downstream 
  */
-case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant) extends Event {
-  def fold[A](ingest: Ingest => A, archive: Archive => A): A = ingest(this)
+case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, splitMeta: Option[SplitMeta]) extends Event {
+  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = ingest(this)
+
   def split(n: Int): List[Event] = {
     val splitSize = (data.length / n) max 1
-    data.grouped(splitSize).map {
-      d => this.copy(data = d)
-    }.toList
+    data.grouped(splitSize).map(d => this.copy(data = d))(collection.breakOut)
   }
+
   def length = data.length
 }
 
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "splitMeta" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0".v))
@@ -107,8 +116,9 @@ object Ingest {
 }
 
 case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId], timestamp: Instant) extends Event {
-  def fold[A](ingest: Ingest => A, archive: Archive => A): A = archive(this)
+  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = archive(this)
   def split(n: Int) = List(this) // can't split an archive
+  val splitMeta = None
   def length = 1
 }
 
@@ -135,5 +145,20 @@ object Archive {
   implicit val Decomposer: Decomposer[Archive] = decomposerV1
   implicit val Extractor: Extractor[Archive] = extractorV1 <+> extractorV0
 }
+
+case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: Array[Byte], encoding: ContentEncoding, timestamp: Instant, splitMeta: Option[SplitMeta]) extends EventMessage {
+  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A
+  def split(n: Int) = {
+    val splitSize = content.length / n
+    content.grouped(splitSize).map(d => this.copy(data = d))(collection.breakOut)
+  }
+    
+  def length = content.length
+}
+
+object StoreFile {
+
+}
+
 
 // vim: set ts=4 sw=4 et:
