@@ -50,6 +50,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
     object Dummy extends Morphism1(StatsNamespace, "dummy") {
       val tpe = UnaryOperationType(JType.JUniverseT, JArrayUnfixedT)
+      override val retainIds = true
 
       def apply(table: Table, ctx: EvaluationContext): M[Table] = {
         for {
