@@ -426,7 +426,98 @@ trait CogroupSpec[M[+_]] extends TableModuleTestSupport[M] with Specification wi
 
     toJson(result).copoint must_== expected
   }
+
+  def testLongEqualSpansOnRight = {
+    val record = JParser.parseUnsafe("""{"key":"Bob","value":42}""")
+    val ltable = fromSample(SampleData(Stream(record)))
+    val rtable = fromSample(SampleData(Stream.tabulate(22) { i =>
+      JParser.parseUnsafe("""{"key":"Bob","value":%d}""" format i)
+    }))
+
+    val expected = Stream.tabulate(22)(JNum(_))
+
+    val keySpec = DerefObjectStatic(Leaf(Source), CPathField("key"))
+    val result: Table = ltable.cogroup(keySpec, keySpec, rtable)(
+      WrapObject(Leaf(Source), "blah!"),
+      WrapObject(Leaf(Source), "argh!"),
+      DerefObjectStatic(Leaf(SourceRight), CPathField("value"))
+    )
+
+    val jsonResult = toJson(result).copoint
+    jsonResult must_== expected
+  }
+
+  def testLongEqualSpansOnLeft = {
+    val record = JParser.parseUnsafe("""{"key":"Bob","value":42}""")
+    val ltable = fromSample(SampleData(Stream.tabulate(22) { i =>
+      JParser.parseUnsafe("""{"key":"Bob","value":%d}""" format i)
+    }))
+    val rtable = fromSample(SampleData(Stream(record)))
+
+    val expected = Stream.tabulate(22)(JNum(_))
+
+    val keySpec = DerefObjectStatic(Leaf(Source), CPathField("key"))
+    val result: Table = ltable.cogroup(keySpec, keySpec, rtable)(
+      WrapObject(Leaf(Source), "blah!"),
+      WrapObject(Leaf(Source), "argh!"),
+      DerefObjectStatic(Leaf(SourceLeft), CPathField("value"))
+    )
+
+    val jsonResult = toJson(result).copoint
+    jsonResult must_== expected
+  }
+
+  def testLongEqualSpansOnBoth = {
+    val table = fromSample(SampleData(Stream.tabulate(22) { i =>
+      JParser.parseUnsafe("""{"key":"Bob","value":%d}""" format i)
+    }))
+
+    val expected = (for {
+      left <- 0 until 22
+      right <- 0 until 22
+    } yield {
+      JParser.parseUnsafe("""{ "left": %d, "right": %d }""" format (left, right))
+    }).toStream
+
+    val keySpec = DerefObjectStatic(Leaf(Source), CPathField("key"))
+    val result: Table = table.cogroup(keySpec, keySpec, table)(
+      WrapObject(Leaf(Source), "blah!"),
+      WrapObject(Leaf(Source), "argh!"),
+      InnerObjectConcat(
+        WrapObject(DerefObjectStatic(Leaf(SourceRight), CPathField("value")), "right"),
+        WrapObject(DerefObjectStatic(Leaf(SourceLeft), CPathField("value")), "left")
+      )
+    )
+
+    val jsonResult = toJson(result).copoint
+    jsonResult must_== expected
+  }
+
+  def testLongLeftSpanWithIncreasingRight = {
+    val ltable = fromSample(SampleData(Stream.tabulate(12) { i =>
+      JParser.parseUnsafe("""{"key":"Bob","value":%d}""" format i)
+    }))
+    val rtable = fromSample(SampleData(Stream(
+      JParser.parseUnsafe("""{"key":"Bob","value":50}"""),
+      JParser.parseUnsafe("""{"key":"Charlie","value":60}""")
+    )))
+
+
+    val expected = Stream.tabulate(12) { i =>
+      JParser.parseUnsafe("""{ "left": %d, "right": 50 }""" format i)
+    } ++ Stream(JParser.parseUnsafe("""{ "right": 60 }"""))
+
+    val keySpec = DerefObjectStatic(Leaf(Source), CPathField("key"))
+    val result: Table = ltable.cogroup(keySpec, keySpec, rtable)(
+      WrapObject(DerefObjectStatic(Leaf(Source), CPathField("value")), "left"),
+      WrapObject(DerefObjectStatic(Leaf(Source), CPathField("value")), "right"),
+      InnerObjectConcat(
+        WrapObject(DerefObjectStatic(Leaf(SourceRight), CPathField("value")), "right"),
+        WrapObject(DerefObjectStatic(Leaf(SourceLeft), CPathField("value")), "left")
+      )
+    )
+
+    val jsonResult = toJson(result).copoint
+    jsonResult must_== expected
+  }
 }
-
-
-// vim: set ts=4 sw=4 et:

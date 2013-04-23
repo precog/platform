@@ -179,7 +179,7 @@ trait RandomForestSpecs extends EvalStackSpecs {
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) =>
-          // println("pred rate classification: " + d.toDouble)
+          //println("pred rate classification: " + d.toDouble)
           d.toDouble must be_>(0.5)
         }
       }
@@ -205,33 +205,30 @@ trait RandomForestSpecs extends EvalStackSpecs {
             std::stats::dummy(countryOfOrigin) where countryOfOrigin = features0[6]
           ]
 
-        features
+         data := { predictors: features, dependent: data0.mpg }
+         rng := observe(data0, std::random::uniform(112))
 
-        -- data := { predictors: features, dependent: data0.mpg }
-        -- data' := data with { rand: observe(data0, std::random::uniform(112)) } 
+         pt := 0.9
+         trainingData := data where rng <= pt
+         predictionData := data where rng > pt
 
-        -- pt := 0.9
-        -- trainingData := data' where data'.rand <= pt
-        -- predictionData := data' where data'.rand > pt
+         predictions := std::stats::rfRegression(trainingData, predictionData.predictors)
+         results := predictionData with predictions
 
-        -- predictions := std::stats::rfRegression(trainingData, predictionData.predictors)
-        -- results := predictionData with predictions
+         SSerr := sum((results.model1 - results.dependent)^2)
+         SStot := sum((results.dependent - mean(results.dependent))^2)
 
-        -- SSerr := sum((results.model1 - results.dependent)^2)
-        -- SStot := sum((results.dependent - mean(results.dependent))^2)
-
-        -- 1 - (SSerr / SStot)
+         1 - (SSerr / SStot)
       """
 
       val results = evalE(input)
-      println(results)
 
       results must haveSize(1)
 
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) => 
-          // println("r^2 regression: " + d)
+          //println("r^2 regression: " + d)
           d.toDouble must be_>(0.4)
         }
       }

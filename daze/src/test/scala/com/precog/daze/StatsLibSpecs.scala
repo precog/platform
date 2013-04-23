@@ -183,6 +183,27 @@ trait StatsLibSpecs[M[+_]] extends Specification
         Vector(SDecimal(1), SDecimal(0), SDecimal(0), SDecimal(0), SDecimal(0)))
     }
     
+    "assign dummy variables to loaded dataset across slices" >> {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Dummy,
+        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(22)
+
+      val expected = Vector.tabulate(22) { i =>
+        Vector.fill(22)(SDecimal(0)).updated(i, SDecimal(1))
+      }.toSet
+      
+      val result2 = result collect {
+        case (ids, SArray(d)) if ids.length == 1 => d
+      }
+
+      result2 must_== expected
+    }
+    
     "compute rank" in {
       val line = Line(1, 1, "")
     

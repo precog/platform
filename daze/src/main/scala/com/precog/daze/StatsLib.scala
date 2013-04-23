@@ -66,61 +66,6 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
     override def _libMorphism1 = super._libMorphism1 ++ Set(Median, Mode, Rank, DenseRank, IndexedRank, Dummy)
     override def _libMorphism2 = super._libMorphism2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
     
-
-    object Dummy extends Morphism1(StatsNamespace, "dummy") {
-      val tpe = UnaryOperationType(JType.JUniverseT, JArrayUnfixedT)
-      override val retainIds = true
-
-      def apply(table: Table, ctx: EvaluationContext): M[Table] = {
-        for {
-          count <- table.reduce(Count.reducer(ctx))
-        } yield {
-          if (count > 1000) {
-            sys.error("explode too many columns")
-          } else {
-            val spec = liftToValues(trans.Scan(TransSpec1.Id, new DummyScanner(count.toInt)))
-            table.transform(spec)
-          }
-        }
-      }
-      
-      final class DummyScanner(length: Int) extends CScanner {
-        type A = Long
-        def init: A = 0L
-
-        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val defined = cols.values.foldLeft(BitSetUtil.create()) { (bitset, col) =>
-            bitset.or(col.definedAt(range.start, range.end))
-            bitset
-          }
-
-          val indices = new Array[Long](range.size)
-          var i = 0
-          var n: Long = a
-          while (i < indices.length) {
-            if (defined(i)) {
-              indices(i) = n
-              n += 1
-            } else {
-              indices(i) = -1
-            }
-            i += 1
-          }
-
-          def makeColumn(idx: Int) = new LongColumn {
-            def isDefinedAt(row: Int) = defined(row)
-            def apply(row: Int) = if (indices(row) == idx) 1L else 0L
-          }
-
-          val cols0: Map[ColumnRef, Column] = (0 until length).map({ idx =>
-            ColumnRef(CPath(CPathIndex(idx)), CLong) -> makeColumn(idx)
-          })(collection.breakOut)
-
-          (n, cols0)
-        }
-      }
-    }
-
     object Median extends Morphism1(EmptyNamespace, "median") {
       import Mean._
       
@@ -1245,11 +1190,47 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
     }
 
-    abstract class BaseRank(name: String) extends Morphism1(StatsNamespace, name) {
-      val tpe = UnaryOperationType(JType.JUniverseT, JNumberT)
+    final class DummyScanner(length: Long) extends CScanner {
+      type A = Long
+      def init: A = 0L
+
+      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        val defined = cols.values.foldLeft(BitSetUtil.create()) { (bitset, col) =>
+          bitset.or(col.definedAt(range.start, range.end))
+          bitset
+        }
+
+        val indices = new Array[Long](range.size)
+        var i = 0
+        var n: Long = a
+        while (i < indices.length) {
+          if (defined(i)) {
+            indices(i) = n
+            n += 1
+          } else {
+            indices(i) = -1
+          }
+          i += 1
+        }
+
+        def makeColumn(idx: Int) = new LongColumn {
+          def isDefinedAt(row: Int) = defined(row)
+          def apply(row: Int) = if (indices(row) == idx) 1L else 0L
+        }
+
+        val cols0: Map[ColumnRef, Column] = (0 until length.toInt).map({ idx =>
+          ColumnRef(CPath(CPathIndex(idx)), CLong) -> makeColumn(idx)
+        })(collection.breakOut)
+
+        (n, cols0)
+      }
+    }
+
+    abstract class BaseRank(name: String, retType: JType = JNumberT) extends Morphism1(StatsNamespace, name) {
+      val tpe = UnaryOperationType(JType.JUniverseT, retType)
       override val retainIds = true
       
-      def rankScanner: BaseRankScanner
+      def rankScanner(size: Long): CScanner
       
       private val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       private val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
@@ -1260,27 +1241,38 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       // sorted on paths.SortKey.
 
       def apply(table: Table, ctx: EvaluationContext): M[Table] = {
-        val m = Map(paths.Value -> Scan(Leaf(Source), rankScanner))
-        val scan = makeTableTrans(m)
-        
-        table.sort(sortByValue, SortAscending).map {
-          _.transform(ObjectDelete(scan, Set(paths.SortKey)))
-        }.flatMap {
-          _.sort(sortByKey, SortAscending)
+        def count(tbl: Table): M[Long] = tbl.size match {
+          case ExactSize(n) => M.point(n)
+          case _ => table.reduce(Count.reducer(ctx))
         }
+
+        for {
+          valueSortedTable <- table.sort(sortByValue, SortAscending)
+          size <- count(valueSortedTable)
+          rankedTable = {
+            val m = Map(paths.Value -> Scan(Leaf(Source), rankScanner(size)))
+            val scan = makeTableTrans(m)
+            valueSortedTable.transform(ObjectDelete(scan, Set(paths.SortKey)))
+          }
+          keySortedTable <- rankedTable.sort(sortByKey, SortAscending)
+        } yield keySortedTable
       }
     }
 
     object DenseRank extends BaseRank("denseRank") {
-      def rankScanner = new DenseRankScaner
+      def rankScanner(size: Long) = new DenseRankScaner
     }
 
     object Rank extends BaseRank("rank") {
-      def rankScanner = new SparseRankScaner
+      def rankScanner(size: Long) = new SparseRankScaner
     }
 
     object IndexedRank extends BaseRank("indexedRank") {
-      def rankScanner = new IndexedRankScanner
+      def rankScanner(size: Long) = new IndexedRankScanner
+    }
+
+    object Dummy extends BaseRank("dummy", JArrayUnfixedT) {
+      def rankScanner(size: Long) = new DummyScanner(size)
     }
   }
 }
