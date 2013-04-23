@@ -110,7 +110,7 @@ class StressTest {
       }
 
       try {
-        loop(AsyncParser())
+        loop(AsyncParser(false))
       } finally {
         ch.close()
       }
