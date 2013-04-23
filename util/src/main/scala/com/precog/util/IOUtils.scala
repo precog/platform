@@ -55,8 +55,8 @@ object IOUtils {
     props
   }
 
-  def writeToFile(s: String, f: File): IO[PrecogUnit] = IO {
-    FileUtils.writeStringToFile(f, s, UTF8)
+  def writeToFile(s: String, f: File, append: Boolean = false): IO[PrecogUnit] = IO {
+    FileUtils.writeStringToFile(f, s, UTF8, append)
     PrecogUnit
   }
 
