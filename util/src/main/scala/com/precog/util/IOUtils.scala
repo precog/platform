@@ -25,6 +25,9 @@ import java.nio.channels._
 import java.util.Properties
 
 import com.google.common.io.Files
+
+import com.weiglewilczek.slf4s.Logging
+
 import org.apache.commons.io.FileUtils
 
 import scalaz._
@@ -32,7 +35,7 @@ import scalaz.effect.IO
 
 import scala.collection.JavaConversions.{seqAsJavaList}
 
-object IOUtils {
+object IOUtils extends Logging {
   final val UTF8 = "UTF-8"
 
   val dotDirs = "." :: ".." :: Nil
@@ -79,6 +82,25 @@ object IOUtils {
   def recursiveDelete(dir: File): IO[PrecogUnit] = IO {
     FileUtils.deleteDirectory(dir)
     PrecogUnit
+  }
+
+  /** Recursively deletes empty directories, stopping at the first
+    * non-empty dir.
+    */
+  def recursiveDeleteEmptyDirs(startDir: File, upTo: File): IO[PrecogUnit] = {
+    if (startDir == upTo) {
+      IO { logger.debug("Stopping recursive clean at root: " + upTo); PrecogUnit }
+    } else if (startDir.isDirectory) {
+      if (Option(startDir.list).exists(_.length == 0)) {
+        IO {
+          startDir.delete()
+        }.flatMap { _ => recursiveDeleteEmptyDirs(startDir.getParentFile, upTo) }
+      } else {
+        IO { logger.debug("Stopping recursive clean on non-empty directory: " + startDir); PrecogUnit }
+      }
+    } else {
+      IO { logger.warn("Asked to clean a non-directory: " + startDir); PrecogUnit }
+    }
   }
 
   def createTmpDir(prefix: String): IO[File] = IO {

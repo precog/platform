@@ -200,6 +200,6 @@ object Permission {
     }
   }
 
-  implicit val decomposer = versioned(decomposerV1Base, Some("1.0".v), defaultVersionProperty)
-  implicit val extractor = versioned(extractorV1Base, Some("1.0".v), defaultVersionProperty) <+> extractorV1Base
+  implicit val decomposer = decomposerV1Base.versioned(Some("1.0".v))
+  implicit val extractor = extractorV1Base.versioned(Some("1.0".v)) <+> extractorV1Base
 }

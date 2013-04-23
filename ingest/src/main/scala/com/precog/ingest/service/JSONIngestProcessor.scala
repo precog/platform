@@ -91,7 +91,7 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
     }
 
   def processBatch(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[BatchIngestResult] = {
-    val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(), Some(jobId), 0, Vector.empty), data match {
+    val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(false), Some(jobId), 0, Vector.empty), data match {
       case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
       case Right(stream) => stream
     })
@@ -107,7 +107,7 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
   }
 
   def processStream(data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[StreamingIngestResult] = {
-    ingestJSONChunk(JSONParseState(AsyncParser(), None, 0, Vector.empty), data match {
+    ingestJSONChunk(JSONParseState(AsyncParser(true), None, 0, Vector.empty), data match {
       case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
       case Right(stream) => stream
     }).map {

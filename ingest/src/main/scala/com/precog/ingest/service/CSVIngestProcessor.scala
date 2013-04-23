@@ -55,6 +55,8 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
 
   def writeToFile(byteStream: ByteChunk): Future[(File, Long)] = {
     val file = File.createTempFile("async-ingest-", null)
+    logger.debug("Writing CSV stream for ingest by %s at path %s to file %s".format(apiKey, path, file))
+
     val outChannel = new FileOutputStream(file).getChannel()
     for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
   }
@@ -69,11 +71,16 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
           val written0 = chan.write(safeBuf)
           writeChannel(chan, tail, written + written0)
         } catch {
-          case t => logger.error("Failure on ByteBuffer read of %s (%d remaining)".format(safeBuf, safeBuf.remaining)); throw t
+          case t => logger.error("Failure on ByteBuffer read of %s (%d remaining)".format(safeBuf, safeBuf.remaining), t); 
+          throw t
         }
 
       case None =>
-        M.point { chan.close(); written }
+        M.point { 
+          chan.close(); 
+          logger.debug("Finished writing CSV stream for ingest by %s at path %s".format(apiKey, path))
+          written 
+        }
     }
   }
 
@@ -174,7 +181,7 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
 
       if (sync) {
         // must not return until everything is persisted to kafka central
-        ingestResult
+        ingestResult 
       } else {
         Promise.successful(AsyncSuccess)
       }

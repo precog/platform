@@ -26,6 +26,7 @@ import scalaz._
 
 import blueeyes.json._
 import blueeyes.core.data._
+import AsyncParser._
 
 import java.nio.ByteBuffer
 import akka.dispatch.{Future, Await, ExecutionContext}
@@ -46,7 +47,7 @@ object JsonUtil {
     (implicit M: Monad[M]): M[Validation[Seq[Throwable], JValue]] = {
 
     // use an empty byte buffer to "prime" the async parser
-    val (_, p) = JParser.parseAsync(ByteBuffer.wrap(new Array[Byte](0)))
+    val p = AsyncParser(false)
 
     def xyz(stream: StreamT[M, ByteBuffer], p: AsyncParser):
         M[Validation[Seq[Throwable], JValue]] = {
@@ -82,8 +83,7 @@ object JsonUtil {
     (stream: StreamT[M, ByteBuffer])
     (implicit M: Monad[M]): StreamT[M, AsyncParse] = {
 
-    // use an empty byte buffer to "prime" the async parser
-    val (_, p) = JParser.parseAsync(ByteBuffer.wrap(new Array[Byte](0)))
+    val p = AsyncParser(false)
 
     // create a new stream, using the current stream and parser
     StreamT.unfoldM((stream, p)) {
