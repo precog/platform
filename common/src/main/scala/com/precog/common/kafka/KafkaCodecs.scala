@@ -47,6 +47,7 @@ trait EncodingFlags {
   val jsonArchiveMessageFlag: Byte = 0x03
   val jsonIngestFlag: Byte = 0x04
   val jsonArchiveFlag: Byte = 0x05
+  val storeFileFlag: Byte = 0x06
   val magicByte: Byte = -123
 
   def writeHeader(buffer: ByteBuffer, encodingFlag: Byte): ByteBuffer = {
@@ -89,7 +90,7 @@ object EventEncoding extends EncodingFlags with Logging {
     logger.trace("Serialized event " + event + " to " + serialized)
     val msgBuffer = charset.encode(serialized)
     val bytes = ByteBuffer.allocate(msgBuffer.limit + 3)
-    writeHeader(bytes, event.fold(_ => jsonIngestFlag, _ => jsonArchiveFlag))
+    writeHeader(bytes, event.fold(_ => jsonIngestFlag, _ => jsonArchiveFlag, _ => storeFileFlag))
     bytes.put(msgBuffer)
     bytes.flip()
     bytes

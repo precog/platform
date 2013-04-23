@@ -78,9 +78,8 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
   private[this] val codec = new KafkaEventCodec
 
   def save(event: Event, timeout: Timeout) = Future {
-    val toSend: List[Message] = event.fold({ ingest =>
-      @tailrec
-      def genEvents(ev: List[Event]): List[Message] = {
+    def genEvents(ev: List[Event], ingest: Ingest): List[Message] = {
+      @tailrec def rec(ev: List[Event]): List[Message] = {
         val messages = ev.map(codec.toMessage)
 
         if (messages.forall(_.size + messagePadding <= maxMessageSize)) {
@@ -92,12 +91,18 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
           }
 
           logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
-          genEvents(ev.flatMap(_.split(2)))
+          rec(ev.flatMap(_.split(2, java.util.UUID.randomUUID)))
         }
       }
 
-      genEvents(List(event))
-    }, a => List(codec.toMessage(a)))
+      rec(ev)
+    }
+
+    val toSend: List[Message] = event.fold(
+      ingest => genEvents(List(event), ingest),
+      archive => List(codec.toMessage(archive)),
+      storeFile => sys.error("todo")
+    )
 
     producer send {
       new ProducerData[String, Message](topic, toSend)

@@ -170,7 +170,7 @@ final class KafkaRelayAgent(
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Authorized]] map { messageFutures =>
       Future.sequence(messageFutures) map { messages: List[Authorized] =>
         val identified: List[Message] = messages.flatMap {
-          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp), offset, Some(authorities)) =>
+          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp, streamId), offset, Some(authorities)) =>
             def encodeIngestMessages(ev: List[IngestMessage]): List[Message] = {
               val messages = ev.map(centralCodec.toMessage)
 
@@ -215,7 +215,7 @@ final class KafkaRelayAgent(
   }
 
   private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
-    case Ingest(apiKey, path, writeAs, _, _, timestamp) =>
+    case Ingest(apiKey, path, writeAs, _, _, timestamp, streamId) =>
       writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp)))
 
     case _ => Promise.successful(None)

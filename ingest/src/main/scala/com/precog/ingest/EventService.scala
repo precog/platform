@@ -103,7 +103,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
             val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
             val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, Clock.System, deleteTimeout)
-            val createHandler = new FileCreateHandler(Clock.System)
+            val createHandler = new FileCreateHandler(Clock.System, deps.eventStore)
 
             EventServiceState(deps.apiKeyFinder, ingestHandler, createHandler, archiveHandler, deps.shardClient, stoppable)
           }

@@ -33,6 +33,7 @@ import blueeyes.json.serialization.Versioned._
 import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor, InstantDecomposer}
 
 import org.joda.time.Instant
+import java.util.UUID
 
 import scalaz._
 import scalaz.Validation._
@@ -43,19 +44,17 @@ import scalaz.syntax.validation._
 
 import shapeless._
 
-case class SplitMeta(idx: Int, total: Int)
-object SplitMeta {
-  implicit val splitMetaIso = Iso.hlist(SplitMeta.apply _, SplitMeta.unapply _)
-  val schemaV1 = "idx" :: "total" :: HNil
-  implicit def extractor = extractorV[SplitMeta](schemaV1, Some("1.0"))
-  implicit def decomposer = decomposerV[SplitMeta](schemaV1, Some("1.0"))
+object JavaSerialization {
+  implicit val uuidDecomposer: Decomposer[UUID] = implicitly[Decomposer[String]].contramap((_: UUID).toString)
+  implicit val uuidExtractor: Extractor[UUID] = implicitly[Extractor[String]].map(UUID.fromString)
 }
+
+import JavaSerialization._
 
 sealed trait Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A
-  def split(n: Int): List[Event]
+  def split(n: Int, streamId: UUID): List[Event]
   def length: Int
-  def splitMeta: Option[SplitMeta]
 }
 
 object Event {
@@ -69,12 +68,12 @@ object Event {
 /**
  * If writeAs is None, then the downstream 
  */
-case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, splitMeta: Option[SplitMeta]) extends Event {
+case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID]) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = ingest(this)
 
-  def split(n: Int): List[Event] = {
+  def split(n: Int, streamId: UUID): List[Event] = {
     val splitSize = (data.length / n) max 1
-    data.grouped(splitSize).map(d => this.copy(data = d))(collection.breakOut)
+    data.grouped(splitSize).map(d => this.copy(data = d, streamId = Some(streamId))).toList
   }
 
   def length = data.length
@@ -83,11 +82,11 @@ case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "splitMeta" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
-  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.0".v))
-  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.0".v))
+  val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.1".v))
+  val extractorV1: Extractor[Ingest] = extractorV[Ingest](schemaV1, Some("1.1".v))
 
   // A transitionary format similar to V1 structure, but lacks a version number and only carries a single data element
   val extractorV1a = new Extractor[Ingest] {
@@ -96,7 +95,9 @@ object Ingest {
         obj.validated[Path]("path") |@|
         obj.validated[Option[AccountId]]("ownerAccountId") ) { (apiKey, path, ownerAccountId) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp)
+          Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), 
+                 if (jv == JUndefined) Vector() else Vector(jv), 
+                 None, EventMessage.defaultTimestamp, None)
         }
     }
   }
@@ -106,19 +107,18 @@ object Ingest {
       ( obj.validated[String]("tokenId") |@|
         obj.validated[Path]("path") ) { (apiKey, path) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp)
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp, None)
         }
     }
   }
 
-  implicit val Decomposer: Decomposer[Ingest] = decomposerV1
-  implicit val Extractor: Extractor[Ingest] = extractorV1 <+> extractorV1a <+> extractorV0
+  implicit val decomposer: Decomposer[Ingest] = decomposerV1
+  implicit val extractor: Extractor[Ingest] = extractorV1 <+> extractorV1a <+> extractorV0
 }
 
 case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = archive(this)
-  def split(n: Int) = List(this) // can't split an archive
-  val splitMeta = None
+  def split(n: Int, streamId: UUID) = List(this) // can't split an archive
   def length = 1
 }
 
@@ -142,22 +142,35 @@ object Archive {
 
   val extractorV0: Extractor[Archive] = extractorV[Archive](schemaV0, None)
 
-  implicit val Decomposer: Decomposer[Archive] = decomposerV1
-  implicit val Extractor: Extractor[Archive] = extractorV1 <+> extractorV0
+  implicit val decomposer: Decomposer[Archive] = decomposerV1
+  implicit val extractor: Extractor[Archive] = extractorV1 <+> extractorV0
 }
 
-case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: Array[Byte], encoding: ContentEncoding, timestamp: Instant, splitMeta: Option[SplitMeta]) extends EventMessage {
-  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A
-  def split(n: Int) = {
-    val splitSize = content.length / n
-    content.grouped(splitSize).map(d => this.copy(data = d))(collection.breakOut)
+case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, streamId: Option[UUID]) extends Event {
+  def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = storeFile(this)
+  def split(n: Int, streamId: UUID) = {
+    val splitSize = content.data.length / n
+    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.encoding), streamId = Some(streamId))).toList
   }
     
-  def length = content.length
+  def length = content.data.length
 }
 
 object StoreFile {
+  import JavaSerialization._
 
+  implicitly[Decomposer[APIKey]]
+  implicitly[Decomposer[Path]]
+  implicitly[Decomposer[JobId]]
+  implicitly[Decomposer[FileContent]]
+  implicitly[Decomposer[Instant]]
+  implicitly[Decomposer[Option[UUID]]]
+  implicit val iso = Iso.hlist(StoreFile.apply _, StoreFile.unapply _)
+
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamId" :: HNil
+
+  implicit val decomposer: Decomposer[StoreFile] = decomposerV[StoreFile](schemaV1, Some("1.0".v))
+  implicit val extractor: Extractor[StoreFile] = extractorV[StoreFile](schemaV1, Some("1.0".v))
 }
 
 

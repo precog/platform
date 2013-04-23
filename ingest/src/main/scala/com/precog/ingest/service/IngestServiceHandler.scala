@@ -91,7 +91,7 @@ class IngestServiceHandler(
 
   def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
     if (data.length > 0) {
-      val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant())
+      val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), None)
       logger.trace("Saving event: " + eventInstance)
       eventStore.save(eventInstance, ingestTimeout)
     } else {

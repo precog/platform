@@ -140,7 +140,7 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                   path("'accountId/password/reset") {
                     path("/'resetToken") {
                       post(PasswordResetHandler)
-                    } ~
+                    } 
                   } ~
                   path("search") {
                     parameter('email) {
