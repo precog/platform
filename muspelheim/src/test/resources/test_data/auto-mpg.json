@@ -1,0 +1,398 @@
+{"mpg": 18.0,"features": [8,307.0,130.0,3504,12.0,70,1,"chevrolet chevelle malibu"]}
+{"mpg": 15.0,"features": [8,350.0,165.0,3693,11.5,70,1,"buick skylark 320"]}
+{"mpg": 18.0,"features": [8,318.0,150.0,3436,11.0,70,1,"plymouth satellite"]}
+{"mpg": 16.0,"features": [8,304.0,150.0,3433,12.0,70,1,"amc rebel sst"]}
+{"mpg": 17.0,"features": [8,302.0,140.0,3449,10.5,70,1,"ford torino"]}
+{"mpg": 15.0,"features": [8,429.0,198.0,4341,10.0,70,1,"ford galaxie 500"]}
+{"mpg": 14.0,"features": [8,454.0,220.0,4354,9.0,70,1,"chevrolet impala"]}
+{"mpg": 14.0,"features": [8,440.0,215.0,4312,8.5,70,1,"plymouth fury iii"]}
+{"mpg": 14.0,"features": [8,455.0,225.0,4425,10.0,70,1,"pontiac catalina"]}
+{"mpg": 15.0,"features": [8,390.0,190.0,3850,8.5,70,1,"amc ambassador dpl"]}
+{"mpg": 15.0,"features": [8,383.0,170.0,3563,10.0,70,1,"dodge challenger se"]}
+{"mpg": 14.0,"features": [8,340.0,160.0,3609,8.0,70,1,"plymouth 'cuda 340"]}
+{"mpg": 15.0,"features": [8,400.0,150.0,3761,9.5,70,1,"chevrolet monte carlo"]}
+{"mpg": 14.0,"features": [8,455.0,225.0,3086,10.0,70,1,"buick estate wagon (sw)"]}
+{"mpg": 24.0,"features": [4,113.0,95.00,2372,15.0,70,3,"toyota corona mark ii"]}
+{"mpg": 22.0,"features": [6,198.0,95.00,2833,15.5,70,1,"plymouth duster"]}
+{"mpg": 18.0,"features": [6,199.0,97.00,2774,15.5,70,1,"amc hornet"]}
+{"mpg": 21.0,"features": [6,200.0,85.00,2587,16.0,70,1,"ford maverick"]}
+{"mpg": 27.0,"features": [4,97.00,88.00,2130,14.5,70,3,"datsun pl510"]}
+{"mpg": 26.0,"features": [4,97.00,46.00,1835,20.5,70,2,"volkswagen 1131 deluxe sedan"]}
+{"mpg": 25.0,"features": [4,110.0,87.00,2672,17.5,70,2,"peugeot 504"]}
+{"mpg": 24.0,"features": [4,107.0,90.00,2430,14.5,70,2,"audi 100 ls"]}
+{"mpg": 25.0,"features": [4,104.0,95.00,2375,17.5,70,2,"saab 99e"]}
+{"mpg": 26.0,"features": [4,121.0,113.0,2234,12.5,70,2,"bmw 2002"]}
+{"mpg": 21.0,"features": [6,199.0,90.00,2648,15.0,70,1,"amc gremlin"]}
+{"mpg": 10.0,"features": [8,360.0,215.0,4615,14.0,70,1,"ford f250"]}
+{"mpg": 10.0,"features": [8,307.0,200.0,4376,15.0,70,1,"chevy c20"]}
+{"mpg": 11.0,"features": [8,318.0,210.0,4382,13.5,70,1,"dodge d200"]}
+{"mpg": 9.0, "features": [8,304.0,193.0,4732,18.5,70,1,"hi 1200d"]}
+{"mpg": 27.0,"features": [4,97.00,88.00,2130,14.5,71,3,"datsun pl510"]}
+{"mpg": 28.0,"features": [4,140.0,90.00,2264,15.5,71,1,"chevrolet vega 2300"]}
+{"mpg": 25.0,"features": [4,113.0,95.00,2228,14.0,71,3,"toyota corona"]}
+{"mpg": 25.0,"features": [4,98.00,null,2046,19.0,71,1,"ford pinto"]}
+{"mpg": 19.0,"features": [6,232.0,100.0,2634,13.0,71,1,"amc gremlin"]}
+{"mpg": 16.0,"features": [6,225.0,105.0,3439,15.5,71,1,"plymouth satellite custom"]}
+{"mpg": 17.0,"features": [6,250.0,100.0,3329,15.5,71,1,"chevrolet chevelle malibu"]}
+{"mpg": 19.0,"features": [6,250.0,88.00,3302,15.5,71,1,"ford torino 500"]}
+{"mpg": 18.0,"features": [6,232.0,100.0,3288,15.5,71,1,"amc matador"]}
+{"mpg": 14.0,"features": [8,350.0,165.0,4209,12.0,71,1,"chevrolet impala"]}
+{"mpg": 14.0,"features": [8,400.0,175.0,4464,11.5,71,1,"pontiac catalina brougham"]}
+{"mpg": 14.0,"features": [8,351.0,153.0,4154,13.5,71,1,"ford galaxie 500"]}
+{"mpg": 14.0,"features": [8,318.0,150.0,4096,13.0,71,1,"plymouth fury iii"]}
+{"mpg": 12.0,"features": [8,383.0,180.0,4955,11.5,71,1,"dodge monaco (sw)"]}
+{"mpg": 13.0,"features": [8,400.0,170.0,4746,12.0,71,1,"ford country squire (sw)"]}
+{"mpg": 13.0,"features": [8,400.0,175.0,5140,12.0,71,1,"pontiac safari (sw)"]}
+{"mpg": 18.0,"features": [6,258.0,110.0,2962,13.5,71,1,"amc hornet sportabout (sw)"]}
+{"mpg": 22.0,"features": [4,140.0,72.00,2408,19.0,71,1,"chevrolet vega (sw)"]}
+{"mpg": 19.0,"features": [6,250.0,100.0,3282,15.0,71,1,"pontiac firebird"]}
+{"mpg": 18.0,"features": [6,250.0,88.00,3139,14.5,71,1,"ford mustang"]}
+{"mpg": 23.0,"features": [4,122.0,86.00,2220,14.0,71,1,"mercury capri 2000"]}
+{"mpg": 28.0,"features": [4,116.0,90.00,2123,14.0,71,2,"opel 1900"]}
+{"mpg": 30.0,"features": [4,79.00,70.00,2074,19.5,71,2,"peugeot 304"]}
+{"mpg": 30.0,"features": [4,88.00,76.00,2065,14.5,71,2,"fiat 124b"]}
+{"mpg": 31.0,"features": [4,71.00,65.00,1773,19.0,71,3,"toyota corolla 1200"]}
+{"mpg": 35.0,"features": [4,72.00,69.00,1613,18.0,71,3,"datsun 1200"]}
+{"mpg": 27.0,"features": [4,97.00,60.00,1834,19.0,71,2,"volkswagen model 111"]}
+{"mpg": 26.0,"features": [4,91.00,70.00,1955,20.5,71,1,"plymouth cricket"]}
+{"mpg": 24.0,"features": [4,113.0,95.00,2278,15.5,72,3,"toyota corona hardtop"]}
+{"mpg": 25.0,"features": [4,97.50,80.00,2126,17.0,72,1,"dodge colt hardtop"]}
+{"mpg": 23.0,"features": [4,97.00,54.00,2254,23.5,72,2,"volkswagen type 3"]}
+{"mpg": 20.0,"features": [4,140.0,90.00,2408,19.5,72,1,"chevrolet vega"]}
+{"mpg": 21.0,"features": [4,122.0,86.00,2226,16.5,72,1,"ford pinto runabout"]}
+{"mpg": 13.0,"features": [8,350.0,165.0,4274,12.0,72,1,"chevrolet impala"]}
+{"mpg": 14.0,"features": [8,400.0,175.0,4385,12.0,72,1,"pontiac catalina"]}
+{"mpg": 15.0,"features": [8,318.0,150.0,4135,13.5,72,1,"plymouth fury iii"]}
+{"mpg": 14.0,"features": [8,351.0,153.0,4129,13.0,72,1,"ford galaxie 500"]}
+{"mpg": 17.0,"features": [8,304.0,150.0,3672,11.5,72,1,"amc ambassador sst"]}
+{"mpg": 11.0,"features": [8,429.0,208.0,4633,11.0,72,1,"mercury marquis"]}
+{"mpg": 13.0,"features": [8,350.0,155.0,4502,13.5,72,1,"buick lesabre custom"]}
+{"mpg": 12.0,"features": [8,350.0,160.0,4456,13.5,72,1,"oldsmobile delta 88 royale"]}
+{"mpg": 13.0,"features": [8,400.0,190.0,4422,12.5,72,1,"chrysler newport royal"]}
+{"mpg": 19.0,"features": [3,70.00,97.00,2330,13.5,72,3,"mazda rx2 coupe"]}
+{"mpg": 15.0,"features": [8,304.0,150.0,3892,12.5,72,1,"amc matador (sw)"]}
+{"mpg": 13.0,"features": [8,307.0,130.0,4098,14.0,72,1,"chevrolet chevelle concours (sw)"]}
+{"mpg": 13.0,"features": [8,302.0,140.0,4294,16.0,72,1,"ford gran torino (sw)"]}
+{"mpg": 14.0,"features": [8,318.0,150.0,4077,14.0,72,1,"plymouth satellite custom (sw)"]}
+{"mpg": 18.0,"features": [4,121.0,112.0,2933,14.5,72,2,"volvo 145e (sw)"]}
+{"mpg": 22.0,"features": [4,121.0,76.00,2511,18.0,72,2,"volkswagen 411 (sw)"]}
+{"mpg": 21.0,"features": [4,120.0,87.00,2979,19.5,72,2,"peugeot 504 (sw)"]}
+{"mpg": 26.0,"features": [4,96.00,69.00,2189,18.0,72,2,"renault 12 (sw)"]}
+{"mpg": 22.0,"features": [4,122.0,86.00,2395,16.0,72,1,"ford pinto (sw)"]}
+{"mpg": 28.0,"features": [4,97.00,92.00,2288,17.0,72,3,"datsun 510 (sw)"]}
+{"mpg": 23.0,"features": [4,120.0,97.00,2506,14.5,72,3,"toyouta corona mark ii (sw)"]}
+{"mpg": 28.0,"features": [4,98.00,80.00,2164,15.0,72,1,"dodge colt (sw)"]}
+{"mpg": 27.0,"features": [4,97.00,88.00,2100,16.5,72,3,"toyota corolla 1600 (sw)"]}
+{"mpg": 13.0,"features": [8,350.0,175.0,4100,13.0,73,1,"buick century 350"]}
+{"mpg": 14.0,"features": [8,304.0,150.0,3672,11.5,73,1,"amc matador"]}
+{"mpg": 13.0,"features": [8,350.0,145.0,3988,13.0,73,1,"chevrolet malibu"]}
+{"mpg": 14.0,"features": [8,302.0,137.0,4042,14.5,73,1,"ford gran torino"]}
+{"mpg": 15.0,"features": [8,318.0,150.0,3777,12.5,73,1,"dodge coronet custom"]}
+{"mpg": 12.0,"features": [8,429.0,198.0,4952,11.5,73,1,"mercury marquis brougham"]}
+{"mpg": 13.0,"features": [8,400.0,150.0,4464,12.0,73,1,"chevrolet caprice classic"]}
+{"mpg": 13.0,"features": [8,351.0,158.0,4363,13.0,73,1,"ford ltd"]}
+{"mpg": 14.0,"features": [8,318.0,150.0,4237,14.5,73,1,"plymouth fury gran sedan"]}
+{"mpg": 13.0,"features": [8,440.0,215.0,4735,11.0,73,1,"chrysler new yorker brougham"]}
+{"mpg": 12.0,"features": [8,455.0,225.0,4951,11.0,73,1,"buick electra 225 custom"]}
+{"mpg": 13.0,"features": [8,360.0,175.0,3821,11.0,73,1,"amc ambassador brougham"]}
+{"mpg": 18.0,"features": [6,225.0,105.0,3121,16.5,73,1,"plymouth valiant"]}
+{"mpg": 16.0,"features": [6,250.0,100.0,3278,18.0,73,1,"chevrolet nova custom"]}
+{"mpg": 18.0,"features": [6,232.0,100.0,2945,16.0,73,1,"amc hornet"]}
+{"mpg": 18.0,"features": [6,250.0,88.00,3021,16.5,73,1,"ford maverick"]}
+{"mpg": 23.0,"features": [6,198.0,95.00,2904,16.0,73,1,"plymouth duster"]}
+{"mpg": 26.0,"features": [4,97.00,46.00,1950,21.0,73,2,"volkswagen super beetle"]}
+{"mpg": 11.0,"features": [8,400.0,150.0,4997,14.0,73,1,"chevrolet impala"]}
+{"mpg": 12.0,"features": [8,400.0,167.0,4906,12.5,73,1,"ford country"]}
+{"mpg": 13.0,"features": [8,360.0,170.0,4654,13.0,73,1,"plymouth custom suburb"]}
+{"mpg": 12.0,"features": [8,350.0,180.0,4499,12.5,73,1,"oldsmobile vista cruiser"]}
+{"mpg": 18.0,"features": [6,232.0,100.0,2789,15.0,73,1,"amc gremlin"]}
+{"mpg": 20.0,"features": [4,97.00,88.00,2279,19.0,73,3,"toyota carina"]}
+{"mpg": 21.0,"features": [4,140.0,72.00,2401,19.5,73,1,"chevrolet vega"]}
+{"mpg": 22.0,"features": [4,108.0,94.00,2379,16.5,73,3,"datsun 610"]}
+{"mpg": 18.0,"features": [3,70.00,90.00,2124,13.5,73,3,"maxda rx3"]}
+{"mpg": 19.0,"features": [4,122.0,85.00,2310,18.5,73,1,"ford pinto"]}
+{"mpg": 21.0,"features": [6,155.0,107.0,2472,14.0,73,1,"mercury capri v6"]}
+{"mpg": 26.0,"features": [4,98.00,90.00,2265,15.5,73,2,"fiat 124 sport coupe"]}
+{"mpg": 15.0,"features": [8,350.0,145.0,4082,13.0,73,1,"chevrolet monte carlo s"]}
+{"mpg": 16.0,"features": [8,400.0,230.0,4278,9.50,73,1,"pontiac grand prix"]}
+{"mpg": 29.0,"features": [4,68.00,49.00,1867,19.5,73,2,"fiat 128"]}
+{"mpg": 24.0,"features": [4,116.0,75.00,2158,15.5,73,2,"opel manta"]}
+{"mpg": 20.0,"features": [4,114.0,91.00,2582,14.0,73,2,"audi 100ls"]}
+{"mpg": 19.0,"features": [4,121.0,112.0,2868,15.5,73,2,"volvo 144ea"]}
+{"mpg": 15.0,"features": [8,318.0,150.0,3399,11.0,73,1,"dodge dart custom"]}
+{"mpg": 24.0,"features": [4,121.0,110.0,2660,14.0,73,2,"saab 99le"]}
+{"mpg": 20.0,"features": [6,156.0,122.0,2807,13.5,73,3,"toyota mark ii"]}
+{"mpg": 11.0,"features": [8,350.0,180.0,3664,11.0,73,1,"oldsmobile omega"]}
+{"mpg": 20.0,"features": [6,198.0,95.00,3102,16.5,74,1,"plymouth duster"]}
+{"mpg": 21.0,"features": [6,200.0,null,2875,17.0,74,1,"ford maverick"]}
+{"mpg": 19.0,"features": [6,232.0,100.0,2901,16.0,74,1,"amc hornet"]}
+{"mpg": 15.0,"features": [6,250.0,100.0,3336,17.0,74,1,"chevrolet nova"]}
+{"mpg": 31.0,"features": [4,79.00,67.00,1950,19.0,74,3,"datsun b210"]}
+{"mpg": 26.0,"features": [4,122.0,80.00,2451,16.5,74,1,"ford pinto"]}
+{"mpg": 32.0,"features": [4,71.00,65.00,1836,21.0,74,3,"toyota corolla 1200"]}
+{"mpg": 25.0,"features": [4,140.0,75.00,2542,17.0,74,1,"chevrolet vega"]}
+{"mpg": 16.0,"features": [6,250.0,100.0,3781,17.0,74,1,"chevrolet chevelle malibu classic"]}
+{"mpg": 16.0,"features": [6,258.0,110.0,3632,18.0,74,1,"amc matador"]}
+{"mpg": 18.0,"features": [6,225.0,105.0,3613,16.5,74,1,"plymouth satellite sebring"]}
+{"mpg": 16.0,"features": [8,302.0,140.0,4141,14.0,74,1,"ford gran torino"]}
+{"mpg": 13.0,"features": [8,350.0,150.0,4699,14.5,74,1,"buick century luxus (sw)"]}
+{"mpg": 14.0,"features": [8,318.0,150.0,4457,13.5,74,1,"dodge coronet custom (sw)"]}
+{"mpg": 14.0,"features": [8,302.0,140.0,4638,16.0,74,1,"ford gran torino (sw)"]}
+{"mpg": 14.0,"features": [8,304.0,150.0,4257,15.5,74,1,"amc matador (sw)"]}
+{"mpg": 29.0,"features": [4,98.00,83.00,2219,16.5,74,2,"audi fox"]}
+{"mpg": 26.0,"features": [4,79.00,67.00,1963,15.5,74,2,"volkswagen dasher"]}
+{"mpg": 26.0,"features": [4,97.00,78.00,2300,14.5,74,2,"opel manta"]}
+{"mpg": 31.0,"features": [4,76.00,52.00,1649,16.5,74,3,"toyota corona"]}
+{"mpg": 32.0,"features": [4,83.00,61.00,2003,19.0,74,3,"datsun 710"]}
+{"mpg": 28.0,"features": [4,90.00,75.00,2125,14.5,74,1,"dodge colt"]}
+{"mpg": 24.0,"features": [4,90.00,75.00,2108,15.5,74,2,"fiat 128"]}
+{"mpg": 26.0,"features": [4,116.0,75.00,2246,14.0,74,2,"fiat 124 tc"]}
+{"mpg": 24.0,"features": [4,120.0,97.00,2489,15.0,74,3,"honda civic"]}
+{"mpg": 26.0,"features": [4,108.0,93.00,2391,15.5,74,3,"subaru"]}
+{"mpg": 31.0,"features": [4,79.00,67.00,2000,16.0,74,2,"fiat x1.9"]}
+{"mpg": 19.0,"features": [6,225.0,95.00,3264,16.0,75,1,"plymouth valiant custom"]}
+{"mpg": 18.0,"features": [6,250.0,105.0,3459,16.0,75,1,"chevrolet nova"]}
+{"mpg": 15.0,"features": [6,250.0,72.00,3432,21.0,75,1,"mercury monarch"]}
+{"mpg": 15.0,"features": [6,250.0,72.00,3158,19.5,75,1,"ford maverick"]}
+{"mpg": 16.0,"features": [8,400.0,170.0,4668,11.5,75,1,"pontiac catalina"]}
+{"mpg": 15.0,"features": [8,350.0,145.0,4440,14.0,75,1,"chevrolet bel air"]}
+{"mpg": 16.0,"features": [8,318.0,150.0,4498,14.5,75,1,"plymouth grand fury"]}
+{"mpg": 14.0,"features": [8,351.0,148.0,4657,13.5,75,1,"ford ltd"]}
+{"mpg": 17.0,"features": [6,231.0,110.0,3907,21.0,75,1,"buick century"]}
+{"mpg": 16.0,"features": [6,250.0,105.0,3897,18.5,75,1,"chevroelt chevelle malibu"]}
+{"mpg": 15.0,"features": [6,258.0,110.0,3730,19.0,75,1,"amc matador"]}
+{"mpg": 18.0,"features": [6,225.0,95.00,3785,19.0,75,1,"plymouth fury"]}
+{"mpg": 21.0,"features": [6,231.0,110.0,3039,15.0,75,1,"buick skyhawk"]}
+{"mpg": 20.0,"features": [8,262.0,110.0,3221,13.5,75,1,"chevrolet monza 2+2"]}
+{"mpg": 13.0,"features": [8,302.0,129.0,3169,12.0,75,1,"ford mustang ii"]}
+{"mpg": 29.0,"features": [4,97.00,75.00,2171,16.0,75,3,"toyota corolla"]}
+{"mpg": 23.0,"features": [4,140.0,83.00,2639,17.0,75,1,"ford pinto"]}
+{"mpg": 20.0,"features": [6,232.0,100.0,2914,16.0,75,1,"amc gremlin"]}
+{"mpg": 23.0,"features": [4,140.0,78.00,2592,18.5,75,1,"pontiac astro"]}
+{"mpg": 24.0,"features": [4,134.0,96.00,2702,13.5,75,3,"toyota corona"]}
+{"mpg": 25.0,"features": [4,90.00,71.00,2223,16.5,75,2,"volkswagen dasher"]}
+{"mpg": 24.0,"features": [4,119.0,97.00,2545,17.0,75,3,"datsun 710"]}
+{"mpg": 18.0,"features": [6,171.0,97.00,2984,14.5,75,1,"ford pinto"]}
+{"mpg": 29.0,"features": [4,90.00,70.00,1937,14.0,75,2,"volkswagen rabbit"]}
+{"mpg": 19.0,"features": [6,232.0,90.00,3211,17.0,75,1,"amc pacer"]}
+{"mpg": 23.0,"features": [4,115.0,95.00,2694,15.0,75,2,"audi 100ls"]}
+{"mpg": 23.0,"features": [4,120.0,88.00,2957,17.0,75,2,"peugeot 504"]}
+{"mpg": 22.0,"features": [4,121.0,98.00,2945,14.5,75,2,"volvo 244dl"]}
+{"mpg": 25.0,"features": [4,121.0,115.0,2671,13.5,75,2,"saab 99le"]}
+{"mpg": 33.0,"features": [4,91.00,53.00,1795,17.5,75,3,"honda civic cvcc"]}
+{"mpg": 28.0,"features": [4,107.0,86.00,2464,15.5,76,2,"fiat 131"]}
+{"mpg": 25.0,"features": [4,116.0,81.00,2220,16.9,76,2,"opel 1900"]}
+{"mpg": 25.0,"features": [4,140.0,92.00,2572,14.9,76,1,"capri ii"]}
+{"mpg": 26.0,"features": [4,98.00,79.00,2255,17.7,76,1,"dodge colt"]}
+{"mpg": 27.0,"features": [4,101.0,83.00,2202,15.3,76,2,"renault 12tl"]}
+{"mpg": 17.5,"features": [8,305.0,140.0,4215,13.0,76,1,"chevrolet chevelle malibu classic"]}
+{"mpg": 16.0,"features": [8,318.0,150.0,4190,13.0,76,1,"dodge coronet brougham"]}
+{"mpg": 15.5,"features": [8,304.0,120.0,3962,13.9,76,1,"amc matador"]}
+{"mpg": 14.5,"features": [8,351.0,152.0,4215,12.8,76,1,"ford gran torino"]}
+{"mpg": 22.0,"features": [6,225.0,100.0,3233,15.4,76,1,"plymouth valiant"]}
+{"mpg": 22.0,"features": [6,250.0,105.0,3353,14.5,76,1,"chevrolet nova"]}
+{"mpg": 24.0,"features": [6,200.0,81.00,3012,17.6,76,1,"ford maverick"]}
+{"mpg": 22.5,"features": [6,232.0,90.00,3085,17.6,76,1,"amc hornet"]}
+{"mpg": 29.0,"features": [4,85.00,52.00,2035,22.2,76,1,"chevrolet chevette"]}
+{"mpg": 24.5,"features": [4,98.00,60.00,2164,22.1,76,1,"chevrolet woody"]}
+{"mpg": 29.0,"features": [4,90.00,70.00,1937,14.2,76,2,"vw rabbit"]}
+{"mpg": 33.0,"features": [4,91.00,53.00,1795,17.4,76,3,"honda civic"]}
+{"mpg": 20.0,"features": [6,225.0,100.0,3651,17.7,76,1,"dodge aspen se"]}
+{"mpg": 18.0,"features": [6,250.0,78.00,3574,21.0,76,1,"ford granada ghia"]}
+{"mpg": 18.5,"features": [6,250.0,110.0,3645,16.2,76,1,"pontiac ventura sj"]}
+{"mpg": 17.5,"features": [6,258.0,95.00,3193,17.8,76,1,"amc pacer d/l"]}
+{"mpg": 29.5,"features": [4,97.00,71.00,1825,12.2,76,2,"volkswagen rabbit"]}
+{"mpg": 32.0,"features": [4,85.00,70.00,1990,17.0,76,3,"datsun b-210"]}
+{"mpg": 28.0,"features": [4,97.00,75.00,2155,16.4,76,3,"toyota corolla"]}
+{"mpg": 26.5,"features": [4,140.0,72.00,2565,13.6,76,1,"ford pinto"]}
+{"mpg": 20.0,"features": [4,130.0,102.0,3150,15.7,76,2,"volvo 245"]}
+{"mpg": 13.0,"features": [8,318.0,150.0,3940,13.2,76,1,"plymouth volare premier v8"]}
+{"mpg": 19.0,"features": [4,120.0,88.00,3270,21.9,76,2,"peugeot 504"]}
+{"mpg": 19.0,"features": [6,156.0,108.0,2930,15.5,76,3,"toyota mark ii"]}
+{"mpg": 16.5,"features": [6,168.0,120.0,3820,16.7,76,2,"mercedes-benz 280s"]}
+{"mpg": 16.5,"features": [8,350.0,180.0,4380,12.1,76,1,"cadillac seville"]}
+{"mpg": 13.0,"features": [8,350.0,145.0,4055,12.0,76,1,"chevy c10"]}
+{"mpg": 13.0,"features": [8,302.0,130.0,3870,15.0,76,1,"ford f108"]}
+{"mpg": 13.0,"features": [8,318.0,150.0,3755,14.0,76,1,"dodge d100"]}
+{"mpg": 31.5,"features": [4,98.00,68.00,2045,18.5,77,3,"honda accord cvcc"]}
+{"mpg": 30.0,"features": [4,111.0,80.00,2155,14.8,77,1,"buick opel isuzu deluxe"]}
+{"mpg": 36.0,"features": [4,79.00,58.00,1825,18.6,77,2,"renault 5 gtl"]}
+{"mpg": 25.5,"features": [4,122.0,96.00,2300,15.5,77,1,"plymouth arrow gs"]}
+{"mpg": 33.5,"features": [4,85.00,70.00,1945,16.8,77,3,"datsun f-10 hatchback"]}
+{"mpg": 17.5,"features": [8,305.0,145.0,3880,12.5,77,1,"chevrolet caprice classic"]}
+{"mpg": 17.0,"features": [8,260.0,110.0,4060,19.0,77,1,"oldsmobile cutlass supreme"]}
+{"mpg": 15.5,"features": [8,318.0,145.0,4140,13.7,77,1,"dodge monaco brougham"]}
+{"mpg": 15.0,"features": [8,302.0,130.0,4295,14.9,77,1,"mercury cougar brougham"]}
+{"mpg": 17.5,"features": [6,250.0,110.0,3520,16.4,77,1,"chevrolet concours"]}
+{"mpg": 20.5,"features": [6,231.0,105.0,3425,16.9,77,1,"buick skylark"]}
+{"mpg": 19.0,"features": [6,225.0,100.0,3630,17.7,77,1,"plymouth volare custom"]}
+{"mpg": 18.5,"features": [6,250.0,98.00,3525,19.0,77,1,"ford granada"]}
+{"mpg": 16.0,"features": [8,400.0,180.0,4220,11.1,77,1,"pontiac grand prix lj"]}
+{"mpg": 15.5,"features": [8,350.0,170.0,4165,11.4,77,1,"chevrolet monte carlo landau"]}
+{"mpg": 15.5,"features": [8,400.0,190.0,4325,12.2,77,1,"chrysler cordoba"]}
+{"mpg": 16.0,"features": [8,351.0,149.0,4335,14.5,77,1,"ford thunderbird"]}
+{"mpg": 29.0,"features": [4,97.00,78.00,1940,14.5,77,2,"volkswagen rabbit custom"]}
+{"mpg": 24.5,"features": [4,151.0,88.00,2740,16.0,77,1,"pontiac sunbird coupe"]}
+{"mpg": 26.0,"features": [4,97.00,75.00,2265,18.2,77,3,"toyota corolla liftback"]}
+{"mpg": 25.5,"features": [4,140.0,89.00,2755,15.8,77,1,"ford mustang ii 2+2"]}
+{"mpg": 30.5,"features": [4,98.00,63.00,2051,17.0,77,1,"chevrolet chevette"]}
+{"mpg": 33.5,"features": [4,98.00,83.00,2075,15.9,77,1,"dodge colt m/m"]}
+{"mpg": 30.0,"features": [4,97.00,67.00,1985,16.4,77,3,"subaru dl"]}
+{"mpg": 30.5,"features": [4,97.00,78.00,2190,14.1,77,2,"volkswagen dasher"]}
+{"mpg": 22.0,"features": [6,146.0,97.00,2815,14.5,77,3,"datsun 810"]}
+{"mpg": 21.5,"features": [4,121.0,110.0,2600,12.8,77,2,"bmw 320i"]}
+{"mpg": 21.5,"features": [3,80.00,110.0,2720,13.5,77,3,"mazda rx-4"]}
+{"mpg": 43.1,"features": [4,90.00,48.00,1985,21.5,78,2,"volkswagen rabbit custom diesel"]}
+{"mpg": 36.1,"features": [4,98.00,66.00,1800,14.4,78,1,"ford fiesta"]}
+{"mpg": 32.8,"features": [4,78.00,52.00,1985,19.4,78,3,"mazda glc deluxe"]}
+{"mpg": 39.4,"features": [4,85.00,70.00,2070,18.6,78,3,"datsun b210 gx"]}
+{"mpg": 36.1,"features": [4,91.00,60.00,1800,16.4,78,3,"honda civic cvcc"]}
+{"mpg": 19.9,"features": [8,260.0,110.0,3365,15.5,78,1,"oldsmobile cutlass salon brougham"]}
+{"mpg": 19.4,"features": [8,318.0,140.0,3735,13.2,78,1,"dodge diplomat"]}
+{"mpg": 20.2,"features": [8,302.0,139.0,3570,12.8,78,1,"mercury monarch ghia"]}
+{"mpg": 19.2,"features": [6,231.0,105.0,3535,19.2,78,1,"pontiac phoenix lj"]}
+{"mpg": 20.5,"features": [6,200.0,95.00,3155,18.2,78,1,"chevrolet malibu"]}
+{"mpg": 20.2,"features": [6,200.0,85.00,2965,15.8,78,1,"ford fairmont (auto)"]}
+{"mpg": 25.1,"features": [4,140.0,88.00,2720,15.4,78,1,"ford fairmont (man)"]}
+{"mpg": 20.5,"features": [6,225.0,100.0,3430,17.2,78,1,"plymouth volare"]}
+{"mpg": 19.4,"features": [6,232.0,90.00,3210,17.2,78,1,"amc concord"]}
+{"mpg": 20.6,"features": [6,231.0,105.0,3380,15.8,78,1,"buick century special"]}
+{"mpg": 20.8,"features": [6,200.0,85.00,3070,16.7,78,1,"mercury zephyr"]}
+{"mpg": 18.6,"features": [6,225.0,110.0,3620,18.7,78,1,"dodge aspen"]}
+{"mpg": 18.1,"features": [6,258.0,120.0,3410,15.1,78,1,"amc concord d/l"]}
+{"mpg": 19.2,"features": [8,305.0,145.0,3425,13.2,78,1,"chevrolet monte carlo landau"]}
+{"mpg": 17.7,"features": [6,231.0,165.0,3445,13.4,78,1,"buick regal sport coupe (turbo)"]}
+{"mpg": 18.1,"features": [8,302.0,139.0,3205,11.2,78,1,"ford futura"]}
+{"mpg": 17.5,"features": [8,318.0,140.0,4080,13.7,78,1,"dodge magnum xe"]}
+{"mpg": 30.0,"features": [4,98.00,68.00,2155,16.5,78,1,"chevrolet chevette"]}
+{"mpg": 27.5,"features": [4,134.0,95.00,2560,14.2,78,3,"toyota corona"]}
+{"mpg": 27.2,"features": [4,119.0,97.00,2300,14.7,78,3,"datsun 510"]}
+{"mpg": 30.9,"features": [4,105.0,75.00,2230,14.5,78,1,"dodge omni"]}
+{"mpg": 21.1,"features": [4,134.0,95.00,2515,14.8,78,3,"toyota celica gt liftback"]}
+{"mpg": 23.2,"features": [4,156.0,105.0,2745,16.7,78,1,"plymouth sapporo"]}
+{"mpg": 23.8,"features": [4,151.0,85.00,2855,17.6,78,1,"oldsmobile starfire sx"]}
+{"mpg": 23.9,"features": [4,119.0,97.00,2405,14.9,78,3,"datsun 200-sx"]}
+{"mpg": 20.3,"features": [5,131.0,103.0,2830,15.9,78,2,"audi 5000"]}
+{"mpg": 17.0,"features": [6,163.0,125.0,3140,13.6,78,2,"volvo 264gl"]}
+{"mpg": 21.6,"features": [4,121.0,115.0,2795,15.7,78,2,"saab 99gle"]}
+{"mpg": 16.2,"features": [6,163.0,133.0,3410,15.8,78,2,"peugeot 604sl"]}
+{"mpg": 31.5,"features": [4,89.00,71.00,1990,14.9,78,2,"volkswagen scirocco"]}
+{"mpg": 29.5,"features": [4,98.00,68.00,2135,16.6,78,3,"honda accord lx"]}
+{"mpg": 21.5,"features": [6,231.0,115.0,3245,15.4,79,1,"pontiac lemans v6"]}
+{"mpg": 19.8,"features": [6,200.0,85.00,2990,18.2,79,1,"mercury zephyr 6"]}
+{"mpg": 22.3,"features": [4,140.0,88.00,2890,17.3,79,1,"ford fairmont 4"]}
+{"mpg": 20.2,"features": [6,232.0,90.00,3265,18.2,79,1,"amc concord dl 6"]}
+{"mpg": 20.6,"features": [6,225.0,110.0,3360,16.6,79,1,"dodge aspen 6"]}
+{"mpg": 17.0,"features": [8,305.0,130.0,3840,15.4,79,1,"chevrolet caprice classic"]}
+{"mpg": 17.6,"features": [8,302.0,129.0,3725,13.4,79,1,"ford ltd landau"]}
+{"mpg": 16.5,"features": [8,351.0,138.0,3955,13.2,79,1,"mercury grand marquis"]}
+{"mpg": 18.2,"features": [8,318.0,135.0,3830,15.2,79,1,"dodge st. regis"]}
+{"mpg": 16.9,"features": [8,350.0,155.0,4360,14.9,79,1,"buick estate wagon (sw)"]}
+{"mpg": 15.5,"features": [8,351.0,142.0,4054,14.3,79,1,"ford country squire (sw)"]}
+{"mpg": 19.2,"features": [8,267.0,125.0,3605,15.0,79,1,"chevrolet malibu classic (sw)"]}
+{"mpg": 18.5,"features": [8,360.0,150.0,3940,13.0,79,1,"chrysler lebaron town @ country (sw)"]}
+{"mpg": 31.9,"features": [4,89.00,71.00,1925,14.0,79,2,"vw rabbit custom"]}
+{"mpg": 34.1,"features": [4,86.00,65.00,1975,15.2,79,3,"maxda glc deluxe"]}
+{"mpg": 35.7,"features": [4,98.00,80.00,1915,14.4,79,1,"dodge colt hatchback custom"]}
+{"mpg": 27.4,"features": [4,121.0,80.00,2670,15.0,79,1,"amc spirit dl"]}
+{"mpg": 25.4,"features": [5,183.0,77.00,3530,20.1,79,2,"mercedes benz 300d"]}
+{"mpg": 23.0,"features": [8,350.0,125.0,3900,17.4,79,1,"cadillac eldorado"]}
+{"mpg": 27.2,"features": [4,141.0,71.00,3190,24.8,79,2,"peugeot 504"]}
+{"mpg": 23.9,"features": [8,260.0,90.00,3420,22.2,79,1,"oldsmobile cutlass salon brougham"]}
+{"mpg": 34.2,"features": [4,105.0,70.00,2200,13.2,79,1,"plymouth horizon"]}
+{"mpg": 34.5,"features": [4,105.0,70.00,2150,14.9,79,1,"plymouth horizon tc3"]}
+{"mpg": 31.8,"features": [4,85.00,65.00,2020,19.2,79,3,"datsun 210"]}
+{"mpg": 37.3,"features": [4,91.00,69.00,2130,14.7,79,2,"fiat strada custom"]}
+{"mpg": 28.4,"features": [4,151.0,90.00,2670,16.0,79,1,"buick skylark limited"]}
+{"mpg": 28.8,"features": [6,173.0,115.0,2595,11.3,79,1,"chevrolet citation"]}
+{"mpg": 26.8,"features": [6,173.0,115.0,2700,12.9,79,1,"oldsmobile omega brougham"]}
+{"mpg": 33.5,"features": [4,151.0,90.00,2556,13.2,79,1,"pontiac phoenix"]}
+{"mpg": 41.5,"features": [4,98.00,76.00,2144,14.7,80,2,"vw rabbit"]}
+{"mpg": 38.1,"features": [4,89.00,60.00,1968,18.8,80,3,"toyota corolla tercel"]}
+{"mpg": 32.1,"features": [4,98.00,70.00,2120,15.5,80,1,"chevrolet chevette"]}
+{"mpg": 37.2,"features": [4,86.00,65.00,2019,16.4,80,3,"datsun 310"]}
+{"mpg": 28.0,"features": [4,151.0,90.00,2678,16.5,80,1,"chevrolet citation"]}
+{"mpg": 26.4,"features": [4,140.0,88.00,2870,18.1,80,1,"ford fairmont"]}
+{"mpg": 24.3,"features": [4,151.0,90.00,3003,20.1,80,1,"amc concord"]}
+{"mpg": 19.1,"features": [6,225.0,90.00,3381,18.7,80,1,"dodge aspen"]}
+{"mpg": 34.3,"features": [4,97.00,78.00,2188,15.8,80,2,"audi 4000"]}
+{"mpg": 29.8,"features": [4,134.0,90.00,2711,15.5,80,3,"toyota corona liftback"]}
+{"mpg": 31.3,"features": [4,120.0,75.00,2542,17.5,80,3,"mazda 626"]}
+{"mpg": 37.0,"features": [4,119.0,92.00,2434,15.0,80,3,"datsun 510 hatchback"]}
+{"mpg": 32.2,"features": [4,108.0,75.00,2265,15.2,80,3,"toyota corolla"]}
+{"mpg": 46.6,"features": [4,86.00,65.00,2110,17.9,80,3,"mazda glc"]}
+{"mpg": 27.9,"features": [4,156.0,105.0,2800,14.4,80,1,"dodge colt"]}
+{"mpg": 40.8,"features": [4,85.00,65.00,2110,19.2,80,3,"datsun 210"]}
+{"mpg": 44.3,"features": [4,90.00,48.00,2085,21.7,80,2,"vw rabbit c (diesel)"]}
+{"mpg": 43.4,"features": [4,90.00,48.00,2335,23.7,80,2,"vw dasher (diesel)"]}
+{"mpg": 36.4,"features": [5,121.0,67.00,2950,19.9,80,2,"audi 5000s (diesel)"]}
+{"mpg": 30.0,"features": [4,146.0,67.00,3250,21.8,80,2,"mercedes-benz 240d"]}
+{"mpg": 44.6,"features": [4,91.00,67.00,1850,13.8,80,3,"honda civic 1500 gl"]}
+{"mpg": 40.9,"features": [4,85.00,null,1835,17.3,80,2,"renault lecar deluxe"]}
+{"mpg": 33.8,"features": [4,97.00,67.00,2145,18.0,80,3,"subaru dl"]}
+{"mpg": 29.8,"features": [4,89.00,62.00,1845,15.3,80,2,"vokswagen rabbit"]}
+{"mpg": 32.7,"features": [6,168.0,132.0,2910,11.4,80,3,"datsun 280-zx"]}
+{"mpg": 23.7,"features": [3,70.00,100.0,2420,12.5,80,3,"mazda rx-7 gs"]}
+{"mpg": 35.0,"features": [4,122.0,88.00,2500,15.1,80,2,"triumph tr7 coupe"]}
+{"mpg": 23.6,"features": [4,140.0,null,2905,14.3,80,1,"ford mustang cobra"]}
+{"mpg": 32.4,"features": [4,107.0,72.00,2290,17.0,80,3,"honda accord"]}
+{"mpg": 27.2,"features": [4,135.0,84.00,2490,15.7,81,1,"plymouth reliant"]}
+{"mpg": 26.6,"features": [4,151.0,84.00,2635,16.4,81,1,"buick skylark"]}
+{"mpg": 25.8,"features": [4,156.0,92.00,2620,14.4,81,1,"dodge aries wagon (sw)"]}
+{"mpg": 23.5,"features": [6,173.0,110.0,2725,12.6,81,1,"chevrolet citation"]}
+{"mpg": 30.0,"features": [4,135.0,84.00,2385,12.9,81,1,"plymouth reliant"]}
+{"mpg": 39.1,"features": [4,79.00,58.00,1755,16.9,81,3,"toyota starlet"]}
+{"mpg": 39.0,"features": [4,86.00,64.00,1875,16.4,81,1,"plymouth champ"]}
+{"mpg": 35.1,"features": [4,81.00,60.00,1760,16.1,81,3,"honda civic 1300"]}
+{"mpg": 32.3,"features": [4,97.00,67.00,2065,17.8,81,3,"subaru"]}
+{"mpg": 37.0,"features": [4,85.00,65.00,1975,19.4,81,3,"datsun 210 mpg"]}
+{"mpg": 37.7,"features": [4,89.00,62.00,2050,17.3,81,3,"toyota tercel"]}
+{"mpg": 34.1,"features": [4,91.00,68.00,1985,16.0,81,3,"mazda glc 4"]}
+{"mpg": 34.7,"features": [4,105.0,63.00,2215,14.9,81,1,"plymouth horizon 4"]}
+{"mpg": 34.4,"features": [4,98.00,65.00,2045,16.2,81,1,"ford escort 4w"]}
+{"mpg": 29.9,"features": [4,98.00,65.00,2380,20.7,81,1,"ford escort 2h"]}
+{"mpg": 33.0,"features": [4,105.0,74.00,2190,14.2,81,2,"volkswagen jetta"]}
+{"mpg": 34.5,"features": [4,100.0,null,2320,15.8,81,2,"renault 18i"]}
+{"mpg": 33.7,"features": [4,107.0,75.00,2210,14.4,81,3,"honda prelude"]}
+{"mpg": 32.4,"features": [4,108.0,75.00,2350,16.8,81,3,"toyota corolla"]}
+{"mpg": 32.9,"features": [4,119.0,100.0,2615,14.8,81,3,"datsun 200sx"]}
+{"mpg": 31.6,"features": [4,120.0,74.00,2635,18.3,81,3,"mazda 626"]}
+{"mpg": 28.1,"features": [4,141.0,80.00,3230,20.4,81,2,"peugeot 505s turbo diesel"]}
+{"mpg": 30.7,"features": [6,145.0,76.00,3160,19.6,81,2,"volvo diesel"]}
+{"mpg": 25.4,"features": [6,168.0,116.0,2900,12.6,81,3,"toyota cressida"]}
+{"mpg": 24.2,"features": [6,146.0,120.0,2930,13.8,81,3,"datsun 810 maxima"]}
+{"mpg": 22.4,"features": [6,231.0,110.0,3415,15.8,81,1,"buick century"]}
+{"mpg": 26.6,"features": [8,350.0,105.0,3725,19.0,81,1,"oldsmobile cutlass ls"]}
+{"mpg": 20.2,"features": [6,200.0,88.00,3060,17.1,81,1,"ford granada gl"]}
+{"mpg": 17.6,"features": [6,225.0,85.00,3465,16.6,81,1,"chrysler lebaron salon"]}
+{"mpg": 28.0,"features": [4,112.0,88.00,2605,19.6,82,1,"chevrolet cavalier"]}
+{"mpg": 27.0,"features": [4,112.0,88.00,2640,18.6,82,1,"chevrolet cavalier wagon"]}
+{"mpg": 34.0,"features": [4,112.0,88.00,2395,18.0,82,1,"chevrolet cavalier 2-door"]}
+{"mpg": 31.0,"features": [4,112.0,85.00,2575,16.2,82,1,"pontiac j2000 se hatchback"]}
+{"mpg": 29.0,"features": [4,135.0,84.00,2525,16.0,82,1,"dodge aries se"]}
+{"mpg": 27.0,"features": [4,151.0,90.00,2735,18.0,82,1,"pontiac phoenix"]}
+{"mpg": 24.0,"features": [4,140.0,92.00,2865,16.4,82,1,"ford fairmont futura"]}
+{"mpg": 23.0,"features": [4,151.0,null,3035,20.5,82,1,"amc concord dl"]}
+{"mpg": 36.0,"features": [4,105.0,74.00,1980,15.3,82,2,"volkswagen rabbit l"]}
+{"mpg": 37.0,"features": [4,91.00,68.00,2025,18.2,82,3,"mazda glc custom l"]}
+{"mpg": 31.0,"features": [4,91.00,68.00,1970,17.6,82,3,"mazda glc custom"]}
+{"mpg": 38.0,"features": [4,105.0,63.00,2125,14.7,82,1,"plymouth horizon miser"]}
+{"mpg": 36.0,"features": [4,98.00,70.00,2125,17.3,82,1,"mercury lynx l"]}
+{"mpg": 36.0,"features": [4,120.0,88.00,2160,14.5,82,3,"nissan stanza xe"]}
+{"mpg": 36.0,"features": [4,107.0,75.00,2205,14.5,82,3,"honda accord"]}
+{"mpg": 34.0,"features": [4,108.0,70.00,224516.9,82,3,"toyota corolla"]}
+{"mpg": 38.0,"features": [4,91.00,67.00,1965,15.0,82,3,"honda civic"]}
+{"mpg": 32.0,"features": [4,91.00,67.00,1965,15.7,82,3,"honda civic (auto)"]}
+{"mpg": 38.0,"features": [4,91.00,67.00,1995,16.2,82,3,"datsun 310 gx"]}
+{"mpg": 25.0,"features": [6,181.0,110.0,2945,16.4,82,1,"buick century limited"]}
+{"mpg": 38.0,"features": [6,262.0,85.00,3015,17.0,82,1,"oldsmobile cutlass ciera (diesel)"]}
+{"mpg": 26.0,"features": [4,156.0,92.00,2585,14.5,82,1,"chrysler lebaron medallion"]}
+{"mpg": 22.0,"features": [6,232.0,112.0,283514.7,82,1,"ford granada l"]}
+{"mpg": 32.0,"features": [4,144.0,96.00,2665,13.9,82,3,"toyota celica gt"]}
+{"mpg": 36.0,"features": [4,135.0,84.00,2370,13.0,82,1,"dodge charger 2.2"]}
+{"mpg": 27.0,"features": [4,151.0,90.00,2950,17.3,82,1,"chevrolet camaro"]}
+{"mpg": 27.0,"features": [4,140.0,86.00,2790,15.6,82,1,"ford mustang gl"]}
+{"mpg": 44.0,"features": [4,97.00,52.00,2130,24.6,82,2,"vw pickup"]}
+{"mpg": 32.0,"features": [4,135.0,84.00,2295,11.6,82,1,"dodge rampage"]}
+{"mpg": 28.0,"features": [4,120.0,79.00,2625,18.6,82,1,"ford ranger"]}
+{"mpg": 31.0,"features": [4,119.0,82.00,2720,19.4,82,1,"chevy s-10"]}
