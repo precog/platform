@@ -380,14 +380,14 @@
 {"mpg": 36.0,"features": [4,98.00,70.00,2125,17.3,82,1,"mercury lynx l"]}
 {"mpg": 36.0,"features": [4,120.0,88.00,2160,14.5,82,3,"nissan stanza xe"]}
 {"mpg": 36.0,"features": [4,107.0,75.00,2205,14.5,82,3,"honda accord"]}
-{"mpg": 34.0,"features": [4,108.0,70.00,224516.9,82,3,"toyota corolla"]}
+{"mpg": 34.0,"features": [4,108.0,70.00,2245,16.9,82,3,"toyota corolla"]}
 {"mpg": 38.0,"features": [4,91.00,67.00,1965,15.0,82,3,"honda civic"]}
 {"mpg": 32.0,"features": [4,91.00,67.00,1965,15.7,82,3,"honda civic (auto)"]}
 {"mpg": 38.0,"features": [4,91.00,67.00,1995,16.2,82,3,"datsun 310 gx"]}
 {"mpg": 25.0,"features": [6,181.0,110.0,2945,16.4,82,1,"buick century limited"]}
 {"mpg": 38.0,"features": [6,262.0,85.00,3015,17.0,82,1,"oldsmobile cutlass ciera (diesel)"]}
 {"mpg": 26.0,"features": [4,156.0,92.00,2585,14.5,82,1,"chrysler lebaron medallion"]}
-{"mpg": 22.0,"features": [6,232.0,112.0,283514.7,82,1,"ford granada l"]}
+{"mpg": 22.0,"features": [6,232.0,112.0,2835,14.7,82,1,"ford granada l"]}
 {"mpg": 32.0,"features": [4,144.0,96.00,2665,13.9,82,3,"toyota celica gt"]}
 {"mpg": 36.0,"features": [4,135.0,84.00,2370,13.0,82,1,"dodge charger 2.2"]}
 {"mpg": 27.0,"features": [4,151.0,90.00,2950,17.3,82,1,"chevrolet camaro"]}
