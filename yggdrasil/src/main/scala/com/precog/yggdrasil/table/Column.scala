@@ -160,7 +160,7 @@ trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
   def rowCompare(row1: Int, row2: Int): Int =
-    java.lang.Boolean.compare(apply(row1), apply(row2))
+    backport.lang.Boolean.compare(apply(row1), apply(row2))
   
   def asBitSet(undefinedVal: Boolean, size: Int): BitSet = {
     val back = new BitSet(size)
@@ -202,7 +202,7 @@ trait LongColumn extends Column with (Int => Long) {
   def apply(row: Int): Long
   def rowEq(row1: Int, row2: Int): Boolean = apply(row1) == apply(row2)
   def rowCompare(row1: Int, row2: Int): Int =
-    java.lang.Long.compare(apply(row1), apply(row2))
+    backport.lang.Long.compare(apply(row1), apply(row2))
 
   override val tpe = CLong
   override def jValue(row: Int) = JNum(this(row))
