@@ -842,7 +842,7 @@ object ImportTools extends Command with Logging {
         }
 
         try {
-          loop(AsyncParser())
+          loop(AsyncParser(true))
         } finally {
           ch.close()
         }
