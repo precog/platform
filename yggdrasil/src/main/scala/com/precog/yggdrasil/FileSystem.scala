@@ -28,6 +28,8 @@ import blueeyes.core.http._
 import blueeyes.json._
 import blueeyes.json.serialization._
 
+import java.util.UUID
+
 import org.joda.time._
 
 import shapeless._
@@ -41,12 +43,19 @@ sealed trait Resource {
   def mimeType: Future[MimeType]
   def authorities: Future[Authorities]
   def close: Future[PrecogUnit]
+  def append(data: PathData): Future[PrecogUnit]
 }
 
 case class NIHDBResource(db: NIHDB)(implicit as: ActorSystem) extends Resource {
   def mimeType: Future[MimeType] = Future(Resource.QuirrelData)
   def authorities: Future[Authorities] = db.authorities
   def close: Future[PrecogUnit] = db.close(as)
+  def append(data: PathData) = data match {
+    case NIHDBData(batch) =>
+      db.insert(batch)
+
+    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-event data to NIHDB"))
+  }
 }
 
 // We may want to add a checksum field.
@@ -97,6 +106,22 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
     }
   }
 
+  def append(data: PathData): Future[PrecogUnit] = data match {
+    case _ => Promise.failed(new IllegalArgumentException("Blob append not yet supported"))
+
+    case BlobData(bytes, mimeType, _) => Future {
+      if (mimeType != metadata.mimeType) {
+        throw new IllegalArgumentException("Attempt to append %s data to a %s blob".format(mimeType, metadata.mimeType))
+      }
+
+      val output = new FileOutputStream(dataFile, true)
+      output.write(bytes)
+      output.close
+    }
+
+    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-blob data to blob"))
+  }
+
   def close = Promise.successful(PrecogUnit)
 }
 
@@ -120,31 +145,53 @@ object ResourceError {
   }
 }
 
+sealed class PathData(val typeName: String)
+object PathData {
+  final val BLOB = "blob"
+  final val NIHDB = "nihdb"
+}
 
-// trait Resource[A] {
-//   def open(baseDir: File): IO[Validation[ResourceError, A]]
-//   // def create(baseDir: File,
-// 
-//   def mimeType(a: A): MimeType
-//   def authorities(a: A): Authorities
-// }
+case class BlobData(data: Array[Byte], mimeType: MimeType, id: UUID) extends PathData(PathData.BLOB)
+case class NIHDBData(data: Seq[(Long, Seq[JValue])], id: Option[UUID]) extends PathData(PathData.NIHDB)
 
 sealed trait PathOp
-case class Create[A, B <: Resource](data: A, id: ResourceId, auth: Option[APIKey]) extends PathOp
+
+/**
+  * Creates a new resource with the given tracking id.
+  */
+case class Create(data: PathData, id: UUID, authorities: Authorities, failIfExists: Boolean) extends PathOp
 
 /**
   * Appends to a specified resource or the current resource, depending on the id field.
   */
-case class Append[A, B <: Resource](data: A, id: Option[ResourceId], auth: Option[APIKey]) extends PathOp
-case class Replace(id: ResourceId, auth: Option[APIKey]) extends PathOp
+case class Append(data: PathData, authorities: Authorities) extends PathOp
+case class Replace(id: UUID, auth: Option[APIKey]) extends PathOp
 case class Read(auth: Option[APIKey]) extends PathOp
 case class Execute(auth: Option[APIKey]) extends PathOp
 case class Stat(auth: Option[APIKey]) extends PathOp
 
 
-final case class VersionLog(versions: SortedMap[Long, String]) {
-  def current: Long = versions.foldLeft(0L)(math.max)
-  def +(kv: (Long, String)) = VersionLog(versions + kv)
+final case class VersionLog(versions: SortedMap[VersionId, String], current: VersionId = versions.foldLeft(0L)(math.max)) {
+  def withCurrent(id: VersionId) =
+    if (! versions.containsKey(id)) {
+      sys.error("Cannot set current version to %d when it doesn't exist in the versions list: %s".format(id, versions))
+    } else {
+      VersionLog(versions, id)
+    }
+
+  def withCurrent(id: VersionId, resource: String) = {
+    VersionLog(versions + (id -> resource), id)
+  }
+
+  // FIXME: Not thread safe. We're in an actor, so this should be OK,
+  // but it would be better to use a cleaner approach
+  def +(v: String): (VersionId, VersionLog) = {
+    val newId = versions.foldLeft(0L)(math.max) + 1
+
+    (newId, this + (newId -> v))
+  }
+
+  def +(kv: (VersionId, String)) = VersionLog(versions + kv)
 }
 
 object VersionLog {
@@ -152,26 +199,37 @@ object VersionLog {
 
   implicit def extractor = new Extractor[VersionLog] {
     def validated(jvalue: JValue): Validation[Extractor.Error, VersionLog] = {
-      jvalue match {
-        case JArray(elems) =>
-          val versionsV: Validation[Extractor.Error, List[(Long, String)]] = elems.traverse { jobj =>
-            (jobj.validated[Long] |@| jobj.validated[String]).tupled
-          }
-          versionsV map { versions => VersionLog(SortedMap(versions: _*)) }
+      for {
+        current <- (jvalue \ "current").validated[Long]
+        versions <- {
+        (jvalue \ "versions") match {
+          case JArray(elems) =>
+            val versionsV: Validation[Extractor.Error, List[(Long, String)]] = elems.traverse { jobj =>
+              (jobj.validated[Long] |@| jobj.validated[String]).tupled
+            }
+            versionsV map { versions => SortedMap(versions: _*) }
 
-        case _ =>
-          Failure(Extractor.invalid("Expected a top-level JSON array."))
+          case _ =>
+            Failure(Extractor.invalid("Expected a JSON array in '.versions'"))
+        }
+      } yield {
+          VersionLog(versions, current)
       }
     }
   }
 
   implicit def decomposer = new Decomposer[VersionLog] {
     def decompose(log: VersionLog): JValue =
-      JArray(log.versions.toList map { case (v, p) =>
-        JObject(JField("version", JNum(v)) ::
-                JField("path", JString(p)) ::
-                Nil)
-      })
+      JObject(
+        "current" -> JNum(log.current),
+        "versions" ->
+          JArray(log.versions.toList map { case (v, p) =>
+            JObject(
+              "version" -> JNum(v),
+              "path" -> JString(p)
+            )
+          })
+      )
   }
 }
 
@@ -197,13 +255,18 @@ final case class PathManagerActor(baseDir: File, path: Path, resources: Resource
     }
   }
 
-  // Keeps track of the open projections for a given version/authority pair
+  // Keeps track of the resources for a given version/authority pair
   private val resources = Cache.simple[VersionId, Map[Authorities, Resource]](
     OnRemoval {
       case (_, resourceMap, cause) if cause != RemovalCause.REPLACED => resourceMap.foreach(_.close)
-    },
-    ExpireAfterAccess(Duration(30, TimeUnit.Minutes))
+    }) //,
+    //ExpireAfterAccess(Duration(30, TimeUnit.Minutes))
   )
+
+  // This tracks resource IDs to their versions. WE must guarantee
+  // ordering of Create/Append/Replace elsewhere because we use that
+  // guarantee to clean this on replacements
+  private var resourceMap: Map[UUID, VersionId] = Map.empty()
 
   private def openProjections(version: VersionId): Option[IO[List[NIHDBResource]]] = {
     resources.get(version).map { existing =>
@@ -278,13 +341,70 @@ final case class PathManagerActor(baseDir: File, path: Path, resources: Resource
     }
   }
 
+  private def performCreate(data: PathData, id: Option[UUID], authorities: Authorities): IO[Validation[ResourceError, Resource]] = {
+    if (resourceMap.containsKey(id)) {
+      // What now?
+    }
+
+    for {
+      version <- IO {
+        val (newVersion, updatedVersions) = versions + data.typeName
+        versions = updatedVersions
+        newVersion
+      }
+      result <- data match {
+        case BlobData(bytes, mimeType) =>
+          resources.createBlob[IO](versionSubdir(version), mimeType, authorities, bytes :: StreamT.empty)
+
+        case NIHDBData(data, idOpt) =>
+          resources.createNIHDB(versionSubdir(version), authorities)
+      }
+      _ = result.map { resource =>
+        id.foreach { i => resourceMap += (i -> version) }
+        resources += (version -> Map(authorities -> resource))
+      }
+    } yield result
+  }
+
   def receive = {
+    case Create(data, id, authorities) =>
+      val requestor = sender
+
+      performCreate(data, id, authorities).map {
+        case Success(resource) =>
+          // Respond to requestor?
+
+        case Failure(error) =>
+          // ???
+      }.unsafePerformIO
+
+    case Append(data, authorities) =>
+      val requestor = sender
+      data match {
+        case BlobData(_, _, id) => sys.error("Append not yet supported for blob data")
+
+        case NIHDBData(data, idOpt) =>
+          for {
+            version <- idOpt.map { id =>
+              resourceMap.get(id).toSuccess("Append for non-existing resource Id " + id)
+            }.getOrElse(Success(versions.current))
+            typeCheck <- 
+          if (versions(version) != PathData.NIHDB) {
+            // Can't append NIHDB data to a Blob
+          } else {
+
+          }
+
+
+      id match {
+        case Some(id) =>
+
+        case None => performCreate(data, 
+
     case Read(auth) =>
       // Returns a stream of bytes + mimetype
     case Archive(auth) =>
       rollOver(identity)
-    case Create(data, auth, creator) =>
-      rollOver(creator.create(_, data))
     case Execute(auth) =>
       // Return projection snapshot if possible.
     case Stat(_) =>

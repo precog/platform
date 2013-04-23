@@ -25,7 +25,7 @@ import security._
 import jobs.JobId
 
 import blueeyes.json.{ JValue, JParser }
-import blueeyes.json.serialization.{ Extractor, Decomposer }
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -181,9 +181,9 @@ object StoreFileMessage {
 
   val schemaV1 = "apiKey" :: "path" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| UncompressedEncoding) :: "timestamp" :: HNil
 
-  val decomposerV1: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0"))
+  val decomposerV1: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0").v)
 
-  val extractorV1: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0"))
+  val extractorV1: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0").v)
 
   implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV1
   implicit val Extractor: Extractor[StoreFileMessage] = extractorV1
