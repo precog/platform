@@ -64,7 +64,6 @@ trait BaseInMemoryJobManager[M[+_]] extends JobManager[M]
 
   implicit def M: Monad[M]
 
-  @volatile
   private[jobs] val jobs: mutable.Map[JobId, JobData]
 
   val fs = new InMemoryFileStorage[M]
