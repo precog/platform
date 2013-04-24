@@ -82,10 +82,12 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
 
     abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like with Morph1Apply {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
+      val rowLevel: Boolean = false
     }
     
     abstract class Morphism2(val namespace: Vector[String], val name: String) extends Morphism2Like {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
+      val rowLevel: Boolean = false
       val multivariate: Boolean = false
       def alignment: MorphismAlignment
       override final def idAlignment: IdentityAlignment = alignment match {
@@ -108,6 +110,8 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       
       def f1(ctx: EvaluationContext): F1
 
+      override val rowLevel: Boolean = true
+
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
     
@@ -129,11 +133,15 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       
       def f2(ctx: EvaluationContext): F2
 
+      override val rowLevel: Boolean = true
+
       override def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2F2(this)
     }
 
     abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike with Morph1Apply {
       val opcode: Int = defaultReductionOpcode.getAndIncrement
+      val rowLevel: Boolean = false
+
       type Result
 
       def monoid: Monoid[Result]

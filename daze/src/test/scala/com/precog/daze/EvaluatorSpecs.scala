@@ -3637,7 +3637,6 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         left,
         Const(CLong(first))(line))(line),
       Const(CLong(second))(line))(line)
-
 }
 
 object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances 

@@ -67,6 +67,7 @@ trait FunctionLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val rowLevel: Boolean
   val deprecation: Option[String] = None
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn

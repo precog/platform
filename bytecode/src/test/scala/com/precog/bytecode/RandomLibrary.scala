@@ -80,21 +80,26 @@ trait RandomLibrary extends Library {
   
   case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {
     val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
+    val rowLevel: Boolean = false
   }
   
   case class Morphism2(namespace: Vector[String], name: String, opcode: Int) extends Morphism2Like {
     val tpe = BinaryOperationType(JType.JUniverseT, JType.JUniverseT, JType.JUniverseT)
+    val rowLevel: Boolean = false
   }
   
   case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with Morphism1Like {
     val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
+    val rowLevel: Boolean = true
   }
   
   case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with Morphism2Like {
     val tpe = BinaryOperationType(JType.JUniverseT, JType.JUniverseT, JType.JUniverseT)
+    val rowLevel: Boolean = true
   }
 
   case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with Morphism1Like {
     val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
+    val rowLevel: Boolean = false
   }
 }

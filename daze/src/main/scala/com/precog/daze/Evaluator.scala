@@ -68,7 +68,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     with Memoizer
     with TypeInferencer
     with CondRewriter
-    with JoinOptimizer
+    with JoinOptimizerModule[M]
     with SortPushDown
     with OpFinderModule[M] 
     with StaticInlinerModule[M] 
@@ -86,12 +86,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   type Evaluator[N[+_]] <: EvaluatorLike[N]
   
   abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
-      extends OpFinder
+      extends OpFinder 
       with ReductionFinder
       with StaticInliner
+      with JoinOptimizer
       with PredicatePullups
       with YggConfigComponent {
-    
+
     type YggConfig <: EvaluatorConfig
 
     import library._  
@@ -118,9 +119,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
     // Have to be idempotent on subgraphs
     def stagedRewriteDAG(optimize: Boolean, ctx: EvaluationContext): DepGraph => DepGraph = {
+      // rewrites are written in `andThen` order
+      // we reverse above because our semigroup uses `compose`
       composeOptimizations(optimize, List(
         inlineStatics(_, ctx),
-        optimizeJoins(_),
+        optimizeJoins(_, ctx),
         rewriteConditionals(_)
       ))
     }

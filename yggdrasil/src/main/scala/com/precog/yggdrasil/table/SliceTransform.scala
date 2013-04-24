@@ -83,6 +83,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
     // No transform defined herein may reduce the size of a slice. Be it known!
     def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
+      //todo missing case WrapObjectDynamic
       val result = spec match {
         case Leaf(source) if source == Source || source == SourceLeft =>
           SliceTransform.left(())
