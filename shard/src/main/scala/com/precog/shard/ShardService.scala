@@ -70,23 +70,29 @@ object ShardStateOptions {
 }
 
 sealed trait ShardState {
-  def platform: Platform[Future, StreamT[Future, CharBuffer]]
+  type Result
+
+  def platform: Platform[Future, Result]
   def apiKeyFinder: APIKeyFinder[Future]
   def stoppable: Stoppable
 }
 
 case class ManagedQueryShardState(
-  override val platform: ManagedPlatform,
-  apiKeyFinder: APIKeyFinder[Future],
-  jobManager: JobManager[Future],
-  clock: Clock,
-  stoppable: Stoppable,
-  options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState
+    override val platform: ManagedPlatform,
+    apiKeyFinder: APIKeyFinder[Future],
+    jobManager: JobManager[Future],
+    clock: Clock,
+    stoppable: Stoppable,
+    options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState {
+  type Result = StreamT[Future, CharBuffer]
+}
 
 case class BasicShardState(
-  platform: Platform[Future, StreamT[Future, CharBuffer]],
-  apiKeyFinder: APIKeyFinder[Future],
-  stoppable: Stoppable) extends ShardState
+    platform: Platform[Future, (Set[Fault], StreamT[Future, CharBuffer])],
+    apiKeyFinder: APIKeyFinder[Future],
+    stoppable: Stoppable) extends ShardState {
+  type Result = (Set[Fault], StreamT[Future, CharBuffer])
+}
 
 trait ShardService extends
     BlueEyesServiceBuilder with

@@ -66,7 +66,8 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
-  def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
+
+  def extractResponse(request: HttpRequest[Future[JValue]], a: A): Future[HttpResponse[QueryResult]]
 
   private val Command = """:(\w+)\s+(.+)""".r
 
@@ -100,18 +101,16 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
       case qt =>
         platform.executorFor(apiKey) flatMap {
           case Success(executor) =>
-            executor.execute(apiKey, query, path, opts) map {
+            executor.execute(apiKey, query, path, opts) flatMap {
               case Success(result) =>
-                appendHeaders(opts) {
-                  extractResponse(request, result)
-                }
+                extractResponse(request, result) map (appendHeaders(opts))
               case Failure(error) =>
-                handleErrors(qt, error)
+                handleErrors(qt, error).point[Future]
             }
 
           case Failure(error) =>
             logger.error("Failure during evaluator setup: " + error)
-            M.point(HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")))
+            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
         }
     })
   }
@@ -134,11 +133,24 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 }
 
 class BasicQueryServiceHandler(
-    val platform: Platform[Future, StreamT[Future, CharBuffer]])(implicit
-    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+    val platform: Platform[Future, (Set[Fault], StreamT[Future, CharBuffer])])(implicit
+    val M: Monad[Future]) extends QueryServiceHandler[(Set[Fault], StreamT[Future, CharBuffer])] {
 
-  def extractResponse(request: HttpRequest[Future[JValue]], stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
-    HttpResponse[QueryResult](OK, content = Some(Right(stream)))
+  def extractResponse(request: HttpRequest[Future[JValue]], result: (Set[Fault], StreamT[Future, CharBuffer])): Future[HttpResponse[QueryResult]] = {
+    val (faults, stream) = result
+    if (faults.isEmpty) {
+      HttpResponse[QueryResult](OK, content = Some(Right(stream))).point[Future]
+    } else {
+      val json = JArray(faults.toList map { fault =>
+        JObject(
+          JField("message", JString(fault.message)) ::
+          (fault.pos map { pos =>
+            JField("position", pos.serialize) :: Nil
+          } getOrElse Nil)
+        )
+      })
+      HttpResponse[QueryResult](BadRequest, content = Some(Left(json))).point[Future]
+    }
   }
 }
 
@@ -161,7 +173,7 @@ class SyncQueryServiceHandler(
   def ensureTermination(data0: StreamT[Future, CharBuffer]) =
     TerminateJson.ensure(silenceShardQueryExceptions(data0))
 
-  def extractResponse(request: HttpRequest[Future[JValue]], result: (Option[JobId], StreamT[Future, CharBuffer])): HttpResponse[QueryResult] = {
+  def extractResponse(request: HttpRequest[Future[JValue]], result: (Option[JobId], StreamT[Future, CharBuffer])): Future[HttpResponse[QueryResult]] = {
     import SyncResultFormat._
 
     val format = request.parameters get 'format map {
@@ -172,16 +184,27 @@ class SyncQueryServiceHandler(
 
     (format, result._1, result._2) match {
       case (Left(msg), _, _) =>
-        HttpResponse[QueryResult](HttpStatus(BadRequest, msg))
+        HttpResponse[QueryResult](HttpStatus(BadRequest, msg)).point[Future]
 
-      case (Right(Simple), _, data) =>
-        HttpResponse[QueryResult](OK, content = Some(Right(ensureTermination(data))))
+      case (Right(Simple), None, data) =>
+        HttpResponse[QueryResult](OK, content = Some(Right(ensureTermination(data)))).point[Future]
+
+      case (Right(Simple), Some(jobId), data) =>
+        val errorsM = jobManager.listMessages(jobId, channels.Error, None)
+        errorsM map { errors =>
+          if (errors.isEmpty) {
+            HttpResponse[QueryResult](OK, content = Some(Right(ensureTermination(data))))
+          } else {
+            val json = JArray(errors.toList map (_.value))
+            HttpResponse[QueryResult](BadRequest, content = Some(Left(json)))
+          }
+        }
 
       case (Right(Detailed), None, data0) =>
         val data = ensureTermination(data0)
         val prefix = CharBuffer.wrap("""{"errors":[],"warnings":[{"message":"Job service is down; errors/warnings are disabled."}],"data":""")
         val result: StreamT[Future, CharBuffer] = (prefix :: data) ++ (CharBuffer.wrap("}") :: StreamT.empty[Future, CharBuffer])
-        HttpResponse[QueryResult](OK, content = Some(Right(result)))
+        HttpResponse[QueryResult](OK, content = Some(Right(result))).point[Future]
 
       case (Right(Detailed), Some(jobId), data0) =>
         val prefix = CharBuffer.wrap("""{ "data" : """)
@@ -208,7 +231,7 @@ class SyncQueryServiceHandler(
           case None =>
             M.point(None)
         }
-        HttpResponse[QueryResult](OK, content = Some(Right(result)))
+        HttpResponse[QueryResult](OK, content = Some(Right(result))).point[Future]
     }
   }
 
@@ -240,8 +263,8 @@ class SyncQueryServiceHandler(
 }
 
 class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
-  def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): HttpResponse[QueryResult] = {
+  def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): Future[HttpResponse[QueryResult]] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
-    HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
+    HttpResponse[QueryResult](Accepted, content = Some(Left(result))).point[Future]
   }
 }
