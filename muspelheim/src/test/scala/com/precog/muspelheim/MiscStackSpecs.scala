@@ -844,6 +844,29 @@ trait MiscStackSpecs extends EvalStackSpecs {
       canada.size mustEqual(570)
     }
 
+    "return result for nested filters" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | medals' := medals where medals.Country = "India"
+        | medals'' := new medals'
+        |
+        | medals'' ~ medals'
+        |   {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(16)
+
+      val maps = results.toSeq collect {
+        case (ids, SObject(obj)) => obj
+      }
+
+      val india = maps filter { _.values forall { _ == SString("India") } }
+      india.size mustEqual(16)
+    }
+
     "accept a solve involving formals of formals" in {
       val input = """
         | medals := //summer_games/london_medals
@@ -2302,17 +2325,65 @@ trait MiscStackSpecs extends EvalStackSpecs {
       results must contain(SBoolean(true))
       results must not(contain(SBoolean(false)))
     }
-    
-    "produce a non-empty set for a ternary join-optimized cartesian" in {
+
+    "produce a non-empty set for a dereferenced join-optimized cartesian" in {
+      val size = """
+        | clicks := //clicks
+        | counts := solve 'pageId 
+        |   count(clicks where clicks.pageId = 'pageId)
+        | sum(std::math::pow(counts, 2))
+      """.stripMargin
+
       val input = """
         | clicks := //clicks
-        | 
         | clicks' := new clicks
+        |
+        | clicks ~ clicks'
+        |   { a: clicks, b: clicks' }.a where [clicks'.pageId] = [clicks.pageId]
+        | """.stripMargin
+
+      val totalResult = evalE(size)
+
+      totalResult must haveSize(1)
+
+      val total = totalResult.collectFirst { 
+        case (_, SDecimal(d)) => d 
+      }.get
+
+      val result = evalE(input)
+      
+      result must not(beEmpty)
+      result must haveSize(total.toInt)
+    }
+
+    "produce a non-empty set for a ternary join-optimized cartesian" in {
+      val size = """
+        | clicks := //clicks
+        | counts := solve 'pageId 
+        |   count(clicks where clicks.pageId = 'pageId)
+        | sum(std::math::pow(counts, 2))
+      """.stripMargin
+
+      val input = """
+        | clicks := //clicks
+        | clicks' := new clicks
+        |
         | clicks ~ clicks'
         |   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
         | """.stripMargin
         
-      evalE(input) must not(beEmpty)
+      val totalResult = evalE(size)
+
+      totalResult must haveSize(1)
+
+      val total = totalResult.collectFirst { 
+        case (_, SDecimal(d)) => d 
+      }.get
+
+      val result = evalE(input)
+      
+      result must not(beEmpty)
+      result must haveSize(total.toInt)
     }
 
     "not produce out-of-order identities for simple cartesian and join with a reduction" in {
@@ -2496,7 +2567,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       eval(input) must not(beEmpty)
     }
-    
 
     "successfully complete a query with a lot of unions" in {
       val input = """

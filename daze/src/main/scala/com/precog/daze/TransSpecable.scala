@@ -35,26 +35,29 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
 
   trait TransSpecable extends EvaluatorMethods {
     import trans._
-    
-    trait TransSpecableFold[T] {
-      def EqualLiteral(node: Join)(parent: T, value: RValue, invert: Boolean): T
+
+    trait TransSpecableOrderFold[T] {
       def WrapObject(node: Join)(parent: T, field: String): T
       def DerefObjectStatic(node: Join)(parent: T, field: String): T
-      def DerefMetadataStatic(node: Join)(parent: T, field: String): T
       def DerefArrayStatic(node: Join)(parent: T, index: Int): T
+      def WrapArray(node: Operate)(parent: T): T
+      def unmatched(node: DepGraph): T
+      def done(node: DepGraph): T
+    }
+    
+    trait TransSpecableFold[T] extends TransSpecableOrderFold[T] {
+      def EqualLiteral(node: Join)(parent: T, value: RValue, invert: Boolean): T
+      def DerefMetadataStatic(node: Join)(parent: T, field: String): T
       def ArraySwap(node: Join)(parent: T, index: Int): T
       def InnerObjectConcat(node: Join)(parent: T): T
       def InnerArrayConcat(node: Join)(parent: T): T
       def Map1Left(node: Join)(parent: T, op: Op2F2, graph: DepGraph, value: RValue): T
       def Map1Right(node: Join)(parent: T, op: Op2F2, graph: DepGraph, value: RValue): T
+      def Const(node: dag.Const)(under: T): T
       def binOp(node: Join)(leftParent: T, rightParent: => T, op: BinaryOperation): T
       def Filter(node: dag.Filter)(leftParent: T, rightParent: => T): T
-      def WrapArray(node: Operate)(parent: T): T
       def Op1(node: Operate)(parent: T, op: UnaryOperation): T
       def Cond(node: dag.Cond)(pred: T, left: T, right: T): T
-      def Const(node: dag.Const)(under: T): T
-      def unmatched(node: DepGraph): T
-      def done(node: DepGraph): T
     }
     
     def isTransSpecable(to: DepGraph, from: DepGraph): Boolean = foldDownTransSpecable(to, Some(from))(new TransSpecableFold[Boolean] {
@@ -80,27 +83,40 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
     
     private[this] def snd[A, B](a: A, b: B): Option[B] = Some(b)
     
-    def mkTransSpec(to: DepGraph, from: DepGraph, ctx: EvaluationContext) =
-      mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, Some(from), ctx, identity, snd, some).map(_._1)  
+    def mkTransSpec(to: DepGraph, from: DepGraph, ctx: EvaluationContext): Option[TransSpec1] =
+      mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, Some(from), ctx, identity, snd, some).map(_._1)
 
-    def findTransSpecAndAncestor(to: DepGraph, ctx: EvaluationContext) =
-      mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, None, ctx, identity, snd, some)  
+    def findAncestor(to: DepGraph, ctx: EvaluationContext): Option[DepGraph] =
+      mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, None, ctx, identity, snd, some).map(_._2)
+
+    def findTransSpecAndAncestor(to: DepGraph, ctx: EvaluationContext): Option[(TransSpec1, DepGraph)] =
+      mkTransSpecWithState[Option, (TransSpec1, DepGraph)](to, None, ctx, identity, snd, some)
+
+    def findOrderAncestor(to: DepGraph, ctx: EvaluationContext): Option[DepGraph] =
+      mkTransSpecOrderWithState[Option, (TransSpec1, DepGraph)](to, None, ctx, identity, snd, some).map(_._2)
+
+    def transFold[N[+_]: Monad, S](
+        to: DepGraph,
+        from: Option[DepGraph],
+        ctx: EvaluationContext,
+        get: S => (TransSpec1, DepGraph),
+        set: (S, (TransSpec1, DepGraph)) => N[S],
+        init: ((TransSpec1, DepGraph)) => N[S]) = {
+
+      // Bifunctor leftMap would be better here if it existed in pimped type inferrable form
+      def leftMap(parent: S)(f: TransSpec1 => TransSpec1) = get(parent) match { 
+        case (spec, ancestor) => set(parent, (f(spec), ancestor))
+      }
       
-    def mkTransSpecWithState[N[+_] : Monad, S](to: DepGraph, from: Option[DepGraph], ctx: EvaluationContext, get: S => (TransSpec1, DepGraph), set: (S, (TransSpec1, DepGraph)) => N[S], init: ((TransSpec1, DepGraph)) => N[S]): N[S] = {
-      foldDownTransSpecable(to, from)(new TransSpecableFold[N[S]] {
+      new TransSpecableFold[N[S]] {
         import trans._
 
-        // Bifunctor leftMap would be better here if it existed in pimped type inferrable form
-        def leftMap(parent: S)(f: TransSpec1 => TransSpec1) = get(parent) match { 
-          case (spec, ancestor) => set(parent, (f(spec), ancestor))
-        }
-        
         def EqualLiteral(node: Join)(parent: N[S], value: RValue, invert: Boolean) =
           parent.flatMap(leftMap(_) { target =>
             val inner = trans.Equal(target, transRValue(value, target))
             if (invert) op1ForUnOp(Comp).spec(ctx)(inner) else inner
           })
-          
+
         def WrapObject(node: Join)(parent: N[S], field: String) =
           parent.flatMap(leftMap(_)(trans.WrapObject(_, field)))
           
@@ -203,27 +219,72 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def unmatched(node: DepGraph) = init(Leaf(Source), node)
         
         def done(node: DepGraph) = init(Leaf(Source), node)
-      })
+      }
+    }
+      
+    def mkTransSpecWithState[N[+_]: Monad, S](
+        to: DepGraph,
+        from: Option[DepGraph],
+        ctx: EvaluationContext,
+        get: S => (TransSpec1, DepGraph),
+        set: (S, (TransSpec1, DepGraph)) => N[S],
+        init: ((TransSpec1, DepGraph)) => N[S]): N[S] = {
+
+      foldDownTransSpecable(to, from)(transFold[N, S](to, from, ctx, get, set, init))
+    }
+
+    def mkTransSpecOrderWithState[N[+_]: Monad, S](
+        to: DepGraph,
+        from: Option[DepGraph],
+        ctx: EvaluationContext,
+        get: S => (TransSpec1, DepGraph),
+        set: (S, (TransSpec1, DepGraph)) => N[S],
+        init: ((TransSpec1, DepGraph)) => N[S]): N[S] = {
+
+      foldDownTransSpecableOrder(to, from)(transFold[N, S](to, from, ctx, get, set, init))
+    }
+
+    object ConstInt {
+      def unapply(c: Const) = c match {
+        case Const(CNum(n)) => Some(n.toInt)
+        case Const(CLong(n)) => Some(n.toInt)
+        case Const(CDouble(n)) => Some(n.toInt)
+        case _ => None
+      }
+    }
+    
+    object Op2F2ForBinOp {
+      def unapply(op: BinaryOperation): Option[Op2F2] = op2ForBinOp(op).flatMap {
+        case op2f2: Op2F2 => Some(op2f2)
+        case _ => None
+      }
+    }
+
+    def foldDownTransSpecableOrder[T](to: DepGraph, from: Option[DepGraph])(alg: TransSpecableOrderFold[T]): T = {
+
+      def loop(graph: DepGraph): T = graph match {
+        case node if from.map(_ == node).getOrElse(false) => alg.done(node)
+        
+        case node @ Join(instructions.WrapObject, CrossLeftSort | CrossRightSort, Const(CString(field)), right) =>
+          alg.WrapObject(node)(loop(right), field)
+
+        case node @ Join(DerefObject, CrossLeftSort | CrossRightSort, left, Const(CString(field))) =>
+          alg.DerefObjectStatic(node)(loop(left), field)
+        
+        case node @ Join(DerefArray, CrossLeftSort | CrossRightSort, left, ConstInt(index)) =>
+          alg.DerefArrayStatic(node)(loop(left), index)
+        
+        case node @ Operate(instructions.WrapArray, parent) =>
+          alg.WrapArray(node)(loop(parent))
+
+        case node => alg.unmatched(node)
+      }
+
+      loop(to)
     }
 
     def foldDownTransSpecable[T](to: DepGraph, from: Option[DepGraph])(alg: TransSpecableFold[T]): T = {
       
-      object ConstInt {
-        def unapply(c: Const) = c match {
-          case Const(CNum(n)) => Some(n.toInt)
-          case Const(CLong(n)) => Some(n.toInt)
-          case Const(CDouble(n)) => Some(n.toInt)
-          case _ => None
-        }
-      }
-      
-      object Op2F2ForBinOp {
-        def unapply(op: BinaryOperation): Option[Op2F2] = op2ForBinOp(op).flatMap {
-          case op2f2: Op2F2 => Some(op2f2)
-          case _ => None
-        }
-      }
-
       def loop(graph: DepGraph): T = graph match {
         case node if from.map(_ == node).getOrElse(false) => alg.done(node)
         
