@@ -58,7 +58,7 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
       ownerAccountId <- alphaStr
       content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*)) if !content.isEmpty
       jobId <- oneOf(identifier.map(Option.apply), None)
-    } yield Ingest(apiKey, path, Some(Authorities(ownerAccountId)), content, jobId, new Instant())
+    } yield Ingest(apiKey, path, Some(Authorities(ownerAccountId)), content, jobId, new Instant(), None)
 
   def genRandomArchive: Gen[Archive] =
     for {
@@ -136,7 +136,7 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
   def genIngest: Gen[Ingest] = for {
     path <- genStablePath
     ingestData <- containerOf[List, JValue](genIngestData).map(l => Vector(l: _*))
-  } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant())
+  } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant(), None)
 
   def genIngestMessage: Gen[IngestMessage] = for {
     producerId <- choose(0, producers-1)

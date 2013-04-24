@@ -38,6 +38,7 @@ import akka.dispatch.{ Future, ExecutionContext, Await }
 import akka.util._
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
@@ -113,19 +114,16 @@ trait TestEventService extends
 
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
 
-  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
-    //println(apiKeyManager.apiKeys)
-    val deps = EventServiceDeps(
-      new DirectAPIKeyFinder(apiKeyManager),
-      accountFinder,
-      new EventStore[Future] {
-        def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
-      },
-      new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l],
-      new HttpClient.EchoClient(_.content)
-    )
+  def configureEventService(config: Configuration): EventService.State = { 
+    val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(1363327426906L))
+    val eventStore = new EventStore[Future] {
+      def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
+    }
+    val jobManager = new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
+    val shardClient = new HttpClient.EchoClient((_: HttpRequest[ByteChunk]).content)
 
-    (deps, Stoppable.Noop)
+    buildServiceState(sys.error("todo"), apiKeyFinder, permissionsFinder, eventStore, jobManager, Stoppable.Noop)
   }
 
   implicit def jValueToFutureJValue(j: JValue) = Future(j)
