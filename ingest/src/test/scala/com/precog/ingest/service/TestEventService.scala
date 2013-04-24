@@ -27,6 +27,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.services._
 import com.precog.util._
 
 import org.specs2.mutable.Specification
@@ -61,10 +62,10 @@ import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.json._
 
 trait TestEventService extends
-  BlueEyesServiceSpecification with
-  EventService with
-  AkkaDefaults {
-
+    BlueEyesServiceSpecification with
+    EventService with
+    AkkaDefaults {
+  import EventService._
   import Permission._
 
   val config = """
@@ -122,8 +123,10 @@ trait TestEventService extends
     }
     val jobManager = new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
     val shardClient = new HttpClient.EchoClient((_: HttpRequest[ByteChunk]).content)
+    val localhost = ServiceLocation("http", "localhost", 80, None)
+    val serviceConfig = ServiceConfig(localhost, localhost, Timeout(10000l), 500, 1024, Timeout(10000l))
 
-    buildServiceState(sys.error("todo"), apiKeyFinder, permissionsFinder, eventStore, jobManager, Stoppable.Noop)
+    buildServiceState(serviceConfig, apiKeyFinder, permissionsFinder, eventStore, jobManager, Stoppable.Noop)
   }
 
   implicit def jValueToFutureJValue(j: JValue) = Future(j)
