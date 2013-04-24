@@ -464,7 +464,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                     )
                   }
 
-                case MorphismAlignment.Custom(f) =>
+                case MorphismAlignment.Custom(_, f) =>
                   mn(f(leftResult, rightResult))
               })
 

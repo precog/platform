@@ -981,6 +981,8 @@ trait DAG extends Instructions {
       lazy val identities = {
         if (mor.retainIds) {
           if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
+          else if (mor.idAlignment == IdentityAlignment.RightAlignment) right.identities
+          else if (mor.idAlignment == IdentityAlignment.LeftAlignment) left.identities
           else left.identities ++ right.identities
         }
         else Identities.Specs.empty

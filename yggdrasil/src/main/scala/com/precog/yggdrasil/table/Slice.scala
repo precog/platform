@@ -405,6 +405,17 @@ trait Slice { source =>
     val columns = source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
   }
 
+  def typedSubsumes(jtpe: JType): Slice = {
+    val tuples: Seq[(CPath, CType)] = source.columns.map({ case (ColumnRef(path, ctpe), _) => (path, ctpe) })(collection.breakOut)
+    val columns = if (Schema.subsumes(tuples, jtpe)) {
+      source.columns filter { case (ColumnRef(path, ctpe), _) => Schema.requiredBy(jtpe, path, ctpe) }
+    } else {
+      Map.empty[ColumnRef, Column]
+    }
+
+    Slice(columns, source.size)
+  }
+
   /**
     * returns a BoolColumn that is true if row subsumes jtype, false otherwise (unless undefined)
     * determine if the supplied jtype subsumes all the columns
@@ -1579,6 +1590,69 @@ object Slice {
     new Slice {
       val size = dataSize
       val columns = columns0
+    }
+  }
+
+  def updateRefs(rv: RValue, into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int, sliceSize: Int): Map[ColumnRef, ArrayColumn[_]] = {
+    rv.flattenWithPath.foldLeft(into) {
+      case (acc, (cpath, CUndefined)) => acc
+      case (acc, (cpath, cvalue)) =>
+        val ref = ColumnRef(cpath, (cvalue.cType))
+        
+        val updatedColumn: ArrayColumn[_] = cvalue match {
+          case CBoolean(b) =>
+            acc.getOrElse(ref, ArrayBoolColumn.empty()).asInstanceOf[ArrayBoolColumn].tap { c => c.update(sliceIndex, b) }
+            
+          case CLong(d) =>
+            acc.getOrElse(ref, ArrayLongColumn.empty(sliceSize)).asInstanceOf[ArrayLongColumn].tap { c => c.update(sliceIndex, d.toLong) }
+
+          case CDouble(d) =>
+            acc.getOrElse(ref, ArrayDoubleColumn.empty(sliceSize)).asInstanceOf[ArrayDoubleColumn].tap { c => c.update(sliceIndex, d.toDouble) }
+
+          case CNum(d) =>
+            acc.getOrElse(ref, ArrayNumColumn.empty(sliceSize)).asInstanceOf[ArrayNumColumn].tap { c => c.update(sliceIndex, d) }
+
+          case CString(s) =>
+            acc.getOrElse(ref, ArrayStrColumn.empty(sliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(sliceIndex, s) }
+
+          case CDate(d) =>
+            acc.getOrElse(ref, ArrayDateColumn.empty(sliceSize)).asInstanceOf[ArrayDateColumn].tap { c => c.update(sliceIndex, d) }
+
+          case CPeriod(p) =>
+            acc.getOrElse(ref, ArrayPeriodColumn.empty(sliceSize)).asInstanceOf[ArrayPeriodColumn].tap { c => c.update(sliceIndex, p) }
+
+          case CArray(arr, cType) =>
+            acc.getOrElse(ref, ArrayHomogeneousArrayColumn.empty(sliceSize)(cType)).asInstanceOf[ArrayHomogeneousArrayColumn[cType.tpe]].tap { c => c.update(sliceIndex, arr) }
+            
+          case CEmptyArray =>
+            acc.getOrElse(ref, MutableEmptyArrayColumn.empty()).asInstanceOf[MutableEmptyArrayColumn].tap { c => c.update(sliceIndex, true) }
+            
+          case CEmptyObject =>
+            acc.getOrElse(ref, MutableEmptyObjectColumn.empty()).asInstanceOf[MutableEmptyObjectColumn].tap { c => c.update(sliceIndex, true) }
+            
+          case CNull =>
+            acc.getOrElse(ref, MutableNullColumn.empty()).asInstanceOf[MutableNullColumn].tap { c => c.update(sliceIndex, true) }
+        }
+        
+        acc + (ref -> updatedColumn)
+    }
+  }
+
+  def fromRValues(values: Stream[RValue]): Slice = {
+    val sliceSize = values.size
+
+    @tailrec def buildColArrays(from: Stream[RValue], into: Map[ColumnRef, ArrayColumn[_]], sliceIndex: Int): (Map[ColumnRef, ArrayColumn[_]], Int) = {
+      from match {
+        case jv #:: xs =>
+          val refs = updateRefs(jv, into, sliceIndex, sliceSize)
+          buildColArrays(xs, refs, sliceIndex + 1)
+        case _ =>
+          (into, sliceIndex)
+      }
+    }
+    
+    new Slice {
+      val (columns, size) = buildColArrays(values.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
     }
   }
 

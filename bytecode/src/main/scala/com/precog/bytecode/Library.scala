@@ -24,6 +24,8 @@ sealed trait IdentityAlignment
 object IdentityAlignment {
   object CrossAlignment extends IdentityAlignment
   object MatchAlignment extends IdentityAlignment
+  object RightAlignment extends IdentityAlignment
+  object LeftAlignment extends IdentityAlignment
 }
 
 trait FunctionLike {

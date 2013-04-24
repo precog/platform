@@ -409,4 +409,3 @@ trait RankSpecs extends EvalStackSpecs {
     }
   }
 }
-

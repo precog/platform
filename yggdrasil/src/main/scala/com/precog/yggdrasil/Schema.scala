@@ -57,6 +57,13 @@ object Schema {
     cpaths sorted
   }
 
+  def sample(jtype: JType, size: Int): Option[JType] = {
+    val paths = flatten(jtype, Nil) groupBy { _._1 } toSeq
+    val sampledPaths: Seq[(CPath, CType)] = scala.util.Random.shuffle(paths).take(size) flatMap { _._2 }
+    
+    mkType(sampledPaths)
+  }
+
   def flatten(jtype: JType, refsOriginal: List[ColumnRef]): List[(CPath, CType)] = {
     def buildPath(nodes: List[CPathNode], refs: List[ColumnRef], jType: JType): List[(CPath, CType)] = jType match {
       case JArrayFixedT(indices) if indices.isEmpty =>
