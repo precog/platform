@@ -231,7 +231,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           }
         )
       } getOrElse {
-        Failure(DispatchError(HttpException(BadRequest, "Missing request body content.")))
+        Failure(DispatchError(BadRequest, "Missing request body content."))
       }
     }
 
