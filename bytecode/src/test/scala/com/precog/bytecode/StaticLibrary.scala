@@ -62,7 +62,12 @@ trait StaticLibrary extends Library {
     DeprecatedM1,
     M11,
     Morphism1(Vector(), "bar33", 0x0002),
-    Morphism1(Vector(), "denseRank", 0x0003))
+    Morphism1(Vector(), "denseRank", 0x0003),
+    flatten)
+    
+  lazy val flatten = new Morphism1(Vector(), "flatten", 0x0100) {
+    override val idPolicy = IdentityPolicy.Synthesize
+  }
     
   lazy val libMorphism2 = Set(
     M2,
@@ -71,12 +76,12 @@ trait StaticLibrary extends Library {
   lazy val expandGlob = Morphism1(Vector("std", "fs"), "expandGlob", 0x0004)
   
   object DeprecatedM1 extends Morphism1(Vector(), "bin25", 0x0025) {
-    override val retainIds = true
+    override val idPolicy = IdentityPolicy.Retain.Merge
     override val deprecation = Some("use bin5 instead")
   }
   
   object M1 extends Morphism1(Vector(), "bin5", 0x0000) {
-    override val retainIds = true
+    override val idPolicy = IdentityPolicy.Retain.Merge
   }
 
   object M11 extends Morphism1(Vector("std", "random"), "foobar", 0x0006) {
@@ -84,7 +89,7 @@ trait StaticLibrary extends Library {
   }
 
   object M2 extends Morphism2(Vector("std"), "bin9", 0x0001) {
-    override val retainIds = true
+    override val idPolicy = IdentityPolicy.Retain.Merge
   }
 
   case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {

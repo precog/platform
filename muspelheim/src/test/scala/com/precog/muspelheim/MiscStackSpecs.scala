@@ -2701,6 +2701,15 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       eval(input) must not(throwA[Throwable])
     }
+    
+    "reduce the size of a filtered flattened array" in {
+      val input = """
+        | foo := flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
+        | foo where foo.a = 1
+        | """.stripMargin
+        
+      evalE(input) must haveSize(1)
+    }
   }
 }
 
