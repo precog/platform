@@ -8,6 +8,19 @@ object IdentityAlignment {
   object RightAlignment extends IdentityAlignment
   object LeftAlignment extends IdentityAlignment
 }
+    
+sealed trait IdentityPolicy
+object IdentityPolicy {
+  sealed trait Retain extends IdentityPolicy
+  object Retain {
+    case object Left extends Retain
+    case object Right extends Retain
+    case object Merge extends Retain
+  }
+  
+  case object Synthesize extends IdentityPolicy
+  case object Strip extends IdentityPolicy
+}
 
 trait FunctionLike {
   val namespace: Vector[String]
@@ -21,7 +34,7 @@ trait FunctionLike {
 trait Morphism1Like extends FunctionLike {
   val tpe: UnaryOperationType
   val isInfinite: Boolean = false
-  val retainIds: Boolean = false
+  val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 
 object Morphism1Like {
@@ -31,7 +44,9 @@ object Morphism1Like {
 
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
-  val retainIds: Boolean = false
+  val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
+  
+  @deprecated("use idPolicy", "now")
   def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
 }
 
