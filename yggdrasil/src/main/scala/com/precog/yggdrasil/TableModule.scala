@@ -105,6 +105,13 @@ object TableModule {
   case object SortAscending extends DesiredSortOrder { val isAscending = true }
   case object SortDescending extends DesiredSortOrder { val isAscending = false }
   case object SortUnknown extends SortOrder
+
+  sealed trait JoinOrder
+  object JoinOrder {
+    case object LeftOrder extends JoinOrder
+    case object RightOrder extends JoinOrder
+    case object KeyOrder extends JoinOrder
+  }
 }
 
 trait TableModule[M[+_]] extends TransSpecModule {
@@ -142,6 +149,14 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table]
     def align(sourceLeft: Table, alignOnL: TransSpec1, sourceRight: Table, alignOnR: TransSpec1): M[(Table, Table)]
+
+    /**
+     * Joins `left` and `right` together using their left/right key specs. The
+     * final order of the resulting table is dependent on the implementation,
+     * but must be a valid `JoinOrder`. This method should not assume any
+     * particular order of the tables, unlike `cogroup`.
+     */
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): (JoinOrder, M[Table])
   }
 
   trait TableLike { this: Table =>

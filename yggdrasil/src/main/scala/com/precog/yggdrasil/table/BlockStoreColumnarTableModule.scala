@@ -36,6 +36,8 @@ import java.io.File
 import java.util.SortedMap
 import java.util.Comparator
 
+import org.apache.commons.collections.primitives.ArrayIntList
+
 import org.apache.jdbm.DBMaker
 import org.apache.jdbm.DB
 
@@ -314,7 +316,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
       Scan(WrapArray(spec), addGlobalIdScanner)
     }
 
-    def apply(slices: StreamT[M, Slice], size: TableSize) = {
+    def apply(slices: StreamT[M, Slice], size: TableSize): Table = {
       size match {
         case ExactSize(1) => new SingletonTable(slices)
         case _            => new ExternalTable(slices, size)
@@ -859,7 +861,68 @@ trait BlockStoreColumnarTableModule[M[+_]]
       Table(StreamT(M.point(head)), ExactSize(totalCount)).transform(TransSpec1.DerefArray1)
     }
 
-    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] 
+    override def join(left0: Table, right0: Table, orderHint: Option[JoinOrder] = None)
+        (keySpec: TransSpec1, joinSpec: TransSpec2): (JoinOrder, M[Table]) = {
+
+      def hashJoin(indexM: M[Slice], table: Table): M[Table] = indexM map { index =>
+        val initKeyTrans = composeSliceTransform(keySpec)
+        val initJoinTrans = composeSliceTransform2(joinSpec)
+        val (_, indexKey) = initKeyTrans.advance(index)
+        val hashed = HashedSlice(indexKey)
+
+        def joinWithHash(stream: StreamT[M, Slice], keyTrans: SliceTransform1[_],
+            joinTrans: SliceTransform2[_]): StreamT[M, Slice] = {
+          StreamT(stream.uncons map {
+            case Some((head, tail)) =>
+              val headBuf = new ArrayIntList(head.size)
+              val indexBuf = new ArrayIntList(index.size)
+
+              val (keyTrans0, headKey) = keyTrans.advance(head)
+              val rowMap = hashed.mapRowsFrom(headKey)
+
+              @tailrec def loop(row: Int): Unit = if (row < headBuf.size) {
+                rowMap(row) foreach { indexRow =>
+                  headBuf.add(row)
+                  indexBuf.add(indexRow)
+                }
+                loop(row + 1)
+              }
+              loop(0)
+
+              val (joinTrans0, slice) = joinTrans.advance(index.remap(indexBuf), head.remap(headBuf))
+              StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0))
+
+            case None =>
+              StreamT.Done
+          })
+        }
+
+        Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans), UnknownSize)
+      }
+
+      (left0, right0) match {
+        case (left: InternalTable, right: InternalTable) =>
+          orderHint match {
+            case Some(JoinOrder.LeftOrder) =>
+              (JoinOrder.LeftOrder, hashJoin(right.slice, left))
+            case Some(JoinOrder.RightOrder) =>
+              (JoinOrder.RightOrder, hashJoin(left.slice, right))
+            case _ =>
+              (JoinOrder.LeftOrder, hashJoin(right.slice, left))
+          }
+
+        case (left: InternalTable, right: ExternalTable) =>
+          (JoinOrder.RightOrder, hashJoin(left.slice, right))
+
+        case (left: ExternalTable, right: InternalTable) =>
+          (JoinOrder.LeftOrder, hashJoin(right.slice, left))
+
+        case (left, right) =>
+          super.join(left, right)(keySpec, joinSpec)
+      }
+    }
+
+    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table]
   }
   
   abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size)
@@ -868,6 +931,16 @@ trait BlockStoreColumnarTableModule[M[+_]]
     import TableModule._
     
     // TODO assert that this table only has one row
+
+    def toRValue: M[RValue] = {
+      def loop(stream: StreamT[M, Slice]): M[RValue] = stream.uncons flatMap {
+        case Some((head, tail)) if head.size > 0 => M point head.toRValue(0)
+        case Some((_, tail)) => loop(tail)
+        case None => M point CUndefined
+      }
+
+      loop(slices)
+    }
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = {
       val xform = transform(valueSpec)
@@ -888,6 +961,41 @@ trait BlockStoreColumnarTableModule[M[+_]]
 
     override def takeRange(startIndex: Long, numberToTake: Long): Table =
       if (startIndex <= 0 && startIndex + numberToTake >= 1) this else Table.empty
+  }
+
+  class InternalTable(val slice: M[Slice], size: TableSize) extends
+      Table(StreamT.wrapEffect(slice.map(_ :: StreamT.empty[M, Slice])), size) {
+    import TableModule._
+
+    def toExternal: ExternalTable = new ExternalTable(slices, size)
+    
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] =
+        toExternal.groupByN(groupKeys, valueSpec, sortOrder, unique)
+
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] =
+        toExternal.sort(sortKey, sortOrder, unique)
+
+    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
+
+    override def force: M[Table] = M.point(this)
+
+    override def paged(limit: Int): Table = this
+
+    override def takeRange(startIndex0: Long, numberToTake0: Long): Table = {
+      if (startIndex0 > Int.MaxValue) {
+        new InternalTable(M point Slice.empty, ExactSize(0))
+      } else {
+        val startIndex = startIndex0.toInt
+        val numberToTake = numberToTake0.toInt min Int.MaxValue
+        def calcNewSize(current: Long): Long = ((current-startIndex) max 0) min numberToTake
+        val size0 = size match {
+          case ExactSize(len) => ExactSize(calcNewSize(len))
+          case EstimateSize(min, max) => EstimateSize(calcNewSize(min), calcNewSize(max))
+          case _ => size
+        }
+        new InternalTable(slice map (_.takeRange(startIndex, numberToTake)), size0)
+      }
+    }
   }
 
   class ExternalTable(slices: StreamT[M, Slice], size: TableSize) extends Table(slices, size) {
@@ -948,5 +1056,3 @@ trait BlockStoreColumnarTableModule[M[+_]]
     }
   }
 }
-
-// vim: set ts=4 sw=4 et:
