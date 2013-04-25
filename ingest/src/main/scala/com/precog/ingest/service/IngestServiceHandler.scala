@@ -68,7 +68,7 @@ import scala.annotation.tailrec
 
 
 sealed trait IngestStore {
-  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit]
+  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[StoreFailure \/ PrecogUnit]
 }
 
 sealed trait ParseDirective {
@@ -84,23 +84,21 @@ class IngestServiceHandler(
   batchSize: Int,
   maxFields: Int)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
-    with IngestStore
-    with Logging { ingestStore =>
+    with Logging { 
 
-  private[this] val processingSelectors = new DefaultIngestProcessingSelectors(maxFields, batchSize, ingestStore)
-
-  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
-    if (data.length > 0) {
-      val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), None)
-      logger.trace("Saving event: " + eventInstance)
-      eventStore.save(eventInstance, ingestTimeout)
-    } else {
-      Future {
-        logger.warn("Unable to ingest empty set of values for %s at %s".format(apiKey, path.toString))
-        PrecogUnit
+  object ingestStore extends IngestStore {
+    def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[StoreFailure \/ PrecogUnit] = {
+      if (data.nonEmpty) {
+        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), None)
+        logger.trace("Saving event: " + eventInstance)
+        eventStore.save(eventInstance, ingestTimeout)
+      } else {
+        Promise successful -\/(StoreFailure("Unable to ingest empty set of values for %s at %s".format(apiKey, path.toString)))
       }
     }
   }
+
+  private[this] val processingSelectors = new DefaultIngestProcessingSelectors(maxFields, batchSize, ingestStore)
 
   def chooseProcessing(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk]): Future[Option[IngestProcessing]] = {
     def array(unsafeBuffer: ByteBuffer): Array[Byte] = {
