@@ -304,10 +304,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => 
             // TODO binary typing
 
-            for {
-              pendingTableLeft <- prepareEval(left, splits)
-              pendingTableRight <- prepareEval(right, splits)
-            } yield {
+            def join0(pendingTableLeft: PendingTable, pendingTableRight: PendingTable): StateT[N, EvaluatorState, PendingTable] = {
               assert(pendingTableLeft.graph != pendingTableRight.graph, "TransSpecable case should have already been handled")
               
               (left.identities, right.identities) match {
@@ -325,14 +322,29 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
                   val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
                   val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
-                  val result = join(leftResult, rightResult)(key, spec)
+                  val (joinOrder, result0) = Table.join(leftResult, rightResult)(key, spec)
+                  val result = if (joinOrder != JoinOrder.KeyOrder) {
+                    result0 flatMap (_.sort(key))
+                  } else {
+                    result0
+                  }
+                  //val result_ = M point (join(leftResult, rightResult)(key, spec))
 
-                  PendingTable(result, graph, TransSpec1.Id)
+                  transState liftM mn(result) map { result =>
+                    PendingTable(result, graph, TransSpec1.Id)
+                  }
 
                 case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-                  PendingTable(Table.empty, graph, TransSpec1.Id)
+                  monadState point PendingTable(Table.empty, graph, TransSpec1.Id)
               }
             }
+
+            for {
+              pendingTableLeft <- prepareEval(left, splits)
+              pendingTableRight <- prepareEval(right, splits)
+              joined <- join0(pendingTableLeft, pendingTableRight)
+            } yield joined
+
           
           case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
             // TODO binary typing

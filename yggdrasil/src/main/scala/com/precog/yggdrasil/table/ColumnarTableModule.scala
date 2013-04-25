@@ -368,6 +368,17 @@ trait ColumnarTableModule[M[+_]]
         ExactSize(values.length)
       )
     }
+
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): (JoinOrder, M[Table]) = {
+      val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
+      val joinedTable = for {
+        left0 <- left.sort(keySpec)
+        right0 <- right.sort(keySpec)
+        cogrouped = left0.cogroup(keySpec, keySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
+      } yield cogrouped.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
+
+      (JoinOrder.KeyOrder, joinedTable)
+    }
   }
 
   abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
