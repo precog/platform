@@ -40,6 +40,7 @@ import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 import com.precog.util.FilesystemFileOps
+import com.precog.yggdrasil.vfs._
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -290,12 +291,13 @@ object Console extends App {
 
         val accountFinder = None
 
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](yggConfig.clock))
         val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
+        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"))))
 
         trait TableCompanion extends NIHDBColumnarTableCompanion
 

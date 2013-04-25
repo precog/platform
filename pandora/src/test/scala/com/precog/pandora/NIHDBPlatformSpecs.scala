@@ -41,6 +41,7 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 import com.precog.yggdrasil.test.YId
 
 import com.precog.muspelheim._
@@ -92,6 +93,8 @@ object NIHDBPlatformActor extends Logging {
     val smallSliceSize = 2
     val ingestConfig = None
     val idSource = new FreshAtomicIdSource
+    val clock = blueeyes.util.Clock.System
+    val storageTimeout = Timeout(Duration(120, "seconds"))
   }
 
   object yggConfig extends YggConfig
@@ -118,7 +121,8 @@ object NIHDBPlatformActor extends Logging {
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
+      val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
 
         Some(SystemState(projectionsActor, actorSystem))
       }

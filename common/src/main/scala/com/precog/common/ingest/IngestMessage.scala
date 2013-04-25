@@ -22,9 +22,11 @@ package ingest
 
 import accounts.AccountId
 import security._
+import com.precog.common.serialization._
 import jobs.JobId
 
-import blueeyes.json.{ JValue, JObject, JParser }
+import blueeyes.core.http.MimeType
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
@@ -34,6 +36,8 @@ import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor,
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import java.util.UUID
+
 import org.joda.time.Instant
 
 import scalaz._
@@ -172,27 +176,24 @@ object ArchiveMessage {
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
 
-case class StoreFileMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, content: String, encoding: ContentEncoding, timestamp: Instant) extends EventMessage {
+case class StoreFileMessage(apiKey: APIKey, path: Path, streamId: UUID, mimeType: MimeType, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: String, encoding: ContentEncoding, timestamp: Instant) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
 }
 
 object StoreFileMessage {
   implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| UncompressedEncoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "streamId" :: "mimeType" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| UncompressedEncoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
 
-  val decomposerV1: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
+  implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
 
-  val extractorV1: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0".v))
-
-  implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV1
-  implicit val Extractor: Extractor[StoreFileMessage] = extractorV1
+  implicit val Extractor: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0".v))
 }
 
 sealed trait ContentEncoding {
   def id: String
-  def compress(raw: String): String
-  def uncompress(compressed: String): String
+  def compress(raw: Array[Byte]): String
+  def uncompress(compressed: String): Array[Byte]
 }
 
 object ContentEncoding {
@@ -212,7 +213,7 @@ object ContentEncoding {
 
 object UncompressedEncoding extends ContentEncoding {
   val id = "uncompressed"
-  def compress(raw: String) = raw
-  def uncompress(compressed: String) = compressed
+  def compress(raw: Array[Byte]) = new String(raw, "UTF-8")
+  def uncompress(compressed: String) = compressed.getBytes("UTF-8")
 }
 

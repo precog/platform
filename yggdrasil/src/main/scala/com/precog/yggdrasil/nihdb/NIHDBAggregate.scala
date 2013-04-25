@@ -39,19 +39,24 @@ class NIHDBAggregate(underlying: NonEmptyList[NIHDBSnapshot], authorities0: Auth
   // FIXME: This is an awful way to use these. We should do offset computation to avoid duplicating these refs
   private[this] val readers = underlying.list.map(_.readers).toArray.flatten
 
+  // Precompute some static info
+  private[this] val snapshotStructure: Set[(CPath, CType)] = readers.map(_.structure).toSet.flatten
+  private[this] val snapshotLength = readers.map(_.length.toLong).sum
+
   val projection = new NIHDBProjection {
     private[this] val projectionId = NIHDB.projectionIdGen.getAndIncrement
 
-    val structure = parent.structure
-    val length = parent.readers.map(_.length.toLong).sum
+    val structure = M.point(parent.snapshotStructure.map { case (s, t) => ColumnRef(s, t) })
+    val length = parent.snapshotLength
 
-    def getBlockAfter(id: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
-      parent.getBlockAfter(id, columns).map ( _.map {
+    def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit MP: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = MP.point {
+      val id = id0.map(_ + 1)
+      val index = id getOrElse 0L
+      parent.getSnapshotBlock(id, columns.map(_.map(_.selector))) map {
         case Block(_, segments, _) =>
-          val index: Long = id.map(_ + 1).getOrElse(0)
           val slice = SegmentsWrapper(segments, projectionId, index)
           BlockProjectionData(index, index, slice)
-      })
+      }
     }
 
     def reduce[A](reduction: Reduction[A], path: CPath): Map[CType, A] = {
@@ -77,30 +82,31 @@ class NIHDBAggregate(underlying: NonEmptyList[NIHDBSnapshot], authorities0: Auth
     getBlock(id.map(_ + 1), columns.map(_.map(_.selector)))
   }
 
-  def getBlock(id: Option[Long], columns: Option[Set[CPath]]): Future[Option[Block]] = {
-    M.point(
-      try {
-        // We're limiting ourselves to 2 billion blocks total here
-        val index = id.map(_.toInt).getOrElse(0)
-        if (index >= readers.length) {
-          None
-        } else {
-          Some(Block(index, readers(index).snapshot(columns).segments, true))
-        }
-      } catch {
-        case e =>
-          // Difficult to do anything else here other than bail
-          logger.warn("Error during block read", e)
-          None
+  def getBlock(id: Option[Long], columns: Option[Set[CPath]]): Future[Option[Block]] =
+    M.point(getSnapshotBlock(id, columns))
+
+  private def getSnapshotBlock(id: Option[Long], columns: Option[Set[CPath]]): Option[Block] = {
+    try {
+      // We're limiting ourselves to 2 billion blocks total here
+      val index = id.map(_.toInt).getOrElse(0)
+      if (index >= readers.length) {
+        None
+      } else {
+        Some(Block(index, readers(index).snapshot(columns).segments, true))
       }
-    )
+    } catch {
+      case e =>
+        // Difficult to do anything else here other than bail
+        logger.warn("Error during block read", e)
+        None
+    }
   }
 
-  def length: Future[Long] = M.point(projection.length)
+  def length: Future[Long] = M.point(snapshotLength)
 
   def status: Future[Status] = sys.error("Status unsupported in aggregate")
 
-  def structure: Future[Set[ColumnRef]] = M.point(readers.map(_.structure.map { case (s, t) => ColumnRef(s, t) }).toSet.flatten)
+  def structure: Future[Set[(CPath, CType)]] = M.point(snapshotStructure)
 
   def count(paths0: Option[Set[CPath]]): Future[Long] = M.point(underlying.map(_.count(paths0)).list.sum)
 

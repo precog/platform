@@ -54,9 +54,12 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(key, path, writeAs, data, jobid, timestamp)) =>
+      case (offset, IngestMessage(_, path, writeAs, data, _, _)) =>
         val batches = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[Batch])
         batches += ((offset, data.map(_.value)))
+
+      case (offset, sfm: StoreFileMessage) =>
+        updates += Create(sfm.path, BlobData(sfm.encoding.uncompress(sfm.content), sfm.mimeType), sfm.streamId, Some(sfm.writeAs), false)
 
       case (_, ArchiveMessage(key, path, jobid, eventId, timestamp)) =>
         val uuid = UUID.randomUUID

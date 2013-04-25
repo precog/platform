@@ -21,18 +21,19 @@ package com.precog.ratatoskr
 
 import com.precog.common._
 
+import com.precog.accounts._
+import com.precog.auth._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.kafka._
 import com.precog.common.security._
-import com.precog.auth._
-import com.precog.accounts._
+import com.precog.niflheim._
+import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.nihdb._
-import com.precog.niflheim._
 import com.precog.yggdrasil.metadata._
-import com.precog.util._
+import com.precog.yggdrasil.nihdb._
+import com.precog.yggdrasil.vfs._
 
 import blueeyes.bkka._
 import blueeyes.json._
@@ -76,9 +77,11 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scalaz._
 import scalaz.effect.IO
+import scalaz.std.list._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.option._
+import scalaz.syntax.traverse._
 
 import scala.collection.SortedSet
 import scala.collection.SortedMap
@@ -788,6 +791,8 @@ object ImportTools extends Command with Logging {
     object shardModule { self =>
       class YggConfig(val config: Configuration) extends BaseConfig {
         val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
+        val clock = blueeyes.util.Clock.System
+        val storageTimeout = Timeout(Duration(120, "seconds"))
       }
 
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
@@ -804,8 +809,8 @@ object ImportTools extends Command with Logging {
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
       val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
-
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
+      val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
     }
 
     import shardModule._
@@ -833,8 +838,7 @@ object ImportTools extends Command with Logging {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
           }
           val eventidobj = EventId(pid, sid.getAndIncrement)
-          val records = results.map(v => IngestRecord(eventidobj, v))
-          val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))
+          val update = Append(Path(db), NIHDBData(Seq((eventidobj.uid, results))), None, Authorities(config.accountId))
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
           bb.flip()
@@ -849,9 +853,7 @@ object ImportTools extends Command with Logging {
     }
 
     logger.info("Finalizing chef work-in-progress")
-    chefs.foreach { chef =>
-      Await.result(gracefulStop(chef, stopTimeout), stopTimeout)
-    }
+    Await.result(chefs.toList.traverse(gracefulStop(_, stopTimeout)), stopTimeout)
 
     Await.result(gracefulStop(masterChef, stopTimeout), stopTimeout)
     logger.info("Completed chef shutdown")

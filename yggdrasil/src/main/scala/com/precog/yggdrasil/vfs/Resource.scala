@@ -66,17 +66,19 @@ sealed trait ResourceError {
 
 object ResourceError {
   case class CorruptData(message: String) extends ResourceError {
-    def exception = new Exception(message)
+    val exception = new Exception(message)
   }
 
   case class MissingData(message: String) extends ResourceError {
-    def exception = new Exception(message)
+    val exception = new Exception(message)
   }
 
-  case class IOError(throwable: Throwable) extends ResourceError
+  case class IOError(exception: Throwable) extends ResourceError {
+    val message = Option(exception.getMessage) getOrElse exception.getClass.toString
+  }
 
   case class GeneralError(message: String) extends ResourceError {
-    def exception = new Exception(message)
+    val exception = new Exception(message)
   }
 
   def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
@@ -153,19 +155,19 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
   def append(data: PathData): Future[PrecogUnit] = data match {
     case _ => Promise.failed(new IllegalArgumentException("Blob append not yet supported"))
 
-    case BlobData(bytes, mimeType) => Future {
-      if (mimeType != metadata.mimeType) {
-        throw new IllegalArgumentException("Attempt to append %s data to a %s blob".format(mimeType, metadata.mimeType))
-      }
-
-      IO(new FileOutputStream(dataFile, true)).bracket(f => IO(f.close())) { output =>
-        IO(output.write(bytes))
-      }.unsafePerformIO
-
-      PrecogUnit
-    }
-
-    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-blob data to blob"))
+//    case BlobData(bytes, mimeType) => Future {
+//      if (mimeType != metadata.mimeType) {
+//        throw new IllegalArgumentException("Attempt to append %s data to a %s blob".format(mimeType, metadata.mimeType))
+//      }
+//
+//      IO(new FileOutputStream(dataFile, true)).bracket(f => IO(f.close())) { output =>
+//        IO(output.write(bytes))
+//      }.unsafePerformIO
+//
+//      PrecogUnit
+//    }
+//
+//    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-blob data to blob"))
   }
 
   def close = Promise.successful(PrecogUnit)

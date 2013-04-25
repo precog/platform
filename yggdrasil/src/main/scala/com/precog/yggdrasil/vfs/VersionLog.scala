@@ -28,6 +28,7 @@ import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.Versioned._
 
+import com.precog.common.serialization._
 import com.precog.util.{FileLock, IOUtils, PrecogUnit}
 
 import com.weiglewilczek.slf4s.Logging
@@ -109,14 +110,6 @@ case class VersionEntry(id: UUID, typeName: String)
 
 object VersionEntry {
   implicit val versionEntryIso = Iso.hlist(VersionEntry.apply _, VersionEntry.unapply _)
-
-  implicit val uuidDecomposer: Decomposer[UUID] = new Decomposer[UUID] {
-    def decompose(u: UUID) = JString(u.toString)
-  }
-
-  implicit val uuidExtractor: Extractor[UUID] = new Extractor[UUID] {
-    def validated(jv: JValue) = jv.validated[String].map(UUID.fromString)
-  }
 
   val schemaV1 = "id" :: "typeName" :: HNil
 
