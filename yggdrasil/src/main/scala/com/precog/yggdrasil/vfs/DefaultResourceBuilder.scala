@@ -19,7 +19,35 @@
  */
 package com.precog
 package yggdrasil
+package vfs
 
+import akka.actor.{ActorRef, ActorSystem}
+import akka.dispatch.Future
+import akka.util.Timeout
+
+import blueeyes.bkka.FutureMonad
+import blueeyes.core.http.MimeType
+import blueeyes.json.{ JParser, JString, JValue }
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.DefaultSerialization._
+import blueeyes.json.serialization.IsoSerialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Versioned._
+import blueeyes.util.Clock
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+
+import com.precog.common.security.{Authorities, PermissionsFinder}
+import com.precog.niflheim.NIHDB
+
+import java.io.{IOException, File, FileOutputStream}
+import java.util.concurrent.ScheduledThreadPoolExecutor
+
+import scalaz.{NonEmptyList => NEL, _}
+import scalaz.effect.IO
+import scalaz.syntax.bifunctor._
+import scalaz.syntax.monad._
+import scalaz.syntax.std.list._
 
 /**
  * Used to access resources. This is needed because opening a NIHDB requires
@@ -40,6 +68,7 @@ class DefaultResourceBuilder(
   private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize,
     new ThreadFactoryBuilder().setNameFormat("HOWL-sched-%03d").build())
 
+  private implicit val futureMonad = new FutureMonad(actorSystem.dispatcher)
 
   /**
     * Compute the dir for a given NIHDB projection based on the provided authorities.
@@ -52,12 +81,12 @@ class DefaultResourceBuilder(
   /**
     * Enumerate the NIHDB descriptors found under a given base directory
     */
-  def findDescriptorDirs(versionDir: File): Option[Set[File]] = {
+  def findDescriptorDirs(versionDir: File): IO[List[File]] = IO {
     // No pathFileFilter needed here, since the projections dir should only contain descriptor dirs
-    Option(versionDir.listFiles).map {
-      _.filter { dir =>
-        dir.isDirectory && NIHDBActor.hasProjection(dir)
-      }.toSet
+    Option(versionDir.listFiles).toList.flatMap {
+      _ filter { dir =>
+        dir.isDirectory && NIHDB.hasProjection(dir)
+      }
     }
   }
 
@@ -75,19 +104,20 @@ class DefaultResourceBuilder(
     ensureDescriptorDir(versionDir, authorities).flatMap { nihDir =>
       NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
     }.map { dbV =>
-      fromExtractorError("Failed to create NIHDB") <-: (dbV map (NIHDBResource(_)(actorSystem.dispatcher)))
+      fromExtractorError("Failed to create NIHDB") <-: (dbV map (NIHDBResource(_, authorities)(actorSystem)))
     }
   }
 
-  def openNIHDB(versionDir: File): IO[Validation[ResourceError, NIHDBResource]] = {
-    val dbIO = NIHDB.open(chef, baseDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-    dbIO map (_ map { dbV =>
-      val resV = dbV map (NIHDBResource(_)(actorSystem.dispatcher))
-      fromExtractorError("Failed to open NIHDB") <-: resV :-> (_._2)
-    })
+  def openNIHDB(descriptorDir: File): IO[Validation[ResourceError, NIHDBResource]] = {
+    NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem).map (_.map { dbV =>
+      val resV = dbV map {
+        case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
+      }
+      fromExtractorError("Failed to open NIHDB") <-: resV
+    }.getOrElse(Failure(MissingData("No NIHDB projection found in " + descriptorDir))))
   }
 
-  final val blobMetadataFilename = "blob_metadata")
+  final val blobMetadataFilename = "blob_metadata"
 
   def isBlob(versionDir: File): Boolean = (new File(versionDir, blobMetadataFilename)).exists
 
@@ -96,9 +126,9 @@ class DefaultResourceBuilder(
    */
   def openBlob(versionDir: File): IO[Validation[ResourceError, Blob]] = IO {
     val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
-    val metadata = metadataStore.validated[BlobMetadata]
+    val metadata = metadataStore.json.validated[BlobMetadata]
     val resource = metadata map { metadata =>
-      Blob(metadata, new File(versionDir, "data"))(actorSystem.dispatcher)
+      Blob(new File(versionDir, "data"), metadata)(actorSystem.dispatcher)
     }
     fromExtractorError("Error reading metadata") <-: resource
   }
@@ -112,7 +142,7 @@ class DefaultResourceBuilder(
     val file = new File(versionDir, "data")
     val out = new FileOutputStream(file)
     def write(size: Long, stream: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Long]] = {
-      stream.uncons flatMap {
+      stream.uncons.flatMap {
         case Some((bytes, tail)) =>
           try {
             out.write(bytes)
@@ -133,7 +163,7 @@ class DefaultResourceBuilder(
         val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
         val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
         metadataStore.json = metadata.serialize
-        Success(Blob(metadata, file)(actorSystem.dispatcher))
+        Success(Blob(file, metadata)(actorSystem.dispatcher))
       } catch { case (ioe: IOException) =>
         Failure(IOError(ioe))
       }

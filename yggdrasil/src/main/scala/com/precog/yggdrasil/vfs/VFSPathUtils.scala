@@ -19,8 +19,21 @@
  */
 package com.precog
 package yggdrasil
+package vfs
 
-object VFSPathUtils {
+import akka.dispatch.Future
+
+import com.precog.common.Path
+import com.precog.common.security.{APIKey, PermissionsFinder}
+import com.precog.niflheim.NIHDBActor
+
+import com.weiglewilczek.slf4s.Logging
+
+import java.io.{File, FileFilter}
+
+import org.apache.commons.io.filefilter.FileFilterUtils
+
+object VFSPathUtils extends Logging {
   // Methods for dealing with path escapes, lookup, enumeration
   private final val disallowedPathComponents = Set(".", "..")
 
@@ -54,12 +67,11 @@ object VFSPathUtils {
     */
   def pathDir(baseDir: File, path: Path): File = {
     // The path component maps directly to the FS
-    val prefix = NIHDBActor.escapePath(path, Set(versionsSubdir)).elements.filterNot(disallowedPathComponents)
+    val prefix = escapePath(path, Set(versionsSubdir)).elements.filterNot(disallowedPathComponents)
     new File(baseDir, prefix.mkString(File.separator))
   }
 
-  def findChildren(baseDir: File, path: Path, apiKey: APIKey): Future[Set[Path]] = {
-    implicit val ctx = context.dispatcher
+  def findChildren(baseDir: File, path: Path, apiKey: APIKey, permissionsFinder: PermissionsFinder[Future]): Future[Set[Path]] = {
     for {
       allowedPaths <- permissionsFinder.findBrowsableChildren(apiKey, path)
     } yield {
@@ -68,7 +80,7 @@ object VFSPathUtils {
       logger.debug("Checking for children of path %s in dir %s among %s".format(path, pathRoot, allowedPaths))
       Option(pathRoot.listFiles(pathFileFilter)).map { files =>
         logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
-        files.filter(_.isDirectory).map { dir => path / Path(dir.getName) }.filter { p => allowedPaths.exists(_.isEqualOrParent(p)) }.toSet
+        files.filter(_.isDirectory).map { dir => unescapePath(path / Path(dir.getName)) }.filter { p => allowedPaths.exists(_.isEqualOrParent(p)) }.toSet
       } getOrElse {
         logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
         Set.empty

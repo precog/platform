@@ -21,20 +21,42 @@ package com.precog
 package yggdrasil
 package vfs
 
-import com.google.common.cache.RemovalCause
+import akka.actor.Actor
+import akka.dispatch.{Await, ExecutionContext, Future, Promise}
+import akka.pattern.pipe
+import akka.util.Duration
 
-import com.precog.common.json._
-
+import blueeyes.bkka.FutureMonad
 import blueeyes.core.http._
 import blueeyes.json._
 import blueeyes.json.serialization._
 
+import com.google.common.cache.RemovalCause
+
+import com.precog.common.Path
+import com.precog.common.accounts.AccountId
+import com.precog.common.security._
+import com.precog.util.PrecogUnit
+import com.precog.util.cache.Cache
+import com.precog.yggdrasil.nihdb._
+
+import com.weiglewilczek.slf4s.Logging
+
+import java.io.{IOException, File}
 import java.util.UUID
 
-import org.joda.time._
+import org.joda.time.DateTime
 
-import shapeless._
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
+import scalaz.effect.IO
+import scalaz.std.list._
+import scalaz.std.stream._
+import scalaz.std.option._
+import scalaz.std.tuple._
+import scalaz.syntax.std.boolean._
+import scalaz.syntax.std.list._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.traverse._
 
 sealed class PathData(val typeName: String)
 object PathData {
@@ -45,39 +67,77 @@ object PathData {
 case class BlobData(data: Array[Byte], mimeType: MimeType) extends PathData(PathData.BLOB)
 case class NIHDBData(data: Seq[(Long, Seq[JValue])]) extends PathData(PathData.NIHDB)
 
+object NIHDBData {
+  val Empty = NIHDBData(Seq.empty)
+}
+
 sealed trait PathOp
+
+sealed trait PathUpdateOp extends PathOp
 
 /**
   * Creates a new resource with the given tracking id.
   */
-case class Create(data: PathData, streamId: UUID, authorities: Authorities, overwrite: Boolean) extends PathOp
+case class Create(path: Path, data: PathData, streamId: UUID, authorities: Option[Authorities], overwrite: Boolean) extends PathUpdateOp
 
 /**
   * Appends data to a resource. If the stream ID is specified, a
   * sequence of Appends must eventually be followed by a Replace.
   */
-case class Append(data: PathData, streamId: Option[UUID], authorities: Authorities) extends PathOp
+case class Append(path: Path, data: PathData, streamId: Option[UUID], authorities: Authorities) extends PathUpdateOp
 
 /**
   * Replace the current HEAD with the version specified by the streamId.
   */
-case class Replace(streamId: UUID) extends PathOp
+case class Replace(path: Path, streamId: UUID) extends PathUpdateOp
 
-case class Read(auth: Option[APIKey]) extends PathOp
-case class Execute(auth: Option[APIKey]) extends PathOp
-case class Stat(auth: Option[APIKey]) extends PathOp
+case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
+case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
+case class Execute(path: Path, auth: Option[APIKey]) extends PathOp
+case class Stat(path: Path, auth: Option[APIKey]) extends PathOp
+
+case class FindChildren(path: Path, auth: APIKey) extends PathOp
+
+sealed trait PathActionResponse
+
+case class UpdateSuccess(path: Path) extends PathActionResponse
+case class UpdateFailure(path: Path, error: ResourceError) extends PathActionResponse
+
+sealed trait ReadResult extends PathActionResponse {
+  def resources: List[Resource]
+}
+
+case class ReadSuccess(path: Path, resources: List[Resource]) extends ReadResult
+case class ReadFailure(path: Path, errors: NEL[ResourceError]) extends ReadResult {
+  val resources = Nil
+}
+
+sealed trait ReadProjectionResult extends PathActionResponse {
+  def projection: Option[NIHDBProjection]
+}
+
+case class ReadProjectionSuccess(path: Path, projection: Option[NIHDBProjection]) extends ReadProjectionResult
+case class ReadProjectionFailure(path: Path, messages: NEL[ResourceError]) extends ReadProjectionResult {
+  val projection = None
+}
 
 /**
   * An actor that manages resources under a given path. The baseDir is the version
   * subdir for the path.
   */
-final class PathManagerActor(baseDir: File, path: Path, resources: Resources) extends Actor {
-  private[this] versionLog = new VersionLog(baseDir)
+final class PathManagerActor(baseDir: File, path: Path, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration) extends Actor with Logging {
+  import ResourceError._
 
-  private def tempVersionDir(id: UUID) = new File(baseDir, id.toString + "-temp")
-  private def mainVersionDir(id: UUID) = new File(baseDir, id.toString)
+  private[this] implicit def executor: ExecutionContext = context.dispatcher
 
-  private def versionSubdir(id: UUID): OptionFile = {
+  private[this] implicit val futureM = new FutureMonad(executor)
+
+  private[this] val versionLog = new VersionLog(baseDir)
+
+  private def tempVersionDir(version: UUID) = new File(baseDir, version.toString + "-temp")
+  private def mainVersionDir(version: UUID) = new File(baseDir, version.toString)
+
+  private def versionSubdir(version: UUID): File = {
     if (mainVersionDir(version).isDirectory) mainVersionDir(version) else tempVersionDir(version)
   }
 
@@ -94,7 +154,7 @@ final class PathManagerActor(baseDir: File, path: Path, resources: Resources) ex
   def promoteVersion(version: UUID): IO[PrecogUnit] = {
     versionLog.setHead(version).map { _ =>
       if (! mainVersionDir(version).isDirectory && tempVersionDir(version).isDirectory) {
-        if (!tempVersionDir.(version).renameTo(mainVersionDir(version))) {
+        if (! tempVersionDir(version).renameTo(mainVersionDir(version))) {
           throw new IOException("Failed to migrate temp dir to main for version " + version)
         }
       }
@@ -103,187 +163,266 @@ final class PathManagerActor(baseDir: File, path: Path, resources: Resources) ex
   }
 
   // Keeps track of the resources for a given version/authority pair
-  private val resources = Cache.simple[UUID, Map[Authorities, Resource]](
-    OnRemoval {
-      case (_, resourceMap, cause) if cause != RemovalCause.REPLACED => resourceMap.foreach(_.close)
-    }) //,
-       //ExpireAfterAccess(Duration(30, TimeUnit.Minutes))
+  // TODO: make this an LRU cache
+  private[this] var versions = Map[UUID, Map[Authorities, Resource]]()
 
   // This will either return a cached resource for the
   // version+authorities, or open a new resource, creating it if
   // needed.
   private def createProjection(version: UUID, authorities: Authorities): Future[NIHDBResource] = {
-    resources.get(version).flatMap(_.get(authorities)).map(Promise.successful(_)) getOrElse {
-      val projDir = 
-
+    versions.get(version).flatMap(_.get(authorities).map(_.asInstanceOf[NIHDBResource])).map(Promise.successful) getOrElse {
       Future {
-        resources.createNIHDB(projDir, authorities).unsafePerformIO.map { resource =>
-          resources += (version -> (resources.getOrElse(authorities, Map()) + (authorities -> resource)))
+        resources.createNIHDB(versionSubdir(version), authorities).unsafePerformIO.map { resource =>
+          versions += (version -> (versions.getOrElse(version, Map()) + (authorities -> resource)))
           resource
-        } valueOr(throw)
+        }.valueOr { e => throw e.exception }
       }
     }
   }
 
-  private def openProjections(version: UUID): Option[IO[List[NIHDBResource]]] = {
-    resources.get(version).map { existing =>
-      logger.debug("Found cached projections for v" + version)
-      IO(existing.values.toList.collect { case nr: NIHDBResource => nr })
-    } orElse {
-      logger.debug("Opening new projections for v" + version)
-      resources.findDescriptorDirs(versionSubdir(version)).map { projDirs =>
-        projDirs.toList.map { bd =>
-          resources.openNIHDB(bd).map { dbv =>
-            dbv.map { nihdbResource =>
-              resources += (version.current -> (resources.getOrElse(version, Map()) + (nihdbResource.authorities -> nihdbResource)))
-              logger.debug("Cache for v%d updated to %s".format(version, resources.get(version)))
-              nihdbResource
-            }
-          }.valueOr { error => sys.error("An error occurred opening the NIHDB projection in %s: %s".format(bd, error.message)) }
-        }.sequence.map(_.flatten)
+  private def openProjections(version: UUID): IO[ValidationNel[ResourceError, List[NIHDBResource]]] = {
+    logger.debug("Opening new projections for v" + version)
+    for {
+      projDirs <- resources.findDescriptorDirs(versionSubdir(version))
+      opened <- projDirs traverse { bd =>
+        resources.openNIHDB(bd) map { proj =>
+          proj.foreach { nihdbResource =>
+            versions += (version -> (versions.getOrElse(version, Map()) + (nihdbResource.authorities -> nihdbResource)))
+            logger.debug("Cache for v%d updated to %s".format(version, versions.get(version)))
+          }
+          proj.toValidationNel
+        }
       }
+    } yield {
+      opened.sequence[({type λ[α] = ValidationNel[ResourceError, α]})#λ, NIHDBResource]
     }
   }
 
-  def aggregateProjections(version: UUID, apiKey: Option[APIKey]): Future[Option[NIHDBResource]] = {
-    findProjections(version, apiKey).flatMap {
-      case Some(inputs) =>
-        inputs.toNel traverse { ps =>
-          if (ps.size == 1) {
-            logger.debug("Aggregate on v%d with key %s returns a single projection".format(version, apiKey))
-            Promise.successful(ps.head)(context.dispatcher)
-          } else {
-            logger.debug("Aggregate on v%d with key %s returns an aggregate projection".format(version, apiKey))
-            for {
-              authorities <- ps.traverse(_.authorities)
-              snaps <- ps.traverse(_.getSnapshot)
-            } yield {
-              new NIHDBResource(new NIHDBAggregate(authorities, snaps))
-            }
+  def aggregateProjections(found: ValidationNel[ResourceError, List[Resource]]): Future[ValidationNel[ResourceError, Option[NIHDBProjection]]] = {
+    found.flatMap { inputs =>
+      val nihdbs = inputs.collect({ case n: NIHDBResource => n })
+
+      if (nihdbs.size != inputs.size) {
+        Failure(NEL(GeneralError("Resources found, but they are not projections")))
+      } else {
+        Success(nihdbs)
+      }
+    } traverse {
+      case Nil =>
+        logger.debug("No projections found for " + path)
+        Promise.successful(None)
+
+      case input :: Nil =>
+        logger.debug("Aggregate on %s returns a single projection".format(path))
+        NIHDBProjection.wrap(input.db, input.authorities).map(Some(_))
+
+      case inputs =>
+        logger.debug("Aggregate on %s returns an aggregate projection".format(path))
+        inputs.toNel traverse { inputsNel: NEL[NIHDBResource] =>
+          inputsNel.traverse { r => r.db.getSnapshot map { (r.authorities, _) } } map { toAggregate =>
+            val (allAuthorities, snapshots) = toAggregate.unzip
+            val newAuthorities = allAuthorities.list.reduce(_ |+| _)
+              (new NIHDBAggregate(snapshots, newAuthorities)).projection
           }
         }
-
-      case None =>
-        logger.debug("No projections found for " + path)
-        Promise.successful(None)(context.dispatcher)
     }
   }
 
-  def findProjections(version: UUID, apiKey: Option[APIKey]): Future[Option[List[NIHDBProjection]]] = {
+  def findResources(version: VersionEntry, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[ValidationNel[ResourceError, List[Resource]]] = {
+    import PathData._
     import Permission._
-    openProjections(version).map(_.unsafePerformIO) match {
-      case None =>
-        logger.warn("No projections found at " + path)
-        Promise.successful(None)(context.dispatcher)
 
-      case Some(foundProjections) =>
-        logger.debug("Checking found projections on v" + version + " for access")
-        foundProjections traverse { proj =>
-          apiKey.map { key =>
-            proj.authorities.flatMap { authorities =>
+    val preAuthedResources: IO[ValidationNel[ResourceError, List[Resource]]] =
+      versions.get(version.id) map { existing =>
+        logger.debug("Found cached projections for version " + version.id)
+        IO(Success(existing.values.toList))
+      } getOrElse {
+        version match {
+          case VersionEntry(id, `BLOB`) =>
+            resources.openBlob(versionSubdir(id)).map(_.map(List(_)).toValidationNel)
+
+          case VersionEntry(id, `NIHDB`) =>
+            openProjections(id)
+        }
+      }
+
+    val result = preAuthedResources map {
+      _ traverse { foundProjections =>
+        logger.debug("Checking found resources at %s, version %s for access".format(path, version.id))
+        // WANTED: Traverse[Future]
+        foundProjections.traverse {
+          proj =>
+            apiKey.map { key =>
               // must have at a minimum a reduce permission from each authority
               // TODO: get a Clock in here
-              authorities.accountIds.toList traverse { id =>
-                apiKeyFinder.hasCapability(key, Set(ReducePermission(path, WrittenByAccount(id))), Some(new DateTime))
+              proj.authorities.accountIds.toList.traverse { id =>
+                permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(new DateTime))
               } map {
                 _.forall(_ == true).option(proj)
               }
+            } getOrElse {
+              Promise.successful(Some(proj))
             }
-          } getOrElse {
-            Promise.successful(Some(proj))(context.dispatcher)
-          }
         } map {
-          _.sequence
+          _.flatten
         }
+      }
     }
+
+    result.except({ case t: Throwable => IO(Promise.failed(t)) }).unsafePerformIO
   }
 
-  private def performCreate(data: PathData, id: UUID, authorities: Authorities): IO[Validation[ResourceError, Resource]] = {
+  private def performCreate(data: PathData, version: UUID, authorities: Option[Authorities]): IO[Option[Validation[ResourceError, Resource]]] = {
     for {
-      version <- IO { versionLog.addVersion(VersionEntry(id, data.typeName)) }
+      _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
       result <- data match {
-        case BlobData(bytes, mimeType) =>
-          resources.createBlob[IO](tempVersionDir(id), mimeType, authorities, bytes :: StreamT.empty)
+        case BlobData(bytes, mimeType) => authorities match {
+          case Some(auth) => resources.createBlob[IO](tempVersionDir(version), mimeType, auth, bytes :: StreamT.empty[IO, Array[Byte]]).map(Some(_))
+          case None => IO(Some(Failure(GeneralError("Cannot create a Blob with empty authorities"))))
+        }
 
-        case NIHDBData(data) =>
-          resources.createNIHDB(tempVersionDir(id), authorities)
+        case NIHDBData(data) => authorities traverse { auth =>
+          resources.createNIHDB(tempVersionDir(version), auth)
+        }
       }
-      _ = result.map { resource =>
-        resources += (version -> Map(authorities -> resource))
-      }
+      _ = result.map { _.map { resource: Resource =>
+        authorities.foreach { auth =>
+          versions += (version -> Map(auth -> resource))
+        }
+      } }
     } yield result
   }
 
-  def hasData(version: Option[UUID]): Boolean = {
-    version.flatMap({ v => Option(mainVersionDir(v).list).map(_.length) }).exist(_ > 0)
+  private def performRead(id: Option[UUID], auth: Option[APIKey]): Future[ValidationNel[ResourceError, List[Resource]]] = {
+    import Permission._
+    import PathData._
+
+    Future { validateVersion(id) }.flatMap {
+      case Some(version) => findResources(version, auth, accountId => Set(ReadPermission(path, WrittenByAccount(accountId))))
+      case None =>
+        val msg = "No matching version could be found for %s:%s".format(id.getOrElse("*"))
+        logger.warn(msg)
+        Promise.successful(Failure(MissingData(msg)).toValidationNel)
+    }
   }
 
+  def validateVersion(requested: Option[UUID]): Option[VersionEntry] = requested.flatMap {
+    id => versionLog.find(id) orElse { throw new Exception("Could not locate version " + id) }
+  } orElse versionLog.current
+
+  def hasData(version: Option[UUID]): Boolean = {
+    version.flatMap({ v => Option(mainVersionDir(v).list).map(_.length) }).exists(_ > 0)
+  }
+
+  def postStop = {
+    Await.result(versions.values.flatMap(_.values).toStream.traverse(_.close), shutdownTimeout)
+  }
 
   def receive = {
-    case Create(data, id, authorities, overwrite) =>
-      if (!overwrite && hasData(versionLog.current)) {
-        sender ! CreateFailure("Non-overwrite request of existing data")
+    case Create(_, data, id, authorities, overwrite) =>
+      if (!overwrite && hasData(versionLog.current.map(_.id))) {
+        sender ! UpdateFailure(path, GeneralError("Non-overwrite create request on existing data"))
       } else {
-        val requestor = sender
-
-        performCreate(data, id, authorities).map {
-          case Success(_) =>
-            requestor ! CreateSuccess(path)
-
-          case Failure(error) =>
-            requestor ! CreateFailure(path, error)
-        }.except {
-          case t: Throwable => IO { logger.error("Error during data creation", t) }
-        }.unsafePerformIO
+        Future {
+          performCreate(data, id, authorities).map {
+            _ map {
+              _.fold(
+                e => UpdateFailure(path, e),
+                _ => UpdateSuccess(path)
+              )
+            } getOrElse UpdateSuccess(path)
+          } unsafePerformIO
+        } recover {
+          case t: Throwable =>
+            val msg = "Error during data creation " + path
+            logger.error(msg, t)
+            UpdateFailure(path, GeneralError(msg))
+        } pipeTo sender
       }
 
-    case Append(data, idOpt, authorities) =>
-      val requestor = sender
-      val result : Future[PrecogUnit] = data match {
-        case BlobData(_, _, id) =>
-          Future { sys.error("Append not yet supported for blob data") }
+    case Append(_, data, idOpt, authorities) =>
+      (data match {
+        case bd: BlobData =>
+          Future {
+            val errMsg = "Append not yet supported for blob data"
+            logger.error(errMsg)
+            UpdateFailure(path, GeneralError(errMsg))
+          }
 
-        case NIHDBData(data) =>
+        case NIHDBData(events) =>
           // Which version are we appending to? In order, prefer the
           // provided version, then the current version. If no version
           // is available, we'll create a new one (legacy ingest
           // handling)
-          (idOpt orElse versionLog.current) match {
+          Future { validateVersion(idOpt).map(_.id) }.flatMap {
             case Some(version) =>
               for {
                 projection <- createProjection(version, authorities)
-                result <- projection.insert(data)
-              } yield result
+                result <- projection.db.insert(events)
+              } yield UpdateSuccess(path)
 
             case None =>
               val version = UUID.randomUUID
 
               Future {
                 (for {
-                  _ <- createVersion(version)
+                  _ <- createVersion(version, data.typeName)
                   _ <- promoteVersion(version)
-                  created <- performCreate(data, version, authorities)
-                }).unsafePerformIO.valueOr(throw)
+                  created <- performCreate(data, version, Some(authorities))
+                } yield {
+                  created map { _.fold(
+                    e => UpdateFailure(path, e),
+                    _ => UpdateSuccess(path)
+                  ) }
+                }) unsafePerformIO
               }
           }
-      }).onFailure {
+      }) recover {
         case t: Throwable =>
-          logger.error("Failure during append to " + path, t)
-          requestor ! AppendFailure(path, t)
-      }.onSuccess {
-        _ => requestor ! AppendSuccess(path)
-      }
+          val msg = "Failure during append to " + path
+          logger.error(msg, t)
+          UpdateFailure(path, IOError(t))
+      } pipeTo sender
 
-    case Replace(id) =>
+    case Replace(_, id) =>
+      Future {
+        promoteVersion(id).map({ _ => UpdateSuccess(path)}).unsafePerformIO
+      } recover {
+        case t: Throwable =>
+          val msg = "Error during promotion of " + id
+          logger.error(msg, t)
+          UpdateFailure(path, IOError(t))
+      } pipeTo sender
 
+    case Read(_, id, auth) =>
+      performRead(id, auth) map {
+        _.fold(
+          messages => ReadFailure(path, messages),
+          resources => ReadSuccess(path, resources)
+        )
+      } recover {
+        case t: Throwable =>
+          val msg = "Error during promotion of " + id
+          logger.error(msg, t)
+          ReadFailure(path, NEL(IOError(t)))
+      } pipeTo sender
 
-    case Read(auth) =>
-      // Returns a stream of bytes + mimetype
-    case Archive(auth) =>
-      rollOver(identity)
-    case Execute(auth) =>
+    case ReadProjection(_, id, auth) =>
+      performRead(id, auth) flatMap(aggregateProjections) map {
+        _.fold(
+          messages => ReadProjectionFailure(path, messages),
+          proj => ReadProjectionSuccess(path, proj)
+        )
+      } recover {
+        case t: Throwable =>
+          val msg = "Error during promotion of " + id
+          logger.error(msg, t)
+          ReadProjectionFailure(path, NEL(IOError(t)))
+      } pipeTo sender
+
+    case Execute(_, auth) =>
       // Return projection snapshot if possible.
-    case Stat(_) =>
+    case Stat(_, _) =>
       // Owners, a bit of history, mime type, etc.
   }
 }

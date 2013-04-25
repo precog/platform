@@ -24,7 +24,7 @@ import accounts.AccountId
 import security._
 import jobs.JobId
 
-import blueeyes.json.{ JValue, JParser }
+import blueeyes.json.{ JValue, JObject, JParser }
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
@@ -196,18 +196,18 @@ sealed trait ContentEncoding {
 }
 
 object ContentEncoding {
-  val decomposerV1: Decomposer[ContentEncoding] = versioned(new Decomposer[ContentEncoding] {
+  implicit val Decomposer: Decomposer[ContentEncoding] = (new Decomposer[ContentEncoding] {
     def decompose(ce: ContentEncoding) = JObject("encoding" -> ce.id.serialize)
-  }, Some("1.0"))
+  }).versioned(Some("1.0".v))
 
-  val extractorV1: Extractor[ContentEncoding] = versioned(new Extractor[ContentEncoding] {
+  implicit val Extractor: Extractor[ContentEncoding] = (new Extractor[ContentEncoding] {
     override def validated(obj: JValue): Validation[Error, ContentEncoding] = {
       obj.validated[String]("encoding").flatMap {
         case "uncompressed" => Success(UncompressedEncoding)
         case invalid => Failure(Invalid("Unknown encoding " + invalid))
       }
     }
-  }, Some("1.0"))
+  }).versioned(Some("1.0".v))
 }
 
 object UncompressedEncoding extends ContentEncoding {

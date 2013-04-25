@@ -47,7 +47,7 @@ import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.JavaConverters._
@@ -69,13 +69,17 @@ case class Structure(columns: Set[(CPath, CType)])
 case object GetAuthorities
 
 object NIHDB {
-  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
+  final val projectionIdGen = new AtomicInteger()
+
+  final def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
     NIHDBActor.create(chef, authorities, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { actor => new NIHDBImpl(actor, timeout) } }
   }
 
-  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
+  final def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
     NIHDBActor.open(chef, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { _ map { case (authorities, actor) => (authorities, new NIHDBImpl(actor, timeout)) } } }
   }
+
+  final def hasProjection(dir: File) = NIHDBActor.hasProjection(dir)
 }
 
 trait NIHDB {
@@ -106,7 +110,7 @@ trait NIHDB {
   def close(implicit actorSystem: ActorSystem): Future[PrecogUnit]
 }
 
-class NIHDBImpl private (actor: ActorRef, timeout: Timeout)(implicit executor: ExecutionContext) extends NIHDB with GracefulStopSupport with AskSupport {
+private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: Timeout)(implicit executor: ExecutionContext) extends NIHDB with GracefulStopSupport with AskSupport {
   private implicit val impTimeout = timeout
 
   def authorities: Future[Authorities] =
@@ -140,54 +144,7 @@ class NIHDBImpl private (actor: ActorRef, timeout: Timeout)(implicit executor: E
     gracefulStop(actor, timeout.duration)(actorSystem).map { _ => PrecogUnit }
 }
 
-class NIHDBAggregate(authorities0: NonEmptyList[Authorities], underlying: NonEmptyList[NIHDBSnapshot])(implicit M: Monad[Future]) extends NIHDB with Logging {
-  private[this] val projectionId = NIHDBProjection.projectionIdGen.getAndIncrement
-  // FIXME: This is an awful way to use these. We should do offset computation to avoid duplicating these refs
-  private[this] val readers = underlying.list.map(_.readers).toArray.flatten
-  private[this] val aggregateAuthorities = authorities0.reduce(_ |+| _)
-
-  def authorities: Future[Authorities] = M.point(aggregateAuthorities)
-
-  def insert(batch: Seq[(Long, Seq[JValue])]): Future[PrecogUnit] = sys.error("Insert unsupported in aggregate")
-
-  def getSnapshot(): Future[NIHDBSnapshot] = sys.error("Snapshot unsupported in aggregate")
-
-  def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit M: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = {
-    getBlock(id0.map(_.toInt).getOrElse(-1) + 1, columns.map(_.map(_.selector)))
-  }
-
-  def getBlock(id: Option[Long], cols: Option[Set[CPath]]): Future[Option[Block]] = {
-    M.point(
-      try {
-        // We're limiting ourselves to 2 billion blocks total here
-        val index = id0.map(_.toInt).getOrElse(0)
-        if (index >= readers.length) {
-          None
-        } else {
-          val slice = SegmentsWrapper(readers(index).snapshot(columns).segments, projectionId, index)
-          Some(BlockProjectionData(index, index, slice))
-        }
-      } catch {
-        case e =>
-          // Difficult to do anything else here other than bail
-          logger.warn("Error during block read", e)
-          None
-      }
-    )
-  }
-
-  def length: Future[Long] = M.point(readers.map(_.length.toLong).sum)
-
-  def status: Future[Status] = sys.error("Status unsupported in aggregate")
-
-  def structure: Future[Set[ColumnRef]] = M.point(readers.map(_.structure.map { case (s, t) => ColumnRef(s, t) }).toSet.flatten)
-
-  def count(paths0: Option[Set[CPath]]): Future[Long] = M.point(underlying.map(_.count(paths0)).toList.sum)
-
-  def close(implicit actorSystem: ActorSystem): Future[PrecogUnit] = M.point(PrecogUnit)
-}
-
-object NIHDBActor extends Logging {
+private[niflheim] object NIHDBActor extends Logging {
   final val descriptorFilename = "NIHDBDescriptor.json"
   final val cookedSubdir = "cooked_blocks"
   final val rawSubdir = "raw_blocks"
@@ -196,7 +153,7 @@ object NIHDBActor extends Logging {
   private[niflheim] final val internalDirs =
     Set(cookedSubdir, rawSubdir, descriptorFilename, CookStateLog.logName + "_1.log", CookStateLog.logName + "_2.log",  lockName + ".lock", CookStateLog.lockName + ".lock")
 
-  def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Validation[Error, ActorRef]] = {
+  final def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Validation[Error, ActorRef]] = {
     val descriptorFile = new File(baseDir, descriptorFilename)
     val currentState: IO[Validation[Error, ProjectionState]] =
       if (descriptorFile.exists) {
@@ -214,7 +171,7 @@ object NIHDBActor extends Logging {
     currentState map { _ map { s => actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold, txLogScheduler))) } }
   }
 
-  def readDescriptor(baseDir: File): IO[Option[Validation[Error, ProjectionState]]] = {
+  final def readDescriptor(baseDir: File): IO[Option[Validation[Error, ProjectionState]]] = {
     val descriptorFile = new File(baseDir, descriptorFilename)
     if (descriptorFile.exists) {
       ProjectionState.fromFile(descriptorFile) map { Some(_) }
@@ -224,17 +181,16 @@ object NIHDBActor extends Logging {
     }
   }
 
-  def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Option[Validation[Error, (Authorities, ActorRef)]]] = {
+  final def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Option[Validation[Error, (Authorities, ActorRef)]]] = {
     val currentState: IO[Option[Validation[Error, ProjectionState]]] = readDescriptor(baseDir)
 
     currentState map { _ map { _ map { s => (s.authorities, actorSystem.actorOf(Props(new NIHDBActor(s, baseDir, chef, cookThreshold, txLogScheduler)))) } } }
   }
 
-
   final def hasProjection(dir: File) = (new File(dir, descriptorFilename)).exists
 }
 
-class NIHDBActor private (private var currentState: ProjectionState, baseDir: File, chef: ActorRef, cookThreshold: Int, txLogScheduler: ScheduledExecutorService)
+private[niflheim] class NIHDBActor private (private var currentState: ProjectionState, baseDir: File, chef: ActorRef, cookThreshold: Int, txLogScheduler: ScheduledExecutorService)
     extends Actor
     with Logging {
   private case class BlockState(cooked: List[CookedReader], pending: Map[Long, StorageReader], rawLog: RawHandler)
@@ -412,7 +368,7 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
   }
 }
 
-case class ProjectionState(maxOffset: Long, cookedMap: Map[Long, String], authorities: Authorities) {
+private[niflheim] case class ProjectionState(maxOffset: Long, cookedMap: Map[Long, String], authorities: Authorities) {
   def readers(baseDir: File): List[CookedReader] =
     cookedMap.map {
       case (id, metadataFile) =>
@@ -420,7 +376,7 @@ case class ProjectionState(maxOffset: Long, cookedMap: Map[Long, String], author
     }.toList
 }
 
-object ProjectionState {
+private[niflheim] object ProjectionState {
   import Extractor.Error
 
   def empty(authorities: Authorities) = ProjectionState(-1L, Map.empty, authorities)
