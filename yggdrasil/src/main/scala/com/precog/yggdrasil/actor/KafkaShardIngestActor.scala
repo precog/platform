@@ -149,7 +149,7 @@ object FilesystemIngestFailureLog {
     implicit val decomposer: Decomposer[LogRecord] = new Decomposer[LogRecord] {
       def decompose(rec: LogRecord) = JObject(
         "offset" -> rec.offset.serialize,
-        "messageType" -> rec.message.fold(_ => "ingest", _ => "archive").serialize,
+        "messageType" -> rec.message.fold(_ => "ingest", _ => "archive", _ => "storeFile").serialize,
         "message" -> rec.message.serialize,
         "lastKnownGood" -> rec.lastKnownGood.serialize
       )

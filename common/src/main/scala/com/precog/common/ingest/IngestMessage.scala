@@ -22,10 +22,12 @@ package ingest
 
 import accounts.AccountId
 import security._
+import com.precog.common.serialization._
 import jobs.JobId
 
-import blueeyes.json.{ JValue, JParser }
-import blueeyes.json.serialization.{ Extractor, Decomposer }
+import blueeyes.core.http.MimeType
+import blueeyes.json._
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -34,6 +36,8 @@ import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor,
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import java.util.UUID
+
 import org.joda.time.Instant
 
 import scalaz._
@@ -50,7 +54,7 @@ sealed trait EventMessage {
   def path: Path
   def jobId: Option[JobId]
   def timestamp: Instant
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A
 }
 
 object EventMessage {
@@ -61,7 +65,7 @@ object EventMessage {
 
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
-      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _)
+      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _, StoreFileMessage.Decomposer.apply _)
     }
   }
 }
@@ -98,7 +102,7 @@ object IngestRecord {
  * accept records for processing in the local queue.
  */
 case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
   def split: List[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
@@ -147,7 +151,7 @@ object IngestMessage {
 }
 
 case class ArchiveMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = am(this)
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = am(this)
 }
 
 object ArchiveMessage {
@@ -171,3 +175,18 @@ object ArchiveMessage {
   implicit val Decomposer: Decomposer[ArchiveMessage] = decomposerV1
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
+
+case class StoreFileMessage(apiKey: APIKey, path: Path, streamId: UUID, mimeType: MimeType, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: String, encoding: ContentEncoding, timestamp: Instant) extends EventMessage {
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
+}
+
+object StoreFileMessage {
+  implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
+
+  val schemaV1 = "apiKey" :: "path" :: "streamId" :: "mimeType" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| RawUTF8Encoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
+
+  implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
+
+  implicit val Extractor: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0".v))
+}
+

@@ -39,6 +39,7 @@ import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 
 import com.precog.util.FilesystemFileOps
 import com.precog.util.PrecogUnit
@@ -70,6 +71,7 @@ import scalaz.syntax.traverse._
 import scalaz.std.iterable._
 import scalaz.std.indexedSeq._
 import scalaz.std.anyVal._
+import scalaz.std.list._
 
 import org.streum.configrity.Configuration
 
@@ -141,7 +143,8 @@ trait NIHDBQueryExecutorComponent  {
       val metadataClient = new StorageMetadataClient[Future](this)
 
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
+      val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration)))
 
       val shardActors @ ShardActors(ingestSupervisor, _) =
         initShardActors(permissionsFinder, projectionsActor)

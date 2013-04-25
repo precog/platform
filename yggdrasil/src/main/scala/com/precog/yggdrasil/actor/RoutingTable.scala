@@ -28,41 +28,49 @@ import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.yggdrasil.nihdb._
+import com.precog.yggdrasil.vfs._
 
 import blueeyes.json._
 
 import com.weiglewilczek.slf4s.Logging
+
+import java.util.UUID
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 trait RoutingTable extends Logging {
 
-  private type Batch = (Long, Seq[IngestRecord])
+  private type Batch = (Long, Seq[JValue])
 
-  def batchMessages(events: Seq[(Long, EventMessage)]): Seq[ProjectionUpdate] = {
+  def batchMessages(events: Seq[(Long, EventMessage)]): Seq[PathUpdateOp] = {
     val start = System.currentTimeMillis
 
     // the sequence of ProjectionUpdate objects to return
-    val updates = ArrayBuffer.empty[ProjectionUpdate]
+    val updates = ArrayBuffer.empty[PathUpdateOp]
 
     // map used to aggregate IngestMessages by (Path, AccountId)
     val recordsByPath = mutable.Map.empty[(Path, Authorities), ArrayBuffer[Batch]]
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(key, path, writeAs, data, jobid, timestamp)) =>
+      case (offset, IngestMessage(_, path, writeAs, data, _, _)) =>
         val batches = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[Batch])
-        batches += ((offset, data))
+        batches += ((offset, data.map(_.value)))
+
+      case (offset, sfm: StoreFileMessage) =>
+        updates += Create(sfm.path, BlobData(sfm.encoding.decode(sfm.content), sfm.mimeType), sfm.streamId, Some(sfm.writeAs), false)
 
       case (_, ArchiveMessage(key, path, jobid, eventId, timestamp)) =>
-        updates += ProjectionArchive(path, key, eventId)
+        val uuid = UUID.randomUUID
+        updates += Create(path, NIHDBData.Empty, uuid, None, false)
+        updates += Replace(path, uuid)
     }
 
     // combine ingest messages by (path, owner), add to updates, then return
     recordsByPath.foreach {
       case ((path, writeAs), batches) =>
-        updates += ProjectionInsert(path, batches, writeAs)
+        updates += Append(path, NIHDBData(batches.toSeq), None, writeAs)
     }
 
     logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))

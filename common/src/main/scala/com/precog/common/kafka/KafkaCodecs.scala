@@ -133,7 +133,7 @@ object EventMessageEncoding extends EncodingFlags with Logging {
     logger.trace("Serialized event " + msg + " to " + serialized)
     val msgBuffer = charset.encode(serialized)
     val bytes = ByteBuffer.allocate(msgBuffer.limit + 3)
-    writeHeader(bytes, msg.fold(_ => jsonIngestMessageFlag, _ => jsonArchiveMessageFlag))
+    writeHeader(bytes, msg.fold(_ => jsonIngestMessageFlag, _ => jsonArchiveMessageFlag, _ => storeFileFlag))
     bytes.put(msgBuffer)
     bytes.flip()
     bytes
@@ -151,9 +151,10 @@ object EventMessageEncoding extends EncodingFlags with Logging {
       //_ = println(java.nio.charset.Charset.forName("UTF-8").decode(buffer).toString)
       jv <- ((Error.thrown _) <-: JParser.parseFromByteBuffer(buffer))
       message <-  msgType match {
-                    case `jsonIngestMessageFlag`  => jv.validated[EventMessageExtraction](IngestMessage.Extractor)
-                    case `jsonArchiveMessageFlag` => jv.validated[ArchiveMessage].map(\/.right(_))
-                  }
+        case `jsonIngestMessageFlag`  => jv.validated[EventMessageExtraction](IngestMessage.Extractor)
+        case `jsonArchiveMessageFlag` => jv.validated[ArchiveMessage].map(\/.right(_))
+        case `storeFileFlag`          => jv.validated[StoreFileMessage].map(\/.right(_))
+      }
     } yield message
   }
 }

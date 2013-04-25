@@ -25,6 +25,7 @@ import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.vfs._
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
 import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
@@ -100,18 +101,18 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
-    val records = (eventId.uid, readRows(data) map (IngestRecord(eventId, _)))
+    val records = (eventId.uid, readRows(data))
 
-    val projection = (projectionsActor ? ProjectionInsert(path, Seq(records), Authorities(accountId))).flatMap { _ =>
+    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), None, Authorities(accountId))).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
-      (projectionsActor ? FindProjection(path)).mapTo[NIHDBActorProjection]
-    }.copoint
+      (projectionsActor ? Read(path, None, None)).mapTo[List[NIHDBResource]]
+    }.copoint.head
 
-    while (projection.status.copoint.pending > 0) {
+    while (projection.db.status.copoint.pending > 0) {
       Thread.sleep(100)
     }
-    projection.close(actorSystem).copoint
+    projection.db.close(actorSystem).copoint
 
     logger.debug("Ingested %s." format data)
 

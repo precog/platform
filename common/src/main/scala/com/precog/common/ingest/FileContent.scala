@@ -50,7 +50,7 @@ object ContentEncoding {
       }
     }
   }
-  
+
   implicit val decomposer = decomposerV1.versioned(Some("1.0".v))
   implicit val extractor = extractorV1.versioned(Some("1.0".v))
 }
@@ -61,7 +61,7 @@ object RawUTF8Encoding extends ContentEncoding {
   def decode(compressed: String) = compressed.getBytes("UTF-8")
 }
 
-case class FileContent(data: Array[Byte], encoding: ContentEncoding) 
+case class FileContent(data: Array[Byte], encoding: ContentEncoding)
 
 object FileContent {
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
@@ -76,11 +76,11 @@ object FileContent {
       jv match {
         case JObject(fields) =>
           (fields.get("encoding").toSuccess(Invalid("File data object missing encoding field.")).flatMap(_.validated[ContentEncoding]) |@|
-           fields.get("data").toSuccess(Invalid("File data object missing data field.")).flatMap(_.validated[String])) { (encoding, contentString) => 
+           fields.get("data").toSuccess(Invalid("File data object missing data field.")).flatMap(_.validated[String])) { (encoding, contentString) =>
             FileContent(encoding.decode(contentString), encoding)
           }
 
-        case _ => 
+        case _ =>
           Failure(Invalid("File contents " + jv.renderCompact + " was not properly encoded as a JSON object."))
       }
     }
@@ -89,6 +89,3 @@ object FileContent {
   implicit val decomposer = DecomposerV0
   implicit val extractor = ExtractorV0
 }
-
-
-

@@ -65,26 +65,24 @@ class StressTest {
 
   val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
-  def newNihProjection(workDir: File, threshold: Int = 1000) =
-    NIHDB.create(chef, Authorities(NonEmptyList(owner)), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map {
-      db => new NIHDBActorProjection(db)(actorSystem.dispatcher)
-    }.valueOr { e => throw new Exception(e.message) }
+  def newNihdb(workDir: File, threshold: Int = 1000): NIHDB =
+    NIHDB.create(chef, Authorities(NonEmptyList(owner)), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.valueOr { e => throw new Exception(e.message) }
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
   def shutdown() = actorSystem.shutdown()
 
   class TempContext {
-    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
-    var projection = newNihProjection(workDir)
-
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
+    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+    val nihdb = newNihdb(workDir)
+
+    def close(proj: NIHDB) = fromFuture(proj.close(actorSystem))
 
     def finish() = {
         (for {
-          _ <- IO { close(projection) }
+          _ <- IO { close(nihdb) }
           _ <- IOUtils.recursiveDelete(workDir)
         } yield ()).unsafePerformIO
     }
@@ -122,7 +120,7 @@ class StressTest {
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
-        projection.insert(Seq((eventid, results.map(v => IngestRecord(eventidobj, v)))))
+        nihdb.insert(Seq((eventid, results)))
 
 
         eventid += 1L
@@ -137,15 +135,18 @@ class StressTest {
       }
       timeit("  finished ingesting")
 
-      while (fromFuture(projection.status).pending > 0) Thread.sleep(100)
+      while (fromFuture(nihdb.status).pending > 0) Thread.sleep(100)
       timeit("  finished cooking")
 
       import scalaz._
-      val stream = StreamT.unfoldM[Future, Unit, Option[Long]](None) { key =>
-        projection.getBlockAfter(key, None).map(_.map { case BlockProjectionData(_, maxKey, _) => ((), Some(maxKey)) })
+      val length = NIHDBProjection.wrap(nihdb).flatMap { projection =>
+        val stream = StreamT.unfoldM[Future, Unit, Option[Long]](None) { key =>
+          projection.getBlockAfter(key, None).map(_.map { case BlockProjectionData(_, maxKey, _) => ((), Some(maxKey)) })
+        }
+        stream.length
       }
 
-      Await.result(stream.length, Duration(300, "seconds"))
+      Await.result(length, Duration(300, "seconds"))
       timeit2("  evaluated")
 
       eventid

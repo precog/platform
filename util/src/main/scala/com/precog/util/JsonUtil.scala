@@ -26,8 +26,8 @@ import scalaz._
 import scalaz.syntax.monad._
 
 import blueeyes.json._
+import blueeyes.json.AsyncParser._
 import blueeyes.core.data._
-import AsyncParser._
 
 import java.nio.ByteBuffer
 import akka.dispatch.{Future, Await, ExecutionContext}
@@ -39,17 +39,15 @@ import akka.dispatch.{Future, Await, ExecutionContext}
  * shared interface with scala collections.
  */
 object JsonUtil {
-  import AsyncParser._
-
   def parseSingleFromByteChunk(bc: ByteChunk)(implicit M: Monad[Future]): Future[Validation[Seq[Throwable], JValue]] =
     parseSingleFromStream[Future](bc.fold(_ :: StreamT.empty, identity))
 
   def parseSingleFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): M[Validation[Seq[Throwable], JValue]] = {
     def rec(stream: StreamT[M, ByteBuffer], parser: AsyncParser): M[Validation[Seq[Throwable], JValue]] = {
       def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]): M[Validation[Seq[Throwable], JValue]] = ap match {
-        case AsyncParse(errors, _) if !errors.isEmpty =>
+        case AsyncParse(errors, _) if errors.nonEmpty =>
           Failure(errors).point[M]
-        case AsyncParse(_, values) if !values.isEmpty =>
+        case AsyncParse(_, values) if values.nonEmpty =>
           Success(values.head).point[M]
         case _ =>
           next

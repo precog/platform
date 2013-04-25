@@ -28,6 +28,7 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
@@ -45,6 +46,8 @@ import blueeyes.bkka._
 import scalaz._
 import scalaz.effect._
 import scalaz.std.anyVal._
+import scalaz.std.list._
+import scalaz.syntax.traverse._
 
 final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean, _rootDir: Option[File], testTimeout: Duration = Duration(120, "seconds"))
     extends EvaluatingPerfTestRunner[Future, T]
@@ -72,6 +75,8 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     override val config = (Configuration parse {
       Option(System.getProperty("precog.storage.root")) map ("precog.storage.root = " + _) getOrElse "" }) ++ commandLineConfig
     val cookThreshold = 10000
+    val clock = blueeyes.util.Clock.System
+    val storageTimeout = Timeout(Duration(120, "seconds"))
   }
 
   yggConfig.dataDir.mkdirs()
@@ -90,13 +95,9 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))
 
   val chefs = (1 to 4).map { _ => actorSystem.actorOf(Props(makeChef)) }
-  val chef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
-  val projectionsActor = actorSystem.actorOf(Props(
-    new NIHDBProjectionsActor(
-      yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps,
-      chef, yggConfig.cookThreshold, storageTimeout,
-      permissionsFinder)
-  ))
+  val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
+  val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
     new Evaluator[N](N0) with IdSourceScannerModule {
@@ -109,7 +110,14 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   def startup() {}
 
   def shutdown() {
-    Await.result(gracefulStop(projectionsActor, storageTimeout.duration), storageTimeout.duration)
+    val stopWait = yggConfig.storageTimeout.duration
+    Await.result(chefs.toList.traverse(gracefulStop(_, stopWait)), stopWait)
+
+    Await.result(gracefulStop(masterChef, stopWait), stopWait)
+    logger.info("Completed chef shutdown")
+
+    logger.info("Waiting for shard shutdown")
+    Await.result(gracefulStop(projectionsActor, stopWait), stopWait)
     actorSystem.shutdown()
   }
 }
