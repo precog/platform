@@ -23,10 +23,11 @@ import scala.annotation.tailrec
 import scala.{ specialized => spec }
 
 import scalaz._
+import scalaz.syntax.monad._
 
 import blueeyes.json._
+import blueeyes.json.AsyncParser._
 import blueeyes.core.data._
-import AsyncParser._
 
 import java.nio.ByteBuffer
 import akka.dispatch.{Future, Await, ExecutionContext}
@@ -38,64 +39,50 @@ import akka.dispatch.{Future, Await, ExecutionContext}
  * shared interface with scala collections.
  */
 object JsonUtil {
-
-  def parseSingleFromByteChunk(bc: ByteChunk)
-    (implicit M: Monad[Future]): Future[Validation[Seq[Throwable], JValue]] =
+  def parseSingleFromByteChunk(bc: ByteChunk)(implicit M: Monad[Future]): Future[Validation[Seq[Throwable], JValue]] =
     parseSingleFromStream[Future](bc.fold(_ :: StreamT.empty, identity))
 
-  def parseSingleFromStream[M[+_]](stream: StreamT[M, ByteBuffer])
-    (implicit M: Monad[M]): M[Validation[Seq[Throwable], JValue]] = {
-
-    // use an empty byte buffer to "prime" the async parser
-    val p = AsyncParser(false)
-
-    def xyz(stream: StreamT[M, ByteBuffer], p: AsyncParser):
-        M[Validation[Seq[Throwable], JValue]] = {
-      def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]):
-          M[Validation[Seq[Throwable], JValue]] =
+  def parseSingleFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): M[Validation[Seq[Throwable], JValue]] = {
+    def rec(stream: StreamT[M, ByteBuffer], parser: AsyncParser): M[Validation[Seq[Throwable], JValue]] = {
+      def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]): M[Validation[Seq[Throwable], JValue]] =
         ap match {
           case AsyncParse(errors, _) if !errors.isEmpty =>
-            M.point(Failure(errors))
+            Failure(errors).point[M]
           case AsyncParse(_, values) if !values.isEmpty =>
-            M.point(Success(values.head))
+            Success(values.head).point[M]
           case _ =>
             next
         }
 
-      M.bind(stream.uncons) {
+      stream.uncons flatMap {
         case Some((bb, tail)) =>
-          val (ap, p2) = p(Some(bb))
-          handle(ap, xyz(tail, p2))
+          val (ap, p2) = parser(More(bb))
+          handle(ap, rec(tail, p2))
         case None =>
-          val (ap, p2) = p(None)
-          handle(ap, M.point(Failure(Seq(new Exception("parse failure")))))
+          val (ap, p2) = parser(Done)
+          handle(ap, Failure(Seq(new Exception("parse failure"))).point[M])
       }
     }
-    xyz(stream, p)
+
+    rec(stream, AsyncParser(true))
   }
 
 
-  def parseManyFromByteChunk(bc: ByteChunk)
-    (implicit M: Monad[Future]): StreamT[Future, AsyncParse] =
+  def parseManyFromByteChunk(bc: ByteChunk)(implicit M: Monad[Future]): StreamT[Future, AsyncParse] =
     parseManyFromStream[Future](bc.fold(_ :: StreamT.empty, identity))
 
-  def parseManyFromStream[M[+_]]
-    (stream: StreamT[M, ByteBuffer])
-    (implicit M: Monad[M]): StreamT[M, AsyncParse] = {
-
-    val p = AsyncParser(false)
-
+  def parseManyFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): StreamT[M, AsyncParse] = {
     // create a new stream, using the current stream and parser
-    StreamT.unfoldM((stream, p)) {
-      case (stream, parser) => M.map(stream.uncons) {
+    StreamT.unfoldM((stream, AsyncParser(true))) {
+      case (stream, parser) => stream.uncons map {
         case Some((bb, tail)) =>
           // parse the current byte buffer, keeping track of the
           // new parser instance we were given back
-          val (r, parser2) = parser(Some(bb))
+          val (r, parser2) = parser(More(bb))
           Some((r, (tail, parser2)))
         case None =>
           // once we're out of byte buffers, send None to signal EOF
-          val (r, parser2) = parser(None)
+          val (r, parser2) = parser(Done)
           Some((r, (StreamT.empty, parser2)))
       }
     }

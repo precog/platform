@@ -183,37 +183,10 @@ case class StoreFileMessage(apiKey: APIKey, path: Path, streamId: UUID, mimeType
 object StoreFileMessage {
   implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "streamId" :: "mimeType" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| UncompressedEncoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "streamId" :: "mimeType" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| RawUTF8Encoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
 
   implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
 
   implicit val Extractor: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0".v))
-}
-
-sealed trait ContentEncoding {
-  def id: String
-  def compress(raw: Array[Byte]): String
-  def uncompress(compressed: String): Array[Byte]
-}
-
-object ContentEncoding {
-  implicit val Decomposer: Decomposer[ContentEncoding] = (new Decomposer[ContentEncoding] {
-    def decompose(ce: ContentEncoding) = JObject("encoding" -> ce.id.serialize)
-  }).versioned(Some("1.0".v))
-
-  implicit val Extractor: Extractor[ContentEncoding] = (new Extractor[ContentEncoding] {
-    override def validated(obj: JValue): Validation[Error, ContentEncoding] = {
-      obj.validated[String]("encoding").flatMap {
-        case "uncompressed" => Success(UncompressedEncoding)
-        case invalid => Failure(Invalid("Unknown encoding " + invalid))
-      }
-    }
-  }).versioned(Some("1.0".v))
-}
-
-object UncompressedEncoding extends ContentEncoding {
-  val id = "uncompressed"
-  def compress(raw: Array[Byte]) = new String(raw, "UTF-8")
-  def uncompress(compressed: String) = compressed.getBytes("UTF-8")
 }
 

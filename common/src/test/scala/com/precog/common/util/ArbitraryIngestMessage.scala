@@ -25,6 +25,7 @@ import security._
 import util.ArbitraryJValue
 
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.UUID
 
 import blueeyes.json._
 
@@ -34,6 +35,8 @@ import Gen._
 import Arbitrary.arbitrary
 
 trait ArbitraryEventMessage extends ArbitraryJValue {
+  def genStreamId: Gen[Option[UUID]] = Gen.oneOf(Gen.resultOf[Int, Option[UUID]](_ => Some(UUID.randomUUID)), None)
+
   def genContentJValue: Gen[JValue] =
     frequency(
       (1, genSimple),
@@ -58,7 +61,8 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
       ownerAccountId <- alphaStr
       content <- containerOf[List, JValue](genContentJValue).map(l => Vector(l: _*)) if !content.isEmpty
       jobId <- oneOf(identifier.map(Option.apply), None)
-    } yield Ingest(apiKey, path, Some(Authorities(ownerAccountId)), content, jobId, new Instant())
+      streamId <- genStreamId
+    } yield Ingest(apiKey, path, Some(Authorities(ownerAccountId)), content, jobId, new Instant(), streamId)
 
   def genRandomArchive: Gen[Archive] =
     for {
@@ -136,7 +140,8 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
   def genIngest: Gen[Ingest] = for {
     path <- genStablePath
     ingestData <- containerOf[List, JValue](genIngestData).map(l => Vector(l: _*))
-  } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant())
+      streamId <- genStreamId
+  } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant(), streamId)
 
   def genIngestMessage: Gen[IngestMessage] = for {
     producerId <- choose(0, producers-1)

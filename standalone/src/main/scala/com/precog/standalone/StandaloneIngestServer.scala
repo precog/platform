@@ -66,7 +66,8 @@ trait StandaloneIngestServer
       apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
-      jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ]()
+      jobManager = new InMemoryJobManager[({ type λ[+α] = EitherT[Future, String, α] })#λ](),
+      shardClient = sys.error("todo")
     )
 
     (deps, stoppable)

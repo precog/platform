@@ -32,6 +32,7 @@ import WebJobManager._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
+import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.util.Clock
 
 import akka.util.Timeout
@@ -41,7 +42,8 @@ import org.joda.time.Instant
 import org.streum.configrity.Configuration
 
 import scalaz._
-import scalaz.{NonEmptyList => NEL}
+import scalaz.NonEmptyList._
+import scalaz.syntax.applicative._
 import scalaz.syntax.std.option._
 
 object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
@@ -68,11 +70,21 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
       sys.error("Unable to build new WebJobManager: " + errs.list.mkString("\n", "\n", ""))
     }
 
+    val shardConf = config.detach("shard")
+    val shardClient0 = (shardConf.get[String]("protocol").toSuccess(nels("Configuration property shard.protocol is required")) |@|
+                        shardConf.get[String]("host").toSuccess(nels("Configuration property shard.host is required")) |@|
+                        shardConf.get[Int]("port").toSuccess(nels("Configuration property shard.port is required"))) { (protocol, host, port) =>
+      (new HttpClientXLightWeb).protocol(protocol).host(host).port(port)
+    } valueOr { errors =>
+      sys.error("Error creating proxy client for shard service: %s".format(errors.list.mkString("; ")))
+    }
+
     val deps = EventServiceDeps[Future]( 
       apiKeyFinder = apiKeyFinder0,
       accountFinder = accountFinder0,
       eventStore = eventStore0,
-      jobManager = jobManager0
+      jobManager = jobManager0,
+      shardClient = shardClient0
     )
 
     (deps, stoppable)

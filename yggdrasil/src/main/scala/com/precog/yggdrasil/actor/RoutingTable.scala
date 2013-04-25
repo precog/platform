@@ -59,7 +59,7 @@ trait RoutingTable extends Logging {
         batches += ((offset, data.map(_.value)))
 
       case (offset, sfm: StoreFileMessage) =>
-        updates += Create(sfm.path, BlobData(sfm.encoding.uncompress(sfm.content), sfm.mimeType), sfm.streamId, Some(sfm.writeAs), false)
+        updates += Create(sfm.path, BlobData(sfm.encoding.decode(sfm.content), sfm.mimeType), sfm.streamId, Some(sfm.writeAs), false)
 
       case (_, ArchiveMessage(key, path, jobid, eventId, timestamp)) =>
         val uuid = UUID.randomUUID
