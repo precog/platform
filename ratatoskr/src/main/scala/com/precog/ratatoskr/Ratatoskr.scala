@@ -529,7 +529,7 @@ object KafkaTools extends Command {
       val parsed = parseEventMessage(msg)
 
       parsed.foreach {
-        case IngestMessage(apiKey, path, ownerAccountId, data, _, _) =>
+        case IngestMessage(apiKey, path, ownerAccountId, data, _, _, _) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
       }

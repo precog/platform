@@ -54,7 +54,7 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(_, path, writeAs, data, _, _)) =>
+      case (offset, IngestMessage(_, path, writeAs, data, _, _, streamId)) =>
         val batches = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[Batch])
         batches += ((offset, data.map(_.value)))
 

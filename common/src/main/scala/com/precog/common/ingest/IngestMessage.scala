@@ -101,12 +101,13 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID]) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
   def split: List[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
-      List(this.copy(data = dataA), this.copy(data = dataB))
+      val sid = streamId.orElse(Some(UUID.randomUUID()))
+      List(this.copy(data = dataA, streamId = sid), this.copy(data = dataB, streamId = sid))
     } else {
       List(this)
     }
@@ -118,12 +119,12 @@ object IngestMessage {
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
-  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0".v))
+  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.1".v))
   val extractorV1: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
-    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.0".v))
+    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.1".v))
     override def validated(jv: JValue) = extractor.validated(jv).map(\/.right(_))
   }
 
@@ -135,11 +136,11 @@ object IngestMessage {
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.writeAs map { authorities =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None))
           } getOrElse {
             \/.left(
               (ingest.apiKey, ingest.path, (authorities: Authorities) =>
-                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
+                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None))
             )
           }
         }
