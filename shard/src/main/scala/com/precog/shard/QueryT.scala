@@ -90,6 +90,11 @@ trait QueryTMonad[Q[+_], M[+_]] extends Monad[({ type λ[α] = QueryT[Q, M, α] 
   def point[A](a: => A): QueryT[Q, M, A] = QueryT(M.point(Q.point(a)))
   def bind[A, B](fa: QueryT[Q, M, A])(f: A => QueryT[Q, M, B]): QueryT[Q, M, B] = fa flatMap f
   override def map[A, B](ma: QueryT[Q, M, A])(f: A => B): QueryT[Q, M, B] = super.map(ma)(f)
+  override def ap[A, B](ma: => QueryT[Q, M, A])(mf: => QueryT[Q, M, A => B]): QueryT[Q, M, B] = {
+    QueryT(M.ap(ma.run)(M.map(mf.run) { (qf: Q[A => B]) =>
+      { (qa: Q[A]) => Q.ap(qa)(qf) }
+    }))
+  }
 }
 
 trait QueryTHoist[Q[+_]] extends Hoist[({ type λ[m[+_], α] = QueryT[Q, m, α] })#λ] { self =>
