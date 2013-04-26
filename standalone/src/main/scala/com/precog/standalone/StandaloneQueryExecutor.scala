@@ -87,6 +87,8 @@ trait StandaloneQueryExecutor
       type YggConfig = platform.YggConfig
       val yggConfig = platform.yggConfig
       val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly[Decomposer[Option[FaultPosition]]])
+    } map { case (faults, result) =>
+      result
     }
   }
 
