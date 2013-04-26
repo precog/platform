@@ -167,7 +167,7 @@ case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileCont
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = storeFile(this)
   def split(n: Int, streamId: UUID) = {
     val splitSize = content.data.length / n
-    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.encoding), streamId = Some(streamId))).toList
+    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.mimeType, content.encoding), streamId = Some(streamId))).toList
   }
     
   def length = content.data.length

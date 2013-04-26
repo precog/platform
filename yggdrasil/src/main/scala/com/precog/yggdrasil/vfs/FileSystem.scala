@@ -77,7 +77,7 @@ sealed trait PathUpdateOp extends PathOp
 /**
   * Creates a new resource with the given tracking id.
   */
-case class Create(path: Path, data: PathData, streamId: UUID, authorities: Option[Authorities], overwrite: Boolean) extends PathUpdateOp
+case class Create(path: Path, data: PathData, streamId: UUID, authorities: Authorities, overwrite: Boolean) extends PathUpdateOp
 
 /**
   * Appends data to a resource. If the stream ID is specified, a

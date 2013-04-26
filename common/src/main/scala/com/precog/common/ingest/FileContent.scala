@@ -20,8 +20,11 @@
 package com.precog.common
 package ingest
 
+import com.precog.common.serialization._
+
 import blueeyes.json._
 import blueeyes.json.serialization._
+import blueeyes.core.http.MimeType
 import IsoSerialization._
 import DefaultSerialization._
 import Versioned._
@@ -61,13 +64,14 @@ object RawUTF8Encoding extends ContentEncoding {
   def decode(compressed: String) = compressed.getBytes("UTF-8")
 }
 
-case class FileContent(data: Array[Byte], encoding: ContentEncoding)
+case class FileContent(data: Array[Byte], mimeType: MimeType, encoding: ContentEncoding)
 
 object FileContent {
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
     def decompose(v: FileContent) = JObject(
-      "encoding" -> v.encoding.jv,
-      "data" -> JString(v.encoding.encode(v.data))
+      "data" -> JString(v.encoding.encode(v.data)),
+      "mimeType" -> v.mimeType.jv,
+      "encoding" -> v.encoding.jv
     )
   }
 
@@ -76,8 +80,9 @@ object FileContent {
       jv match {
         case JObject(fields) =>
           (fields.get("encoding").toSuccess(Invalid("File data object missing encoding field.")).flatMap(_.validated[ContentEncoding]) |@|
-           fields.get("data").toSuccess(Invalid("File data object missing data field.")).flatMap(_.validated[String])) { (encoding, contentString) =>
-            FileContent(encoding.decode(contentString), encoding)
+           fields.get("mimeType").toSuccess(Invalid("File data object missing MIME type.")).flatMap(_.validated[MimeType]) |@|
+           fields.get("data").toSuccess(Invalid("File data object missing data field.")).flatMap(_.validated[String])) { (encoding, mimeType, contentString) =>
+            FileContent(encoding.decode(contentString), mimeType, encoding)
           }
 
         case _ =>

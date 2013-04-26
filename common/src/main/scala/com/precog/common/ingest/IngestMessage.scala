@@ -177,14 +177,14 @@ object ArchiveMessage {
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
 
-case class StoreFileMessage(apiKey: APIKey, path: Path, streamId: UUID, mimeType: MimeType, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: String, encoding: ContentEncoding, timestamp: Instant) extends EventMessage {
+case class StoreFileMessage(apiKey: APIKey, path: Path, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: FileContent, timestamp: Instant, streamId: Option[UUID]) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
 }
 
 object StoreFileMessage {
   implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "streamId" :: "mimeType" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: ("encoding" ||| RawUTF8Encoding.asInstanceOf[ContentEncoding]) :: "timestamp" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: "timestamp" :: "streamId" :: HNil
 
   implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
 
