@@ -469,7 +469,7 @@ trait LinearRegressionLibModule[M[+_]]
     object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with LinearPredictionBase {
       val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
-      override val retainIds = true
+      override val idPolicy = IdentityPolicy.Retain.Merge
 
       lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
 

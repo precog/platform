@@ -22,7 +22,9 @@ package typer
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
+import com.precog.bytecode.IdentityPolicy
 import com.precog.util.IdGen
+
 import scalaz._
 import scalaz.Ordering._
 import scalaz.std.option._  
@@ -523,9 +525,22 @@ trait ProvenanceChecker extends parser.AST with Binder {
             case Morphism1Binding(morph1) => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
               expr.provenance = {
-                if (morph1.isInfinite) InfiniteProvenance
-                else if (morph1.retainIds) actuals.head.provenance 
-                else ValueProvenance
+                if (morph1.isInfinite) {
+                  InfiniteProvenance
+                } else {
+                  morph1.idPolicy match {
+                    case _: IdentityPolicy.Retain => actuals.head.provenance
+                    
+                    case IdentityPolicy.Synthesize => {
+                      if (actuals.head.provenance.isParametric)
+                        ParametricDynamicProvenance(actuals.head.provenance, currentId.getAndIncrement())
+                      else
+                        DynamicProvenance(currentId.getAndIncrement())
+                    }
+                    
+                    case IdentityPolicy.Strip => ValueProvenance
+                  }
+                }
               }
               (errors, constr)
             }
@@ -539,38 +554,62 @@ trait ProvenanceChecker extends parser.AST with Binder {
               val (rightErrors, rightConstr) = loop(right, relations, constraints)
                 
               val unified = unifyProvenance(relations)(left.provenance, right.provenance)
-
-              val (errors, constr) = if (morph2.retainIds) {
-                if (left.provenance.isParametric || right.provenance.isParametric) {
-                  expr.provenance = UnifiedProvenance(left.provenance, right.provenance)
-
-                  if (unified.isDefined)
-                    (Set(), Set())
-                  else
-                    (Set(), Set(Related(left.provenance, right.provenance)))
-                } else {
-                  expr.provenance = unified getOrElse NullProvenance
-                  if (unified.isDefined)
-                    (Set(), Set())
-                  else
-                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+              
+              val (errors, constr) = morph2.idPolicy match {
+                case IdentityPolicy.Retain.Left => {
+                  expr.provenance = left.provenance
+                  (Set(), Set())
                 }
-              } else {
-                if (left.provenance.isParametric || right.provenance.isParametric) {
-                  expr.provenance = ValueProvenance
                   
-                  (Set(), Set(Related(left.provenance, right.provenance)))
-                } else {
-                  if (unified.isDefined) {
-                    expr.provenance = ValueProvenance
+                case IdentityPolicy.Retain.Right => {
+                  expr.provenance = right.provenance
+                  (Set(), Set())
+                }
+                
+                case IdentityPolicy.Retain.Merge => {
+                  if (left.provenance.isParametric || right.provenance.isParametric) {
+                    expr.provenance = UnifiedProvenance(left.provenance, right.provenance)
+  
+                    if (unified.isDefined)
+                      (Set(), Set())
+                    else
+                      (Set(), Set(Related(left.provenance, right.provenance)))
+                  } else {
+                    expr.provenance = unified getOrElse NullProvenance
+                    if (unified.isDefined)
+                      (Set(), Set())
+                    else
+                      (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                  }
+                }
+                
+                case IdentityPolicy.Synthesize => {
+                  if (left.provenance.isParametric || right.provenance.isParametric) {
+                    expr.provenance = ParametricDynamicProvenance(UnifiedProvenance(left.provenance, right.provenance), currentId.getAndIncrement())
                     (Set(), Set())
                   } else {
-                    expr.provenance = NullProvenance
-                    (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                    expr.provenance = DynamicProvenance(currentId.getAndIncrement())
+                    (Set(), Set())
+                  }
+                }
+                
+                case IdentityPolicy.Strip => {
+                  if (left.provenance.isParametric || right.provenance.isParametric) {
+                    expr.provenance = ValueProvenance
+                    
+                    (Set(), Set(Related(left.provenance, right.provenance)))
+                  } else {
+                    if (unified.isDefined) {
+                      expr.provenance = ValueProvenance
+                      (Set(), Set())
+                    } else {
+                      expr.provenance = NullProvenance
+                      (Set(Error(expr, OperationOnUnrelatedSets)), Set())
+                    }
                   }
                 }
               }
-              
+
               (leftErrors ++ rightErrors ++ errors, leftConstr ++ rightConstr ++ constr)
             }
             

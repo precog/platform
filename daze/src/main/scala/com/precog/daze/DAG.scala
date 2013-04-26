@@ -965,9 +965,12 @@ trait DAG extends Instructions {
     }
 
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = {
-        if (mor.retainIds) parent.identities
-        else Identities.Specs.empty
+      lazy val identities = mor.idPolicy match {
+        case _: IdentityPolicy.Retain => parent.identities
+        
+        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        
+        case IdentityPolicy.Strip => Identities.Specs.empty
       }
       
       val sorting = IdentitySort
@@ -978,14 +981,28 @@ trait DAG extends Instructions {
     }
 
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = {
-        if (mor.retainIds) {
-          if (mor.idAlignment == IdentityAlignment.MatchAlignment) (left.identities ++ right.identities).distinct
-          else if (mor.idAlignment == IdentityAlignment.RightAlignment) right.identities
-          else if (mor.idAlignment == IdentityAlignment.LeftAlignment) left.identities
-          else left.identities ++ right.identities
+      lazy val identities = mor.idPolicy match {
+        case IdentityPolicy.Retain.Left =>
+          left.identities
+        
+        case IdentityPolicy.Retain.Right =>
+          right.identities
+        
+        case IdentityPolicy.Retain.Merge => {
+          // backwards compatibility with idAlignment
+          if (mor.idAlignment == IdentityAlignment.MatchAlignment)
+            (left.identities ++ right.identities).distinct
+          else if (mor.idAlignment == IdentityAlignment.RightAlignment)
+            right.identities
+          else if (mor.idAlignment == IdentityAlignment.LeftAlignment)
+            left.identities
+          else
+            left.identities ++ right.identities
         }
-        else Identities.Specs.empty
+        
+        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+        
+        case IdentityPolicy.Strip => Identities.Specs.empty
       }
       
       val sorting = IdentitySort

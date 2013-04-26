@@ -212,7 +212,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
           step -> JPeriodT)),
         JArrayHomogeneousT(JDateT))
 
-      override val retainIds = true
+      override val idPolicy = IdentityPolicy.Retain.Merge
 
       def scanner = new CScanner {
         type A = Unit
