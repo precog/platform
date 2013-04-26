@@ -81,6 +81,10 @@ object ResourceError {
     val exception = new Exception(message)
   }
 
+  case class PermissionsError(message: String) extends ResourceError {
+    val exception = new Exception(message)
+  }
+
   def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
     CorruptData("%s:\n%s" format (msg, error.message))
   }

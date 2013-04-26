@@ -75,17 +75,6 @@ sealed trait PathOp {
 sealed trait PathUpdateOp extends PathOp
 
 /**
-  * Creates a new version of the given resource based on the
-  * streamId. This message represents an atomic version update
-  * sequence. In an atomic version update sequence, the Create will
-  * generate a new version, but that version is not automatically
-  * promoted to HEAD. The Create must be followed by zero or more
-  * Append messages with matching streamIds, and then a final Replace
-  * message with matching streamId to indicate promotion to HEAD.
-  */
-case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp
-
-/**
   * Appends data to a resource. If the streamId is non-empty, this
   * Append is part of an atomic version update sequence (see
   * [[com.precog.yggdrasil.vfs.Create]] for details on the
@@ -94,14 +83,23 @@ case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, authorit
   * available, a new version will be created as long as the apiKey has
   * create permissions for the path.
   */
-case class Append(path: Path, data: PathData, streamId: Option[UUID], authorities: Authorities) extends PathUpdateOp
+case class Append(path: Path, data: PathData, streamId: APIKey \/ UUID, jobId: Option[JobId], authorities: Authorities') extends PathUpdateOp
 
-case class ArchiveCurrentVersion(path: Path) extends PathUpdateOp
+/**
+  * Creates a new version of the given resource based on the
+  * streamId. This message represents an atomic version update
+  * sequence. In an atomic version update sequence, the Create will
+  * generate a new version, but that version is not automatically
+  * promoted to HEAD. The Create must be followed by zero or more
+  * Append messages with matching streamIds, and then a final Replace
+  * message with matching streamId to indicate promotion to HEAD.
+  */
+case class CreateNewVersion(path: Path, apiKey: APIKey, data: PathData, streamId: UUID, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp
 
 /**
   * Replace the current HEAD with the version specified by the streamId.
   */
-case class SetCurrentVersion(path: Path, streamId: UUID) extends PathUpdateOp
+case class SetCurrentVersion(path: Path, streamId: UUID, jobId: JobId) extends PathUpdateOp
 
 case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
 case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
@@ -135,3 +133,4 @@ case class ReadProjectionFailure(path: Path, messages: NEL[ResourceError]) exten
   val projection = None
 }
 
+/* class FileSystem */

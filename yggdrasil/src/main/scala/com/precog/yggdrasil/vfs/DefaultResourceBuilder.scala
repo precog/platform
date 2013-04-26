@@ -70,33 +70,10 @@ class DefaultResourceBuilder(
 
   private implicit val futureMonad = new FutureMonad(actorSystem.dispatcher)
 
-  /**
-    * Compute the dir for a given NIHDB projection based on the provided authorities.
-    */
-  def descriptorDir(versionDir: File, authorities: Authorities): File = {
-    //The projections are stored in a folder based on their authority's hash
-    new File(versionDir, authorities.sha1)
-  }
-
-  /**
-    * Enumerate the NIHDB descriptors found under a given base directory
-    */
-  def findDescriptorDirs(versionDir: File): IO[List[File]] = IO {
-    // No pathFileFilter needed here, since the projections dir should only contain descriptor dirs
-    Option(versionDir.listFiles).toList.flatMap {
-      _ filter { dir =>
-        dir.isDirectory && NIHDB.hasProjection(dir)
-      }
-    }
-  }
-
-  // Must return a directory
   def ensureDescriptorDir(versionDir: File, authorities: Authorities): IO[File] = IO {
-    val dir = descriptorDir(versionDir, authorities)
-    if (!dir.exists && !dir.mkdirs()) {
+    if (!versionDir.isDirectory && !versionDir.mkdirs) {
       throw new Exception("Failed to create directory for projection: " + dir)
     }
-    dir
   }
 
   // Resource creation/open and discovery

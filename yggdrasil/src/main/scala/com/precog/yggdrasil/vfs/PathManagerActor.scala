@@ -30,6 +30,7 @@ import blueeyes.bkka.FutureMonad
 import blueeyes.core.http._
 import blueeyes.json._
 import blueeyes.json.serialization._
+import blueeyes.util.Clock
 
 import com.google.common.cache.RemovalCause
 
@@ -50,19 +51,20 @@ import org.joda.time.DateTime
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect.IO
 import scalaz.std.list._
-import scalaz.std.stream._
 import scalaz.std.option._
+import scalaz.std.stream._
 import scalaz.std.tuple._
+import scalaz.syntax.effect.id._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
-import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 
 /**
   * An actor that manages resources under a given path. The baseDir is the version
   * subdir for the path.
   */
-final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration) extends Actor with Logging {
+final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration, jobsManager: JobManager[Future], clock: Clock) extends Actor with Logging {
   import ResourceError._
 
   private[this] implicit def executor: ExecutionContext = context.dispatcher
@@ -76,146 +78,93 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
       dir.isDirectory.option(dir)
     }
 
-  private def tempVersionDir(version: UUID) = dirIfExists(version.toString + "-temp")
+  private def versionDir(version: UUID) = dirIfExists(version.toString)
 
-  private def mainVersionDir(version: UUID) = dirIfExists(version.toString)
-
-  private def versionSubdir(version: UUID): File = {
-    if (mainVersionDir(version).isDirectory) mainVersionDir(version) else tempVersionDir(version)
-  }
-
-  def createVersion(version: UUID, typeName: String): IO[PrecogUnit] = {
-    // Don't double-create
-    if (versionLog.find(version).isEmpty) {
-
-
-    versionLog.addVersion(VersionEntry(version, typeName)).map { _ =>
-      val tmpDir = tempVersionDir(version)
-      if (!tmpDir.isDirectory && !tmpDir.mkdirs()) {
-        throw new IOException("Failed to create temp dir " + tmpDir)
-      }
-      PrecogUnit
-    }
-  }
-
-  def promoteVersion(version: UUID): IO[PrecogUnit] = {
-    // Need to clear out any current resources to ensure we don't yank the rug/dir out from under them
-
-
-    // Shift the temp dir 
-    versionLog.setHead(version).map { _ =>
-      if (! mainVersionDir(version).isDirectory && tempVersionDir(version).isDirectory) {
-        if (! tempVersionDir(version).renameTo(mainVersionDir(version))) {
-          throw new IOException("Failed to migrate temp dir to main for version " + version)
+  private def createVersion(version: UUID, typeName: String): IO[PrecogUnit] = {
+    if (versionLog.isCompleted(version)) {
+      IO(PrecogUnit)
+    } else {
+      for {
+        _ <- versionLog.addVersion(VersionEntry(version, typeName))
+        makeDir <- versionDir(version) map { tmpDir =>
+          // If a dir for this vesion exists currently, we need to wipe it since
+          // we're restarting this sequence
+          IOUtils.recursiveDelete(tmpDir) flatMap { _ =>
+            IOUtils.makeDirectory(tmpDir)
+          }
+        } orElse {
+            Some(IOUtils.makeDirectory(tmpDir))
+          }
         }
+    } yield makeDir
+  }
+
+  private def promoteVersion(version: UUID): Future[PrecogUnit] = {
+    // we only promote if the requested version is in progress
+    if (versionLog.isCompleted(version)) {
+      Promise.successful(PrecogUnit)
+    } else {
+      Future {
+        versionLog.completeVersion(version) unsafePerformIO
       }
-      PrecogUnit
     }
   }
 
   // Keeps track of the resources for a given version/authority pair
   // TODO: make this an LRU cache
-  private[this] var versions = Map[UUID, Map[Authorities, Resource]]()
+  private[this] var versions = Map[UUID, Resource]()
 
   // This will either return a cached resource for the
   // version+authorities, or open a new resource, creating it if
   // needed.
   private def createProjection(version: UUID, authorities: Authorities): Future[NIHDBResource] = {
-    versions.get(version).flatMap(_.get(authorities).map(_.asInstanceOf[NIHDBResource])).map(Promise.successful) getOrElse {
+    logger.debug("Creating new projection for " + version)
+    versions.get(version) map(Future(_.asInstanceOf[NIHDBResource]))) getOrElse {
       Future {
-        resources.createNIHDB(versionSubdir(version), authorities).unsafePerformIO.map { resource =>
-          versions += (version -> (versions.getOrElse(version, Map()) + (authorities -> resource)))
-          resource
-        }.valueOr { e => throw e.exception }
+        resources.createNIHDB(versionDir(version), authorities).unsafePerformIO.map { _.tap { resource =>
+          versions += (version -> resource)
+        } }.valueOr { e => throw e.exception }
       }
     }
   }
 
-  private def openProjections(version: UUID): IO[ValidationNel[ResourceError, List[NIHDBResource]]] = {
-    logger.debug("Opening new projections for v" + version)
-    for {
-      projDirs <- resources.findDescriptorDirs(versionSubdir(version))
-      opened <- projDirs traverse { bd =>
-        resources.openNIHDB(bd) map { proj =>
-          proj.foreach { nihdbResource =>
-            versions += (version -> (versions.getOrElse(version, Map()) + (nihdbResource.authorities -> nihdbResource)))
-            logger.debug("Cache for v%d updated to %s".format(version, versions.get(version)))
-          }
-          proj.toValidationNel
-        }
-      }
-    } yield {
-      opened.sequence[({type λ[α] = ValidationNel[ResourceError, α]})#λ, NIHDBResource]
-    }
-  }
-
-  def aggregateProjections(found: ValidationNel[ResourceError, List[Resource]]): Future[ValidationNel[ResourceError, Option[NIHDBProjection]]] = {
-    found.flatMap { inputs =>
-      val nihdbs = inputs.collect({ case n: NIHDBResource => n })
-
-      if (nihdbs.size != inputs.size) {
-        Failure(NEL(GeneralError("Resources found, but they are not projections")))
-      } else {
-        Success(nihdbs)
-      }
-    } traverse {
-      case Nil =>
-        logger.debug("No projections found for " + path)
-        Promise.successful(None)
-
-      case input :: Nil =>
-        logger.debug("Aggregate on %s returns a single projection".format(path))
-        NIHDBProjection.wrap(input.db, input.authorities).map(Some(_))
-
-      case inputs =>
-        logger.debug("Aggregate on %s returns an aggregate projection".format(path))
-        inputs.toNel traverse { inputsNel: NEL[NIHDBResource] =>
-          inputsNel.traverse { r => r.db.getSnapshot map { (r.authorities, _) } } map { toAggregate =>
-            val (allAuthorities, snapshots) = toAggregate.unzip
-            val newAuthorities = allAuthorities.list.reduce(_ |+| _)
-              (new NIHDBAggregate(snapshots, newAuthorities)).projection
-          }
-        }
-    }
-  }
-
-  def findResources(version: VersionEntry, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[ValidationNel[ResourceError, List[Resource]]] = {
+  def findResources(version: VersionEntry, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Validation[ResourceError, Option[Resource]]] = {
     import PathData._
     import Permission._
 
-    val preAuthedResources: IO[ValidationNel[ResourceError, List[Resource]]] =
+    val preAuthedResource: IO[Validation[ResourceError, Resource]] =
       versions.get(version.id) map { existing =>
-        logger.debug("Found cached projections for version " + version.id)
-        IO(Success(existing.values.toList))
+        logger.debug("Found cached resource for version " + version.id)
+        IO(Success(existing))
       } getOrElse {
-        version match {
-          case VersionEntry(id, `BLOB`) =>
-            resources.openBlob(versionSubdir(id)).map(_.map(List(_)).toValidationNel)
+        versionDir(version) map { dir =>
+          version match {
+            case VersionEntry(id, `BLOB`) =>
+              resources.openBlob(dir)
 
-          case VersionEntry(id, `NIHDB`) =>
-            openProjections(id)
+            case VersionEntry(id, `NIHDB`) =>
+              resources.openNIHDB(dir)
+          } flatMap {
+            _ traverse {
+              _ tap { resource => IO { versions += (version -> resource) } }
+            }
+          }
         }
       }
 
-    val result = preAuthedResources map {
-      _ traverse { foundProjections =>
-        logger.debug("Checking found resources at %s, version %s for access".format(path, version.id))
-        // WANTED: Traverse[Future]
-        foundProjections.traverse {
-          proj =>
-            apiKey.map { key =>
-              // must have at a minimum a reduce permission from each authority
-              // TODO: get a Clock in here
-              proj.authorities.accountIds.toList.traverse { id =>
-                permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(new DateTime))
-              } map {
-                _.forall(_ == true).option(proj)
-              }
-            } getOrElse {
-              Promise.successful(Some(proj))
-            }
-        } map {
-          _.flatten
+    val result = preAuthedResource map {
+      _ traverse { proj =>
+        logger.debug("Checking found resource at %s, version %s for access".format(path, version.id))
+        apiKey.map { key =>
+          // must have at a minimum a reduce permission from each authority
+          // TODO: get a Clock in here
+          proj.authorities.accountIds.toList.traverse { id =>
+            permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(clock.now))
+          } map {
+            _.forall(_ == true).option(proj)
+          }
+        } getOrElse {
+          Promise.successful(Some(proj))
         }
       }
     }
@@ -223,28 +172,34 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
     result.except({ case t: Throwable => IO(Promise.failed(t)) }).unsafePerformIO
   }
 
-  private def performCreate(data: PathData, version: UUID, authorities: Option[Authorities]): IO[Option[Validation[ResourceError, Resource]]] = {
-    for {
-      _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
-      result <- data match {
-        case BlobData(bytes, mimeType) => authorities match {
-          case Some(auth) => resources.createBlob[IO](tempVersionDir(version), mimeType, auth, bytes :: StreamT.empty[IO, Array[Byte]]).map(Some(_))
-          case None => IO(Some(Failure(GeneralError("Cannot create a Blob with empty authorities"))))
-        }
+  private def performCreate(apiKey: APIKey, data: PathData, version: UUID, authorities: Authorities): Future[PathActionResponse] = {
+    permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, clock.now) map { okToWrite =>
+      if (okToWrite) {
+        for {
+          _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
+          created <- data match {
+            case BlobData(bytes, mimeType) =>
+              resources.createBlob[IO](tempVersionDir(version), mimeType, authorities, bytes :: StreamT.empty[IO, Array[Byte]])
 
-        case NIHDBData(data) => authorities traverse { auth =>
-          resources.createNIHDB(tempVersionDir(version), auth)
+            case NIHDBData(data) =>
+              resources.createNIHDB(tempVersionDir(version), authorities)
+          }
+          cached <- created traverse {
+            _ tap { resource => IO { versions += (version -> resource) } }
+          }
+        } yield {
+          _.fold(
+            e => UpdateFailure(path, e),
+            _ => UpdateSuccess(path)
+          )
         }
+      } else {
+        UpdateFailure(path, PermissionsError("Key %s does not have permission to write to %s under %d".format(apiKey, path, authorities)))
       }
-      _ = result.map { _.map { resource: Resource =>
-        authorities.foreach { auth =>
-          versions += (version -> Map(auth -> resource))
-        }
-      } }
-    } yield result
+    }
   }
 
-  private def performRead(id: Option[UUID], auth: Option[APIKey]): Future[ValidationNel[ResourceError, List[Resource]]] = {
+  private def performRead(id: Option[UUID], auth: Option[APIKey]): Future[Validation[ResourceError, Option[Resource]]] = {
     import Permission._
     import PathData._
 
@@ -253,7 +208,7 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
       case None =>
         val msg = "No matching version could be found for %s:%s".format(id.getOrElse("*"))
         logger.warn(msg)
-        Promise.successful(Failure(MissingData(msg)).toValidationNel)
+        Promise.successful(Failure(MissingData(msg)))
     }
   }
 
@@ -262,28 +217,28 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
   } orElse versionLog.current
 
   def hasData(version: Option[UUID]): Boolean = {
-    version.flatMap({ v => Option(mainVersionDir(v).list).map(_.length) }).exists(_ > 0)
+    for {
+      v <- version
+      dir <- versionDir(v)
+      files <- Option(dir.list)
+    } yield {
+      files.size > 0
+    } getOrElse false
   }
 
   override def postStop = {
     Await.result(versions.values.flatMap(_.values).toStream.traverse(_.close), shutdownTimeout)
   }
 
+
+
   def receive = {
-    case Create(_, data, id, authorities, overwrite) =>
+    case CreateNewVersion(_, apiKey, data, version, authorities, overwrite) =>
       if (!overwrite && hasData(versionLog.current.map(_.id))) {
+        // TODO: add backchannel error
         sender ! UpdateFailure(path, GeneralError("Non-overwrite create request on existing data"))
       } else {
-        Future {
-          performCreate(data, id, authorities).map {
-            _ map {
-              _.fold(
-                e => UpdateFailure(path, e),
-                _ => UpdateSuccess(path)
-              )
-            } getOrElse UpdateSuccess(path)
-          } unsafePerformIO
-        } recover {
+        performCreate(apiKey, data, version, authorities) recover {
           case t: Throwable =>
             val msg = "Error during data creation " + path
             logger.error(msg, t)
@@ -291,7 +246,7 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
         } pipeTo sender
       }
 
-    case Append(_, data, idOpt, authorities) =>
+    case Append(_, data, writeId, jobIdOpt, authorities) =>
       (data match {
         case bd: BlobData =>
           Future {
@@ -301,11 +256,10 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
           }
 
         case NIHDBData(events) =>
-          // Which version are we appending to? In order, prefer the
-          // provided version, then the current version. If no version
-          // is available, we'll create a new one (legacy ingest
-          // handling)
-          Future { validateVersion(idOpt).map(_.id) }.flatMap {
+          // Which version are we appending to? If writeId is a UUID,
+          // we need to validate that version, otherwise we'll use
+          // head
+          Future { validateVersion(writeId.toOption).map(_.id) }.flatMap {
             case Some(version) =>
               for {
                 projection <- createProjection(version, authorities)
@@ -315,18 +269,10 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
             case None =>
               val version = UUID.randomUUID
 
-              Future {
-                (for {
-                  _ <- createVersion(version, data.typeName)
-                  _ <- promoteVersion(version)
-                  created <- performCreate(data, version, Some(authorities))
-                } yield {
-                  created map { _.fold(
-                    e => UpdateFailure(path, e),
-                    _ => UpdateSuccess(path)
-                  ) }
-                }) unsafePerformIO
-              }
+              for {
+                created <- performCreate(data, version, Some(authorities))
+                _       <- promoteVersion(version)
+              } yield created
           }
       }) recover {
         case t: Throwable =>

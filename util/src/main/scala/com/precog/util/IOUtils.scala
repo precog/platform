@@ -79,6 +79,12 @@ object IOUtils extends Logging {
     }
   }
 
+  def makeDirectory(dir: File): IO[PrecogUnit] = IO {
+    if (!dir.isDirectory && !dir.mkdirs) {
+      throw new IOException("Failed to create directory " + dir)
+    }
+  }
+
   def recursiveDelete(dir: File): IO[PrecogUnit] = IO {
     FileUtils.deleteDirectory(dir)
     PrecogUnit

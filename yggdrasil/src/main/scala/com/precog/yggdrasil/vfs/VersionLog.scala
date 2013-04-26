@@ -47,6 +47,7 @@ import shapeless._
 object VersionLog {
   final val lockName = "versionLog"
   final val logName = "versionLog"
+  final val completedLogName = "completedLog"
   final val currentVersionFilename = "HEAD"
 }
 
@@ -60,9 +61,11 @@ class VersionLog(baseDir: File) extends Logging {
 
   private[this] var currentVersion: Option[VersionEntry] = None
   private[this] var allVersions: List[VersionEntry] = Nil
+  private[this] var completedVersions: Set[UUID] = Set.empty
 
   private[this] val headFile = new File(baseDir, currentVersionFilename)
   private[this] val logFile = new File(baseDir, logName)
+  private[this] val completedFile = new File(baseDir, completedLogName)
 
   // Read in the list of versions as well as the current version
   if (headFile.exists) {
@@ -79,30 +82,49 @@ class VersionLog(baseDir: File) extends Logging {
     } yield versions).valueOr { error => throw new Exception(error.message) }
   }
 
+  if (completedFile.exists) {
+    completedVersions = (for {
+      jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
+      versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, UUID](_.validated[UUID])
+    } yield versions.toSet).valueOr { error => throw new Exception(error.message) }
+  }
+
   def current = currentVersion
   def find(version: UUID): Option[VersionEntry] = allVersions.find(_.id == version)
+  def isCompleted(version: UUID) = completedVersion.contains(version)
 
   def close = {
     workLock.release
   }
 
-  def addVersion(entry: VersionEntry): IO[PrecogUnit] = {
-    IOUtils.writeToFile(entry.serialize.renderCompact + "\n", logFile, true).map { _ =>
+  def addVersion(entry: VersionEntry): IO[PrecogUnit] = allVersions.find(entry) map {
+    IO(PrecogUnit)
+  } getOrElse {
+    IOUtils.writeTOfile(entry.serialize.renderCompact + "\n", logFile, true).map { _ =>
       allVersions = allVersions :+ entry
       PrecogUnit
     }
   }
 
-  def setHead(id: UUID): IO[PrecogUnit] = {
-    if (currentVersion.exists(_ == id)) {
+  def completeVersion(version: UUID): IO[PrecogUnit] = allVersions.find(_.id == version) map { _ =>
+    IOUtils.writeTOfile(version.serialize.renderCompact + "\n", completedFile)
+  } getOrElse {
+    IO.throwIO(new IllegalStateException("Cannot completed unknown version " + version))
+  }
+
+  def setHead(newHead: UUID): IO[PrecogUnit] = {
+    if (currentVersion.exists(_.id == newHead)) {
       IO(PrecogUnit)
     } else {
       allVersions.find(_.id == id).toSuccess(new IllegalStateException("Failed to locate entry to promote: " + id)).map { entry =>
-        currentVersion = Some(entry)
-        IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile)
+        IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile).map { _ =>
+          currentVersion = Some(entry)
+        }
       }.valueOr(IO.throwIO)
     }
   }
+
+  def clearHead = ???
 }
 
 
