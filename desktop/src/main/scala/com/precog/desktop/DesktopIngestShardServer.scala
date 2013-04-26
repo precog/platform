@@ -14,8 +14,6 @@ import com.precog.common.accounts.StaticAccountFinder
 import com.precog.common.security.APIKeyFinder
 import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone._
-import com.precog.ingest.{EventServiceDeps, EventService}
-import com.precog.ingest.kafka.KafkaEventStore
 import com.precog.util.PrecogUnit
 
 import java.awt._
@@ -23,7 +21,7 @@ import java.awt.event._
 import javax.swing._
 
 import java.io.IOException
-import java.net.{InetAddress, Socket, URL}
+import java.net.{InetAddress, Socket}
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, KafkaServerStartable}
