@@ -84,7 +84,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
-      extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, CharBuffer]] {
+      extends Evaluator[N](N0) with QueryExecutor[N, (Set[Fault], StreamT[N, CharBuffer])] {
 
     type YggConfig <: ShardQueryExecutorConfig
     protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
@@ -104,7 +104,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
       queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
@@ -114,7 +114,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       // This should be executed within the outer N returned above, so keep
       // this as a def, and use within an N.point.
 
-      def solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
+      def solution: Validation[Throwable, Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = Validation.fromTryCatch {
         val (faults, bytecode) = asBytecode(query)
 
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
@@ -140,7 +140,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         }
 
         resultVN map { nt =>
-          StreamT.wrapEffect {
+          (faults, StreamT.wrapEffect {
             faults map {
               case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
               case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
@@ -156,13 +156,13 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
                 val chunks = outputChunks(opts.output) { nt }
                 chunks ++ StreamT.wrapEffect(queryReport.done map { _ => StreamT.empty[N, CharBuffer] })
             }
-          }
+          })
         }
       }
 
       N point {
         ((systemError _) <-: solution) flatMap {
-          identity[Validation[EvaluationError, StreamT[N, CharBuffer]]]
+          identity[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]]
         }
       }
     }

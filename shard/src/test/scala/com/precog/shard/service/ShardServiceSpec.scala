@@ -126,8 +126,9 @@ trait TestShardService extends
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
-      override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)
+      override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)(self.M)
       val defaultTimeout = Duration(90, TimeUnit.SECONDS)
+      val M = self.M
 
       override val jobManager = self.jobManager
 
@@ -275,6 +276,15 @@ class ShardServiceSpec extends TestShardService {
         case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
       }
     }
+    "return 400 and errors if format is 'simple'" in {
+      val result = for {
+        HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(result)), _) <- query("bad query")
+      } yield result
+
+      result.copoint must beLike {
+        case JArray(JString("ERROR!") :: Nil) => ok
+      }
+    }
     "return warnings/errors if format is 'detailed'" in {
       val result = for {
         HttpResponse(HttpStatus(OK, _), _, Some(Right(data)), _) <- query(simpleQuery, format = Some("detailed"))
@@ -348,6 +358,8 @@ trait TestPlatform extends ManagedPlatform { self =>
   implicit def executionContext: ExecutionContext
   val to = Duration(3, "seconds")
 
+  implicit def M: Monad[Future]
+
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
@@ -381,7 +393,16 @@ trait TestPlatform extends ManagedPlatform { self =>
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+        if (query == "bad query") {
+          val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
+            jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
+          } getOrElse ().point[Future]
+          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] {
+            mu map { _ => success(wrap(JArray(List(JNum(2))))) }
+          }
+        } else {
+          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+        }
       }
     }
   }
