@@ -58,6 +58,7 @@ import blueeyes.core.data._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
@@ -145,19 +146,36 @@ trait TestShardService extends
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
-     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
-       req map {
-         case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
-         case Right(stream) => Right(stream.map(utf8.encode))
-       }
+    def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
+      req map {
+        case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+        case Right(stream) => Right(stream.map(utf8.encode))
+      }
 
-     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
-       fres map {
-         _ map {
-           case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
-           case Right(stream) => Right(stream.map(utf8.decode))
-         }
-       }
+    def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
+      fres map { response =>
+        val contentType = response.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption)
+        response.status.code match {
+          case OK | Accepted => //assume application/json
+            response map {
+              case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _)) 
+              case Right(stream) => Right(stream.map(utf8.decode))
+            }
+
+          case error =>
+            if (contentType.exists(_ == MimeTypes.application/json)) {
+              response map {
+                case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
+                case Right(stream) => Right(stream.map(utf8.decode))
+              }
+            } else {
+              response map { 
+                case Left(bb) => Left(JString(new String(bb.array, "UTF-8")))
+                case chunk => Right(StreamT.wrapEffect(chunkToFutureString.apply(chunk).map(s => CharBuffer.wrap(JString(s).renderCompact) :: StreamT.empty[Future, CharBuffer])))
+              }
+            }
+        }
+      }
    }
 
   lazy val queryService = client.contentType[QueryResult](application/(MimeTypes.json))
@@ -267,12 +285,13 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject query when no API key provided" in {
       query(simpleQuery, None).copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, _, _) => ok
       }
     }
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+          content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
     "return warnings/errors if format is 'detailed'" in {
@@ -322,12 +341,13 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject browse when no API key provided" in {
       browse(None).copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, _, _) => ok
       }
     }
     "reject browse when API key not found" in {
       browse(Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+          content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
     "return error response on browse failure" in {
