@@ -199,7 +199,7 @@ trait ShardService extends
                 post { syncQueryService(state) } 
               } 
             } 
-          }
+          } ~
           options {
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
