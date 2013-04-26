@@ -26,6 +26,8 @@ import com.precog.common.services.ServiceHandlerUtil._
 import blueeyes.core.service._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpHeaders._
+import blueeyes.core.http.MimeTypes._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
 
@@ -47,7 +49,7 @@ trait APIKeyServiceCombinators extends HttpRequestHandlerCombinators {
   }
 
   def invalidAPIKey[A](implicit convert: JValue => A, M: Monad[Future]): String => Future[HttpResponse[A]] = {
-    (msg: String) => M.point(forbidden(msg) map convert)
+    (msg: String) => M.point((forbidden(msg) map convert).copy(headers = HttpHeaders(`Content-Type`(application/json))))
   }
 
   // Convenience combinator for when we know our result is an `HttpResponse` and that
