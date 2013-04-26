@@ -71,14 +71,24 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
 
   private[this] val versionLog = new VersionLog(baseDir)
 
-  private def tempVersionDir(version: UUID) = new File(baseDir, version.toString + "-temp")
-  private def mainVersionDir(version: UUID) = new File(baseDir, version.toString)
+  private def dirIfExists(name: String): Option[File] =
+    Option(new File(baseDir, name)).flatMap { dir =>
+      dir.isDirectory.option(dir)
+    }
+
+  private def tempVersionDir(version: UUID) = dirIfExists(version.toString + "-temp")
+
+  private def mainVersionDir(version: UUID) = dirIfExists(version.toString)
 
   private def versionSubdir(version: UUID): File = {
     if (mainVersionDir(version).isDirectory) mainVersionDir(version) else tempVersionDir(version)
   }
 
   def createVersion(version: UUID, typeName: String): IO[PrecogUnit] = {
+    // Don't double-create
+    if (versionLog.find(version).isEmpty) {
+
+
     versionLog.addVersion(VersionEntry(version, typeName)).map { _ =>
       val tmpDir = tempVersionDir(version)
       if (!tmpDir.isDirectory && !tmpDir.mkdirs()) {
@@ -89,6 +99,10 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
   }
 
   def promoteVersion(version: UUID): IO[PrecogUnit] = {
+    // Need to clear out any current resources to ensure we don't yank the rug/dir out from under them
+
+
+    // Shift the temp dir 
     versionLog.setHead(version).map { _ =>
       if (! mainVersionDir(version).isDirectory && tempVersionDir(version).isDirectory) {
         if (! tempVersionDir(version).renameTo(mainVersionDir(version))) {

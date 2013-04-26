@@ -75,20 +75,33 @@ sealed trait PathOp {
 sealed trait PathUpdateOp extends PathOp
 
 /**
-  * Creates a new resource with the given tracking id.
+  * Creates a new version of the given resource based on the
+  * streamId. This message represents an atomic version update
+  * sequence. In an atomic version update sequence, the Create will
+  * generate a new version, but that version is not automatically
+  * promoted to HEAD. The Create must be followed by zero or more
+  * Append messages with matching streamIds, and then a final Replace
+  * message with matching streamId to indicate promotion to HEAD.
   */
-case class Create(path: Path, data: PathData, streamId: UUID, authorities: Option[Authorities], overwrite: Boolean) extends PathUpdateOp
+case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, authorities: Option[Authorities], canOverwrite: Boolean) extends PathUpdateOp
 
 /**
-  * Appends data to a resource. If the stream ID is specified, a
-  * sequence of Appends must eventually be followed by a Replace.
+  * Appends data to a resource. If the streamId is non-empty, this
+  * Append is part of an atomic version update sequence (see
+  * [[com.precog.yggdrasil.vfs.Create]] for details on the
+  * semantics). If the streamId is empty, then this Append is applied
+  * to the current HEAD version. If there is no current version
+  * available, a new version will be created as long as the apiKey has
+  * create permissions for the path.
   */
 case class Append(path: Path, data: PathData, streamId: Option[UUID], authorities: Authorities) extends PathUpdateOp
+
+case class ArchiveCurrentVersion(path: Path) extends PathUpdateOp
 
 /**
   * Replace the current HEAD with the version specified by the streamId.
   */
-case class Replace(path: Path, streamId: UUID) extends PathUpdateOp
+case class SetCurrentVersion(path: Path, streamId: UUID) extends PathUpdateOp
 
 case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
 case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
