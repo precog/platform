@@ -179,7 +179,7 @@ class SyncQueryServiceHandler(
 
       case (Right(Detailed), None, data0) =>
         val data = ensureTermination(data0)
-        val prefix = CharBuffer.wrap("""{"errors":[],"warnings":[{"message":"Job service is down; errors/warnings are disabled."}],"data":""")
+        val prefix = CharBuffer.wrap("""{"errors":[],"warnings":[],"serverWarnings":[{"message":"Job service is down; errors/warnings are disabled."}],"data":""")
         val result: StreamT[Future, CharBuffer] = (prefix :: data) ++ (CharBuffer.wrap("}") :: StreamT.empty[Future, CharBuffer])
         HttpResponse[QueryResult](OK, content = Some(Right(result)))
 
@@ -195,11 +195,13 @@ class SyncQueryServiceHandler(
                 val warningsM = jobManager.listMessages(jobId, channels.Warning, None)
                 val errorsM = jobManager.listMessages(jobId, channels.Error, None)
                 val serverErrorsM = jobManager.listMessages(jobId, channels.ServerError, None)
-                (warningsM |@| errorsM |@| serverErrorsM) { (warnings, errors, serverErrors) =>
-                  val suffix = """, "errors": %s, "warnings": %s, "serverErrors": %s }""" format (
+                val serverWarningsM = jobManager.listMessages(jobId, channels.ServerWarning, None)
+                (warningsM |@| errorsM |@| serverErrorsM |@| serverWarningsM) { (warnings, errors, serverErrors, serverWarnings) =>
+                  val suffix = """, "errors": %s, "warnings": %s, "serverErrors": %s, "serverWarnings": %s }""" format (
                     JArray(errors.toList map (_.value)).renderCompact,
                     JArray(warnings.toList map (_.value)).renderCompact,
-                    JArray(serverErrors.toList map (_.value)).renderCompact
+                    JArray(serverErrors.toList map (_.value)).renderCompact,
+                    JArray(serverWarnings.toList map (_.value)).renderCompact
                   )
                   Some((CharBuffer.wrap(suffix), None))
                 }
