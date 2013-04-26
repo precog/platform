@@ -27,6 +27,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.services._
 import com.precog.util._
 
 import org.specs2.mutable.Specification
@@ -38,6 +39,7 @@ import akka.dispatch.{ Future, ExecutionContext, Await }
 import akka.util._
 
 import org.joda.time.DateTime
+import org.joda.time.Instant
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
@@ -60,10 +62,10 @@ import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.json._
 
 trait TestEventService extends
-  BlueEyesServiceSpecification with
-  EventService with
-  AkkaDefaults {
-
+    BlueEyesServiceSpecification with
+    EventService with
+    AkkaDefaults {
+  import EventService._
   import Permission._
 
   val config = """
@@ -113,19 +115,18 @@ trait TestEventService extends
 
   private val stored = scala.collection.mutable.ArrayBuffer.empty[Event]
 
-  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable) = {
-    //println(apiKeyManager.apiKeys)
-    val deps = EventServiceDeps(
-      new DirectAPIKeyFinder(apiKeyManager),
-      accountFinder,
-      new EventStore[Future] {
-        def save(action: Event, timeout: Timeout) = M.point { stored += action; PrecogUnit }
-      },
-      new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l],
-      new HttpClient.EchoClient(_.content)
-    )
+  def configureEventService(config: Configuration): EventService.State = { 
+    val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(1363327426906L))
+    val eventStore = new EventStore[Future] {
+      def save(action: Event, timeout: Timeout) = M.point { stored += action; \/-(PrecogUnit) }
+    }
+    val jobManager = new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
+    val shardClient = new HttpClient.EchoClient((_: HttpRequest[ByteChunk]).content)
+    val localhost = ServiceLocation("http", "localhost", 80, None)
+    val serviceConfig = ServiceConfig(localhost, localhost, Timeout(10000l), 500, 1024, Timeout(10000l))
 
-    (deps, Stoppable.Noop)
+    buildServiceState(serviceConfig, apiKeyFinder, permissionsFinder, eventStore, jobManager, Stoppable.Noop)
   }
 
   implicit def jValueToFutureJValue(j: JValue) = Future(j)

@@ -220,6 +220,8 @@ class NIHDBLinearRegressionSpecs extends LinearRegressionSpecs with NIHDBPlatfor
 
 class NIHDBClusteringSpecs extends ClusteringSpecs with NIHDBPlatformSpecs
 
+class NIHDBRandomForestSpecs extends RandomForestSpecs with NIHDBPlatformSpecs
+
 class NIHDBMiscStackSpecs extends MiscStackSpecs with NIHDBPlatformSpecs
 
 class NIHDBNonObjectStackSpecs extends NonObjectStackSpecs with NIHDBPlatformSpecs

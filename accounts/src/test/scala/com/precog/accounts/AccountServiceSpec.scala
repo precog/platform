@@ -330,7 +330,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
               logger.debug("Got reset email: " + output.toString("UTF-8"))
               message.getSubject
 
-            case _ => failure("Reset email not received")
+            case problem => failure("Reset email not received, got " + problem)
           }
         }
         resetResult <- resetPassword(accountId, resetToken, newPass)

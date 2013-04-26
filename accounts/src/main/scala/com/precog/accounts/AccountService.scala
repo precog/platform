@@ -138,14 +138,13 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
                 path("/accounts/") {
                   post(PostAccountHandler) ~
                   path("'accountId/password/reset") {
+                    post(GenerateResetTokenHandler) ~
                     path("/'resetToken") {
                       post(PasswordResetHandler)
                     } 
                   } ~
                   path("search") {
-                    parameter('email) {
-                      get(SearchAccountsHandler)
-                    }
+                    get(SearchAccountsHandler)
                   } ~
                   path("'accountId/grants/") {
                     post(CreateAccountGrantHandler)

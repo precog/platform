@@ -111,7 +111,7 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
     }
   }
 
-  object SearchAccountHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
+  object SearchAccountsHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {
     val service: HttpRequest[Future[JValue]] => Validation[NotServed, Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
       Success {
         request.parameters.get('email) match {
@@ -231,24 +231,11 @@ class AccountServiceHandlers(val accountManager: AccountManager[Future], apiKeyF
           }
         )
       } getOrElse {
-        Failure(DispatchError(HttpException(BadRequest, "Missing request body content.")))
+        Failure(DispatchError(BadRequest, "Missing request body content."))
       }
     }
 
     val metadata = DescriptionMetadata("Creates a new account associated with the specified email address, subscribed to the free plan.")
-  }
-
-  object SearchAccountsHandler extends CustomHttpService[Future[JValue], String => Future[HttpResponse[JValue]]] {
-    val service: HttpRequest[Future[JValue]] => Validation[NotServed, String => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => Success {
-      (email: String) => {
-        accountManager.findAccountByEmail(email) map {
-          case Some(account) => HttpResponse[JValue](OK, content = Some(JArray(account.accountId.serialize)))
-          case None => HttpResponse[JValue](OK, content = Some(JArray()))
-        }
-      }
-    }
-
-    val metadata = DescriptionMetadata("Returns a set of account IDs that correspond to the specified query parameters.")
   }
 
   object CreateAccountGrantHandler extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] {

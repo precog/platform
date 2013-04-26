@@ -54,15 +54,17 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(_, path, writeAs, data, _, _)) =>
+      case (offset, IngestMessage(_, path, writeAs, data, _, _, streamId)) =>
+        //FIXME: need to take streamId into account
         val batches = recordsByPath.getOrElseUpdate((path, writeAs), ArrayBuffer.empty[Batch])
         batches += ((offset, data.map(_.value)))
 
       case (offset, sfm: StoreFileMessage) =>
-        updates += Create(sfm.path, BlobData(sfm.encoding.decode(sfm.content), sfm.mimeType), sfm.streamId, Some(sfm.writeAs), false)
+        updates += Create(sfm.path, BlobData(sfm.content.data, sfm.content.mimeType), sfm.streamId.getOrElse(sys.error("decide what to do here.")), sfm.writeAs, false)
 
       case (_, ArchiveMessage(key, path, jobid, eventId, timestamp)) =>
         val uuid = UUID.randomUUID
+        // FIXME: not sure about this impl... append will subsequently not have the right authorities?
         updates += Create(path, NIHDBData.Empty, uuid, None, false)
         updates += Replace(path, uuid)
     }

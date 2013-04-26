@@ -471,7 +471,7 @@ trait LinearRegressionLibModule[M[+_]]
 
       override val retainIds = true
 
-      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))

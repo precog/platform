@@ -17,18 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
+package com.precog.common
+package services
 
-import com.precog.common.ingest._
-import com.precog.util.PrecogUnit
+import blueeyes.core.http.URI
 
-import akka.dispatch.Future
-import akka.util.Timeout
+import org.streum.configrity.Configuration
 
 import scalaz._
+import scalaz.NonEmptyList._
+import scalaz.syntax.applicative._
+import scalaz.syntax.std.option._
 
-case class StoreFailure(message: String)
-
-trait EventStore[M[+_]] {
-  def save(action: Event, timeout: Timeout): M[StoreFailure \/ PrecogUnit]
+case class ServiceLocation(protocol: String, host: String, port: Int, pathPrefix: Option[String]) {
+  def toURI: URI = URI(scheme = Some(protocol), host = Some(host), port = Some(port), path = pathPrefix)
 }
+
+object ServiceLocation {
+  def fromConfig(conf: Configuration): ValidationNel[String, ServiceLocation] = {
+    (conf.get[String]("protocol").toSuccess(nels("Configuration property protocol is required")) |@|
+     conf.get[String]("host").toSuccess(nels("Configuration property host is required")) |@|
+     conf.get[Int]("port").toSuccess(nels("Configuration property port is required"))) { (protocol, host, port) =>
+      ServiceLocation(protocol, host, port, conf.get[String]("pathPrefix"))  
+    } 
+  }
+}
+
+
+
+

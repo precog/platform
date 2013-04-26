@@ -26,7 +26,7 @@ import jobs.JobId
 
 import blueeyes.json.{ JPath, JValue, JUndefined }
 import blueeyes.json.serialization._
-import blueeyes.json.serialization.Extractor.Error
+import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Versioned._
@@ -146,11 +146,28 @@ object Archive {
   implicit val extractor: Extractor[Archive] = extractorV1 <+> extractorV0
 }
 
-case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, streamId: Option[UUID]) extends Event {
+sealed trait StoreMode
+object StoreMode {
+  implicit val decomposer: Decomposer[StoreMode] = Decomposer[String].contramap[StoreMode] {
+    case Create => "create"
+    case Replace => "replace"
+  }
+
+  implicit val extractor: Extractor[StoreMode] = Extractor[String].mapv {
+    case "create" => Success(Create)
+    case "replace" => Success(Replace)
+    case other => Failure(Invalid("Storage mode %s not recogized.".format(other)))
+  }
+
+  case object Create extends StoreMode
+  case object Replace extends StoreMode
+}
+
+case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, streamId: Option[UUID], mode: StoreMode) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = storeFile(this)
   def split(n: Int, streamId: UUID) = {
     val splitSize = content.data.length / n
-    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.encoding), streamId = Some(streamId))).toList
+    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.mimeType, content.encoding), streamId = Some(streamId))).toList
   }
     
   def length = content.data.length
@@ -159,19 +176,10 @@ case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileCont
 object StoreFile {
   import JavaSerialization._
 
-  implicitly[Decomposer[APIKey]]
-  implicitly[Decomposer[Path]]
-  implicitly[Decomposer[JobId]]
-  implicitly[Decomposer[FileContent]]
-  implicitly[Decomposer[Instant]]
-  implicitly[Decomposer[Option[UUID]]]
   implicit val iso = Iso.hlist(StoreFile.apply _, StoreFile.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamId" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamId" :: "mode" :: HNil
 
   implicit val decomposer: Decomposer[StoreFile] = decomposerV[StoreFile](schemaV1, Some("1.0".v))
   implicit val extractor: Extractor[StoreFile] = extractorV[StoreFile](schemaV1, Some("1.0".v))
 }
-
-
-// vim: set ts=4 sw=4 et:

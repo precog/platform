@@ -55,6 +55,8 @@ class Path private (val elements: String*) {
 
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth)
 
+  def urlEncode: Path = new Path(elements.map(java.net.URLEncoder.encode(_, "UTF-8")): _*)
+
   override def equals(that: Any) = that match {
     case Path(`path`) => true
     case _ => false

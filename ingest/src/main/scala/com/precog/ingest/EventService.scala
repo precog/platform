@@ -29,6 +29,7 @@ import com.precog.common.services._
 
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
+import akka.util.Timeout
 
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.Stoppable
@@ -37,6 +38,7 @@ import blueeyes.core.data.DefaultBijections.jvalueToChunk
 import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.core.service.RestPathPattern._
+import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.health.metrics.{eternity}
 import blueeyes.json._
 import blueeyes.util.Clock
@@ -58,23 +60,41 @@ import scalaz.syntax.std.option._
 import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExecutor, TimeUnit}
 import com.precog.common.Path
 
-case class EventServiceState(
-  accessControl: APIKeyFinder[Future], 
-  ingestHandler: IngestServiceHandler, 
-  fileCreateHandler: FileCreateHandler,
-  archiveHandler: ArchiveServiceHandler[ByteChunk], 
-  shardClient: HttpClient[ByteChunk],
-  stop: Stoppable)
-
-case class EventServiceDeps[M[+_]](
-    apiKeyFinder: APIKeyFinder[M],
-    accountFinder: AccountFinder[M],
-    eventStore: EventStore[M],
-    jobManager: JobManager[({type λ[+α] = ResponseM[M, α]})#λ],
-    shardClient: HttpClient[ByteChunk])
-
 object EventService {
   val X_QUIRREL_SCRIPT = MimeType("text", "x-quirrel-script")
+
+  case class State(
+    accessControl: APIKeyFinder[Future], 
+    ingestHandler: IngestServiceHandler, 
+    fileCreateHandler: FileCreateHandler,
+    archiveHandler: ArchiveServiceHandler[ByteChunk], 
+    shardClient: HttpClient[ByteChunk],
+    stop: Stoppable
+  )
+
+  case class ServiceConfig(
+    serviceLocation: ServiceLocation,
+    shardLocation: ServiceLocation,
+    ingestTimeout: Timeout,
+    ingestBatchSize: Int,
+    ingestMaxFields: Int,
+    deleteTimeout: Timeout
+  )
+
+  object ServiceConfig {
+    def fromConfiguration(config: Configuration) = {
+      (ServiceLocation.fromConfig(config.detach("eventService")) |@| ServiceLocation.fromConfig(config.detach("shard"))) { (serviceLoc, shardLoc) =>
+        ServiceConfig(
+          serviceLocation = serviceLoc,
+          shardLocation = shardLoc,
+          ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l)),
+          ingestBatchSize = config[Int]("ingest.batch_size", 500),
+          ingestMaxFields = config[Int]("ingest.max_fields", 1024),
+          deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
+        )
+      }
+    }
+  }
 }
 
 trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators {
@@ -82,7 +102,24 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
-  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)
+  def configureEventService(config: Configuration): State
+
+  protected[this] def buildServiceState(
+      serviceConfig: ServiceConfig, 
+      apiKeyFinder: APIKeyFinder[Future],
+      permissionsFinder: PermissionsFinder[Future],
+      eventStore: EventStore[Future],
+      jobManager: JobManager[Response],
+      stoppable: Stoppable): State = {
+    import serviceConfig._
+
+    val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
+    val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, Clock.System, deleteTimeout)
+    val createHandler = new FileCreateHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
+    val shardClient = (new HttpClientXLightWeb).protocol(shardLocation.protocol).host(shardLocation.host).port(shardLocation.port)
+
+    EventService.State(apiKeyFinder, ingestHandler, createHandler, archiveHandler, shardClient, stoppable)
+  }
 
   def eventOptionsResponse = CORSHeaders.apply[JValue, Future](M)
 
@@ -91,24 +128,9 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
       healthMonitor("/health", defaultShutdownTimeout, List(blueeyes.health.metrics.eternity)) { monitor => context =>
         startup {
           import context._
-          Future {
-            val (deps, stoppable) = configureEventService(config)
-            val permissionsFinder = new PermissionsFinder(deps.apiKeyFinder, deps.accountFinder, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
-
-            val ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l))
-            val ingestBatchSize = config[Int]("ingest.batch_size", 500)
-            val ingestMaxFields = config[Int]("ingest.max_fields", 1024) // Because kjn says so
-
-            val deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
-
-            val ingestHandler = new IngestServiceHandler(permissionsFinder, deps.jobManager, Clock.System, deps.eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
-            val archiveHandler = new ArchiveServiceHandler[ByteChunk](deps.apiKeyFinder, deps.eventStore, Clock.System, deleteTimeout)
-            val createHandler = new FileCreateHandler(Clock.System, deps.eventStore)
-
-            EventServiceState(deps.apiKeyFinder, ingestHandler, createHandler, archiveHandler, deps.shardClient, stoppable)
-          }
+          Future(configureEventService(config))
         } ->
-        request { (state: EventServiceState) =>
+        request { (state: State) =>
           import CORSHeaderHandler.allowOrigin
           implicit val FR = M.compose[({ type l[a] = Function2[APIKey, Path, a] })#l] 
 
@@ -131,7 +153,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
     }}
   }
 
-  def fsService(state: EventServiceState): AsyncHttpService[ByteChunk, JValue] = {
+  def fsService(state: State): AsyncHttpService[ByteChunk, JValue] = {
     jsonAPIKey(state.accessControl) {
       dataPath("/fs") {
         post(state.ingestHandler) ~
@@ -146,7 +168,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
     }
   }
 
-  def dataService(state: EventServiceState): AsyncHttpService[ByteChunk, JValue] = {
+  def dataService(state: State): AsyncHttpService[ByteChunk, JValue] = {
     import HttpRequestHandlerImplicits._
     jsonAPIKey(state.accessControl) {
       path("/data") {

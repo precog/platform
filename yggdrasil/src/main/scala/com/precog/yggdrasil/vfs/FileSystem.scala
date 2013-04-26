@@ -83,7 +83,7 @@ sealed trait PathUpdateOp extends PathOp
   * Append messages with matching streamIds, and then a final Replace
   * message with matching streamId to indicate promotion to HEAD.
   */
-case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, authorities: Option[Authorities], canOverwrite: Boolean) extends PathUpdateOp
+case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp
 
 /**
   * Appends data to a resource. If the streamId is non-empty, this

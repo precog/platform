@@ -77,7 +77,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     object MorphismAlignment {
       case class Match(morph: M[Morph1Apply]) extends MorphismAlignment 
       case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
-      case class Custom(f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
+      case class Custom(alignment: IdentityAlignment, f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
     }
 
     abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like with Morph1Apply {
@@ -90,7 +90,8 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       def alignment: MorphismAlignment
       override final def idAlignment: IdentityAlignment = alignment match {
         case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
-        case _ => IdentityAlignment.CrossAlignment
+        case MorphismAlignment.Cross(_) => IdentityAlignment.CrossAlignment
+        case MorphismAlignment.Custom(alignment, _) => alignment
       }
     }
 
@@ -248,6 +249,7 @@ trait StdLibModule[M[+_]]
     with StringLibModule[M]
     with StatsLibModule[M]
     with ClusteringLibModule[M] 
+    with RandomForestLibModule[M] 
     with LogisticRegressionLibModule[M]
     with LinearRegressionLibModule[M]
     with FSLibModule[M]
@@ -265,6 +267,7 @@ trait StdLibModule[M[+_]]
       with StringLib
       with StatsLib
       with ClusteringLib
+      with RandomForestLib
       with LogisticRegressionLib
       with LinearRegressionLib
       with FSLib

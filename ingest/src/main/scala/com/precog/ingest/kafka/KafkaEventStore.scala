@@ -47,6 +47,7 @@ import scala.annotation.tailrec
 
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
+import scalaz.\/._
 import scalaz.syntax.std.option._
 
 object KafkaEventStore {
@@ -76,38 +77,43 @@ object KafkaEventStore {
 class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, maxMessageSize: Int, messagePadding: Int)(implicit executor: ExecutionContext) extends EventStore[Future] with Logging {
   logger.info("Creating LocalKafkaEventStore for %s with max message size = %d".format(topic, maxMessageSize))
   private[this] val codec = new KafkaEventCodec
+  private implicit val M = new blueeyes.bkka.FutureMonad(executor)
 
-  def save(event: Event, timeout: Timeout) = Future {
-    def genEvents(ev: List[Event], ingest: Ingest): List[Message] = {
-      @tailrec def rec(ev: List[Event]): List[Message] = {
+  def save(event: Event, timeout: Timeout) = {
+    def genEvents(ev: List[Event], ingest: Ingest): StoreFailure \/ List[Message] = {
+      @tailrec def rec(ev: List[Event]): StoreFailure \/ List[Message] = {
         val messages = ev.map(codec.toMessage)
 
         if (messages.forall(_.size + messagePadding <= maxMessageSize)) {
-          messages
+          right(messages)
         } else {
+          // FIXME: This test is wrong; event.length needs to have different semantics than number of messages
+          // now that we have StoreFile
           if (ev.size == event.length) {
             logger.error("Failed to reach reasonable message size after splitting JValues to individual inserts!")
-            throw new Exception("Failed insertion of excessively large event(s)!")
+            left(StoreFailure("Failed insertion of excessively large event(s)!"))
+          } else {
+            logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
+            rec(ev.flatMap(_.split(2, java.util.UUID.randomUUID)))
           }
-
-          logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
-          rec(ev.flatMap(_.split(2, java.util.UUID.randomUUID)))
         }
       }
 
       rec(ev)
     }
 
-    val toSend: List[Message] = event.fold(
+    val toSend = event.fold(
       ingest => genEvents(List(event), ingest),
-      archive => List(codec.toMessage(archive)),
+      archive => right(List(codec.toMessage(archive))),
       storeFile => sys.error("todo")
     )
 
-    producer send {
-      new ProducerData[String, Message](topic, toSend)
+    toSend traverse { kafkaMessages =>
+      Future {
+        producer send { new ProducerData[String, Message](topic, kafkaMessages) }
+        PrecogUnit
+      }
     }
-    PrecogUnit
   }
 }
 

@@ -43,6 +43,8 @@ import org.joda.time.format.ISODateTimeFormat
 import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 
+import java.net.URLEncoder
+
 import scalaz._
 import scalaz.Validation._
 import scalaz.{NonEmptyList => NEL}
@@ -123,7 +125,7 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
   private def findPermissions(apiKey: APIKey, path: Path, at: Option[DateTime]): Response[Set[Permission]] = {
     withJsonClient { client0 =>
       val client = at map (fmt.print(_)) map (client0.query("at", _)) getOrElse client0
-      eitherT(client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path) map {
+      eitherT(client.query("apiKey", apiKey).get[JValue]("permissions/fs" + path.urlEncode.path) map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_:Extractor.Error).message) <-: jvalue.validated[Set[Permission]]).disjunction
         case res =>

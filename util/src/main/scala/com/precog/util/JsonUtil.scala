@@ -44,15 +44,14 @@ object JsonUtil {
 
   def parseSingleFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): M[Validation[Seq[Throwable], JValue]] = {
     def rec(stream: StreamT[M, ByteBuffer], parser: AsyncParser): M[Validation[Seq[Throwable], JValue]] = {
-      def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]): M[Validation[Seq[Throwable], JValue]] =
-        ap match {
-          case AsyncParse(errors, _) if !errors.isEmpty =>
-            Failure(errors).point[M]
-          case AsyncParse(_, values) if !values.isEmpty =>
-            Success(values.head).point[M]
-          case _ =>
-            next
-        }
+      def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]): M[Validation[Seq[Throwable], JValue]] = ap match {
+        case AsyncParse(errors, _) if errors.nonEmpty =>
+          Failure(errors).point[M]
+        case AsyncParse(_, values) if values.nonEmpty =>
+          Success(values.head).point[M]
+        case _ =>
+          next
+      }
 
       stream.uncons flatMap {
         case Some((bb, tail)) =>
@@ -73,7 +72,7 @@ object JsonUtil {
 
   def parseManyFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): StreamT[M, AsyncParse] = {
     // create a new stream, using the current stream and parser
-    StreamT.unfoldM((stream, AsyncParser(true))) {
+    StreamT.unfoldM((stream, AsyncParser(false))) {
       case (stream, parser) => stream.uncons map {
         case Some((bb, tail)) =>
           // parse the current byte buffer, keeping track of the

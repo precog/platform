@@ -75,10 +75,11 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
     for {
       ingest <- genRandomIngest if ingest.writeAs.isDefined
       eventIds <- containerOfN[List, EventId](ingest.data.size, genEventId).map(l => Vector(l: _*))
+      streamId <- genStreamId
     } yield {
       //TODO: Replace with IngestMessage.fromIngest when it's usable
       val data = (eventIds zip ingest.data) map { Function.tupled(IngestRecord.apply) }
-      IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, data, ingest.jobId, new Instant())
+      IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, data, ingest.jobId, new Instant(), streamId)
     }
 
   def genRandomArchiveMessage: Gen[ArchiveMessage] =
@@ -140,14 +141,15 @@ trait RealisticEventMessage extends ArbitraryEventMessage {
   def genIngest: Gen[Ingest] = for {
     path <- genStablePath
     ingestData <- containerOf[List, JValue](genIngestData).map(l => Vector(l: _*))
-      streamId <- genStreamId
+    streamId <- genStreamId
   } yield Ingest(ingestAPIKey, Path(path), Some(ingestOwnerAccountId), ingestData, None, new Instant(), streamId)
 
   def genIngestMessage: Gen[IngestMessage] = for {
     producerId <- choose(0, producers-1)
     ingest <- genIngest
+    streamId <- genStreamId
   } yield {
     val records = ingest.data map { jv => IngestRecord(EventId(producerId, eventIds(producerId).getAndIncrement), jv) }
-    IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, records, ingest.jobId, ingest.timestamp)
+    IngestMessage(ingest.apiKey, ingest.path, ingest.writeAs.get, records, ingest.jobId, ingest.timestamp, streamId)
   }
 }

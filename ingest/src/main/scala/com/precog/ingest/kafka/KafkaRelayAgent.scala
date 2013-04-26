@@ -188,7 +188,7 @@ final class KafkaRelayAgent(
             }
 
             val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)))
+            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp, streamId)))
 
           case Authorized(event: Ingest, _, None) =>
             // cannot relay event without a resolved owner account ID; fail loudly.

@@ -302,6 +302,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
       "survive pathology 1" in testCogroupPathology1
       "survive pathology 2" in testCogroupPathology2
       "survive pathology 3" in testCogroupPathology3
+
+      "not truncate cogroup when right side has long equal spans" in testLongEqualSpansOnRight
+      "not truncate cogroup when left side has long equal spans" in testLongEqualSpansOnLeft
+      "not truncate cogroup when both sides have long equal spans" in testLongEqualSpansOnBoth
+      "not truncate cogroup when left side is long span and right is increasing" in testLongLeftSpanWithIncreasingRight
       
       "survive scalacheck" in { 
         check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
@@ -699,6 +704,3 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
     val idSource = new FreshAtomicIdSource
   }
 }
-
-
-// vim: set ts=4 sw=4 et:
