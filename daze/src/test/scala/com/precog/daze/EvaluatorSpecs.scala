@@ -3543,6 +3543,91 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         resultsE must haveSize(100)
       }
     }
+    
+    "assign identities to the results of flatten" in {
+      val line = Line(1, 1, "")
+      
+      /*
+       * flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
+       */
+      
+      val input = dag.Morph1(Flatten,
+        Join(JoinArray, CrossLeftSort,
+          Operate(WrapArray, 
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("a"))(line),
+                dag.Const(CLong(1))(line))(line),
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("b"))(line),
+                dag.Const(CLong(2))(line))(line))(line))(line),
+          Operate(WrapArray, 
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("a"))(line),
+                dag.Const(CLong(3))(line))(line),
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("b"))(line),
+                dag.Const(CLong(4))(line))(line))(line))(line))(line))(line)
+                
+      testEval(input) { resultsE =>
+        resultsE must haveSize(2)
+        
+        forall(resultsE) {
+          case (ids, sv) => {
+            ids must haveSize(1)
+            
+            sv must beLike {
+              case SObject(obj) => {
+                obj must haveSize(2)
+                obj must haveKey("a")
+                obj must haveKey("b")
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    "reduce the size of a filtered flattened array" in {
+      val line = Line(1, 1, "")
+      
+      /*
+       * foo := flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
+       * foo where foo.a = 1
+       */
+      
+      val foo = dag.Morph1(Flatten,
+        Join(JoinArray, CrossLeftSort,
+          Operate(WrapArray, 
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("a"))(line),
+                dag.Const(CLong(1))(line))(line),
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("b"))(line),
+                dag.Const(CLong(2))(line))(line))(line))(line),
+          Operate(WrapArray, 
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("a"))(line),
+                dag.Const(CLong(3))(line))(line),
+              Join(WrapObject, CrossLeftSort,
+                dag.Const(CString("b"))(line),
+                dag.Const(CLong(4))(line))(line))(line))(line))(line))(line)
+      
+      val input = dag.Filter(IdentitySort,
+        foo,
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
+            foo,
+            dag.Const(CString("a"))(line))(line),
+          dag.Const(CLong(1))(line))(line))(line)
+      
+      testEval(input) { resultsE =>
+        resultsE must haveSize(1)
+      }
+    }
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 

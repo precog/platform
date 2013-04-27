@@ -77,7 +77,7 @@ trait JoinOptimizer extends DAGTransform {
             
             val (eqLHS, eqRHS, liftedLHS, liftedRHS) =
               if (determinedBy(lhs, eqA)) (eqA, eqB, liftedA, liftedB) else(eqB, eqA, liftedB, liftedA) 
- 
+              
               Join(op, ValueSort(sortId),
                 liftRewrite(lhs, eqLHS, liftedLHS),
                 liftRewrite(rhs, eqRHS, liftedRHS))(j.loc)

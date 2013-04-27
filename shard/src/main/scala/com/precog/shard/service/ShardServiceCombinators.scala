@@ -21,13 +21,16 @@ package com.precog.shard
 package service
 
 import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
+import akka.dispatch.Promise
+import akka.dispatch.ExecutionContext
 import akka.util.Duration
 
 import blueeyes._
 import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpHeaders._
+import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -44,10 +47,11 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Validation._
+import scalaz.std.option._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
 import scalaz.syntax.bifunctor._
-import scalaz.std.option._
+import scalaz.syntax.std.boolean._
 
 import java.util.concurrent.TimeUnit
 
@@ -160,12 +164,11 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     }
   }
 
-  def query[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, (APIKey, Path) => Future[B]] = {
-    new DelegatingService[A, (APIKey, Path) => Future[B], A, (APIKey, Path, Query, QueryOptions) => Future[B]] {
+  def query[B](next: HttpService[ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]]] = {
+    new DelegatingService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]], ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]] {
       val delegate = next
       val metadata = NoMetadata
-      val service = (request: HttpRequest[A]) => {
-        val query: Option[String] = request.parameters.get('q).filter(_ != null)
+      val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[B]]]  = (request: HttpRequest[ByteChunk]) => {
         val offsetAndLimit = getOffsetAndLimit(request)
         val sortOn = getSortOn(request).toValidationNel
         val sortOrder = getSortOrder(request).toValidationNel
@@ -173,31 +176,40 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
         val output = getOutputType(request)
 
         (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
-          val opts = QueryOptions(
-            page = offsetAndLimit,
-            sortOn = sortOn,
-            sortOrder = sortOrder,
-            timeout = timeout.map(Duration(_, TimeUnit.MILLISECONDS)),
-            output = output
-          )
+          QueryOptions(offsetAndLimit, sortOn, sortOrder, timeout.map(Duration(_, TimeUnit.MILLISECONDS)), output)
+        } leftMap { errors =>
+          DispatchError(BadRequest, "Errors were encountered decoding query configuration parameters.", Some(errors.list mkString "\n")) : NotServed
+        } flatMap { opts =>
+          def quirrelContent(request: HttpRequest[ByteChunk]): Option[ByteChunk] = for {
+            header <- request.headers.header[`Content-Type`] if header.mimeTypes exists { t =>
+                        t == text/plain || (t.maintype == "text" && t.subtype == "x-quirrel-script")
+                      }
+            content <- request.content
+          } yield content
 
-          query map { q =>
-            next.service(request) map { f => (apiKey: APIKey, path: Path) => f(apiKey, path, q, opts) }
-          } getOrElse {
-            failure(inapplicable)
+          next.service(request) map { f => 
+            (apiKey: APIKey, path: Path) => {
+              val query: Option[Future[String]] = 
+                request.parameters.get('q).filter(_ != null).map(Promise.successful).
+                orElse(quirrelContent(request).map(ByteChunk.forceByteArray(_:ByteChunk).map(new String(_: Array[Byte], "UTF-8"))))
+
+              val result: Future[HttpResponse[B]] = query map { q =>
+                q flatMap { f(apiKey, path, _: String, opts) }
+              } getOrElse {
+                Promise.successful(HttpResponse(HttpStatus(BadRequest, "Neither the query string nor request body contained an identifiable quirrel query.")))
+              }
+              result
+            }
           }
-        } match {
-          case Success(success) => success
-          case Failure(errors) => failure(DispatchError(BadRequest, errors.list mkString "\n"))
         }
       }
     }
   }
 
-  def asyncQuery[A, B](next: HttpService[A, (APIKey, Path, Query, QueryOptions) => Future[B]]): HttpService[A, APIKey => Future[B]] = {
-    new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
-      val delegate = query[A, B](next)
-      val service = { (request: HttpRequest[A]) =>
+  def asyncQuery[B](next: HttpService[ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, APIKey => Future[HttpResponse[B]]] = {
+    new DelegatingService[ByteChunk, APIKey => Future[HttpResponse[B]], ByteChunk, (APIKey, Path) => Future[HttpResponse[B]]] {
+      val delegate = query[B](next)
+      val service = { (request: HttpRequest[ByteChunk]) =>
         val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
         delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
           (apiKey: APIKey) => f(apiKey, Path(path))

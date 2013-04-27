@@ -2132,8 +2132,41 @@ object EmitterSpecs extends Specification
         |   data where data = 'minexp
         | """.stripMargin
         
-      emit(compileSingle(input))
-      true mustEqual true
+      emit(compileSingle(input)) must not(throwA[Throwable])
+    }
+    
+    "correctly emit a matched binary operation on the results of a flatten" in {
+      val input = """
+        | foo := flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
+        | foo where foo.a = 1
+        | """.stripMargin
+        
+      testEmit(input)(Vector(
+        PushString("a"),
+        PushNum("1"),
+        Map2Cross(WrapObject),
+        PushString("b"),
+        PushNum("2"),
+        Map2Cross(WrapObject),
+        Map2Cross(JoinObject),
+        Map1(WrapArray),
+        PushString("a"),
+        PushNum("3"),
+        Map2Cross(WrapObject),
+        PushString("b"),
+        PushNum("4"),
+        Map2Cross(WrapObject),
+        Map2Cross(JoinObject),
+        Map1(WrapArray),
+        Map2Cross(JoinArray),
+        Morph1(BuiltInMorphism1(flatten)),
+        Dup,
+        Swap(1),
+        PushString("a"),
+        Map2Cross(DerefObject),
+        PushNum("1"),
+        Map2Cross(Eq),
+        FilterMatch))
     }
   }
   

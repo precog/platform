@@ -70,23 +70,29 @@ object ShardStateOptions {
 }
 
 sealed trait ShardState {
-  def platform: Platform[Future, StreamT[Future, CharBuffer]]
+  type Result
+
+  def platform: Platform[Future, Result]
   def apiKeyFinder: APIKeyFinder[Future]
   def stoppable: Stoppable
 }
 
 case class ManagedQueryShardState(
-  override val platform: ManagedPlatform,
-  apiKeyFinder: APIKeyFinder[Future],
-  jobManager: JobManager[Future],
-  clock: Clock,
-  stoppable: Stoppable,
-  options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState
+    override val platform: ManagedPlatform,
+    apiKeyFinder: APIKeyFinder[Future],
+    jobManager: JobManager[Future],
+    clock: Clock,
+    stoppable: Stoppable,
+    options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState {
+  type Result = StreamT[Future, CharBuffer]
+}
 
 case class BasicShardState(
-  platform: Platform[Future, StreamT[Future, CharBuffer]],
-  apiKeyFinder: APIKeyFinder[Future],
-  stoppable: Stoppable) extends ShardState
+    platform: Platform[Future, (Set[Fault], StreamT[Future, CharBuffer])],
+    apiKeyFinder: APIKeyFinder[Future],
+    stoppable: Stoppable) extends ShardState {
+  type Result = (Set[Fault], StreamT[Future, CharBuffer])
+}
 
 trait ShardService extends
     BlueEyesServiceBuilder with
@@ -171,9 +177,9 @@ trait ShardService extends
 
   private def cf = implicitly[ByteChunk => Future[JValue]]
 
-  def shardService[F[+_]](service: HttpService[Future[JValue], F[Future[HttpResponse[QueryResult]]]])(implicit
+  def shardService[F[+_]](service: HttpService[ByteChunk, F[Future[HttpResponse[QueryResult]]]])(implicit
       F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {
-    service map { _ map { _ map { _ map queryResultToByteChunk } } } contramap cf
+    service map { _ map { _ map { _ map queryResultToByteChunk } } }
   }
 
   private def asyncHandler(state: ShardState) = {
@@ -211,21 +217,22 @@ trait ShardService extends
     jsonp[ByteChunk] {
       jsonAPIKey(state.apiKeyFinder) {
         dataPath("/analytics/fs") {
-          query[ByteChunk, HttpResponse[ByteChunk]] {
-            get {
-              shardService[({ type λ[+α] = ((APIKey, Path, String, QueryOptions) => α) })#λ] {
-                syncQueryService(state)
-              }
-            } ~
-            options {
-              (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path, s: String, o: QueryOptions) => optionsResponse
-            }
+          shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
+            query[QueryResult] {
+              { 
+                get { syncQueryService(state) } ~
+                post { syncQueryService(state) } 
+              } 
+            } 
+          } ~
+          options {
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
         } ~
         dataPath("/meta/fs") {
           get {
             shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
-              new BrowseServiceHandler[Future[JValue]](state.platform.metadataClient, state.apiKeyFinder)
+              new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder)
             }
           } ~
           options {
