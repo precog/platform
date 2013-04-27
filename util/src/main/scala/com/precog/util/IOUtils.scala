@@ -80,7 +80,9 @@ object IOUtils extends Logging {
   }
 
   def makeDirectory(dir: File): IO[PrecogUnit] = IO {
-    if (!dir.isDirectory && !dir.mkdirs) {
+    if (dir.isDirectory || dir.mkdirs) {
+      PrecogUnit
+    } else {
       throw new IOException("Failed to create directory " + dir)
     }
   }

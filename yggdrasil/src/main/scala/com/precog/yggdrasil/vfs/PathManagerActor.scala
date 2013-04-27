@@ -93,10 +93,10 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
             IOUtils.makeDirectory(tmpDir)
           }
         } orElse {
-            Some(IOUtils.makeDirectory(tmpDir))
-          }
+          Some(IOUtils.makeDirectory(tmpDir))
         }
-    } yield makeDir
+      } yield makeDir
+    }
   }
 
   private def promoteVersion(version: UUID): Future[PrecogUnit] = {
@@ -119,12 +119,18 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
   // needed.
   private def createProjection(version: UUID, authorities: Authorities): Future[NIHDBResource] = {
     logger.debug("Creating new projection for " + version)
-    versions.get(version) map(Future(_.asInstanceOf[NIHDBResource]))) getOrElse {
-      Future {
-        resources.createNIHDB(versionDir(version), authorities).unsafePerformIO.map { _.tap { resource =>
-          versions += (version -> resource)
-        } }.valueOr { e => throw e.exception }
+    versions.get(version) map { v => 
+      Future(v.asInstanceOf[NIHDBResource])
+    } getOrElse {
+      val createIO = for {
+        createResult <- resources.createNIHDB(versionDir(version), authorities)
+        _ <- createResult traverse { _ tap { resource => IO { versions += (version -> resource) } } }
+      } yield {
+        // TODO: can we do something better than just throw here?
+        createResult valueOr { error => throw error }
       }
+
+      Future(createIO.unsafePerformIO)
     }
   }
 
@@ -138,13 +144,13 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
         IO(Success(existing))
       } getOrElse {
         versionDir(version) map { dir =>
-          version match {
+          (version match {
             case VersionEntry(id, `BLOB`) =>
               resources.openBlob(dir)
 
             case VersionEntry(id, `NIHDB`) =>
               resources.openNIHDB(dir)
-          } flatMap {
+          }) flatMap {
             _ traverse {
               _ tap { resource => IO { versions += (version -> resource) } }
             }
