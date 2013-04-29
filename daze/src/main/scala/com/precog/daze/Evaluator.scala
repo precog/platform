@@ -430,91 +430,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 monadState point PendingTable(Table.empty, graph, TransSpec1.Id, IdentitySort)
             }
 
-          //case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
-          //  // TODO binary typing
-
-          //  def join0(pendingTableLeft: PendingTable, pendingTableRight: PendingTable): StateT[N, EvaluatorState, PendingTable] = {
-          //    assert(pendingTableLeft.graph != pendingTableRight.graph, "TransSpecable case should have already been handled")
-          //    
-          //    (left.identities, right.identities) match {
-          //      case (Identities.Specs(_), Identities.Specs(_)) =>
-          //        val prefixLength = sharedPrefixLength(left, right)
-
-          //        val identities = left.identities.length + right.identities.length - prefixLength
-          //        val key = joinSort match {
-          //          case IdentitySort => buildJoinKeySpec(prefixLength)
-          //          case ValueSort(id) => trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
-          //          case _ => sys.error("unreachable code")
-          //        }
-
-          //        val spec = buildWrappedJoinSpec(prefixLength, left.identities.length, right.identities.length)(transFromBinOp(op, ctx))
-
-          //        val leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
-          //        val rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
-          //        val (joinOrder, result0) = Table.join(leftResult, rightResult)(key, spec)
-          //        val result = if (joinOrder != JoinOrder.KeyOrder) {
-          //          result0 flatMap (_.sort(key))
-          //        } else {
-          //          result0
-          //        }
-
-          //        //val result_ = M point (join(leftResult, rightResult)(key, spec))
-
-          //        transState liftM mn(result) map { result =>
-          //          PendingTable(result, graph, TransSpec1.Id)
-          //        }
-
-          //      case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-          //        monadState point PendingTable(Table.empty, graph, TransSpec1.Id)
-          //    }
-          //  }
-
-          //  for {
-          //    pendingTableLeft <- prepareEval(left, splits)
-          //    pendingTableRight <- prepareEval(right, splits)
-          //    joined <- join0(pendingTableLeft, pendingTableRight)
-          //  } yield joined
-
           case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
             // TODO binary typing
             join(target, boolean, joinSort)(trans.Filter(_, _))
-            //def join0(pendingTableTarget: PendingTable, pendingTableBoolean: PendingTable) = {
-            //  assert(pendingTableTarget.graph != pendingTableBoolean.graph, "TransSpecable case should have already been handled")
-
-            //  val prefixLength = sharedPrefixLength(target, boolean)
-            //  
-            //  val key = joinSort match {
-            //    case IdentitySort => buildJoinKeySpec(prefixLength)
-            //    case ValueSort(id) => trans.DerefObjectStatic(Leaf(Source), CPathField("sort-" + id))
-            //    case _ => sys.error("unreachable code")
-            //  }
-            //  
-            //  val spec = buildWrappedJoinSpec(prefixLength, target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
-            //    trans.Filter(srcLeft, srcRight)
-            //  }
-            //  val parentTargetTable = pendingTableTarget.table
-            //  val targetResult = parentTargetTable.transform(liftToValues(pendingTableTarget.trans))
-            //  val parentBooleanTable = pendingTableBoolean.table
-            //  val booleanResult = parentBooleanTable.transform(liftToValues(pendingTableBoolean.trans))
-            //  //val result = join(targetResult, booleanResult)(key, spec)
-            //  val (joinOrder, result0) = Table.join(targetResult, booleanResult)(key, spec)
-            //  val result = if (joinOrder != JoinOrder.KeyOrder) {
-            //    result0 flatMap (_.sort(key))
-            //  } else {
-            //    result0
-            //  }
-
-            //  // PendingTable(result, graph, TransSpec1.Id)
-            //  transState liftM mn(result) map { result =>
-            //    PendingTable(result, graph, TransSpec1.Id)
-            //  }
-            //}
-
-            //for {
-            //  pendingTableTarget <- prepareEval(target, splits)
-            //  pendingTableBoolean <- prepareEval(boolean, splits)
-            //  joined <- join0(pendingTableTarget, pendingTableBoolean)
-            //} yield joined
 
           case s: SplitParam => 
             sys.error("Inlining of SplitParam failed")
@@ -527,6 +445,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             //       specific to our merge implementation. We may also just add
             //       fresh IDs to the tables... as noted, TODO!
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id, IdentitySort) }
+
           case Const(value) =>
             val table = value match {
               case CString(str) => Table.constString(Set(str))
@@ -801,53 +720,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     
           case j @ Join(op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => 
             cross(left, right, joinSort)(transFromBinOp(op, ctx))
-            //val isLeft = joinSort == CrossLeftSort
-
-            //for {
-            //  pendingTableLeft <- prepareEval(left, splits)
-            //  pendingTableRight <- prepareEval(right, splits)
-
-            //  leftResult = pendingTableLeft.table.transform(liftToValues(pendingTableLeft.trans))
-            //  rightResult = pendingTableRight.table.transform(liftToValues(pendingTableRight.trans))
-
-            //  valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
-
-            //  result = if (isLeft) {
-            //    leftResult.paged(maxSliceSize).compact(valueSpec).cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op, ctx)))
-            //  } else {
-            //    rightResult.paged(maxSliceSize).compact(valueSpec).cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op, ctx))))
-            //  }
-            //} yield {
-            //  PendingTable(result, graph, TransSpec1.Id, if (isLeft) pendingTableLeft.sort else pendingTableRight.sort)
-            //}
           
           case f @ dag.Filter(joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => 
             cross(target, boolean, joinSort)(trans.Filter(_, _))
-            //val isLeft = joinSort == CrossLeftSort
-            //
-            //for {
-            //  pair <- zip(prepareEval(target, splits), prepareEval(boolean, splits))
-            //  (pendingTableTarget, pendingTableBoolean) = pair
-
-            //  targetResult = pendingTableTarget.table.transform(liftToValues(pendingTableTarget.trans))
-            //  booleanResult = pendingTableBoolean.table.transform(liftToValues(pendingTableBoolean.trans))
-
-            //  valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
-
-            //  result = if (isLeft) {
-            //    val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
-            //      trans.Filter(srcLeft, srcRight)
-            //    }
-            //    targetResult.paged(maxSliceSize).compact(valueSpec).cross(booleanResult)(spec)
-            //  } else {
-            //    val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
-            //      trans.Filter(srcRight, srcLeft)
-            //    }
-            //    booleanResult.paged(maxSliceSize).compact(valueSpec).cross(targetResult)(spec)
-            //  }
-            //} yield {
-            //  PendingTable(result, graph, TransSpec1.Id, if (isLeft) pendingTableTarget.sort else pendingTableBoolean.sort)
-            //}
           
           case Sort(parent, indexes) => 
             val identityOrder = Vector(0 until indexes.length: _*)
