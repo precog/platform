@@ -424,7 +424,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
             (left.identities, right.identities) match {
               case (Identities.Specs(_), Identities.Specs(_)) =>
-                join(left, right, IdentitySort)(transFromBinOp(op, ctx))
+                join(left, right, joinSort)(transFromBinOp(op, ctx))
 
               case (Identities.Undefined, _) | (_, Identities.Undefined) =>
                 monadState point PendingTable(Table.empty, graph, TransSpec1.Id, IdentitySort)
