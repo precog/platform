@@ -84,92 +84,92 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     }
 
     // this will eventually be a re-order cross test case
-    "insert sorts for match on out-of-order operand set" >> {
-      "left" >> {
-        val line = Line(1, 1, "")
-        
-        val left = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-        val right = Join(Add, CrossRightSort,
-          dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
-          left)(line)
-        
-        val input = Join(Or, IdentitySort, left, right)(line)
-        
-        val expectedRight = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
-          left)(line)
+    //"insert sorts for match on out-of-order operand set" >> {
+    //  "left" >> {
+    //    val line = Line(1, 1, "")
+    //    
+    //    val left = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
+    //    val right = Join(Add, CrossRightSort,
+    //      dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
+    //      left)(line)
+    //    
+    //    val input = Join(Or, IdentitySort, left, right)(line)
+    //    
+    //    val expectedRight = Join(Add, CrossLeftSort,
+    //      dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
+    //      left)(line)
 
-        val expected = Join(Or, IdentitySort, left, Sort(expectedRight, Vector(1)))(line)
-        
-        orderCrosses(input) mustEqual expected
-      }
-      
-      "right" >> {
-        val line = Line(1, 1, "")
-        
-        val right = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-        val left = Join(Add, CrossRightSort,
-          dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
-          right)(line)
-        
-        val input = Join(Or, IdentitySort, left, right)(line)
-        
-        val expectedLeft = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
-          right)(line)
+    //    val expected = Join(Or, IdentitySort, left, Sort(expectedRight, Vector(1)))(line)
+    //    
+    //    orderCrosses(input) mustEqual expected
+    //  }
+    //  
+    //  "right" >> {
+    //    val line = Line(1, 1, "")
+    //    
+    //    val right = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
+    //    val left = Join(Add, CrossRightSort,
+    //      dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
+    //      right)(line)
+    //    
+    //    val input = Join(Or, IdentitySort, left, right)(line)
+    //    
+    //    val expectedLeft = Join(Add, CrossLeftSort,
+    //      dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
+    //      right)(line)
 
-        val expected = Join(Or, IdentitySort, Sort(expectedLeft, Vector(1)), right)(line)
-        
-        orderCrosses(input) mustEqual expected
-      }
-      
-      "both" >> {
-        val line = Line(1, 1, "")
-        
-        val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-        val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
-        val baz = dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line)
-        
-        val left = Join(Add, CrossRightSort, bar, foo)(line)
-        val right = Join(Add, CrossRightSort, baz, foo)(line)
-        
-        val expectedLeft = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
-          foo)(line)
+    //    val expected = Join(Or, IdentitySort, Sort(expectedLeft, Vector(1)), right)(line)
+    //    
+    //    orderCrosses(input) mustEqual expected
+    //  }
+    //  
+    //  "both" >> {
+    //    val line = Line(1, 1, "")
+    //    
+    //    val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
+    //    val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
+    //    val baz = dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line)
+    //    
+    //    val left = Join(Add, CrossRightSort, bar, foo)(line)
+    //    val right = Join(Add, CrossRightSort, baz, foo)(line)
+    //    
+    //    val expectedLeft = Join(Add, CrossLeftSort,
+    //      dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
+    //      foo)(line)
 
-        val expectedRight = Join(Add, CrossLeftSort,
-          dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line),
-          foo)(line)
+    //    val expectedRight = Join(Add, CrossLeftSort,
+    //      dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line),
+    //      foo)(line)
 
-        val input = Join(Or, IdentitySort, left, right)(line)
-        val expected = Join(Or, IdentitySort, Sort(expectedLeft, Vector(1)), Sort(expectedRight, Vector(1)))(line)
-        
-        orderCrosses(input) mustEqual expected
-      }
-      
-      "random-case-without-a-label" >> {
-        val line = Line(1, 1, "")
-        
-        val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line), JTextT)(line)
-        val numbers3 = dag.LoadLocal(Const(CString("/hom/numbers3"))(line), JTextT)(line)
-        
-        val input = Join(Add, IdentitySort,
-          Join(Add, CrossRightSort,
-            Join(Eq, IdentitySort, numbers, numbers)(line),
-            Join(Eq, IdentitySort, numbers3, numbers3)(line))(line),
-          Join(Eq, IdentitySort, numbers3, numbers3)(line))(line)
-        
-        val expected = Join(Add, IdentitySort,
-          Sort(
-            Join(Add, CrossLeftSort,
-              Join(Eq, IdentitySort, numbers, numbers)(line),
-              Memoize(Join(Eq, IdentitySort, numbers3, numbers3)(line), 100))(line),
-            Vector(1)),
-          Join(Eq, IdentitySort, numbers3, numbers3)(line))(line)
-            
-        orderCrosses(input) mustEqual expected
-      }
-    }
+    //    val input = Join(Or, IdentitySort, left, right)(line)
+    //    val expected = Join(Or, IdentitySort, Sort(expectedLeft, Vector(1)), Sort(expectedRight, Vector(1)))(line)
+    //    
+    //    orderCrosses(input) mustEqual expected
+    //  }
+    //  
+    //  "random-case-without-a-label" >> {
+    //    val line = Line(1, 1, "")
+    //    
+    //    val numbers = dag.LoadLocal(Const(CString("/hom/numbers"))(line), JTextT)(line)
+    //    val numbers3 = dag.LoadLocal(Const(CString("/hom/numbers3"))(line), JTextT)(line)
+    //    
+    //    val input = Join(Add, IdentitySort,
+    //      Join(Add, CrossRightSort,
+    //        Join(Eq, IdentitySort, numbers, numbers)(line),
+    //        Join(Eq, IdentitySort, numbers3, numbers3)(line))(line),
+    //      Join(Eq, IdentitySort, numbers3, numbers3)(line))(line)
+    //    
+    //    val expected = Join(Add, IdentitySort,
+    //      Sort(
+    //        Join(Add, CrossLeftSort,
+    //          Join(Eq, IdentitySort, numbers, numbers)(line),
+    //          Memoize(Join(Eq, IdentitySort, numbers3, numbers3)(line), 100))(line),
+    //        Vector(1)),
+    //      Join(Eq, IdentitySort, numbers3, numbers3)(line))(line)
+    //        
+    //    orderCrosses(input) mustEqual expected
+    //  }
+    //}
 
     // this will eventually be a re-order cross test case
     "insert sorts for filter on out-of-order operand set" >> {

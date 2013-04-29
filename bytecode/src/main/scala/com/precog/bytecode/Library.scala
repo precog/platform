@@ -21,10 +21,32 @@ package com.precog
 package bytecode
 
 sealed trait IdentityAlignment
+
 object IdentityAlignment {
+
+  /**
+   * Both IDs are kept. For each ID on the left, we fully traverse the right
+   * side. This matches what Table does. Thus, the result is only ordered by
+   * the left IDs, and not both.
+   *
+   * TODO: Once table guarantees an order-preserving cross, then the result
+   *       of a Custom Morph2 should be forced to be order preserving too.
+   */
   object CrossAlignment extends IdentityAlignment
+
+  /**
+   * All IDs are kept. Prefix first, then remaining left IDs, then remaining
+   * right IDs. The result is in order of the prefix/key.
+   *
+   * TODO: Much like join, custom Morph2's should be allowed to specify order
+   *       after the join.
+   */
   object MatchAlignment extends IdentityAlignment
+
+  /** Left IDs are discarded, right IDs are kept, in order. */
   object RightAlignment extends IdentityAlignment
+
+  /** Right IDs are discarded, left IDs are kept, in order. */
   object LeftAlignment extends IdentityAlignment
 }
     

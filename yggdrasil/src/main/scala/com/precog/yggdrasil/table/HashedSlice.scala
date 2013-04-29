@@ -73,7 +73,7 @@ private final class SliceHasher(slice: Slice) {
 
   @tailrec private final def hashOf(row: Int, i: Int = 0, hc: Int = 0): Int = {
     if (i > hashers.length) hc else {
-      hashOf(row, i + 1, 23 * hc + hashers(i).hash(row))
+      hashOf(row, i + 1, hc ^ hashers(i).hash(row))
     }
   }
 

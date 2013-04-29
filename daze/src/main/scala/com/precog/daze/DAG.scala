@@ -1305,6 +1305,7 @@ trait DAG extends Instructions {
     sealed trait TableSort extends JoinSort
     
     case object IdentitySort extends TableSort
+    case class PartialIdentitySort(ids: Vector[Int]) extends TableSort
     case class ValueSort(id: Int) extends TableSort
     // case object NullSort extends TableSort -- Not USED!
     
