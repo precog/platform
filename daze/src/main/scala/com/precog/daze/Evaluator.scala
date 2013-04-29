@@ -408,11 +408,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 val keyTable = tableData.transform(keySpec).canonicalize(maxSliceSize)
                 val valueTable = tableSamples.transform(valueSpec).canonicalize(maxSliceSize)
 
-                transState liftM mn(keyTable.zip(valueTable) flatMap { _.sort(keySpec, SortAscending) })
+                transState liftM mn(keyTable.zip(valueTable))
               }
             } yield {
-              // TODO: Get the actual sort for this... is it really IdentitySort?
-              PendingTable(result, graph, TransSpec1.Id, IdentitySort) // TODO: is this sorted?
+              val sort = pendingTableData.sort match {
+                case ValueSort(_) => PartialIdentitySort(Vector.empty)
+                case identitySort => identitySort
+              }
+              PendingTable(result, graph, TransSpec1.Id, sort)
             }
 
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
