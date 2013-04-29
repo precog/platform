@@ -106,21 +106,23 @@ trait CrossOrdering extends DAG {
           Diff(memoized(left), memoized(right))(node.loc)
         
         case node @ Join(op, ValueSort(id), left, right) => {
-          val left2 = memoized(left)
-          val right2 = memoized(right)
-          
-          def resortLeft = ReSortBy(left2, id)
-          def resortRight = ReSortBy(right2, id)
-          
-          (left2.sorting, right2.sorting) match {
-            case (ValueSort(`id`), ValueSort(`id`)) => Join(op, ValueSort(id), left2, right2)(node.loc)
-            case (ValueSort(`id`), _              ) => Join(op, ValueSort(id), left2, resortRight)(node.loc)
-            case (_,               ValueSort(`id`)) => Join(op, ValueSort(id), resortLeft, right2)(node.loc)
-            case _                                  => Join(op, ValueSort(id), resortLeft, resortRight)(node.loc)
-          }
+          Join(op, ValueSort(id), memoized(left), memoized(right))(node.loc)
+          //val left2 = memoized(left)
+          //val right2 = memoized(right)
+          //
+          //def resortLeft = ReSortBy(left2, id)
+          //def resortRight = ReSortBy(right2, id)
+          //
+          //(left2.sorting, right2.sorting) match {
+          //  case (ValueSort(`id`), ValueSort(`id`)) => Join(op, ValueSort(id), left2, right2)(node.loc)
+          //  case (ValueSort(`id`), _              ) => Join(op, ValueSort(id), left2, resortRight)(node.loc)
+          //  case (_,               ValueSort(`id`)) => Join(op, ValueSort(id), resortLeft, right2)(node.loc)
+          //  case _                                  => Join(op, ValueSort(id), resortLeft, resortRight)(node.loc)
+          //}
         }
 
         case node @ Join(op, IdentitySort, left, right) => {
+          //Join(op, IdentitySort, memoized(left), memoized(right))(node.loc)
           val left2 = memoized(left)
           val right2 = memoized(right)
           
@@ -134,6 +136,16 @@ trait CrossOrdering extends DAG {
           
           def sortLeftAux = Sort(left2, Vector(0 until left2.identities.length: _*))
           def sortRightAux = Sort(right2, Vector(0 until right2.identities.length: _*))
+
+          //println("node:\n" + node)
+          //println("left2.sorting = " + left2.sorting)
+          //println("leftPrefix = " + leftPrefix)
+          //println("left.identities = " + left2.identities)
+          //println("leftIndices = " + leftIndices)
+          //println("right2.sorting = " + right2.sorting)
+          //println("rightPrefix = " + rightPrefix)
+          //println("right.identities = " + right2.identities)
+          //println("rightIndices = " + rightIndices)
           
           (left2.sorting, leftPrefix, right2.sorting, rightPrefix) match {
             case (IdentitySort, true,  IdentitySort, true ) => Join(op, IdentitySort, left2, right2)(node.loc)
