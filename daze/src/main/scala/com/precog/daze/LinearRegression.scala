@@ -449,7 +449,8 @@ trait LinearRegressionLibModule[M[+_]]
 
           // `arraySpec` generates the schema in which the Coefficients will be returned
           val arraySpec = InnerArrayConcat(trans.WrapArray(xsSpec), trans.WrapArray(ySpec))
-          val table = table0.transform(arraySpec)
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          val table = table0.transform(valueSpec).transform(arraySpec)
 
           val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
           

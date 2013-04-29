@@ -305,7 +305,10 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: EvaluationContext) = {
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          table.transform(valueSpec).reduce(reducer(ctx)) map extract
+        }
       }
     }
 
@@ -455,7 +458,10 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: EvaluationContext) = {
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          table.transform(valueSpec).reduce(reducer(ctx)) map extract
+        }
       }
     }
 
@@ -615,7 +621,10 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: EvaluationContext) = {
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          table.transform(valueSpec).reduce(reducer(ctx)) map extract
+        }
       }
     }
 
@@ -820,7 +829,10 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: EvaluationContext) = {
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          table.transform(valueSpec).reduce(reducer(ctx)) map extract
+        }
       }
     }
 
