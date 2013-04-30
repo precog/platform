@@ -72,26 +72,27 @@ class DefaultResourceBuilder(
 
   def ensureDescriptorDir(versionDir: File, authorities: Authorities): IO[File] = IO {
     if (!versionDir.isDirectory && !versionDir.mkdirs) {
-      throw new Exception("Failed to create directory for projection: " + dir)
+      throw new Exception("Failed to create directory for projection: " + versionDir)
     }
+    versionDir
   }
 
   // Resource creation/open and discovery
   def createNIHDB(versionDir: File, authorities: Authorities): IO[Validation[ResourceError, NIHDBResource]] = {
-    ensureDescriptorDir(versionDir, authorities).flatMap { nihDir =>
+    ensureDescriptorDir(versionDir, authorities) flatMap { nihDir =>
       NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-    }.map { dbV =>
+    } map { dbV =>
       fromExtractorError("Failed to create NIHDB") <-: (dbV map (NIHDBResource(_, authorities)(actorSystem)))
     }
   }
 
-  def openNIHDB(descriptorDir: File): IO[Validation[ResourceError, NIHDBResource]] = {
+  def openNIHDB(descriptorDir: File): IO[ValidationNel[ResourceError, NIHDBResource]] = {
     NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem).map (_.map { dbV =>
       val resV = dbV map {
         case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
       }
-      fromExtractorError("Failed to open NIHDB") <-: resV
-    }.getOrElse(Failure(MissingData("No NIHDB projection found in " + descriptorDir))))
+      fromExtractorErrorNel("Failed to open NIHDB") <-: resV
+    }.getOrElse(Failure(NEL(MissingData("No NIHDB projection found in " + descriptorDir)))))
   }
 
   final val blobMetadataFilename = "blob_metadata"
@@ -101,13 +102,13 @@ class DefaultResourceBuilder(
   /**
    * Open the blob for reading in `baseDir`.
    */
-  def openBlob(versionDir: File): IO[Validation[ResourceError, Blob]] = IO {
+  def openBlob(versionDir: File): IO[ValidationNel[ResourceError, Blob]] = IO {
     val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
     val metadata = metadataStore.json.validated[BlobMetadata]
     val resource = metadata map { metadata =>
       Blob(new File(versionDir, "data"), metadata)(actorSystem.dispatcher)
     }
-    fromExtractorError("Error reading metadata") <-: resource
+    fromExtractorErrorNel("Error reading metadata") <-: resource
   }
 
   /**

@@ -25,6 +25,7 @@ import com.precog.accounts._
 import com.precog.auth._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.jobs._
 import com.precog.common.kafka._
 import com.precog.common.security._
 import com.precog.niflheim._
@@ -809,8 +810,11 @@ object ImportTools extends Command with Logging {
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
       val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
+
+      val authorities = Authorities(config.accountId)
+
       val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
     }
 
     import shardModule._
@@ -840,7 +844,7 @@ object ImportTools extends Command with Logging {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
           }
           val eventidobj = EventId(pid, sid.getAndIncrement)
-          val update = Append(Path(db), NIHDBData(Seq((eventidobj.uid, results))), None, Authorities(config.accountId))
+          val update = Append(Path(db), NIHDBData(Seq((eventidobj.uid, results))), WriteTo.Current(config.apiKey, authorities), None)
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
           bb.flip()

@@ -29,15 +29,18 @@ import akka.util.Duration
 import blueeyes.bkka.FutureMonad
 import blueeyes.core.http._
 import blueeyes.json._
-import blueeyes.json.serialization._
+//import blueeyes.json.serialization._
 import blueeyes.util.Clock
 
 import com.google.common.cache.RemovalCause
 
 import com.precog.common.Path
 import com.precog.common.accounts.AccountId
+import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.util.PrecogUnit
+import Permission._
+import com.precog.niflheim.NIHDB
+import com.precog.util._
 import com.precog.util.cache.Cache
 import com.precog.yggdrasil.nihdb._
 
@@ -48,7 +51,8 @@ import java.util.UUID
 
 import org.joda.time.DateTime
 
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz._
+import scalaz.NonEmptyList._
 import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.std.option._
@@ -58,27 +62,23 @@ import scalaz.syntax.effect.id._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
+import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
 
 /**
   * An actor that manages resources under a given path. The baseDir is the version
   * subdir for the path.
   */
-final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration, jobsManager: JobManager[Future], clock: Clock) extends Actor with Logging {
+final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration, jobsManager: JobManager[Future], clock: Clock) extends Actor with Logging {
   import ResourceError._
 
   private[this] implicit def executor: ExecutionContext = context.dispatcher
 
   private[this] implicit val futureM = new FutureMonad(executor)
 
-  private[this] val versionLog = new VersionLog(baseDir)
+  private def versionDir(version: UUID) = new File(baseDir, version.toString)
 
-  private def dirIfExists(name: String): Option[File] =
-    Option(new File(baseDir, name)).flatMap { dir =>
-      dir.isDirectory.option(dir)
-    }
-
-  private def versionDir(version: UUID) = dirIfExists(version.toString)
+  private def dirOpt(dir: File) = dir.isDirectory.option(dir)
 
   private def createVersion(version: UUID, typeName: String): IO[PrecogUnit] = {
     if (versionLog.isCompleted(version)) {
@@ -86,14 +86,15 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
     } else {
       for {
         _ <- versionLog.addVersion(VersionEntry(version, typeName))
-        makeDir <- versionDir(version) map { tmpDir =>
+        vDir = versionDir(version)
+        makeDir <- dirOpt(vDir) map { _ =>
           // If a dir for this vesion exists currently, we need to wipe it since
           // we're restarting this sequence
-          IOUtils.recursiveDelete(tmpDir) flatMap { _ =>
-            IOUtils.makeDirectory(tmpDir)
+          IOUtils.recursiveDelete(vDir) flatMap { _ =>
+            IOUtils.makeDirectory(vDir)
           }
-        } orElse {
-          Some(IOUtils.makeDirectory(tmpDir))
+        } getOrElse {
+          IOUtils.makeDirectory(vDir)
         }
       } yield makeDir
     }
@@ -114,213 +115,212 @@ final class PathManagerActor(path: Path, baseDir: File, resources: DefaultResour
   // TODO: make this an LRU cache
   private[this] var versions = Map[UUID, Resource]()
 
-  // This will either return a cached resource for the
-  // version+authorities, or open a new resource, creating it if
-  // needed.
-  private def createProjection(version: UUID, authorities: Authorities): Future[NIHDBResource] = {
-    logger.debug("Creating new projection for " + version)
-    versions.get(version) map { v => 
-      Future(v.asInstanceOf[NIHDBResource])
+  private def checkPermissions[A](value: A, writtenBy: Authorities, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Option[A]] = {
+    apiKey.map { key =>
+      writtenBy.accountIds.toList.traverse { id =>
+        permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(clock.now))
+      } map {
+        _.forall(_ == true).option(value)
+      }
     } getOrElse {
-      val createIO = for {
-        createResult <- resources.createNIHDB(versionDir(version), authorities)
-        _ <- createResult traverse { _ tap { resource => IO { versions += (version -> resource) } } }
-      } yield {
-        // TODO: can we do something better than just throw here?
-        createResult valueOr { error => throw error }
-      }
-
-      Future(createIO.unsafePerformIO)
+      Promise.successful(Some(value))
     }
-  }
-
-  def findResources(version: VersionEntry, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Validation[ResourceError, Option[Resource]]] = {
-    import PathData._
-    import Permission._
-
-    val preAuthedResource: IO[Validation[ResourceError, Resource]] =
-      versions.get(version.id) map { existing =>
-        logger.debug("Found cached resource for version " + version.id)
-        IO(Success(existing))
-      } getOrElse {
-        versionDir(version) map { dir =>
-          (version match {
-            case VersionEntry(id, `BLOB`) =>
-              resources.openBlob(dir)
-
-            case VersionEntry(id, `NIHDB`) =>
-              resources.openNIHDB(dir)
-          }) flatMap {
-            _ traverse {
-              _ tap { resource => IO { versions += (version -> resource) } }
-            }
-          }
-        }
-      }
-
-    val result = preAuthedResource map {
-      _ traverse { proj =>
-        logger.debug("Checking found resource at %s, version %s for access".format(path, version.id))
-        apiKey.map { key =>
-          // must have at a minimum a reduce permission from each authority
-          // TODO: get a Clock in here
-          proj.authorities.accountIds.toList.traverse { id =>
-            permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(clock.now))
-          } map {
-            _.forall(_ == true).option(proj)
-          }
-        } getOrElse {
-          Promise.successful(Some(proj))
-        }
-      }
-    }
-
-    result.except({ case t: Throwable => IO(Promise.failed(t)) }).unsafePerformIO
   }
 
   private def performCreate(apiKey: APIKey, data: PathData, version: UUID, authorities: Authorities): Future[PathActionResponse] = {
-    permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, clock.now) map { okToWrite =>
+    permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, clock.instant) map { okToWrite =>
       if (okToWrite) {
-        for {
+        (for {
           _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
           created <- data match {
             case BlobData(bytes, mimeType) =>
-              resources.createBlob[IO](tempVersionDir(version), mimeType, authorities, bytes :: StreamT.empty[IO, Array[Byte]])
+              resources.createBlob[IO](versionDir(version), mimeType, authorities, bytes :: StreamT.empty[IO, Array[Byte]])
 
             case NIHDBData(data) =>
-              resources.createNIHDB(tempVersionDir(version), authorities)
+              resources.createNIHDB(versionDir(version), authorities)
           }
           cached <- created traverse {
             _ tap { resource => IO { versions += (version -> resource) } }
           }
         } yield {
-          _.fold(
-            e => UpdateFailure(path, e),
+          created.fold(
+            e => UpdateFailure(path, nels(e)),
             _ => UpdateSuccess(path)
           )
-        }
+        }).unsafePerformIO
       } else {
-        UpdateFailure(path, PermissionsError("Key %s does not have permission to write to %s under %d".format(apiKey, path, authorities)))
+        UpdateFailure(path, nels(PermissionsError("Key %s does not have permission to write to %s under %d".format(apiKey, path, authorities))))
       }
     }
   }
 
-  private def performRead(id: Option[UUID], auth: Option[APIKey]): Future[Validation[ResourceError, Option[Resource]]] = {
-    import Permission._
-    import PathData._
-
-    Future { validateVersion(id) }.flatMap {
-      case Some(version) => findResources(version, auth, accountId => Set(ReadPermission(path, WrittenByAccount(accountId))))
-      case None =>
-        val msg = "No matching version could be found for %s:%s".format(id.getOrElse("*"))
-        logger.warn(msg)
-        Promise.successful(Failure(MissingData(msg)))
+  private def getNihdb(version: UUID): Future[ValidationNel[ResourceError, NIHDBResource]] = {
+    versions.get(version) map {
+      case nr: NIHDBResource => Promise successful Success(nr)
+      case uhoh => Promise successful Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))
+    } orElse {
+      versionLog.find(version) map { _ =>
+        Future { resources.openNIHDB(versionDir(version)).unsafePerformIO }
+      }
+    } getOrElse {
+      Promise successful Failure(nels(MissingData("No matching version could be found for " + version)))
     }
   }
 
-  def validateVersion(requested: Option[UUID]): Option[VersionEntry] = requested.flatMap {
-    id => versionLog.find(id) orElse { throw new Exception("Could not locate version " + id) }
-  } orElse versionLog.current
+  private def getNihdbProjection(version: UUID): Future[ValidationNel[ResourceError, NIHDBProjection]] = {
+    getNihdb(version) flatMap { nv =>
+      nv traverse { nr =>
+        NIHDBProjection.wrap(nr)
+      }
+    }
+  }
 
-  def hasData(version: Option[UUID]): Boolean = {
-    for {
+  private def getResource(version: UUID): Future[ValidationNel[ResourceError, Resource]] = {
+    versions.get(version) map { res =>
+      Promise successful Success(res)
+    } orElse {
+      versionLog.find(version) map { _ =>
+        Future {
+          (if (NIHDB.hasProjection(versionDir(version))) {
+            resources.openNIHDB(versionDir(version))
+          } else {
+            resources.openBlob(versionDir(version))
+          }).unsafePerformIO
+        }
+      }
+    } getOrElse {
+      Promise successful Failure(nels(MissingData("No matching version could be found for " + version)))
+    }
+  }
+
+  private def hasData(version: Option[UUID]): Boolean = {
+    (for {
       v <- version
-      dir <- versionDir(v)
+      dir <- dirOpt(versionDir(v))
       files <- Option(dir.list)
     } yield {
       files.size > 0
-    } getOrElse false
+    }) getOrElse false
   }
 
   override def postStop = {
-    Await.result(versions.values.flatMap(_.values).toStream.traverse(_.close), shutdownTimeout)
+    Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
   }
 
 
 
   def receive = {
-    case CreateNewVersion(_, apiKey, data, version, authorities, overwrite) =>
+    case CreateNewVersion(_, data, version, apiKey, authorities, overwrite) =>
       if (!overwrite && hasData(versionLog.current.map(_.id))) {
         // TODO: add backchannel error
-        sender ! UpdateFailure(path, GeneralError("Non-overwrite create request on existing data"))
+        sender ! UpdateFailure(path, nels(GeneralError("Non-overwrite create request on existing data")))
       } else {
         performCreate(apiKey, data, version, authorities) recover {
           case t: Throwable =>
             val msg = "Error during data creation " + path
             logger.error(msg, t)
-            UpdateFailure(path, GeneralError(msg))
+            UpdateFailure(path, nels(GeneralError(msg)))
         } pipeTo sender
       }
 
-    case Append(_, data, writeId, jobIdOpt, authorities) =>
-      (data match {
-        case bd: BlobData =>
-          Future {
-            val errMsg = "Append not yet supported for blob data"
-            logger.error(errMsg)
-            UpdateFailure(path, GeneralError(errMsg))
+    case Append(_, bd: BlobData, writeTo, jobIdOpt) =>
+      Future {
+        val errMsg = "Append not yet supported for blob data"
+        logger.error(errMsg)
+        UpdateFailure(path, nels(GeneralError(errMsg)))
+      }
+
+    case Append(_, data @ NIHDBData(events), writeTo, jobIdOpt) =>
+      val resourceVF = writeTo match {
+        case WriteTo.Version(versionId) => 
+          getNihdb(versionId) map { _ map { projection =>
+            projection.db.insert(events)
+          } fold (
+            e => UpdateFailure(path, e),
+            _ => UpdateSuccess(path)
+          )}
+
+        case WriteTo.Current(key, authorities) =>
+          versionLog.current map { version =>
+            getNihdb(version.id) map { _ map { projection =>
+              projection.db.insert(events)
+            } fold (
+              e => UpdateFailure(path, e),
+              _ => UpdateSuccess(path)
+            )}
+          } getOrElse {
+            val version = UUID.randomUUID
+            for {
+              created <- performCreate(key, data, version, authorities)
+              _       <- promoteVersion(version)
+            } yield created
           }
+      }
 
-        case NIHDBData(events) =>
-          // Which version are we appending to? If writeId is a UUID,
-          // we need to validate that version, otherwise we'll use
-          // head
-          Future { validateVersion(writeId.toOption).map(_.id) }.flatMap {
-            case Some(version) =>
-              for {
-                projection <- createProjection(version, authorities)
-                result <- projection.db.insert(events)
-              } yield UpdateSuccess(path)
-
-            case None =>
-              val version = UUID.randomUUID
-
-              for {
-                created <- performCreate(data, version, Some(authorities))
-                _       <- promoteVersion(version)
-              } yield created
-          }
-      }) recover {
+      resourceVF.recover {
         case t: Throwable =>
           val msg = "Failure during append to " + path
           logger.error(msg, t)
-          UpdateFailure(path, IOError(t))
+          UpdateFailure(path, nels(IOError(t)))
       } pipeTo sender
 
-    case Replace(_, id) =>
-      Future {
-        promoteVersion(id).map({ _ => UpdateSuccess(path)}).unsafePerformIO
+    case MakeCurrent(_, id, jobId) =>
+      promoteVersion(id) map {
+        _ => UpdateSuccess(path)
       } recover {
         case t: Throwable =>
-          val msg = "Error during promotion of " + id
+          val msg = "Error during promotion of " + id + " to current"
           logger.error(msg, t)
-          UpdateFailure(path, IOError(t))
+          UpdateFailure(path, nels(IOError(t)))
       } pipeTo sender
 
     case Read(_, id, auth) =>
-      performRead(id, auth) map {
-        _.fold(
-          messages => ReadFailure(path, messages),
-          resources => ReadSuccess(path, resources)
-        )
-      } recover {
+      val resVF: Future[ReadResult] = (id orElse versionLog.current.map(_.id)).map { version =>
+        getResource(version) flatMap {
+          _ traverse { resource =>
+          // TODO: should we even be checking perms here?
+            checkPermissions(resource, resource.authorities, auth, id => Set(ReadPermission(path, WrittenByAccount(id)))) map { resOpt =>
+              ReadSuccess(path, resOpt)
+            }
+          } map {
+            _ valueOr { errors =>
+              ReadFailure(path, errors)
+            } 
+          }
+        }
+      } getOrElse {
+        Promise successful ReadSuccess(path, None)
+      }
+
+      resVF recover {
         case t: Throwable =>
-          val msg = "Error during promotion of " + id
+          val msg = "Error during read on " + id
           logger.error(msg, t)
-          ReadFailure(path, NEL(IOError(t)))
+          ReadFailure(path, nels(IOError(t)))
       } pipeTo sender
 
     case ReadProjection(_, id, auth) =>
-      performRead(id, auth) flatMap(aggregateProjections) map {
-        _.fold(
-          messages => ReadProjectionFailure(path, messages),
-          proj => ReadProjectionSuccess(path, proj)
-        )
-      } recover {
+      val projectionVF = (id orElse versionLog.current.map(_.id)) map { version =>
+        getNihdbProjection(version) map {
+          _ traverse { projection =>
+            checkPermissions(projection, projection.authorities, auth, id => Set(ReducePermission(path, WrittenByAccount(id)))) map { projOpt =>
+              ReadProjectionSuccess(path, projOpt)
+            }
+          } map {
+            _ valueOr { errors =>
+              ReadProjectionFailure(path, errors)
+            }
+          }
+        }
+      } getOrElse {
+        Promise successful ReadProjectionSuccess(path, None)
+      }
+
+      projectionVF recover {
         case t: Throwable =>
-          val msg = "Error during promotion of " + id
+          val msg = "Error during read projection on " + id
           logger.error(msg, t)
-          ReadProjectionFailure(path, NEL(IOError(t)))
+          ReadProjectionFailure(path, nels(IOError(t)))
       } pipeTo sender
 
     case Execute(_, auth) =>

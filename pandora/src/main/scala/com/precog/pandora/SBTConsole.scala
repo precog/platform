@@ -29,6 +29,7 @@ import pandora._
 
 import com.precog.common.Path
 import com.precog.common.accounts._
+import com.precog.common.jobs._
 import com.precog.niflheim._
 import com.precog.yggdrasil.vfs._
 
@@ -131,7 +132,7 @@ object SBTConsole {
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
     val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
+    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) with IdSourceScannerModule {

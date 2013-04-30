@@ -36,6 +36,7 @@ import jline.console.ConsoleReader
 import com.precog.common.Path
 import com.precog.common.kafka._
 import com.precog.common.accounts._
+import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
@@ -297,7 +298,7 @@ object Console extends App {
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
         val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"))))
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"), new InMemoryJobManager[Future], yggConfig.clock)))
 
         trait TableCompanion extends NIHDBColumnarTableCompanion
 

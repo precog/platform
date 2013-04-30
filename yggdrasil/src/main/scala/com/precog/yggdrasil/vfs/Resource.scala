@@ -42,7 +42,7 @@ import org.joda.time.DateTime
 
 import scala.annotation.tailrec
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect.IO
 import scalaz.syntax.std.option._
 
@@ -87,6 +87,10 @@ object ResourceError {
 
   def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
     CorruptData("%s:\n%s" format (msg, error.message))
+  }
+
+  def fromExtractorErrorNel(msg: String): Extractor.Error => NEL[ResourceError] = { error =>
+    NEL(fromExtractorError(msg)(error))
   }
 }
 

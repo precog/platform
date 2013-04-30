@@ -144,7 +144,7 @@ trait NIHDBQueryExecutorComponent  {
 
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
       val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration)))
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
 
       val shardActors @ ShardActors(ingestSupervisor, _) =
         initShardActors(permissionsFinder, projectionsActor)

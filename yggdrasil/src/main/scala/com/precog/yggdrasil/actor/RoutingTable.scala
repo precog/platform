@@ -54,33 +54,26 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId)) =>
+      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId)) => 
         recordsByPath.get(path) match {
           case Some((`apiKey`, `writeAs`, buffer)) =>
-            recordsByPath += (path -> (apiKey, writeAs, buffer + ((offset, data.map(_.value)))))
+            buffer += (offset -> data.map(_.value))
 
           case Some((k0, a0, buffer)) =>
             updates += Append(path, NIHDBData(buffer), WriteTo.Current(k0, a0), jobId)
             recordsByPath += (path -> (apiKey, writeAs, ArrayBuffer[Batch]((offset, data.map(_.value)))))
-
-          case None => 
+          case None =>
             recordsByPath += (path -> (apiKey, writeAs, ArrayBuffer[Batch]((offset, data.map(_.value)))))
         }
 
-      case (offset, StoreFileMessage(apiKey, path, writeAs, jobId, eventId, fileContent, timestamp, streamId) =>
-        updates += CreateNewVersion(path, BlobData(sfm.content.data, sfm.content.mimeType), sfm.streamId.getOrElse(UUID.randomUUID), apiKey, writeAs, false)
+      case (offset, StoreFileMessage(apiKey, path, writeAs, jobId, eventId, fileContent, timestamp, streamId)) =>
+        updates += CreateNewVersion(path, BlobData(fileContent.data, fileContent.mimeType), streamId.getOrElse(UUID.randomUUID), apiKey, writeAs, false)
 
-      case (_, ArchiveMessage(key, path, jobid, eventId, timestamp)) =>
+      case (_, ArchiveMessage(key, path, jobId, eventId, timestamp)) =>
         updates += ArchivePath(path, jobId)
     }
 
-    // combine ingest messages by (path, owner), add to updates, then return
-    recordsByPath.foreach {
-      case ((path, writeAs), batches) =>
-    }
-
     logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))
-
     updates
   }
 }

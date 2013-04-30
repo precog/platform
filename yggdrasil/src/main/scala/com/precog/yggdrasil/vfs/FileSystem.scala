@@ -35,6 +35,7 @@ import com.google.common.cache.RemovalCause
 
 import com.precog.common.Path
 import com.precog.common.accounts.AccountId
+import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.util.PrecogUnit
 import com.precog.util.cache.Cache
@@ -70,17 +71,25 @@ object NIHDBData {
 
 sealed trait PathOp {
   def path: Path
+  def jobId: Option[JobId]
 }
 
 sealed trait PathUpdateOp extends PathOp
 
-sealed trait WriteTo 
+sealed trait WriteTo {
+  def writeId: Option[UUID]
+}
 object WriteTo {
   // You'll either use the API key to check against current authorities, or the
   // api key will be used to check for create permissions and the authorities
   // will be used if the create permission check succeeds.
-  case class Current(as: APIKey, authorities: Authorities) extends WriteTo
-  case class Version(streamId: UUID) extends WriteTo
+  case class Current(as: APIKey, authorities: Authorities) extends WriteTo {
+    val writeId = None
+  }
+
+  case class Version(streamId: UUID) extends WriteTo {
+    val writeId = Some(streamId)
+  }
 }
 
 /**
@@ -101,7 +110,9 @@ case class Append(path: Path, data: PathData, writeTo: WriteTo, jobId: Option[Jo
   * or more Append messages with matching streamIds, and then a final Replace
   * message with matching streamId to indicate promotion to HEAD.
   */
-case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, apiKey: APIKey, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp
+case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, apiKey: APIKey, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp {
+  val jobId = None
+}
 
 /**
   * Replace the current HEAD with the version specified by the streamId.
@@ -110,27 +121,40 @@ case class MakeCurrent(path: Path, streamId: UUID, jobId: Option[JobId]) extends
 
 case class ArchivePath(path: Path, jobId: Option[JobId]) extends PathUpdateOp
 
-case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
-case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp
-case class Execute(path: Path, auth: Option[APIKey]) extends PathOp
-case class Stat(path: Path, auth: Option[APIKey]) extends PathOp
+case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp {
+  val jobId = None
+}
 
-case class FindChildren(path: Path, auth: APIKey) extends PathOp
+case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp {
+  val jobId = None
+}
+
+case class Execute(path: Path, auth: Option[APIKey]) extends PathOp {
+  val jobId = None
+}
+
+case class Stat(path: Path, auth: Option[APIKey]) extends PathOp {
+  val jobId = None
+}
+
+case class FindChildren(path: Path, auth: APIKey) extends PathOp {
+  val jobId = None
+}
 
 
 
 sealed trait PathActionResponse
 
 case class UpdateSuccess(path: Path) extends PathActionResponse
-case class UpdateFailure(path: Path, error: ResourceError) extends PathActionResponse
+case class UpdateFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
 
 sealed trait ReadResult extends PathActionResponse {
-  def resources: List[Resource]
+  def resource: Option[Resource]
 }
 
-case class ReadSuccess(path: Path, resources: List[Resource]) extends ReadResult
+case class ReadSuccess(path: Path, resource: Option[Resource]) extends ReadResult
 case class ReadFailure(path: Path, errors: NEL[ResourceError]) extends ReadResult {
-  val resources = Nil
+  val resource = None
 }
 
 sealed trait ReadProjectionResult extends PathActionResponse {

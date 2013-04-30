@@ -22,6 +22,7 @@ package com.precog.pandora
 import com.precog.common.Path
 import com.precog.util.VectorCase
 import com.precog.common.accounts._
+import com.precog.common.jobs._
 import com.precog.common.kafka._
 import com.precog.common.security._
 
@@ -122,7 +123,7 @@ object NIHDBPlatformActor extends Logging {
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
       val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration)))
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
         Some(SystemState(projectionsActor, actorSystem))
       }

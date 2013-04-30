@@ -39,8 +39,11 @@ import java.util.UUID
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect.IO
 import scalaz.std.list._
+import scalaz.std.option._
 import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
+import scalaz.syntax.applicative._
+import scalaz.syntax.effect.id._
 
 import shapeless._
 
@@ -49,82 +52,107 @@ object VersionLog {
   final val logName = "versionLog"
   final val completedLogName = "completedLog"
   final val currentVersionFilename = "HEAD"
-}
 
+  final val unsetSentinel = "unset"
+
+  class LogFiles(val baseDir: File) {
+    val headFile = new File(baseDir, currentVersionFilename)
+    val logFile = new File(baseDir, logName)
+    val completedFile = new File(baseDir, completedLogName)
+  }
+
+  def open(baseDir: File) = IO {
+    val logFiles = new LogFiles(baseDir)
+    import logFiles._
+
+    // Read in the list of versions as well as the current version
+    val currentVersion: Validation[Error, Option[VersionEntry]] = if (headFile.exists) {
+      for {
+        jv <- JParser.parseFromFile(headFile).leftMap(Error.thrown)
+        version <- jv match {
+          case JString(`unsetSentinel`) => Success(None)
+          case other => other.validated[VersionEntry].map(Some(_))
+        }
+      } yield version
+    } else {
+      Success(None)
+    }
+
+    val allVersions: Validation[Error, List[VersionEntry]] = if (logFile.exists) {
+      for {
+        jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
+        versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, VersionEntry](_.validated[VersionEntry])
+      } yield versions
+    } else {
+      Success(Nil)
+    }
+
+    val completedVersions: Validation[Error, Set[UUID]] = if (completedFile.exists) {
+      for {
+        jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
+        versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, UUID](_.validated[UUID])
+      } yield versions.toSet
+    } else {
+      Success(Set.empty)
+    }
+
+    (currentVersion |@| allVersions |@| completedVersions) { new VersionLog(logFiles, _, _, _) }
+  }
+}
 /**
   * Track path versions. This class is not thread safe
   */
-class VersionLog(baseDir: File) extends Logging {
+class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry], initAllVersions: List[VersionEntry], initCompletedVersions: Set[UUID]) extends Logging {
   import VersionLog._
+  import logFiles._
 
   private[this] val workLock = FileLock(baseDir, lockName)
 
-  private[this] var currentVersion: Option[VersionEntry] = None
-  private[this] var allVersions: List[VersionEntry] = Nil
-  private[this] var completedVersions: Set[UUID] = Set.empty
+  private[this] var currentVersion: Option[VersionEntry] = initVersion
+  private[this] var allVersions: List[VersionEntry] = initAllVersions
+  private[this] var completedVersions: Set[UUID] = initCompletedVersions
 
-  private[this] val headFile = new File(baseDir, currentVersionFilename)
-  private[this] val logFile = new File(baseDir, logName)
-  private[this] val completedFile = new File(baseDir, completedLogName)
-
-  // Read in the list of versions as well as the current version
-  if (headFile.exists) {
-    currentVersion = (for {
-      jv <- JParser.parseFromFile(headFile).leftMap(Error.thrown)
-      version <- jv.validated[VersionEntry]
-    } yield Some(version)).valueOr { case Thrown(t) => throw t }
-  }
-
-  if (logFile.exists) {
-    allVersions = (for {
-      jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
-      versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, VersionEntry](_.validated[VersionEntry])
-    } yield versions).valueOr { error => throw new Exception(error.message) }
-  }
-
-  if (completedFile.exists) {
-    completedVersions = (for {
-      jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
-      versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, UUID](_.validated[UUID])
-    } yield versions.toSet).valueOr { error => throw new Exception(error.message) }
-  }
-
-  def current = currentVersion
+  def current: Option[VersionEntry] = currentVersion
   def find(version: UUID): Option[VersionEntry] = allVersions.find(_.id == version)
-  def isCompleted(version: UUID) = completedVersion.contains(version)
+  def isCompleted(version: UUID) = completedVersions.contains(version)
 
   def close = {
     workLock.release
   }
 
-  def addVersion(entry: VersionEntry): IO[PrecogUnit] = allVersions.find(entry) map {
+  def addVersion(entry: VersionEntry): IO[PrecogUnit] = allVersions.find(_ == entry) map { _ =>
     IO(PrecogUnit)
   } getOrElse {
-    IOUtils.writeTOfile(entry.serialize.renderCompact + "\n", logFile, true).map { _ =>
+    IOUtils.writeToFile(entry.serialize.renderCompact + "\n", logFile, true) map { _ =>
       allVersions = allVersions :+ entry
       PrecogUnit
     }
   }
 
-  def completeVersion(version: UUID): IO[PrecogUnit] = allVersions.find(_.id == version) map { _ =>
-    IOUtils.writeTOfile(version.serialize.renderCompact + "\n", completedFile)
-  } getOrElse {
-    IO.throwIO(new IllegalStateException("Cannot completed unknown version " + version))
+  def completeVersion(version: UUID): IO[PrecogUnit] = allVersions.find(_.id == version) traverse { _ =>
+    IOUtils.writeToFile(version.serialize.renderCompact + "\n", completedFile)
+  } map {
+    _ getOrElse { throw new IllegalStateException("Cannot completed unknown version " + version) }
   }
 
   def setHead(newHead: UUID): IO[PrecogUnit] = {
     if (currentVersion.exists(_.id == newHead)) {
       IO(PrecogUnit)
     } else {
-      allVersions.find(_.id == id).toSuccess(new IllegalStateException("Failed to locate entry to promote: " + id)).map { entry =>
-        IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile).map { _ =>
-          currentVersion = Some(entry)
+      allVersions.find(_.id == newHead) traverse { entry =>
+        IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile) map { _ =>
+          currentVersion = Some(entry);
+          PrecogUnit 
         }
-      }.valueOr(IO.throwIO)
+      } map {
+        _ getOrElse { throw new IllegalStateException("Attempt to set head to nonexistent version: " + newHead) }
+      }
     }
   }
 
-  def clearHead = ???
+  def clearHead = IOUtils.writeToFile(unsetSentinel, headFile).map { _ =>
+    currentVersion = None
+  }
 }
 
 

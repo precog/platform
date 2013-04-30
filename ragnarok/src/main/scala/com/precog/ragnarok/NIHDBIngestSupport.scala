@@ -103,7 +103,7 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
     val eventId = EventId(pid, sid.getAndIncrement)
     val records = (eventId.uid, readRows(data))
 
-    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), None, Authorities(accountId))).flatMap { _ =>
+    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), WriteTo.Current(apiKey, Authorities(accountId)), None)).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
       (projectionsActor ? Read(path, None, None)).mapTo[List[NIHDBResource]]
