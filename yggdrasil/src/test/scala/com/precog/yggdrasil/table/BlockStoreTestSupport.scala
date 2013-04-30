@@ -74,7 +74,7 @@ trait BaseBlockStoreTestModule[M[+_]]
     val xyz = slices.foldLeft(Set.empty[ColumnRef]) {
       case (acc, slice) => acc ++ slice.columns.keySet
     }
-    val structure = M.point(xyz)
+    def structure(implicit M: Monad[M]) = M.point(xyz)
 
     private implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
 
