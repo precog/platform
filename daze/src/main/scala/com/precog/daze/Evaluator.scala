@@ -358,24 +358,26 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             val joinSpec = buildWrappedJoinSpec(prefixLength, leftLength, rightLength)(spec)
-            val (joinOrder, resultM) = (isSorted(leftSort), isSorted(rightSort)) match {
+            val resultM = (isSorted(leftSort), isSorted(rightSort)) match {
               case (true, true) =>
-                (KeyOrder, M point simpleJoin(leftResult, rightResult)(keySpec, joinSpec))
+                M point (KeyOrder -> simpleJoin(leftResult, rightResult)(keySpec, joinSpec))
               case (lSorted, rSorted) =>
                 val hint = Some(if (lSorted) LeftOrder else if (rSorted) RightOrder else KeyOrder)
                 Table.join(leftResult, rightResult, hint)(keySpec, joinSpec)
             }
 
-            val sort = (joinKey, joinOrder) match {
-              case (ValueJoin(id), KeyOrder) => ValueSort(id)
-              case (ValueJoin(_), LeftOrder) => leftSort
-              case (ValueJoin(_), RightOrder) => rightSort
-              case (IdentityJoin(ids), KeyOrder) => PartialIdentitySort(ids)
-              case (IdentityJoin(ids), LeftOrder) => leftSort
-              case (IdentityJoin(ids), RightOrder) => rightSort
-            }
+            resultM map { case (joinOrder, result) =>
+              val sort = (joinKey, joinOrder) match {
+                case (ValueJoin(id), KeyOrder) => ValueSort(id)
+                case (ValueJoin(_), LeftOrder) => leftSort
+                case (ValueJoin(_), RightOrder) => rightSort
+                case (IdentityJoin(ids), KeyOrder) => PartialIdentitySort(ids)
+                case (IdentityJoin(ids), LeftOrder) => leftSort
+                case (IdentityJoin(ids), RightOrder) => rightSort
+              }
 
-            resultM map (PendingTable(_, graph, TransSpec1.Id, sort))
+              PendingTable(result, graph, TransSpec1.Id, sort)
+            }
           }
 
           // TODO: Parallelize the 2 prepareEvals.

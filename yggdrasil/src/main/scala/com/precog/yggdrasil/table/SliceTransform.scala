@@ -114,7 +114,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                 } yield result
                   
                 resultColumns.groupBy(_.tpe) map { 
-                  case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                  case (tpe, cols) =>
+                    val col = cols reduceLeft { (c1, c2) =>
+                      Column.unionRightSemigroup.append(c1, c2)
+                    }
+                    (ColumnRef(CPath.Identity, tpe), col)
                 }
               }
             }
