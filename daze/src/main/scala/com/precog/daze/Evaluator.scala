@@ -265,10 +265,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         
         def get0(pt: PendingTable): (TransSpec1, DepGraph) = (pt.trans, pt.graph)
         
-        def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
+        def set0(pt: PendingTable, tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] = {
           for {
             _ <- monadState.modify { state => state.copy(assume = state.assume + (tg._2 -> (pt.table, pt.sort))) }
           } yield pt.copy(trans = tg._1, graph = tg._2)
+        }
 
         def init0(tg: (TransSpec1, DepGraph)): StateT[N, EvaluatorState, PendingTable] =
           memoized(tg._2, evalNotTransSpecable)
@@ -278,7 +279,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
          * performing the cross on the left or right, depending on the value
          * of `crossSort` (`CrossLeftSort` or `CrossRightSort`).
          */
-        def cross(left: DepGraph, right: DepGraph, crossSort: JoinSort)
+        def cross(graph: DepGraph, left: DepGraph, right: DepGraph, crossSort: JoinSort)
             (spec: (TransSpec2, TransSpec2) => TransSpec2): StateT[N, EvaluatorState, PendingTable] = {
           val isLeft = crossSort == CrossLeftSort
           def valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
@@ -299,7 +300,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           }
         }
 
-        def join(left: DepGraph, right: DepGraph, joinSort: JoinSort)
+        def join(graph: DepGraph, left: DepGraph, right: DepGraph, joinSort: JoinSort)
             (spec: (TransSpec2, TransSpec2) => TransSpec2): StateT[N, EvaluatorState, PendingTable] = {
 
           import JoinOrder._
@@ -386,8 +387,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
         }
 
         type TSM[+T] = StateT[N, EvaluatorState, T]
-        def evalTransSpecable(to: DepGraph): StateT[N, EvaluatorState, PendingTable] =
+        def evalTransSpecable(to: DepGraph): StateT[N, EvaluatorState, PendingTable] = {
           mkTransSpecWithState[TSM, PendingTable](to, None, ctx, get0, set0, init0)
+        }
         
         def evalNotTransSpecable(graph: DepGraph): StateT[N, EvaluatorState, PendingTable] = graph match {
           case dag.Observe(data, samples) =>
@@ -421,7 +423,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
             (left.identities, right.identities) match {
               case (Identities.Specs(_), Identities.Specs(_)) =>
-                join(left, right, joinSort)(transFromBinOp(op, ctx))
+                join(graph, left, right, joinSort)(transFromBinOp(op, ctx))
 
               case (Identities.Undefined, _) | (_, Identities.Undefined) =>
                 monadState point PendingTable(Table.empty, graph, TransSpec1.Id, IdentitySort)
@@ -429,7 +431,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
           case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
             // TODO binary typing
-            join(target, boolean, joinSort)(trans.Filter(_, _))
+            join(graph, target, boolean, joinSort)(trans.Filter(_, _))
 
           case s: SplitParam => 
             sys.error("Inlining of SplitParam failed")
@@ -507,14 +509,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             
             val joined: StateT[N, EvaluatorState, (Morph1Apply, PendingTable)] = mor.alignment match {
               case MorphismAlignment.Cross(morph1) =>
-                ((transState liftM mn(morph1)) |@| cross(left, right, CrossLeftSort)(spec)).tupled
+                ((transState liftM mn(morph1)) |@| cross(graph, left, right, CrossLeftSort)(spec)).tupled
 
               case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) > 0 =>
-                ((transState liftM mn(morph1)) |@| join(left, right, IdentitySort)(spec)).tupled
+                ((transState liftM mn(morph1)) |@| join(graph, left, right, IdentitySort)(spec)).tupled
 
               case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) == 0 =>
                 val crossSort = if (left.isSingleton || !right.isSingleton) CrossRightSort else CrossLeftSort
-                ((transState liftM mn(morph1)) |@| cross(left, right, crossSort)(spec)).tupled
+                ((transState liftM mn(morph1)) |@| cross(graph, left, right, crossSort)(spec)).tupled
 
               case MorphismAlignment.Custom(alignment, f) =>
                 val pair = (prepareEval(left, splits) |@| prepareEval(right, splits)).tupled
@@ -716,10 +718,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
     
           case j @ Join(op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => 
-            cross(left, right, joinSort)(transFromBinOp(op, ctx))
+            cross(graph, left, right, joinSort)(transFromBinOp(op, ctx))
           
           case f @ dag.Filter(joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => 
-            cross(target, boolean, joinSort)(trans.Filter(_, _))
+            cross(graph, target, boolean, joinSort)(trans.Filter(_, _))
           
           case Sort(parent, indexes) => 
             val identityOrder = Vector(0 until indexes.length: _*)

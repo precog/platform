@@ -151,7 +151,11 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
             (l, al) =  get(pl)
             pr      <- rightParent
             (r, ar) =  get(pr)
-            result  <-  if(al == ar) set(pl, (transFromBinOp(op, ctx)(l, r), al)) else init(Leaf(Source), node)  
+            result  <- if (al == ar) {
+              set(pl, (transFromBinOp(op, ctx)(l, r), al))
+            } else {
+              init(Leaf(Source), node)
+            }
           } yield result
         }
           

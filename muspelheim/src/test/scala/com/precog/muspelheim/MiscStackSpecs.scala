@@ -164,6 +164,8 @@ trait MiscStackSpecs extends EvalStackSpecs {
           ids must haveSize(2)
 
           elems.keys mustEqual(Set("weight", "increasedWeight"))
+
+        case _ => ko
       }
 
       val weights = result collect { case (_, SObject(elems)) => elems("weight") }
