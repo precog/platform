@@ -67,7 +67,7 @@ object HashedSlice {
  * same value, regardless of whether the slices look similar otherwise.
  */
 private final class SliceHasher(slice: Slice) {
-  private val hashers: Array[ColumnHasher] = slice.columns.toArray.sortBy(_._1) map { case (ref, col) =>
+  private val hashers: Array[ColumnHasher] = slice.columns.toArray map { case (ref, col) =>
     ColumnHasher(ref, col)
   }
 
