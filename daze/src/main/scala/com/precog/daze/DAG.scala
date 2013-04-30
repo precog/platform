@@ -1162,7 +1162,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
     
-    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with StagingPoint {
+    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
       val loc = parent.loc
       
       lazy val identities = parent.identities.fold(specs => {
@@ -1196,7 +1196,7 @@ trait DAG extends Instructions {
      * share the same identity.  This is very important to ensure correctness in
      * evaluation of the `Join` node.
      */
-    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with StagingPoint {
+    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
       val loc = parent.loc
 
       lazy val identities = parent.identities
