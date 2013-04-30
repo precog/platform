@@ -560,9 +560,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
               table = pending.table.transform(liftToValues(pending.trans))
-
-              sorted <- transState liftM mn(table.sort(valueSpec, SortAscending))
-              distinct = sorted.distinct(valueSpec)
+              distinct = table.distinct(valueSpec)
               result = distinct.transform(idSpec)
             } yield {
               PendingTable(result, graph, TransSpec1.Id, IdentitySort)
