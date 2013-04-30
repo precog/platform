@@ -1111,8 +1111,12 @@ trait ColumnarTableModule[M[+_]]
               StreamT.Done
             }
         )
-        
-        Table(stream((id.initial, filter.initial), slices), UnknownSize)
+
+        val slices0 = StreamT.wrapEffect(this.sort(spec) map { sorted =>
+          stream((id.initial, filter.initial), sorted.slices)
+        })
+
+        Table(slices0, EstimateSize(0L, size.maxSize))
       }
 
       distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
