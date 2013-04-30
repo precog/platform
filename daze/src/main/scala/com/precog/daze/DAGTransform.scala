@@ -86,8 +86,6 @@ trait DAGTransform extends DAG {
 
         case SortBy(parent, sortField, valueField, id) => f(SortBy(transformAux(parent), sortField, valueField, id))
         
-        case ReSortBy(parent, id) => f(ReSortBy(transformAux(parent), id))
-  
         case Memoize(parent, priority) => f(Memoize(transformAux(parent), priority))
   
         case graph @ Distinct(parent) => f(Distinct(transformAux(parent))(graph.loc))

@@ -797,22 +797,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               }
             }
          
-          //ReSortBy is untested because, in practice, we cannot reach this case
-          case s @ ReSortBy(parent, id) => 
-            sys.error("Can we really not hit this in practice?")
-            if (parent.sorting == ValueSort(id)) {
-              prepareEval(parent, splits)
-            } else {
-              for {
-                pending <- prepareEval(parent, splits)
-                table = pending.table.transform(liftToValues(pending.trans))
-                
-                result <- transState liftM mn(table.sort(DerefObjectStatic(Leaf(Source), CPathField("sort-" + id)), SortAscending))
-              } yield {
-                PendingTable(result, graph, TransSpec1.Id, ValueSort(id))
-              }
-            }
-          
           case Memoize(parent, priority) => 
             for {
               pending <- prepareEval(parent, splits)
@@ -975,7 +959,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             
             case dag.Sort(parent, _) => queue2 enqueue parent
             case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
-            case dag.ReSortBy(parent, _) => queue2 enqueue parent
             
             case dag.Memoize(parent, _) => queue2 enqueue parent
           }
@@ -1081,7 +1064,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       
       case Sort(parent, _) => Set(parent)
       case SortBy(parent, _, _, _) => Set(parent)
-      case ReSortBy(parent, _) => Set(parent)
       
       case Memoize(parent, _) => Set(parent)
     }

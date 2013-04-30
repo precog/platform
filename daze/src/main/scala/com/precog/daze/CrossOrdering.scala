@@ -105,21 +105,8 @@ trait CrossOrdering extends DAG {
         case node @ Diff(left, right) =>
           Diff(memoized(left), memoized(right))(node.loc)
         
-        case node @ Join(op, ValueSort(id), left, right) => {
+        case node @ Join(op, ValueSort(id), left, right) =>
           Join(op, ValueSort(id), memoized(left), memoized(right))(node.loc)
-          //val left2 = memoized(left)
-          //val right2 = memoized(right)
-          //
-          //def resortLeft = ReSortBy(left2, id)
-          //def resortRight = ReSortBy(right2, id)
-          //
-          //(left2.sorting, right2.sorting) match {
-          //  case (ValueSort(`id`), ValueSort(`id`)) => Join(op, ValueSort(id), left2, right2)(node.loc)
-          //  case (ValueSort(`id`), _              ) => Join(op, ValueSort(id), left2, resortRight)(node.loc)
-          //  case (_,               ValueSort(`id`)) => Join(op, ValueSort(id), resortLeft, right2)(node.loc)
-          //  case _                                  => Join(op, ValueSort(id), resortLeft, resortRight)(node.loc)
-          //}
-        }
 
         case node @ Join(op, IdentitySort, left, right) => {
           //Join(op, IdentitySort, memoized(left), memoized(right))(node.loc)
@@ -137,16 +124,6 @@ trait CrossOrdering extends DAG {
           def sortLeftAux = Sort(left2, Vector(0 until left2.identities.length: _*))
           def sortRightAux = Sort(right2, Vector(0 until right2.identities.length: _*))
 
-          //println("node:\n" + node)
-          //println("left2.sorting = " + left2.sorting)
-          //println("leftPrefix = " + leftPrefix)
-          //println("left.identities = " + left2.identities)
-          //println("leftIndices = " + leftIndices)
-          //println("right2.sorting = " + right2.sorting)
-          //println("rightPrefix = " + rightPrefix)
-          //println("right.identities = " + right2.identities)
-          //println("rightIndices = " + rightIndices)
-          
           (left2.sorting, leftPrefix, right2.sorting, rightPrefix) match {
             case (IdentitySort, true,  IdentitySort, true ) => Join(op, IdentitySort, left2, right2)(node.loc)
             case (IdentitySort, true,  IdentitySort, false) => Join(op, IdentitySort, left2, sortRight)(node.loc)
@@ -173,7 +150,7 @@ trait CrossOrdering extends DAG {
             val right2 = memoized(right)
             
             right2 match {
-              case _: Memoize | _: Sort | _: SortBy | _: ReSortBy | _: LoadLocal =>
+              case _: Memoize | _: Sort | _: SortBy | _: LoadLocal =>
                 Join(op, CrossLeftSort, memoized(left), right2)(node.loc)
               
               case _ =>
@@ -185,20 +162,8 @@ trait CrossOrdering extends DAG {
         case node @ Join(op, joinSort, left, right) =>
           Join(op, joinSort, memoized(left), memoized(right))(node.loc)
         
-        case node @ Filter(ValueSort(id), target, boolean) => {
-          val target2 = memoized(target)
-          val boolean2 = memoized(boolean)
-          
-          def resortTarget  = ReSortBy(target2, id)
-          def resortBoolean = ReSortBy(boolean2, id)
-          
-          (target2.sorting, boolean2.sorting) match {
-            case (ValueSort(`id`), ValueSort(`id`)) => Filter(ValueSort(id), target2, boolean2)(node.loc) 
-            case (ValueSort(`id`), _              ) => Filter(ValueSort(id), target2, resortBoolean)(node.loc)
-            case (_,               ValueSort(`id`)) => Filter(ValueSort(id), resortTarget, boolean2)(node.loc)
-            case _                                  => Filter(ValueSort(id), resortTarget, resortBoolean)(node.loc)
-          }
-        }
+        case node @ Filter(ValueSort(id), target, boolean) =>
+          Filter(ValueSort(id), memoized(target), memoized(boolean))(node.loc)
           
         case node @ Filter(IdentitySort, target, boolean) => {
           val target2 = memoized(target)
@@ -238,9 +203,6 @@ trait CrossOrdering extends DAG {
         
         case SortBy(parent, sortField, valueField, id) =>
           SortBy(memoized(parent), sortField, valueField, id)
-        
-        case ReSortBy(parent, id) =>
-          ReSortBy(memoized(parent), id)
         
         case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }
