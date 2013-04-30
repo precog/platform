@@ -508,8 +508,6 @@ trait DAG extends Instructions {
 
           case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
 
-          case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(parent), id)
-
           case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
         }
 
@@ -705,9 +703,6 @@ trait DAG extends Instructions {
                   case dag.SortBy(parent, sortField, valueField, id) =>
                     for { newParent <- memoized(parent) } yield dag.SortBy(newParent, sortField, valueField, id)
         
-                  case dag.ReSortBy(parent, id) =>
-                    for { newParent <- memoized(parent) } yield dag.ReSortBy(newParent, id)
-        
                   case dag.Memoize(parent, priority) =>
                     for { newParent <- memoized(parent) } yield dag.Memoize(newParent, priority)
                 }
@@ -871,8 +866,6 @@ trait DAG extends Instructions {
         case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
-
-        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))
       }
@@ -1225,18 +1218,6 @@ trait DAG extends Instructions {
     case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with StagingPoint {
       val loc = parent.loc
 
-      lazy val identities = parent.identities
-      
-      val sorting = ValueSort(id)
-      
-      lazy val isSingleton = parent.isSingleton
-      
-      lazy val containsSplitArg = parent.containsSplitArg
-    }
-    
-    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph with StagingPoint {
-      val loc = parent.loc
-      
       lazy val identities = parent.identities
       
       val sorting = ValueSort(id)

@@ -130,8 +130,6 @@ trait TypeInferencer extends DAG {
     
           case SortBy(parent, _, _, _) => inner(jtpe, typing, splits, parent)
           
-          case ReSortBy(parent, _) => inner(jtpe, typing, splits, parent)
-  
           case Memoize(parent, _) => inner(jtpe, typing, splits, parent)
     
           case Distinct(parent) => inner(jtpe, typing, splits, parent)

@@ -174,8 +174,6 @@ trait Memoizer extends DAG {
 
         case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
 
-        case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(parent), id)
-
         case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
       }
 
@@ -354,9 +352,6 @@ trait Memoizer extends DAG {
       findForcingRefs(parent, OpSide.Center(graph))      // sort is a forcing point, but not a memo candidate
     
     case SortBy(parent, _, _, _) =>
-      findForcingRefs(parent, OpSide.Center(graph))      // sort is a forcing point, but not a memo candidate
-    
-    case ReSortBy(parent, _) =>
       findForcingRefs(parent, OpSide.Center(graph))      // sort is a forcing point, but not a memo candidate
     
     case Memoize(parent, _) =>
