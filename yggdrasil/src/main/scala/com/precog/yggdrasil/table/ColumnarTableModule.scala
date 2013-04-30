@@ -483,24 +483,23 @@ trait ColumnarTableModule[M[+_]]
      * different than if the tables were normalized. 
      */
     def zip(t2: Table): M[Table] = {
-      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
-
-      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice], acc: StreamT[M, Slice]): M[StreamT[M, Slice]] = {
-        slices1.uncons flatMap { 
+      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice]): StreamT[M, Slice] = {
+        StreamT(slices1.uncons flatMap {
           case Some((head1, tail1)) =>
-            slices2.uncons flatMap {
-              case Some((head2, tail2)) => {
-                rec(tail1, tail2, head1.zip(head2) :: acc)
-              }
-              case None => M.point(acc)
+            slices2.uncons map {
+              case Some((head2, tail2)) =>
+                StreamT.Yield(head1 zip head2, rec(tail1, tail2))
+              case None =>
+                StreamT.Done
             }
-          case None => M.point(acc)
-        }
+
+          case None =>
+            M point StreamT.Done
+        })
       }
 
-      val resultSlices = rec(slices, t2.slices, StreamT.empty[M, Slice])
-
-      resultSlices map { sl => Table(sl, resultSize) }
+      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
+      M point Table(rec(slices, t2.slices), resultSize)
 
       // todo investigate why the code below makes all of RandomLibSpecs explode
       // val resultSlices = Apply[({ type l[a] = StreamT[M, a] })#l].zip.zip(slices, t2.slices) map { case (s1, s2) => s1.zip(s2) }
@@ -1725,4 +1724,3 @@ trait ColumnarTableModule[M[+_]]
     def metrics = TableMetrics(readStarts.get, blockReads.get)
   }
 }
-// vim: set ts=4 sw=4 et:
