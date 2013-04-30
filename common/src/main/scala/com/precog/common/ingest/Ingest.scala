@@ -68,7 +68,7 @@ object Event {
 /**
  * If writeAs is None, then the downstream 
  */
-case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID]) extends Event {
+case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID], storeMode: StoreMode) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = ingest(this)
 
   def split(n: Int, streamId: UUID): List[Event] = {
@@ -82,7 +82,7 @@ case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: "storeMode" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.1".v))
@@ -97,7 +97,7 @@ object Ingest {
           val jv = (obj \ "data")
           Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), 
                  if (jv == JUndefined) Vector() else Vector(jv), 
-                 None, EventMessage.defaultTimestamp, None)
+                 None, EventMessage.defaultTimestamp, None, StoreMode.Append)
         }
     }
   }
@@ -107,7 +107,7 @@ object Ingest {
       ( obj.validated[String]("tokenId") |@|
         obj.validated[Path]("path") ) { (apiKey, path) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp, None)
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp, None, StoreMode.Append)
         }
     }
   }
