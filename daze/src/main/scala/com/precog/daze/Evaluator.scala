@@ -380,12 +380,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
           }
 
-          // TODO: Parallelize the 2 prepareEvals.
-          for {
-            pendingTableLeft <- prepareEval(left, splits)
-            pendingTableRight <- prepareEval(right, splits)
-            joined <- transState liftM mn(join0(pendingTableLeft, pendingTableRight))
-          } yield joined
+          (prepareEval(left, splits) |@| prepareEval(right, splits)).tupled flatMap {
+            case (pendingTableLeft, pendingTableRight) =>
+              transState liftM mn(join0(pendingTableLeft, pendingTableRight))
+          }
         }
 
         type TSM[+T] = StateT[N, EvaluatorState, T]
