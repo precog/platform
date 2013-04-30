@@ -24,7 +24,7 @@ import com.precog.common.serialization._
 
 import blueeyes.json._
 import blueeyes.json.serialization._
-import blueeyes.core.http.MimeType
+import blueeyes.core.http.{ MimeTypes, MimeType }
 import IsoSerialization._
 import DefaultSerialization._
 import Versioned._
@@ -67,6 +67,11 @@ object RawUTF8Encoding extends ContentEncoding {
 case class FileContent(data: Array[Byte], mimeType: MimeType, encoding: ContentEncoding)
 
 object FileContent {
+  import MimeTypes._
+  val XQuirrelScript = MimeType("text", "x-quirrel-script")
+  val ApplicationJson = application/json
+  val XJsonStream = MimeType("application", "x-json-stream")
+
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
     def decompose(v: FileContent) = JObject(
       "data" -> JString(v.encoding.encode(v.data)),

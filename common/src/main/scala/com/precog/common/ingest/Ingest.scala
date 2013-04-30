@@ -151,16 +151,19 @@ object StoreMode {
   implicit val decomposer: Decomposer[StoreMode] = Decomposer[String].contramap[StoreMode] {
     case Create => "create"
     case Replace => "replace"
+    case Append => "append"
   }
 
   implicit val extractor: Extractor[StoreMode] = Extractor[String].mapv {
     case "create" => Success(Create)
     case "replace" => Success(Replace)
+    case "append" => Success(Append)
     case other => Failure(Invalid("Storage mode %s not recogized.".format(other)))
   }
 
   case object Create extends StoreMode
   case object Replace extends StoreMode
+  case object Append extends StoreMode
 }
 
 case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, streamId: Option[UUID], mode: StoreMode) extends Event {

@@ -22,6 +22,7 @@ package com.precog.ingest
 import service._
 import com.precog.common.accounts._
 import com.precog.common.client._
+import com.precog.common.ingest._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.security.service._
@@ -61,12 +62,10 @@ import java.util.concurrent.{ArrayBlockingQueue, ExecutorService, ThreadPoolExec
 import com.precog.common.Path
 
 object EventService {
-  val X_QUIRREL_SCRIPT = MimeType("text", "x-quirrel-script")
-
   case class State(
     accessControl: APIKeyFinder[Future], 
     ingestHandler: IngestServiceHandler, 
-    fileCreateHandler: FileCreateHandler,
+    fileCreateHandler: FileStoreHandler,
     archiveHandler: ArchiveServiceHandler[ByteChunk], 
     shardClient: HttpClient[ByteChunk],
     stop: Stoppable
@@ -115,7 +114,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
 
     val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
     val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, Clock.System, deleteTimeout)
-    val createHandler = new FileCreateHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
+    val createHandler = new FileStoreHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
     val shardClient = (new HttpClientXLightWeb).protocol(shardLocation.protocol).host(shardLocation.host).port(shardLocation.port)
 
     EventService.State(apiKeyFinder, ingestHandler, createHandler, archiveHandler, shardClient, stoppable)
@@ -169,23 +168,20 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   }
 
   def dataService(state: State): AsyncHttpService[ByteChunk, JValue] = {
+    import FileContent._
     import HttpRequestHandlerImplicits._
     jsonAPIKey(state.accessControl) {
       path("/data") {
         dataPath("/fs") {
-          post {
-            accept(application/json, MimeType("application", "x-json-stream")) {
-              state.ingestHandler
-            } ~
-            accept(X_QUIRREL_SCRIPT) {
-              state.fileCreateHandler
-            }
-          } ~ 
-          patch {
-            accept(application/json, MimeType("application", "x-json-stream")) {
-              state.ingestHandler
-            }
-          } 
+          accept(ApplicationJson, XJsonStream) {
+            post { state.ingestHandler } ~
+            put { state.ingestHandler } ~
+            patch { state.ingestHandler }
+          }
+          accept(XQuirrelScript) {
+            post { state.fileCreateHandler }
+            put { state.fileCreateHandler }
+          }
         } 
       }
     }
@@ -194,7 +190,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   def shardProxy(shardClient: HttpClient[ByteChunk]): AsyncHttpService[ByteChunk, ByteChunk] = {
     path("/data/fs/'path") {
       get {
-        accept(X_QUIRREL_SCRIPT) {
+        accept(FileContent.XQuirrelScript) {
           proxy(shardClient) { _ => true }
         }
       }

@@ -50,23 +50,42 @@ import scalaz.syntax.semigroup._
 import com.weiglewilczek.slf4s._
 
 
-class FileCreateHandler(serviceLocation: ServiceLocation, jobManager: JobManager[Response], clock: Clock, eventStore: EventStore[Future], ingestTimeout: Timeout)(implicit M: Monad[Future], executor: ExecutionContext) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
+class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[Response], clock: Clock, eventStore: EventStore[Future], ingestTimeout: Timeout)(implicit M: Monad[Future], executor: ExecutionContext) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   private val baseURI = serviceLocation.toURI
 
+  private def validateFileName(name: String): Validation[String, Path] = {
+    sys.error("todo")
+  }
+
+  private def validateStoreMode(contentType: MimeType, method: HttpMethod): Validation[String, StoreMode] = {
+    import FileContent._
+    (contentType, method) match {
+      case (XQuirrelScript, HttpMethods.POST) => Success(StoreMode.Create)
+      case (XQuirrelScript, HttpMethods.PUT) => Success(StoreMode.Replace)
+      case (otherType, otherMethod) => Failure("Content-Type %s is not supported for use with method %s.".format(otherType, otherMethod))
+    }
+  }
+
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
-    request.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption).toSuccess(DispatchError(BadRequest, "Unable to determine content type for file create.")) map { contentType =>
+    val fileName0 = request.headers.get("X-File-Name").toSuccess("X-File-Name header must be provided.") flatMap validateFileName
+    val contentType0 = request.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption).toSuccess("Unable to determine content type for file create.")
+
+    val storeMode0 = contentType0 flatMap { validateStoreMode(_: MimeType, request.method) }
+
+    (fileName0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (fileName, contentType, storeMode) => 
       (apiKey: APIKey, path: Path) => {
         val timestamp = clock.now()
+        val fullPath = path / fileName
 
         request.content map { content =>
         // TODO: check ingest permissions
           (for {
             jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
             bytes <- right(ByteChunk.forceByteArray(content))
-            storeFile = StoreFile(apiKey, path, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, None, StoreMode.Create)
+            storeFile = StoreFile(apiKey, fullPath, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, None, storeMode)
             _ <- right(eventStore.save(storeFile, ingestTimeout))
           } yield {
-            val resultsPath = (baseURI.path |+| Some("/data/fs/" + path.path)).map(_.replaceAll("//", "/"))
+            val resultsPath = (baseURI.path |+| Some("/data/fs/" + fullPath.path)).map(_.replaceAll("//", "/"))
             val locationHeader = Location(baseURI.copy(path = resultsPath))
             HttpResponse[JValue](Accepted, headers = HttpHeaders(List(locationHeader)))
           }) valueOr { errors =>
@@ -77,7 +96,10 @@ class FileCreateHandler(serviceLocation: ServiceLocation, jobManager: JobManager
           Promise successful HttpResponse[JValue](HttpStatus(BadRequest, "Attempt to create a file without body content."))
         }
       }
+    } leftMap { errors =>
+      DispatchError(BadRequest, errors.list.mkString("; "))
     }
+
   }
 
   val metadata = NoMetadata
