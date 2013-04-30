@@ -156,7 +156,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
      * but must be a valid `JoinOrder`. This method should not assume any
      * particular order of the tables, unlike `cogroup`.
      */
-    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): (JoinOrder, M[Table])
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)]
   }
 
   trait TableLike { this: Table =>

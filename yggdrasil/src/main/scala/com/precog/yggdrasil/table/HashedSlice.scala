@@ -33,7 +33,7 @@ import scala.annotation.tailrec
 final class HashedSlice private (slice0: Slice, rowMap: scala.collection.Map[Int, List[Int]]) {
   def mapRowsFrom(slice1: Slice): Int => Iterator[Int] = {
     val hasher = new SliceHasher(slice1)
-    val rowComparator: RowComparator = Slice.rowComparatorFor(slice0, slice1) {
+    val rowComparator: RowComparator = Slice.rowComparatorFor(slice1, slice0) {
       _.columns.keys map (_.selector)
     }
 
@@ -72,7 +72,7 @@ private final class SliceHasher(slice: Slice) {
   }
 
   @tailrec private final def hashOf(row: Int, i: Int = 0, hc: Int = 0): Int = {
-    if (i > hashers.length) hc else {
+    if (i >= hashers.length) hc else {
       hashOf(row, i + 1, hc ^ hashers(i).hash(row))
     }
   }
