@@ -24,9 +24,10 @@ import blueeyes.json.serialization._
 import blueeyes.util.Clock
 
 import com.precog.common._
-
-import com.precog.common.security._
 import com.precog.common.accounts._
+import com.precog.common.jobs.JobId
+import com.precog.common.security._
+
 import com.precog.daze._
 import com.precog.muspelheim._
 
@@ -36,6 +37,8 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
+
 import com.precog.util.FilesystemFileOps
 
 import org.slf4j.{ Logger, LoggerFactory }
@@ -47,6 +50,9 @@ import scalaz.Validation._
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+
+trait Blah {
+}
 
 trait ShardQueryExecutorConfig
     extends BaseConfig
@@ -104,7 +110,55 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
+    def executeToPathOps(apiKey: String, query: String, prefix: Path, opts: QueryOptions, dest: Path, authorities: Authorities, jobId: Option[JobId]): N[Validation[EvaluationError, StreamT[M, PathOp]]] = {
+
+      val streamId = java.util.UUID.randomUUID
+      val writeTo = WriteTo.Version(streamId)
+
+      def jvaluesFromSlice(slice: Slice): Seq[JValue] = {
+        val len = slice.size
+        val jvalues = new Array[JValue](len)
+        var i = 0
+        var j = 0
+        while (i < len) {
+          val jv = slice.toJValue(i)
+          if (jv != JUndefined) {
+            jvalues(j) = jv
+            j += 1
+          }
+          i += 1
+        }
+        jvalues
+      }
+
+      def writeAll(n: Long, stream: StreamT[M, Slice]): N[StreamT[M, PathOp]] = {
+        def pathOps: StreamT[M, PathOp] =
+          StreamT.unfoldM[M, PathOp, (Long, StreamT[M, Slice])]((1L, stream)) {
+            case (n, _) if n < 0L =>
+              M.point(None)
+            case (n, stream) => stream.uncons.flatMap {
+              case Some((slice, tail)) =>
+                val jvalues = jvaluesFromSlice(slice)
+                val pathOp = Append(dest, NIHDBData(Seq((n, jvalues))), writeTo, jobId)
+                M.point(Some((pathOp, (n + 1, tail))))
+              case None =>
+                val pathOp = MakeCurrent(dest, streamId, jobId)
+                M.point(Some((pathOp, (-1L, StreamT.empty[M, Slice]))))
+            }
+          }
+        queryReport.done.map(_ => pathOps)
+      }
+
+      executeToTable(apiKey, query, prefix, opts).flatMap {
+        case Failure(error) =>
+          N.point(Failure(error))
+        case Success(table) =>
+          val cnv = CreateNewVersion(dest, NIHDBData(Seq()), streamId, apiKey, authorities, true)
+          writeAll(1L, table.slices).map(st => Success(cnv :: st))
+      }
+    }
+
+    def executeToTable(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, Table]] = {
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
       queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
@@ -114,7 +168,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       // This should be executed within the outer N returned above, so keep
       // this as a def, and use within an N.point.
 
-      def solution: Validation[Throwable, Validation[EvaluationError, StreamT[N, CharBuffer]]] = Validation.fromTryCatch {
+      def solution: Validation[Throwable, Validation[EvaluationError, N[Table]]] = Validation.fromTryCatch {
         val (faults, bytecode) = asBytecode(query)
 
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
@@ -139,31 +193,32 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           success(N.point(Table.empty))
         }
 
-        resultVN map { nt =>
-          StreamT.wrapEffect {
-            faults map {
-              case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
-              case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
-            } reduceOption { (a, b) =>
-              (a |@| b)(_ || _)
-            } getOrElse (N point false) map {
-              case true =>
-                //FIXME: we should die here, maybe?
-                //queryReport.die() map { _ => StreamT.empty[N, CharBuffer] }
-                outputChunks(opts.output)(N point Table.empty)
-
-              case false =>
-                val chunks = outputChunks(opts.output) { nt }
-                chunks ++ StreamT.wrapEffect(queryReport.done map { _ => StreamT.empty[N, CharBuffer] })
-            }
+        resultVN.map { nt =>
+          faults map {
+            case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
+            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
+          } reduceOption { (a, b) =>
+            (a |@| b)(_ || _)
+          } getOrElse (N point false) flatMap {
+            case true => N.point(Table.empty)
+            case false => nt
           }
         }
       }
 
-      N point {
-        ((systemError _) <-: solution) flatMap {
-          identity[Validation[EvaluationError, StreamT[N, CharBuffer]]]
-        }
+      N.point(solution).flatMap {
+        case Failure(e) => N.point(Failure(SystemError(e)))
+        case Success(Failure(err)) => N.point(Failure(err))
+        case Success(Success(nt)) => nt.map(Success(_))
+      }
+    }
+
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
+      executeToTable(apiKey, query, prefix, opts).flatMap {
+        case Success(table) =>
+          queryReport.done.map(_ => Success(outputChunks(opts.output)(N.point(table))))
+        case Failure(error) =>
+          N.point(Failure(error))
       }
     }
 
