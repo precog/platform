@@ -293,9 +293,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               rTable.compact(valueSpec).cross(lTable.compact(valueSpec))(crossSpec)
             }
 
-            // TODO: The "sorting" is not quite correct. If it is IdentitySort,
-            // then we need to turn that into a PartialIdentitySort.
-            val sort = if (isLeft) ptLeft.sort else ptRight.sort
+            def fixSort(sort: TableSort, node: DepGraph): TableSort = sort match {
+              case IdentitySort => PartialIdentitySort(Vector.range(0, node.identities.length))
+              case validSort => validSort
+            }
+            val sort = if (isLeft) fixSort(ptLeft.sort, left) else fixSort(ptRight.sort, right)
             PendingTable(table, graph, TransSpec1.Id, sort)
           }
         }
@@ -523,10 +525,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 pair flatMap { case (ptLeft, ptRight) =>
                   val leftTable = ptLeft.table.transform(liftToValues(ptLeft.trans))
                   val rightTable = ptRight.table.transform(liftToValues(ptRight.trans))
-                  val sort = alignment match { // TODO: These aren't entirely correct.
-                    case IdentityAlignment.CrossAlignment => ptLeft.sort // Incorrect if IdentitySort. PartialIdentitySort.
-                    case IdentityAlignment.MatchAlignment => IdentitySort // Incorrect. PartialIdentitySort.
-                    case IdentityAlignment.RightAlignment => ptRight.sort // Correct, if left IDs are discarded.
+                  val sort = alignment match {
+                    case IdentityAlignment.CrossAlignment =>
+                      PartialIdentitySort(Vector.range(0, left.identities.length))
+                    case IdentityAlignment.MatchAlignment =>
+                      IdentitySort // Incorrect, but we don't really know what the Morph2 did.
+                    case IdentityAlignment.RightAlignment => ptRight.sort // Correct.
                     case IdentityAlignment.LeftAlignment => ptLeft.sort // Correct.
                   }
                   transState liftM mn(f(leftTable, rightTable) map { case (table, morph1) =>
@@ -537,7 +541,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
             joined flatMap { case (morph1, PendingTable(joinedTable, _, _, sort)) =>
               // If the morphism doesn't retain IDs, we assume the result is
-              // identity sorted. This is fine for things with value provenance.
+              // identity sorted. This is fine for value provenance too (0 IDs).
               val finalSort = if (mor.retainIds) sort else IdentitySort
               transState liftM mn(morph1(joinedTable, ctx)) map { table =>
                 PendingTable(table, graph, TransSpec1.Id, sort)
@@ -597,7 +601,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
 
               _ <- monadState.modify { state =>
                 state.copy(
-                  assume = state.assume + (m -> (wrapped, IdentitySort)), //TODO: is this right?
+                  assume = state.assume + (m -> (wrapped, IdentitySort)),
                   reductions = state.reductions + (m -> rvalue)
                 )
               }
@@ -644,7 +648,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case dag.Assert(pred, child) => 
             for {
               predPending <- prepareEval(pred, splits)
-              childPending <- prepareEval(child, splits)     // TODO squish once brian's PR lands
+              childPending <- prepareEval(child, splits)
               
               liftedTrans = liftToValues(predPending.trans)
               predTable = predPending.table transform DerefObjectStatic(liftedTrans, paths.Value)
