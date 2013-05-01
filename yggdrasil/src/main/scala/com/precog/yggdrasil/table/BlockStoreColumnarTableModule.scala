@@ -60,6 +60,7 @@ import TableModule._
 
 trait BlockStoreColumnarTableModuleConfig {
   def maxSliceSize: Int
+  def hashJoins: Boolean = true
 }
 
 trait BlockStoreColumnarTableModule[M[+_]]
@@ -906,28 +907,32 @@ trait BlockStoreColumnarTableModule[M[+_]]
         Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans), UnknownSize)
       }
 
-      (left0.toInternalTable().toEither |@| right0.toInternalTable().toEither).tupled flatMap {
-        case (Right(left), Right(right)) =>
-          M point (orderHint match {
-            case Some(JoinOrder.LeftOrder) =>
-              (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
-            case Some(JoinOrder.RightOrder) =>
-              (JoinOrder.RightOrder, hashJoin(left.slice, right, flip=false))
-            case _ =>
-              (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
-          })
+      if (yggConfig.hashJoins) {
+        (left0.toInternalTable().toEither |@| right0.toInternalTable().toEither).tupled flatMap {
+          case (Right(left), Right(right)) =>
+            M point (orderHint match {
+              case Some(JoinOrder.LeftOrder) =>
+                (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
+              case Some(JoinOrder.RightOrder) =>
+                (JoinOrder.RightOrder, hashJoin(left.slice, right, flip=false))
+              case _ =>
+                (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
+            })
 
-        case (Right(left), Left(right)) =>
-          M point (JoinOrder.RightOrder -> hashJoin(left.slice, right, flip=false))
+          case (Right(left), Left(right)) =>
+            M point (JoinOrder.RightOrder -> hashJoin(left.slice, right, flip=false))
 
-        case (Left(left), Right(right)) =>
-          M point (JoinOrder.LeftOrder -> hashJoin(right.slice, left, flip=true))
+          case (Left(left), Right(right)) =>
+            M point (JoinOrder.LeftOrder -> hashJoin(right.slice, left, flip=true))
 
-        case (leftE, rightE) =>
-          val idT = Predef.identity[Table](_)
-          val left = leftE.fold(idT, idT)
-          val right = rightE.fold(idT, idT)
-          super.join(left, right, orderHint)(keySpec, joinSpec)
+          case (leftE, rightE) =>
+            val idT = Predef.identity[Table](_)
+            val left = leftE.fold(idT, idT)
+            val right = rightE.fold(idT, idT)
+            super.join(left, right, orderHint)(keySpec, joinSpec)
+        }
+      } else {
+        super.join(left0, right0, orderHint)(keySpec, joinSpec)
       }
     }
 
