@@ -30,17 +30,19 @@ import scala.annotation.tailrec
  * Creates an efficient hash for a slice. From this, when given another slice, we can
  * map rows from that slice to rows in the hashed slice.
  */
-final class HashedSlice private (slice0: Slice, rowMap: scala.collection.Map[Int, List[Int]]) {
-  def mapRowsFrom(slice1: Slice): Int => Iterator[Int] = {
+final class HashedSlice private (slice0: Slice, rowMap: scala.collection.Map[Int, IntList]) {
+  def mapRowsFrom(slice1: Slice): Int => (Int => Unit) => Unit = {
     val hasher = new SliceHasher(slice1)
     val rowComparator: RowComparator = Slice.rowComparatorFor(slice1, slice0) {
       _.columns.keys map (_.selector)
     }
 
     { (lrow: Int) =>
-      val matches = rowMap get hasher.hash(lrow) getOrElse Nil
-      matches.toIterator filter { rrow =>
-        rowComparator.compare(lrow, rrow) == scalaz.Ordering.EQ
+      { (f: Int => Unit) =>
+        val matches = rowMap get hasher.hash(lrow) getOrElse IntNil
+        matches foreach { rrow =>
+          if (rowComparator.compare(lrow, rrow) == scalaz.Ordering.EQ) f(rrow)
+        }
       }
     }
   }
@@ -50,10 +52,10 @@ object HashedSlice {
   def apply(slice: Slice): HashedSlice = {
     val hasher = new SliceHasher(slice)
 
-    val rowMap: mutable.Map[Int, List[Int]] = mutable.Map.empty
+    val rowMap: mutable.Map[Int, IntList] = mutable.Map.empty
     Loop.range(0, slice.size) { row =>
       val hash = hasher.hash(row)
-      val rows = rowMap.getOrElse(hash, Nil)
+      val rows = rowMap.getOrElse(hash, IntNil)
       rowMap.put(hash, row :: rows)
     }
 
