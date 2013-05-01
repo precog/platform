@@ -515,7 +515,7 @@ object KafkaTools extends Command {
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.payload) match {
-        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _, streamId)) =>
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
 
@@ -530,7 +530,7 @@ object KafkaTools extends Command {
       val parsed = parseEventMessage(msg)
 
       parsed.foreach {
-        case IngestMessage(apiKey, path, ownerAccountId, data, _, _, _) =>
+        case IngestMessage(apiKey, path, ownerAccountId, data, _, _, _, _) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
       }

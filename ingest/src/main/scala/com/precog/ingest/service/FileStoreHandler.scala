@@ -40,11 +40,14 @@ import akka.dispatch.Promise
 import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 
+import java.net.URLEncoder
+
 import scalaz._
 import scalaz.EitherT._
 import scalaz.std.string._
 import scalaz.std.option._
 import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
 import scalaz.syntax.semigroup._
 import com.weiglewilczek.slf4s._
@@ -52,10 +55,6 @@ import com.weiglewilczek.slf4s._
 
 class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[Response], clock: Clock, eventStore: EventStore[Future], ingestTimeout: Timeout)(implicit M: Monad[Future], executor: ExecutionContext) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   private val baseURI = serviceLocation.toURI
-
-  private def validateFileName(name: String): Validation[String, Path] = {
-    sys.error("todo")
-  }
 
   private def validateStoreMode(contentType: MimeType, method: HttpMethod): Validation[String, StoreMode] = {
     import FileContent._
@@ -66,16 +65,35 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
     }
   }
 
+  private def validateFileName(fileName: Option[String], storeMode: StoreMode): Validation[String, Path => Path] = {
+    (storeMode: @unchecked) match {
+      case StoreMode.Create => 
+        for {
+          fn0 <- fileName.toSuccess("X-File-Name header must be provided.")
+          // if the filename after URL encoding is the same as before, accept it.
+          _ <- (URLEncoder.encode(fn0, "UTF-8") == fn0).unlessM[({ type λ[α] = Validation[String, α] })#λ, Unit] {
+            Failure("%s is not a valid file name; please do not use characters which require URL encoding.")
+          }
+        } yield {
+          (dir: Path) => dir / Path(fn0)
+        }
+
+      case StoreMode.Replace =>
+        fileName.toFailure(()).leftMap(_ => "X-File-Name header not respected for PUT requests; please specify the resource to update via the URL.") map { _ =>
+          (resource: Path) => resource
+        }
+    }
+  }
+
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
-    val fileName0 = request.headers.get("X-File-Name").toSuccess("X-File-Name header must be provided.") flatMap validateFileName
     val contentType0 = request.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption).toSuccess("Unable to determine content type for file create.")
-
     val storeMode0 = contentType0 flatMap { validateStoreMode(_: MimeType, request.method) }
+    val pathf0 = storeMode0 flatMap { validateFileName(request.headers.get("X-File-Name"), _: StoreMode) }
 
-    (fileName0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (fileName, contentType, storeMode) => 
+    (pathf0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (pathf, contentType, storeMode) => 
       (apiKey: APIKey, path: Path) => {
         val timestamp = clock.now()
-        val fullPath = path / fileName
+        val fullPath = pathf(path)
 
         request.content map { content =>
         // TODO: check ingest permissions

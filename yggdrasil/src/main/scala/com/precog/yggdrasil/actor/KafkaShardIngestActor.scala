@@ -328,7 +328,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         case Nil =>
           (batch, checkpoint)
 
-        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _, streamId)) :: tail =>
+        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _, _, _)) :: tail =>
           val newCheckpoint = if (records.isEmpty) {
             checkpoint.skipTo(offset)
           } else {
@@ -385,7 +385,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
         eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage.EventMessageExtraction)] map { messageSet =>
           val apiKeys: List[(APIKey, Path)] = messageSet collect {
-            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _, streamId))) => (apiKey, path)
+            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _, _, _))) => (apiKey, path)
             case (_, -\/((apiKey, path, _))) => (apiKey, path)
           }
 

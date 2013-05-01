@@ -34,6 +34,7 @@ import akka.dispatch.ExecutionContext
 import blueeyes.bkka._
 
 import java.util.Properties
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import _root_.kafka.common._
@@ -80,32 +81,31 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
   private implicit val M = new blueeyes.bkka.FutureMonad(executor)
 
   def save(event: Event, timeout: Timeout) = {
-    def genEvents(ev: List[Event], ingest: Ingest): StoreFailure \/ List[Message] = {
-      @tailrec def rec(ev: List[Event]): StoreFailure \/ List[Message] = {
-        val messages = ev.map(codec.toMessage)
-
-        if (messages.forall(_.size + messagePadding <= maxMessageSize)) {
-          right(messages)
-        } else {
-          // FIXME: This test is wrong; event.length needs to have different semantics than number of messages
-          // now that we have StoreFile
-          if (ev.size == event.length) {
-            logger.error("Failed to reach reasonable message size after splitting JValues to individual inserts!")
-            left(StoreFailure("Failed insertion of excessively large event(s)!"))
+    val fallbackStreamId = UUID.randomUUID
+    @tailrec def encodeAll(toEncode: List[Event], messages: Vector[Message]): StoreFailure \/ Vector[Message] = {
+      toEncode match {
+        case x :: xs =>
+          val message = codec.toMessage(x)
+          if (message.size + messagePadding <= maxMessageSize) {
+            encodeAll(xs, messages :+ message)
           } else {
-            logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
-            rec(ev.flatMap(_.split(2, java.util.UUID.randomUUID)))
+            val postSplit = x.split(2, fallbackStreamId) 
+            if (postSplit.length == 1) {
+              logger.error("Failed to reach reasonable message size for event: %s".format(event))
+              left(StoreFailure("Failed insertion due to excessively large event(s)!"))
+            } else {
+              encodeAll(postSplit ::: xs, messages)
+            }
           }
-        }
-      }
 
-      rec(ev)
+        case Nil => right(messages)
+      }
     }
 
     val toSend = event.fold(
-      ingest => genEvents(List(event), ingest),
+      ingest => encodeAll(List(event), Vector.empty),
       archive => right(List(codec.toMessage(archive))),
-      storeFile => sys.error("todo")
+      storeFile => encodeAll(List(event), Vector.empty)
     )
 
     toSend traverse { kafkaMessages =>

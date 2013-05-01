@@ -101,7 +101,7 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID]) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID], storeMode: StoreMode) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
   def split: List[IngestMessage] = {
     if (data.size > 1) {
@@ -119,7 +119,7 @@ object IngestMessage {
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: "storeMode" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.1".v))
@@ -136,11 +136,11 @@ object IngestMessage {
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.writeAs map { authorities =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None, StoreMode.Append))
           } getOrElse {
             \/.left(
               (ingest.apiKey, ingest.path, (authorities: Authorities) =>
-                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None))
+                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None, StoreMode.Append))
             )
           }
         }

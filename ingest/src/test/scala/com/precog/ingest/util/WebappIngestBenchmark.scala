@@ -108,7 +108,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None, new Instant(), None)
+            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None, new Instant(), None, StoreMode.Append)
 
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))

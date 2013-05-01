@@ -29,6 +29,7 @@ import blueeyes.core.http.HttpRequest
 import blueeyes.json._
 
 import com.precog.common.Path
+import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
 import com.precog.common.security.{APIKey, Authorities}
 import com.precog.ingest.util.CsvType
@@ -142,7 +143,7 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
       }.sortBy(_._1).map(_._2).toArray
     }
 
-    def ingestSync(reader: CSVReader, jobId: Option[JobId]): Future[IngestResult] = {
+    def ingestSync(reader: CSVReader, jobId: Option[JobId], storeMode: StoreMode): Future[IngestResult] = {
       def readBatches(paths: Array[JPath], reader: CSVReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
         // TODO: handle errors in readBatch
         M.point(readBatch(reader, Vector())) flatMap { batch =>
@@ -158,7 +159,7 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
               }
             }
 
-            ingestStore.store(apiKey, path, authorities, jvals, jobId) flatMap { _ =>
+            ingestStore.store(apiKey, path, authorities, jvals, jobId, storeMode) flatMap { _ =>
               readBatches(paths, reader, total + batch.length, ingested + batch.length, errors)
             }
           }
@@ -174,11 +175,11 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
       }
     }
 
-    def ingest(durability: Durability, errorHandling: ErrorHandling, data: ByteChunk): Future[IngestResult] = {
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult] = {
       readerBuilder map { f =>
         for {
           (file, size) <- writeToFile(data)
-          result <- ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), durability.jobId)
+          result <- ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), durability.jobId, storeMode)
         } yield {
           file.delete()
           result
