@@ -68,7 +68,7 @@ import scala.annotation.tailrec
 
 
 sealed trait IngestStore {
-  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], storeMode: StoreMode): Future[StoreFailure \/ PrecogUnit]
+  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit]
 }
 
 sealed trait ParseDirective {
@@ -87,9 +87,9 @@ class IngestServiceHandler(
     with Logging { 
 
   object ingestStore extends IngestStore {
-    def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], storeMode: StoreMode): Future[StoreFailure \/ PrecogUnit] = {
+    def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit] = {
       if (data.nonEmpty) {
-        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), None, storeMode)
+        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), streamRef)
         logger.trace("Saving event: " + eventInstance)
         eventStore.save(eventInstance, ingestTimeout)
       } else {

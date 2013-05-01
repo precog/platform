@@ -85,7 +85,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must contain(testValue).only
       }
     }
@@ -100,7 +100,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must containAllOf(t1 :: t2 :: t3 :: Nil).only
       }
     }
@@ -116,7 +116,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must contain(arr).only
       }
     }

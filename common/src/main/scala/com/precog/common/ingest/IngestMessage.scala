@@ -101,13 +101,12 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID], storeMode: StoreMode) extends EventMessage {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamRef: StreamRef) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
   def split: List[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
-      val sid = streamId.orElse(Some(UUID.randomUUID()))
-      List(this.copy(data = dataA, streamId = sid), this.copy(data = dataB, streamId = sid))
+      List(this.copy(data = dataA), this.copy(data = dataB))
     } else {
       List(this)
     }
@@ -119,7 +118,7 @@ object IngestMessage {
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: "storeMode" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamRef" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.1".v))
@@ -136,11 +135,11 @@ object IngestMessage {
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.writeAs map { authorities =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None, StoreMode.Append))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, StreamRef.Append))
           } getOrElse {
             \/.left(
               (ingest.apiKey, ingest.path, (authorities: Authorities) =>
-                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, None, StoreMode.Append))
+                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, StreamRef.Append))
             )
           }
         }
@@ -177,14 +176,14 @@ object ArchiveMessage {
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
 
-case class StoreFileMessage(apiKey: APIKey, path: Path, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: FileContent, timestamp: Instant, streamId: Option[UUID]) extends EventMessage {
+case class StoreFileMessage(apiKey: APIKey, path: Path, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: FileContent, timestamp: Instant, streamRef: StreamRef) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
 }
 
 object StoreFileMessage {
   implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: "timestamp" :: "streamId" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: "timestamp" :: "streamRef" :: HNil
 
   implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
 

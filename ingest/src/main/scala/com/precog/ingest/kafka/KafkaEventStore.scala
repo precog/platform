@@ -81,7 +81,6 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
   private implicit val M = new blueeyes.bkka.FutureMonad(executor)
 
   def save(event: Event, timeout: Timeout) = {
-    val fallbackStreamId = UUID.randomUUID
     @tailrec def encodeAll(toEncode: List[Event], messages: Vector[Message]): StoreFailure \/ Vector[Message] = {
       toEncode match {
         case x :: xs =>
@@ -89,7 +88,7 @@ class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, m
           if (message.size + messagePadding <= maxMessageSize) {
             encodeAll(xs, messages :+ message)
           } else {
-            val postSplit = x.split(2, fallbackStreamId) 
+            val postSplit = x.split(2) 
             if (postSplit.length == 1) {
               logger.error("Failed to reach reasonable message size for event: %s".format(event))
               left(StoreFailure("Failed insertion due to excessively large event(s)!"))

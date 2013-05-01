@@ -74,7 +74,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
           values
       }
 
-      def ingestAllOrNothing(state: JSONParseState, stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
+      def ingestAllOrNothing(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[JSONParseState] = {
         def accumulate(state: JSONParseState, records: Vector[JValue], stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
           stream.uncons.flatMap {
             case Some((head, rest)) =>
@@ -97,7 +97,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
                            else parsed.errors.map(pe => (pe.line, pe.msg))
 
               if (errors.isEmpty) {
-                storage.store(apiKey, path, authorities, records ++ parsed.values, jobId, storeMode) map { _ =>
+                storage.store(apiKey, path, authorities, records ++ parsed.values, jobId, streamRef.terminate) map { _ =>
                   sys.error("Do something useful with StoreFailure")
                   state.update(finalParser, ingestSize, Nil)
                 }
@@ -110,27 +110,27 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
         accumulate(state, Vector.empty[JValue], stream)
       }
 
-      def ingestUnbuffered(state: JSONParseState, stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
+      def ingestUnbuffered(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[JSONParseState] = {
         stream.uncons.flatMap {
           case Some((head, rest)) =>
             // Dup and rewind to ensure we have something to parse
             val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
             val (parsed, updatedParser) = state.parser(More(toParse))
-            ingestBlock(parsed, updatedParser, state) { ingestUnbuffered(_, rest) }
+            ingestBlock(parsed, updatedParser, state, streamRef) { ingestUnbuffered(_, rest, streamRef) }
 
           case None =>
             val (parsed, finalParser) = state.parser(Done)
-            ingestBlock(parsed, finalParser, state) { (_: JSONParseState).point[Future] }
+            ingestBlock(parsed, finalParser, state, streamRef.terminate) { (_: JSONParseState).point[Future] }
         }
       }
 
-      def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState)(continue: JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
+      def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef)(continue: JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
         (errorHandling: @unchecked) match {
           case IngestAllPossible =>
             val (toIngest, overLarge) = expandArraysAtRoot(parsed.values) partition { jv => jv.flattenWithPath.size <= maxFields }
             val ingestSize = toIngest.size
 
-            storage.store(apiKey, path, authorities, toIngest, jobId, storeMode) flatMap { _ =>
+            storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { _ =>
               sys.error("Do something useful with StoreFailure")
               val overLargeError = (-1, (overLargeErrorBase + " (%d records affected)").format(overLarge.size))
               continue(state.update(updatedParser, ingestSize, parsed.errors.map(pe => (pe.line, pe.msg)) :+ overLargeError))
@@ -141,29 +141,26 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
             val ingestSize = toIngest.size
 
             if (overLarge.isEmpty && parsed.errors.isEmpty) {
-              storage.store(apiKey, path, authorities, toIngest, jobId, storeMode) flatMap { _ =>
+              storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { _ =>
                 sys.error("Do something useful with StoreFailure")
                 continue(state.update(updatedParser, ingestSize, Nil))
               }
-            } else if (toIngest.nonEmpty) {
-              storage.store(apiKey, path, authorities, toIngest, jobId, storeMode) map { _ =>
+            } else {
+              storage.store(apiKey, path, authorities, toIngest, jobId, streamRef.terminate) map { _ =>
                 sys.error("Do something useful with StoreFailure")
                 val errors = if (overLarge.nonEmpty) List((state.ingested + toIngest.size, overLargeErrorBase))
                              else parsed.errors.map(pe => (pe.line, pe.msg))
 
                 state.update(updatedParser, toIngest.size, errors)
               }
-            } else {
-              logger.warn("Async parse of chunk resulted in zero values, %d errors".format(parsed.errors.size))
-              state.update(updatedParser, 0, parsed.errors.map { pe => (pe.line, pe.msg) }).point[Future]
-            }
+            } 
         }
       }
 
       errorHandling match {
-        case StopOnFirstError => ingestUnbuffered(JSONParseState.empty(true), stream)
-        case IngestAllPossible => ingestUnbuffered(JSONParseState.empty(false), stream)
-        case AllOrNothing => ingestAllOrNothing(JSONParseState.empty(true), stream)
+        case StopOnFirstError => ingestUnbuffered(JSONParseState.empty(true), stream, storeMode.createStreamRef(false))
+        case IngestAllPossible => ingestUnbuffered(JSONParseState.empty(false), stream, storeMode.createStreamRef(false))
+        case AllOrNothing => ingestAllOrNothing(JSONParseState.empty(true), stream, storeMode.createStreamRef(false))
       }
     }
 
