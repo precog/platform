@@ -882,7 +882,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
               val rowMap = hashed.mapRowsFrom(headKey)
 
               @tailrec def loop(row: Int): Unit = if (row < head.size) {
-                rowMap(row) foreach { indexRow =>
+                rowMap(row) { indexRow =>
                   headBuf.add(row)
                   indexBuf.add(indexRow)
                 }
