@@ -22,6 +22,7 @@ import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 
 import java.net.URLEncoder
+import java.util.UUID
 
 import scalaz._
 import scalaz.EitherT._
@@ -41,7 +42,7 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
     import FileContent._
     (contentType, method) match {
       case (XQuirrelScript, HttpMethods.POST) => Success(StoreMode.Create)
-      case (XQuirrelScript, HttpMethods.PUT) => Success(StoreMode.Replace)
+      case (XQuirrelScript, HttpMethods.PUT)  => Success(StoreMode.Replace)
       case (otherType, otherMethod) => Failure("Content-Type %s is not supported for use with method %s.".format(otherType, otherMethod))
     }
   }
@@ -81,7 +82,7 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
           (for {
             jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
             bytes <- right(ByteChunk.forceByteArray(content))
-            storeFile = StoreFile(apiKey, fullPath, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, None, storeMode)
+            storeFile = StoreFile(apiKey, fullPath, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, storeMode.createStreamRef(true))
             _ <- right(eventStore.save(storeFile, ingestTimeout))
           } yield {
             val resultsPath = (baseURI.path |+| Some("/data/fs/" + fullPath.path)).map(_.replaceAll("//", "/"))
