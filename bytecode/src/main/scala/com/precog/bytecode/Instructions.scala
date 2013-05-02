@@ -34,8 +34,6 @@ trait Instructions {
       case Map1(_) => (1, 1)
       case Map2Match(_) => (2, 1)
       case Map2Cross(_) => (2, 1)
-      case Map2CrossLeft(_) => (2, 1)
-      case Map2CrossRight(_) => (2, 1)
         
       case Reduce(_) => (1, 1)
       case Morph1(_) => (1, 1)
@@ -51,13 +49,6 @@ trait Instructions {
       
       case FilterMatch => (2, 1)
       case FilterCross => (2, 1)
-      case FilterCrossLeft => (2, 1)
-      case FilterCrossRight => (2, 1)
-      
-      case FilterMatch => (2, 1)
-      case FilterCross => (2, 1)
-      case FilterCrossLeft => (2, 1)
-      case FilterCrossRight => (2, 1)
       
       case Group(_) => (2, 1)
       case MergeBuckets(_) => (2, 1)
@@ -99,8 +90,6 @@ trait Instructions {
     case class Map1(op: UnaryOperation) extends Instruction
     case class Map2Match(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2Cross(op: BinaryOperation) extends Instruction with JoinInstr
-    case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
-    case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: BuiltInReduction) extends Instruction
     case class Morph1(m1: BuiltInMorphism1) extends Instruction
@@ -124,8 +113,6 @@ trait Instructions {
     
     case object FilterMatch extends Instruction with DataInstr
     case object FilterCross extends Instruction with DataInstr
-    case object FilterCrossLeft extends Instruction with DataInstr
-    case object FilterCrossRight extends Instruction with DataInstr
     
     case object Dup extends Instruction
     case object Drop extends Instruction
@@ -156,8 +143,6 @@ trait Instructions {
       def unapply(instr: JoinInstr): Option[BinaryOperationType] = instr match {
         case Map2Match(op) => Some(op.tpe)
         case Map2Cross(op) => Some(op.tpe) 
-        case Map2CrossLeft(op) => Some(op.tpe)
-        case Map2CrossRight(op) => Some(op.tpe)
         case _ => None
       }
     }

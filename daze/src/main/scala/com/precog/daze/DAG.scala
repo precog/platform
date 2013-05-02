@@ -63,8 +63,6 @@ trait DAG extends Instructions {
         val maybeOpSort = Some(instr) collect {
           case instructions.Map2Match(op) => (op, IdentitySort)
           case instructions.Map2Cross(op) => (op, CrossLeftSort)
-          case instructions.Map2CrossLeft(op) => (op, CrossLeftSort)
-          case instructions.Map2CrossRight(op) => (op, CrossRightSort)
         }
         
         val eitherRootsOp = maybeOpSort map {
@@ -253,8 +251,6 @@ trait DAG extends Instructions {
         
         case instr @ FilterMatch => processFilter(instr, IdentitySort)
         case instr @ FilterCross => processFilter(instr, CrossLeftSort)
-        case instr @ FilterCrossLeft => processFilter(instr, CrossLeftSort)
-        case instr @ FilterCrossRight => processFilter(instr, CrossRightSort)
         
         case Dup => {
           roots match {
@@ -1178,7 +1174,7 @@ trait DAG extends Instructions {
       
       def valueKeys = left.valueKeys
       
-      lazy val isSingleton = left.isSingleton && right.isSingleton
+      lazy val isSingleton = left.isSingleton
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
@@ -1340,6 +1336,7 @@ trait DAG extends Instructions {
     case class ValueSort(id: Int) extends TableSort
     // case object NullSort extends TableSort -- Not USED!
     
+    // case class Cross(hint: Option[CrossOrder]) extends JoinSort
     case object CrossLeftSort extends JoinSort
     case object CrossRightSort extends JoinSort
   }
