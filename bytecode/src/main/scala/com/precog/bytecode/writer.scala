@@ -41,8 +41,6 @@ trait BytecodeWriter extends Writer with Version {
       val pred = instr match {
         case FilterMatch => 0
         case FilterCross => 0
-        case FilterCrossLeft => 0
-        case FilterCrossRight => 0
         
         case Swap(depth) => {
           writeInt(4, buffer)
@@ -127,8 +125,6 @@ trait BytecodeWriter extends Writer with Version {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
         case Map2Match(op) => (0x01, 0.toShort, binaryOpNum(op))
         case Map2Cross(op) => (0x02, 0.toShort, binaryOpNum(op))
-        case Map2CrossLeft(op) => (0x04, 0.toShort, binaryOpNum(op))
-        case Map2CrossRight(op) => (0x06, 0.toShort, binaryOpNum(op))
         
         case Reduce(red) => (0x08, 0.toShort, reductionNum(red))
         case Morph1(m1) => (0x09, 0.toShort, morph1Num(m1))
@@ -143,8 +139,6 @@ trait BytecodeWriter extends Writer with Version {
         
         case FilterMatch => (0x14, 0.toShort, 0)
         case FilterCross => (0x16, 0.toShort, 0)
-        case FilterCrossLeft => (0x17, 0.toShort, 0)
-        case FilterCrossRight => (0x18, 0.toShort, 0)
         
         case Group(id) => (0x1A, 0.toShort, id)
         case MergeBuckets(and) => (0x1B, 0.toShort, if (and) 0x01 else 0x00)
