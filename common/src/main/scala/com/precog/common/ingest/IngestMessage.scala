@@ -103,10 +103,11 @@ object IngestRecord {
  */
 case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamRef: StreamRef) extends EventMessage {
   def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
-  def split: List[IngestMessage] = {
+  def split: Seq[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
-      List(this.copy(data = dataA), this.copy(data = dataB))
+      val Seq(refA, refB) = streamRef.split(2)
+      List(this.copy(data = dataA, streamRef = refA), this.copy(data = dataB, streamRef = refB))
     } else {
       List(this)
     }

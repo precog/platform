@@ -73,7 +73,10 @@ case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data
 
   def split(n: Int): List[Event] = {
     val splitSize = (data.length / n) max 1
-    data.grouped(splitSize).map(d => this.copy(data = d)).toList
+    val splitData = data.grouped(splitSize).toSeq
+    (splitData zip streamRef.split(splitData.size)).map({
+      case (d, ref) => this.copy(data = d, streamRef = ref)
+    })(collection.breakOut)
   }
 
   def length = data.length
@@ -166,20 +169,24 @@ object StoreMode {
 sealed trait StreamRef {
   def terminal: Boolean
   def terminate: StreamRef
+  def split(n: Int): Seq[StreamRef]
 }
 
 object StreamRef {
   case class Create(streamRef: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
 
   case class Replace(streamRef: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
 
   case object Append extends StreamRef { 
     val terminal = false 
     def terminate = this
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n) { this }
   } 
 
   implicit val decomposer: Decomposer[StreamRef] = new Decomposer[StreamRef] {
