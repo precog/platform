@@ -385,6 +385,9 @@ trait ColumnarTableModule[M[+_]]
         JoinOrder.KeyOrder -> cogrouped.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
       }
     }
+
+    def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)] =
+      M.point(CrossOrder.CrossLeft -> left.cross(right)(spec))
   }
 
   abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
@@ -1159,10 +1162,11 @@ trait ColumnarTableModule[M[+_]]
       val sizeCheck = for (resultSize <- newSizeM) yield
         resultSize < yggConfig.maxSaneCrossSize && resultSize >= 0
 
-      if (sizeCheck getOrElse true)
+      if (sizeCheck getOrElse true) {
         Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
-      else
+      } else {
         throw EnormousCartesianException(this.size, that.size)
+      }
     }
     
     /**
