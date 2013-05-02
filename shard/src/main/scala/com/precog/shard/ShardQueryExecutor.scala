@@ -89,6 +89,8 @@ object Fault {
 trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
+  def shardExecutorFor[N[+_]](apiKey: APIKey): M[Validation[String, ShardQueryExecutor[N]]]
+
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
       extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, CharBuffer]] {
 
@@ -110,7 +112,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def executeToPathOps(apiKey: String, query: String, prefix: Path, opts: QueryOptions, dest: Path, authorities: Authorities, jobId: Option[JobId]): N[Validation[EvaluationError, StreamT[M, PathOp]]] = {
+    // Returns a Stream of (record count, Op)
+    def executeToPathOps(apiKey: String, query: String, prefix: Path, opts: QueryOptions, dest: Path, authorities: Authorities, jobId: Option[JobId]): N[Validation[EvaluationError, StreamT[M, (Long, PathOp)]]] = {
 
       val streamId = java.util.UUID.randomUUID
       val writeTo = WriteTo.Version(streamId)
@@ -131,19 +134,19 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         jvalues
       }
 
-      def writeAll(n: Long, stream: StreamT[M, Slice]): N[StreamT[M, PathOp]] = {
-        def pathOps: StreamT[M, PathOp] =
-          StreamT.unfoldM[M, PathOp, (Long, StreamT[M, Slice])]((1L, stream)) {
+      def writeAll(n: Long, stream: StreamT[M, Slice]): N[StreamT[M, (Long, PathOp)]] = {
+        def pathOps: StreamT[M, (Long, PathOp)] =
+          StreamT.unfoldM[M, (Long, PathOp), (Long, StreamT[M, Slice])]((1L, stream)) {
             case (n, _) if n < 0L =>
               M.point(None)
             case (n, stream) => stream.uncons.flatMap {
               case Some((slice, tail)) =>
                 val jvalues = jvaluesFromSlice(slice)
                 val pathOp = Append(dest, NIHDBData(Seq((n, jvalues))), writeTo, jobId)
-                M.point(Some((pathOp, (n + 1, tail))))
+                M.point(Some(((slice.size, pathOp), (n + 1, tail))))
               case None =>
                 val pathOp = MakeCurrent(dest, streamId, jobId)
-                M.point(Some((pathOp, (-1L, StreamT.empty[M, Slice]))))
+                M.point(Some(((0L, pathOp), (-1L, StreamT.empty[M, Slice]))))
             }
           }
         queryReport.done.map(_ => pathOps)
@@ -154,7 +157,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           N.point(Failure(error))
         case Success(table) =>
           val cnv = CreateNewVersion(dest, NIHDBData(Seq()), streamId, apiKey, authorities, true)
-          writeAll(1L, table.slices).map(st => Success(cnv :: st))
+          writeAll(1L, table.slices).map(st => Success((0L, cnv) :: st))
       }
     }
 
