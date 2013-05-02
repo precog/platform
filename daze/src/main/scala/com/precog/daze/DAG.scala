@@ -439,8 +439,12 @@ trait DAG extends Instructions {
     val loc: Line
     
     def identities: Identities
+
+    /** Returns true if the identities are guaranteed to be unique. */
+    def uniqueIdentities: Boolean
     
-    def sorting: dag.TableSort
+    /** The set of available value-sorted keys. */
+    def valueKeys: Set[Int]
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
@@ -897,8 +901,10 @@ trait DAG extends Instructions {
     //tic variable node
     case class SplitParam(id: Int, parentId: Identifier)(val loc: Line) extends DepGraph {
       val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -907,7 +913,9 @@ trait DAG extends Instructions {
     
     //grouping node (e.g. foo where foo.a = 'b)
     case class SplitGroup(id: Int, identities: Identities, parentId: Identifier)(val loc: Line) extends DepGraph {
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
+
+      def uniqueIdentities = false
       
       val isSingleton = false
       
@@ -916,8 +924,10 @@ trait DAG extends Instructions {
     
     case class Const(value: RValue)(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -928,7 +938,9 @@ trait DAG extends Instructions {
     class Undefined(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Undefined
 
-      val sorting = IdentitySort
+      def uniqueIdentities = false
+
+      def valueKeys = Set.empty
 
       val isSingleton = false
 
@@ -949,8 +961,10 @@ trait DAG extends Instructions {
     
     case class New(parent: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -965,8 +979,10 @@ trait DAG extends Instructions {
         
         case IdentityPolicy.Strip => Identities.Specs.empty
       }
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -997,8 +1013,10 @@ trait DAG extends Instructions {
         
         case IdentityPolicy.Strip => Identities.Specs.empty
       }
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -1007,8 +1025,10 @@ trait DAG extends Instructions {
 
     case class Distinct(parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1021,8 +1041,10 @@ trait DAG extends Instructions {
         case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
         case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = false
       
@@ -1031,8 +1053,10 @@ trait DAG extends Instructions {
     
     case class Operate(op: UnaryOperation, parent: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = parent.identities
+
+      def uniqueIdentities = parent.uniqueIdentities
       
-      lazy val sorting = parent.sorting
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1041,8 +1065,10 @@ trait DAG extends Instructions {
     
     case class Reduce(red: Reduction, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -1053,8 +1079,10 @@ trait DAG extends Instructions {
       val loc = parent.loc
       
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = false
       
@@ -1063,8 +1091,10 @@ trait DAG extends Instructions {
     
     case class Split(spec: BucketSpec, child: DepGraph, id: Identifier)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -1089,8 +1119,10 @@ trait DAG extends Instructions {
     
     case class Assert(pred: DepGraph, child: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = child.identities
+
+      def uniqueIdentities = child.uniqueIdentities
       
-      val sorting = child.sorting
+      def valueKeys = child.valueKeys
       
       lazy val isSingleton = child.isSingleton
       
@@ -1102,8 +1134,10 @@ trait DAG extends Instructions {
       val peer = IUI(true, Filter(leftJoin, left, pred)(loc), Filter(rightJoin, right, Operate(Comp, pred)(loc))(loc))(loc)
       
       lazy val identities = peer.identities
+
+      def uniqueIdentities = peer.uniqueIdentities
       
-      val sorting = peer.sorting
+      def valueKeys = peer.valueKeys
       
       lazy val isSingleton = peer.isSingleton
       
@@ -1112,8 +1146,10 @@ trait DAG extends Instructions {
     
     case class Observe(data: DepGraph, samples: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = data.identities
+
+      def uniqueIdentities = data.uniqueIdentities
       
-      val sorting = data.sorting
+      def valueKeys = Set.empty
       
       lazy val isSingleton = data.isSingleton
       
@@ -1126,7 +1162,9 @@ trait DAG extends Instructions {
         case _ => Identities.Undefined
       }
 
-      val sorting = IdentitySort    // TODO not correct!
+      def uniqueIdentities = false
+
+      def valueKeys = Set.empty  // TODO not correct!
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -1135,8 +1173,10 @@ trait DAG extends Instructions {
     
     case class Diff(left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = left.identities
+
+      def uniqueIdentities = left.uniqueIdentities
       
-      val sorting = IdentitySort    // TODO not correct!
+      def valueKeys = left.valueKeys
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -1151,12 +1191,14 @@ trait DAG extends Instructions {
         
         case _ => (left.identities ++ right.identities).distinct
       }
-      
-      lazy val sorting = joinSort match {
-        case tbl: TableSort => tbl
-        case CrossLeftSort => left.sorting // This isn't correct.
-        case CrossRightSort => right.sorting
+
+      def uniqueIdentities = joinSort match {
+        case CrossLeftSort | CrossRightSort => left.uniqueIdentities && right.uniqueIdentities
+        case IdentitySort => left.uniqueIdentities && right.uniqueIdentities
+        case _ => false
       }
+
+      lazy val valueKeys = left.valueKeys ++ right.valueKeys
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -1169,12 +1211,14 @@ trait DAG extends Instructions {
         case CrossLeftSort => target.identities ++ boolean.identities
         case _ => (target.identities ++ boolean.identities).distinct
       }
-      
-      lazy val sorting = joinSort match {
-        case tbl: TableSort => tbl
-        case CrossLeftSort => target.sorting
-        case CrossRightSort => boolean.sorting
+
+      def uniqueIdentities = joinSort match {
+        case CrossLeftSort | CrossRightSort => target.uniqueIdentities && boolean.uniqueIdentities
+        case IdentitySort => target.uniqueIdentities && boolean.uniqueIdentities
+        case _ => false
       }
+      
+      lazy val valueKeys = target.valueKeys ++ boolean.valueKeys
       
       lazy val isSingleton = target.isSingleton
       
@@ -1197,7 +1241,9 @@ trait DAG extends Instructions {
         Identities.Specs(back)
       }, Identities.Undefined)
       
-      val sorting = IdentitySort
+      def uniqueIdentities = parent.uniqueIdentities
+
+      def valueKeys = Set.empty
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1219,8 +1265,10 @@ trait DAG extends Instructions {
       val loc = parent.loc
 
       lazy val identities = parent.identities
+
+      def uniqueIdentities = parent.uniqueIdentities
       
-      val sorting = ValueSort(id)
+      lazy val valueKeys = Set(id)
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1231,7 +1279,11 @@ trait DAG extends Instructions {
       val loc = parent.loc
       
       lazy val identities = parent.identities
-      lazy val sorting = parent.sorting
+
+      def uniqueIdentities = parent.uniqueIdentities
+
+      def valueKeys = parent.valueKeys
+
       lazy val isSingleton = parent.isSingleton
       
       lazy val containsSplitArg = parent.containsSplitArg
