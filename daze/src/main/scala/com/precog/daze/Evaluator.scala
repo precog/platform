@@ -288,31 +288,74 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
          * performing the cross on the left or right, depending on the value
          * of `crossSort` (`CrossLeftSort` or `CrossRightSort`).
          */
-        def cross(graph: DepGraph, left: DepGraph, right: DepGraph, crossSort: JoinSort)
-            (spec: (TransSpec2, TransSpec2) => TransSpec2): StateT[N, EvaluatorState, PendingTable] = {
-          val isLeft = crossSort == CrossLeftSort
+        def cross(graph: DepGraph, left0: DepGraph, right0: DepGraph, crossSort: JoinSort)
+            (spec0: (TransSpec2, TransSpec2) => TransSpec2): StateT[N, EvaluatorState, PendingTable] = {
+          import CrossOrder._
           def valueSpec = DerefObjectStatic(Leaf(Source), paths.Value)
-          (prepareEval(left, splits) |@| prepareEval(right, splits)) { (ptLeft, ptRight) =>
-            val lTable = ptLeft.table.transform(liftToValues(ptLeft.trans))
-            val rTable = ptRight.table.transform(liftToValues(ptRight.trans))
-            val crossSpec = buildWrappedCrossSpec(if (isLeft) spec else spec.flip)
-            val table = if (isLeft) {
-              lTable.compact(valueSpec).cross(rTable.compact(valueSpec))(crossSpec)
-            } else {
-              rTable.compact(valueSpec).cross(lTable.compact(valueSpec))(crossSpec)
-            }
 
-            def fixSort(sort: TableSort, node: DepGraph): TableSort = sort match {
-              case IdentitySort =>
-                if (graph.uniqueIdentities) {
-                  IdentitySort
-                } else {
-                  PartialIdentitySort(Vector.range(0, node.identities.length))
+          def cross0(left: DepGraph, right: DepGraph)(spec: (TransSpec2, TransSpec2) => TransSpec2) = {
+            (prepareEval(left, splits) |@| prepareEval(right, splits)).tupled flatMap { case (ptLeft, ptRight) =>
+              val lTable = ptLeft.table.transform(liftToValues(ptLeft.trans))
+              val rTable = ptRight.table.transform(liftToValues(ptRight.trans))
+              val crossSpec = buildWrappedCrossSpec(spec)
+              val resultM = Table.cross(lTable.compact(valueSpec), rTable.compact(valueSpec))(crossSpec)
+
+              transState liftM mn(resultM map { case (joinOrder, table) =>
+                def leftIds: Vector[Int] = Vector.range(0, left.identities.length)
+                def rightIds: Vector[Int] = Vector.range(0, right.identities.length)
+
+                val sort = joinOrder match {
+                  case CrossLeft =>
+                    ptLeft.sort match {
+                      case IdentitySort if ptRight.sort == IdentitySort && graph.uniqueIdentities =>
+                        IdentitySort
+                      case IdentitySort => PartialIdentitySort(leftIds)
+                      case otherSort => otherSort
+                    }
+                  case CrossRight =>
+                    ptRight.sort match {
+                      case IdentitySort if ptLeft.sort == IdentitySort && graph.uniqueIdentities =>
+                        PartialIdentitySort((rightIds map (_ + leftIds.size)) ++ leftIds)
+                      case IdentitySort =>
+                        PartialIdentitySort(rightIds map (_ + leftIds.size))
+                      case PartialIdentitySort(ids) =>
+                        PartialIdentitySort(ids map (_ + leftIds.size))
+                      case valueSort => valueSort
+                    }
+                  case CrossLeftRight =>
+                    (ptLeft.sort, ptRight.sort) match {
+                      case (IdentitySort, PartialIdentitySort(rIds)) =>
+                        PartialIdentitySort(leftIds ++ (rIds map (_ + leftIds.size)))
+                      case (PartialIdentitySort(lIds), PartialIdentitySort(rIds)) =>
+                        PartialIdentitySort(lIds ++ (rIds map (_ + leftIds.size)))
+                      case (IdentitySort, IdentitySort) => IdentitySort
+                      case (IdentitySort, _) => PartialIdentitySort(leftIds)
+                      case (otherSort, _) => otherSort
+                    }
+                  case CrossRightLeft =>
+                    (ptLeft.sort, ptRight.sort) match {
+                      case (IdentitySort, IdentitySort) =>
+                        PartialIdentitySort(rightIds ++ (leftIds map (_ + rightIds.size)))
+                      case (IdentitySort, PartialIdentitySort(rIds)) =>
+                        PartialIdentitySort(rIds ++ (leftIds map (_ + rightIds.size)))
+                      case (PartialIdentitySort(lIds), IdentitySort) =>
+                        PartialIdentitySort(rightIds ++ (lIds map (_ + rightIds.size)))
+                      case (PartialIdentitySort(lIds), PartialIdentitySort(rIds)) =>
+                        PartialIdentitySort(rIds ++ (lIds map (_ + rightIds.size)))
+                      case (_, IdentitySort) => PartialIdentitySort(rightIds)
+                      case (_, otherSort) => otherSort
+                    }
                 }
-              case validSort => validSort
+
+                PendingTable(table, graph, TransSpec1.Id, sort)
+              })
             }
-            val sort = if (isLeft) fixSort(ptLeft.sort, left) else fixSort(ptRight.sort, right)
-            PendingTable(table, graph, TransSpec1.Id, sort)
+          }
+
+          if (crossSort == CrossRightSort) {
+            cross0(right0, left0)(spec0.flip)
+          } else {
+            cross0(left0, right0)(spec0)
           }
         }
 

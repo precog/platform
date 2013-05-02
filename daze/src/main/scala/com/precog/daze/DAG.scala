@@ -1188,7 +1188,6 @@ trait DAG extends Instructions {
       lazy val identities = joinSort match {
         case CrossRightSort => right.identities ++ left.identities
         case CrossLeftSort => left.identities ++ right.identities
-        
         case _ => (left.identities ++ right.identities).distinct
       }
 
@@ -1333,7 +1332,6 @@ trait DAG extends Instructions {
       }
     }
 
-    
     sealed trait JoinSort
     sealed trait TableSort extends JoinSort
     

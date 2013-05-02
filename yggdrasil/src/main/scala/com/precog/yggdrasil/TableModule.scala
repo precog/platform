@@ -112,6 +112,14 @@ object TableModule {
     case object RightOrder extends JoinOrder
     case object KeyOrder extends JoinOrder
   }
+
+  sealed trait CrossOrder
+  object CrossOrder {
+    case object CrossLeft extends CrossOrder
+    case object CrossRight extends CrossOrder
+    case object CrossLeftRight extends CrossOrder
+    case object CrossRightLeft extends CrossOrder
+  }
 }
 
 trait TableModule[M[+_]] extends TransSpecModule {
@@ -157,6 +165,8 @@ trait TableModule[M[+_]] extends TransSpecModule {
      * particular order of the tables, unlike `cogroup`.
      */
     def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)]
+
+    def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)]
   }
 
   trait TableLike { this: Table =>
