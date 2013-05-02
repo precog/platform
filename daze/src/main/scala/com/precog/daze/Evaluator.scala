@@ -303,7 +303,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             def fixSort(sort: TableSort, node: DepGraph): TableSort = sort match {
-              case IdentitySort => PartialIdentitySort(Vector.range(0, node.identities.length))
+              case IdentitySort =>
+                if (graph.uniqueIdentities) {
+                  IdentitySort
+                } else {
+                  PartialIdentitySort(Vector.range(0, node.identities.length))
+                }
               case validSort => validSort
             }
             val sort = if (isLeft) fixSort(ptLeft.sort, left) else fixSort(ptRight.sort, right)
@@ -450,10 +455,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           // not using extractors due to bug
           case s: SplitGroup => 
             val f = splits(s.parentId)
-            // TODO: I think the sorted-ness of a group is actually the same as
-            //       the order that the table came from, though this is
-            //       specific to our merge implementation. We may also just add
-            //       fresh IDs to the tables... as noted, TODO!
             transState liftM f(s.id) map { PendingTable(_, graph, TransSpec1.Id, IdentitySort) }
 
           case Const(value) =>
@@ -687,6 +688,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             evalNotTransSpecable(c.peer)
           
           case IUI(union, left, right) => 
+            // TODO: Get rid of ValueSorts.
             for {
               pair <- zip(prepareEval(left, splits), prepareEval(right, splits))
               (leftPending, rightPending) = pair
@@ -743,7 +745,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case Sort(parent, indexes) => 
             val identityOrder = Vector(0 until indexes.length: _*)
             prepareEval(parent, splits) flatMap { pending =>
-              if (indexes == identityOrder && parent.sorting == IdentitySort) {
+              if (indexes == identityOrder) {
                 transState liftM N.point(pending)
               } else {
                 val fullOrder = indexes ++ ((0 until parent.identities.length) filterNot (indexes contains))
@@ -767,11 +769,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 }
                 
                 for {
-                  //sorted <- transState liftM mn(shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending))
                   sorted <- monadState point shuffled
-                  sortedResult = parent.sorting match {
-                    case ValueSort(id) => sorted.transform(ObjectDelete(Leaf(Source), Set(CPathField("sort-" + id))))
-                    case _ => sorted
+                  sortedResult = if (parent.valueKeys.isEmpty) sorted else {
+                    sorted.transform(ObjectDelete(Leaf(Source), parent.valueKeys map { id =>
+                      CPathField("sort-" + id)
+                    }))
                   }
                 } yield {
                   PendingTable(sortedResult, graph, TransSpec1.Id, adjustedSort)
@@ -782,32 +784,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case s @ SortBy(parent, sortField, valueField, id) => 
             val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(sortField))
             val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(valueField))
-                  
-            if (parent.sorting == ValueSort(id)) {
+            if (parent.valueKeys contains id) {
               prepareEval(parent, splits)
             } else {
               for {
                 pending <- prepareEval(parent, splits)
                 table = pending.table.transform(liftToValues(pending.trans))
-                
-                //sorted <- transState liftM mn(table.sort(sortSpec, SortAscending))
-                sorted = table
                 result = {
                   val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
                   val wrappedValue = trans.WrapObject(valueSpec, paths.Value.name)
-                  
-                  val oldSortField = parent.sorting match {
-                    case ValueSort(id2) if id != id2 => Some(CPathField("sort-" + id2))
-                    case _ => None
-                  }
-                  
+                  val oldSortFields = parent.valueKeys map { id0 => CPathField("sort-" + id0) }
                   val spec = InnerObjectConcat(
                     InnerObjectConcat(
-                      ObjectDelete(Leaf(Source), Set(CPathField("sort-" + id), paths.Value) ++ oldSortField),
+                      ObjectDelete(Leaf(Source), Set(CPathField("sort-" + id), paths.Value) ++ oldSortFields),
                         wrappedSort),
                         wrappedValue)
                   
-                  sorted.transform(spec)
+                  table.transform(spec)
                 }
               } yield {
                 PendingTable(result, graph, TransSpec1.Id, pending.sort)
