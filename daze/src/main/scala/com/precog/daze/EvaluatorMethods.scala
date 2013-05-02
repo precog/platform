@@ -97,7 +97,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       components reduceLeft { trans.InnerArrayConcat(_, _) }
     }
     
-    def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int, valueKeys: Set[Int] = Set.empty)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
       val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
       val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
       
@@ -123,8 +123,18 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
 
       val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
-        
-      InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
+
+      val valueKeySpecs = valueKeys map { key =>
+        trans.WrapObject(DerefObjectStatic(Leaf(SourceLeft), CPathField("sort-" + key)), "sort-" + key)
+      }
+
+      val keyValueSpec = InnerObjectConcat(wrappedValueSpec, wrappedIdentitySpec)
+
+      if (valueKeySpecs.isEmpty) {
+        keyValueSpec
+      } else {
+        InnerObjectConcat(keyValueSpec, OuterObjectConcat(valueKeySpecs.toList: _*))
+      }
     }
     
     def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
@@ -151,6 +161,3 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
     }
   }
 }
-
-
-// vim: set ts=4 sw=4 et:
