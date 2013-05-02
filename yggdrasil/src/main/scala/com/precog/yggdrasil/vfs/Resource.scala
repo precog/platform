@@ -15,7 +15,7 @@ import blueeyes.json.serialization.Versioned._
 
 import com.precog.common.security.Authorities
 import com.precog.niflheim.NIHDB
-import com.precog.util.PrecogUnit
+import com.precog.util.{IOUtils, PrecogUnit}
 
 import java.io.{File, FileInputStream, FileOutputStream}
 
@@ -113,6 +113,9 @@ object BlobMetadata {
 final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: ExecutionContext) extends Resource {
   val authorities: Authorities = metadata.authorities
   val mimeType: MimeType = metadata.mimeType
+
+  /** Suck the file into a String */
+  def asString: IO[String] = IOUtils.readFileToString(dataFile)
 
   /** Stream the file off disk. */
   def stream: StreamT[IO, Array[Byte]] = {
