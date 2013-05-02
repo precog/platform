@@ -564,18 +564,6 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
     }
     
-    "parse a filter_crossl" in {
-      val line = Line(1, 1, "")
-      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
-      result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
-    }
-    
-    "parse a filter_crossr" in {
-      val line = Line(1, 1, "")
-      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
-      result mustEqual Right(Filter(CrossRightSort, Const(CTrue)(line), Const(CFalse)(line))(line))
-    }
-    
     "continue processing beyond a filter" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch, Map1(Neg)))

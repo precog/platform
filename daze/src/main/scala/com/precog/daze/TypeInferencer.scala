@@ -28,8 +28,7 @@ import com.precog.util.Identifier
 
 trait TypeInferencer extends DAG {
   import instructions.{
-    BinaryOperation, ArraySwap, WrapArray, WrapObject, DerefArray, DerefObject,
-    JoinInstr, Map2, Map2Cross, Map2CrossLeft, Map2CrossRight
+    BinaryOperation, ArraySwap, WrapArray, WrapObject, DerefArray, DerefObject
   }
   import dag._
 

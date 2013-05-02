@@ -43,7 +43,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
     Add, Neg,
     DerefArray, DerefObject,
     ArraySwap, WrapObject, JoinObject,
-    Map2Cross, Map2CrossLeft, Map2CrossRight, Map2Match
+    Map2Cross, Map2Match
   }
   import bytecode._
   import library._
