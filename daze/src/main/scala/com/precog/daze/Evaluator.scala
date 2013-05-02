@@ -509,7 +509,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               pendingTable <- prepareEval(parent, splits)
               back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
             } yield {
-              val sort = if (mor.retainIds) pendingTable.sort else IdentitySort
+              import IdentityPolicy._
+              val sort = mor.idPolicy match {
+                case Synthesize | Strip => IdentitySort
+                case (_: Retain) => pendingTable.sort
+              }
               PendingTable(back, graph, TransSpec1.Id, sort)
             }
         
@@ -549,9 +553,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             joined flatMap { case (morph1, PendingTable(joinedTable, _, _, sort)) =>
-              // If the morphism doesn't retain IDs, we assume the result is
-              // identity sorted. This is fine for value provenance too (0 IDs).
-              val finalSort = if (mor.retainIds) sort else IdentitySort
+              import IdentityPolicy._
+              val finalSort = mor.idPolicy match {
+                case Synthesize | Strip => IdentitySort
+                case (_: Retain) => sort
+              }
               transState liftM mn(morph1(joinedTable, ctx)) map { table =>
                 PendingTable(table, graph, TransSpec1.Id, sort)
               }
