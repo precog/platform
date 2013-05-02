@@ -31,6 +31,7 @@ import blueeyes.json.{AsyncParser, AsyncParse }
 import AsyncParser._
 
 import com.precog.common.Path
+import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
 import com.precog.common.security.{APIKey, Authorities}
 
@@ -86,7 +87,7 @@ trait IngestProcessing {
   def forRequest(request: HttpRequest[_]): ValidationNel[String, IngestProcessor]
 
   trait IngestProcessorLike {
-    def ingest(durability: Durability, errorHandling: ErrorHandling, data: ByteChunk): Future[IngestResult]
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult]
   }
 }
 

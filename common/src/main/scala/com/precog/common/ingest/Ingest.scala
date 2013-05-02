@@ -24,7 +24,7 @@ import accounts.AccountId
 import security._
 import jobs.JobId
 
-import blueeyes.json.{ JPath, JValue, JUndefined }
+import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -53,7 +53,7 @@ import JavaSerialization._
 
 sealed trait Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A
-  def split(n: Int, streamId: UUID): List[Event]
+  def split(n: Int): List[Event]
   def length: Int
 }
 
@@ -68,12 +68,15 @@ object Event {
 /**
  * If writeAs is None, then the downstream 
  */
-case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamId: Option[UUID], storeMode: StoreMode) extends Event {
+case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamRef: StreamRef) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = ingest(this)
 
-  def split(n: Int, streamId: UUID): List[Event] = {
+  def split(n: Int): List[Event] = {
     val splitSize = (data.length / n) max 1
-    data.grouped(splitSize).map(d => this.copy(data = d, streamId = Some(streamId))).toList
+    val splitData = data.grouped(splitSize).toSeq
+    (splitData zip streamRef.split(splitData.size)).map({
+      case (d, ref) => this.copy(data = d, streamRef = ref)
+    })(collection.breakOut)
   }
 
   def length = data.length
@@ -82,7 +85,7 @@ case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data
 object Ingest {
   implicit val eventIso = Iso.hlist(Ingest.apply _, Ingest.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamId" :: "storeMode" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamRef" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[Ingest] = decomposerV[Ingest](schemaV1, Some("1.1".v))
@@ -97,7 +100,7 @@ object Ingest {
           val jv = (obj \ "data")
           Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), 
                  if (jv == JUndefined) Vector() else Vector(jv), 
-                 None, EventMessage.defaultTimestamp, None, StoreMode.Append)
+                 None, EventMessage.defaultTimestamp, StreamRef.Append)
         }
     }
   }
@@ -107,7 +110,7 @@ object Ingest {
       ( obj.validated[String]("tokenId") |@|
         obj.validated[Path]("path") ) { (apiKey, path) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp, None, StoreMode.Append)
+          Ingest(apiKey, path, None, if (jv == JUndefined) Vector() else Vector(jv), None, EventMessage.defaultTimestamp, StreamRef.Append)
         }
     }
   }
@@ -118,7 +121,7 @@ object Ingest {
 
 case class Archive(apiKey: APIKey, path: Path, jobId: Option[JobId], timestamp: Instant) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = archive(this)
-  def split(n: Int, streamId: UUID) = List(this) // can't split an archive
+  def split(n: Int) = List(this) // can't split an archive
   def length = 1
 }
 
@@ -146,31 +149,72 @@ object Archive {
   implicit val extractor: Extractor[Archive] = extractorV1 <+> extractorV0
 }
 
-sealed trait StoreMode
+sealed trait StoreMode {
+  def createStreamRef(terminal: Boolean): StreamRef
+}
 object StoreMode {
-  implicit val decomposer: Decomposer[StoreMode] = Decomposer[String].contramap[StoreMode] {
-    case Create => "create"
-    case Replace => "replace"
-    case Append => "append"
+  case object Create extends StoreMode {
+    def createStreamRef(terminal: Boolean) = StreamRef.Create(UUID.randomUUID, terminal)
   }
 
-  implicit val extractor: Extractor[StoreMode] = Extractor[String].mapv {
-    case "create" => Success(Create)
-    case "replace" => Success(Replace)
-    case "append" => Success(Append)
-    case other => Failure(Invalid("Storage mode %s not recogized.".format(other)))
+  case object Replace extends StoreMode {
+    def createStreamRef(terminal: Boolean) = StreamRef.Create(UUID.randomUUID, terminal)
   }
 
-  case object Create extends StoreMode
-  case object Replace extends StoreMode
-  case object Append extends StoreMode
+  case object Append extends StoreMode {
+    def createStreamRef(terminal: Boolean) = StreamRef.Append
+  }
 }
 
-case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, streamId: Option[UUID], mode: StoreMode) extends Event {
+sealed trait StreamRef {
+  def terminal: Boolean
+  def terminate: StreamRef
+  def split(n: Int): Seq[StreamRef]
+}
+
+object StreamRef {
+  case class Create(streamRef: UUID, terminal: Boolean) extends StreamRef {
+    def terminate = copy(terminal = true)
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
+  }
+
+  case class Replace(streamRef: UUID, terminal: Boolean) extends StreamRef {
+    def terminate = copy(terminal = true)
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
+  }
+
+  case object Append extends StreamRef { 
+    val terminal = false 
+    def terminate = this
+    def split(n: Int): Seq[StreamRef] = Vector.fill(n) { this }
+  } 
+
+  implicit val decomposer: Decomposer[StreamRef] = new Decomposer[StreamRef] {
+    def decompose(streamRef: StreamRef) = streamRef match {
+      case Create(uuid, terminal) => JObject("create" -> JObject("streamRef" -> uuid.jv, "terminal" -> terminal.jv))
+      case Replace(uuid, terminal) => JObject("replace" -> JObject("streamRef" -> uuid.jv, "terminal" -> terminal.jv))
+      case Append => JString("append")
+    }
+  }
+
+  implicit val extractor: Extractor[StreamRef] = new Extractor[StreamRef] {
+    def validated(jv: JValue) = jv match {
+      case JString("append") => Success(Append)
+      case other => 
+        ((other \? "create") map { jv => (jv, Create.apply _) }) orElse ((other \? "replace") map { jv => (jv, Replace.apply _) }) map { 
+          case (jv, f) => (jv.validated[UUID]("uuid") |@| jv.validated[Boolean]("terminal")) { f }
+        } getOrElse {
+          Failure(Invalid("Storage mode %s not recogized.".format(other)))
+        }
+    }
+  }
+}
+
+case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, stream: StreamRef) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = storeFile(this)
-  def split(n: Int, streamId: UUID) = {
+  def split(n: Int) = {
     val splitSize = content.data.length / n
-    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.mimeType, content.encoding), streamId = Some(streamId))).toList
+    content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.mimeType, content.encoding))).toList
   }
     
   def length = content.data.length
@@ -181,7 +225,7 @@ object StoreFile {
 
   implicit val iso = Iso.hlist(StoreFile.apply _, StoreFile.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamId" :: "mode" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamRef" :: HNil
 
   implicit val decomposer: Decomposer[StoreFile] = decomposerV[StoreFile](schemaV1, Some("1.0".v))
   implicit val extractor: Extractor[StoreFile] = extractorV[StoreFile](schemaV1, Some("1.0".v))

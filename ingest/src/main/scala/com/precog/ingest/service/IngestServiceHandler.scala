@@ -68,7 +68,7 @@ import scala.annotation.tailrec
 
 
 sealed trait IngestStore {
-  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[StoreFailure \/ PrecogUnit]
+  def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit]
 }
 
 sealed trait ParseDirective {
@@ -87,9 +87,9 @@ class IngestServiceHandler(
     with Logging { 
 
   object ingestStore extends IngestStore {
-    def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[StoreFailure \/ PrecogUnit] = {
+    def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit] = {
       if (data.nonEmpty) {
-        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), None)
+        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), streamRef)
         logger.trace("Saving event: " + eventInstance)
         eventStore.save(eventInstance, ingestTimeout)
       } else {
@@ -125,12 +125,12 @@ class IngestServiceHandler(
     }
   }
 
-  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk], durability: Durability, errorHandling: ErrorHandling): EitherT[Future, NonEmptyList[String], IngestResult] =
+  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk], durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode): EitherT[Future, NonEmptyList[String], IngestResult] =
     right(chooseProcessing(apiKey, path, authorities, request)) flatMap {
       case Some(processing) => 
         EitherT {
           (processing.forRequest(request) tuple request.content.toSuccess(nels("Ingest request missing body content."))) traverse {
-            case (processor, data) => processor.ingest(durability, errorHandling, data)
+            case (processor, data) => processor.ingest(durability, errorHandling, storeMode, data)
           } map {
             _.disjunction
           }
@@ -185,15 +185,14 @@ class IngestServiceHandler(
                                 else StopOnFirstError 
 
             val durabilityM = request.method match {
-              case HttpMethods.POST | HttpMethods.PUT => 
-                createJob map { GlobalDurability(_) } 
-
-              case HttpMethods.PATCH => 
-                right(Promise successful LocalDurability: Future[Durability]) 
+              case HttpMethods.POST => createJob map { jobId => (GlobalDurability(jobId), StoreMode.Create) }
+              case HttpMethods.PUT => createJob map { jobId => (GlobalDurability(jobId), StoreMode.Replace) }
+              case HttpMethods.PATCH => right[Future, String, (Durability, StoreMode)](Promise.successful((LocalDurability, StoreMode.Append)))
+              case _ => left[Future, String, (Durability, StoreMode)](Promise.successful("HTTP method " + request.method + " not supported for data ingest."))
             }
 
-            durabilityM flatMap { durability =>
-              ingestBatch(apiKey, path, authorities, request, durability, errorHandling) flatMap {
+            durabilityM flatMap { case (durability, storeMode) =>
+              ingestBatch(apiKey, path, authorities, request, durability, errorHandling, storeMode) flatMap {
                 case NotIngested(reason) =>
                   val message = "Ingest to %s by %s failed with reason: %s ".format(path, apiKey, reason)
                   logger.warn(message)

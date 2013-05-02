@@ -45,6 +45,7 @@ trait RoutingTable extends Logging {
 
   // DREAMON: Some day, make this a stream transformer
   def batchMessages(events: Seq[(Long, EventMessage)]): Seq[PathUpdateOp] = {
+    sys.error("todo") /*
     val start = System.currentTimeMillis
 
     // the sequence of ProjectionUpdate objects to return
@@ -55,7 +56,7 @@ trait RoutingTable extends Logging {
 
     // process each message, aggregating ingest messages
     events.foreach {
-      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId, mode @ (StoreMode.Create | StoreMode.Replace)) => 
+      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId, mode @ (StoreMode.Create | StoreMode.Replace))) => 
         // Send along whatever we've batched up to this point, then start a new
         // update. This could get messy if the create fails due to not
         // overwriting existing data, but more ingests are coming along
@@ -102,6 +103,7 @@ trait RoutingTable extends Logging {
 
     logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))
     updates
+    */
   }
 }
 

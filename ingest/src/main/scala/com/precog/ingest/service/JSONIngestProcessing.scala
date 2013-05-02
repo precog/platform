@@ -38,12 +38,13 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.ByteBuffer
 
 import scalaz._
+import scalaz.syntax.monad._
 
 sealed trait JSONRecordStyle
 case object JSONValueStyle extends JSONRecordStyle
 case object JSONStreamStyle extends JSONRecordStyle
 
-final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, recordStyle: JSONRecordStyle, maxFields: Int, ingest: IngestStore)(implicit M: Monad[Future]) extends IngestProcessing with Logging {
+final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, recordStyle: JSONRecordStyle, maxFields: Int, storage: IngestStore)(implicit M: Monad[Future]) extends IngestProcessing with Logging {
 
   def forRequest(request: HttpRequest[_]): ValidationNel[String, IngestProcessor] = {
     Success(new IngestProcessor)
@@ -58,59 +59,112 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
     def empty(stopOnFirstError: Boolean) = JSONParseState(AsyncParser(stopOnFirstError), 0, Vector.empty)
   }
 
-  def ingestJSONChunk(errorHandling: ErrorHandling, jobId: Option[JobId], stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
-    def rec(state: JSONParseState, stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
-      stream.uncons.flatMap {
-        case Some((head, rest)) =>
-          import state._
-          // Dup and rewind to ensure we have something to parse
-          val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
-          logger.trace("Async parse on " + toParse)
-          val (parsed, updatedParser) = parser(More(toParse))
-          val records = recordStyle match {
-            case JSONValueStyle => 
-              parsed.values flatMap {
-                case JArray(elements) => elements
-                case value => Seq(value)
-              }
+  final class IngestProcessor extends IngestProcessorLike {
+    def ingestJSONChunk(errorHandling: ErrorHandling, storeMode: StoreMode, jobId: Option[JobId], stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
+      val overLargeErrorBase = "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields)
 
-            case JSONStreamStyle => 
-              parsed.values
+      @inline def expandArraysAtRoot(values: Seq[JValue]) = recordStyle match {
+        case JSONValueStyle => 
+          values flatMap {
+            case JArray(elements) => elements
+            case value => Seq(value)
           }
 
-          if (records.size > 0) {
-            val toIngest = records.takeWhile { jv => jv.flattenWithPath.size <= maxFields }
-            if (toIngest.size == records.size) {
-              ingest.store(apiKey, path, authorities, records, jobId) flatMap { _ =>
-                rec(state.update(updatedParser, records.size, parsed.errors.map { pe => (pe.line, pe.msg) }), rest)
+        case JSONStreamStyle => 
+          values
+      }
+
+      def ingestAllOrNothing(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[JSONParseState] = {
+        def accumulate(state: JSONParseState, records: Vector[JValue], stream: StreamT[Future, ByteBuffer]): Future[JSONParseState] = {
+          stream.uncons.flatMap {
+            case Some((head, rest)) =>
+              val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
+              val (parsed, updatedParser) = state.parser(More(toParse))
+              val ingestSize = parsed.values.size
+              val errors = if (parsed.errors.isEmpty && parsed.values.exists(_.flattenWithPath.size > maxFields)) List((state.ingested, overLargeErrorBase))
+                           else parsed.errors.map(pe => (pe.line, pe.msg))
+
+              if (errors.isEmpty) {
+                accumulate(state.update(updatedParser, ingestSize), records ++ parsed.values, rest)
+              } else {
+                state.update(updatedParser, ingestSize, errors).point[Future]
+              }
+
+            case None =>
+              val (parsed, finalParser) = state.parser(Done)
+              val ingestSize = parsed.values.size
+              val errors = if (parsed.errors.isEmpty && parsed.values.exists(_.flattenWithPath.size > maxFields)) List((state.ingested, overLargeErrorBase))
+                           else parsed.errors.map(pe => (pe.line, pe.msg))
+
+              if (errors.isEmpty) {
+                storage.store(apiKey, path, authorities, records ++ parsed.values, jobId, streamRef.terminate) map { _ =>
+                  sys.error("Do something useful with StoreFailure")
+                  state.update(finalParser, ingestSize, Nil)
+                }
+              } else {
+                state.update(finalParser, ingestSize, errors).point[Future]
+              }
+          }
+        }
+
+        accumulate(state, Vector.empty[JValue], stream)
+      }
+
+      def ingestUnbuffered(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[JSONParseState] = {
+        stream.uncons.flatMap {
+          case Some((head, rest)) =>
+            // Dup and rewind to ensure we have something to parse
+            val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
+            val (parsed, updatedParser) = state.parser(More(toParse))
+            ingestBlock(parsed, updatedParser, state, streamRef) { ingestUnbuffered(_, rest, streamRef) }
+
+          case None =>
+            val (parsed, finalParser) = state.parser(Done)
+            ingestBlock(parsed, finalParser, state, streamRef.terminate) { (_: JSONParseState).point[Future] }
+        }
+      }
+
+      def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef)(continue: JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
+        (errorHandling: @unchecked) match {
+          case IngestAllPossible =>
+            val (toIngest, overLarge) = expandArraysAtRoot(parsed.values) partition { jv => jv.flattenWithPath.size <= maxFields }
+            val ingestSize = toIngest.size
+
+            storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { _ =>
+              sys.error("Do something useful with StoreFailure")
+              val overLargeError = (-1, (overLargeErrorBase + " (%d records affected)").format(overLarge.size))
+              continue(state.update(updatedParser, ingestSize, parsed.errors.map(pe => (pe.line, pe.msg)) :+ overLargeError))
+            }
+
+          case StopOnFirstError =>
+            val (toIngest, overLarge) = expandArraysAtRoot(parsed.values) span { jv => jv.flattenWithPath.size <= maxFields }
+            val ingestSize = toIngest.size
+
+            if (overLarge.isEmpty && parsed.errors.isEmpty) {
+              storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { _ =>
+                sys.error("Do something useful with StoreFailure")
+                continue(state.update(updatedParser, ingestSize, Nil))
               }
             } else {
-              ingest.store(apiKey, path, authorities, toIngest, jobId) map { _ =>
-                state.update(updatedParser, toIngest.size, Seq((-1, "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields))))
-              }
-            }
-          } else {
-            logger.warn("Async parse of chunk resulted in zero values, %d errors".format(parsed.errors.size))
-            rec(state.update(updatedParser, 0, parsed.errors.map { pe => (pe.line, pe.msg) }), rest)
-          }
+              storage.store(apiKey, path, authorities, toIngest, jobId, streamRef.terminate) map { _ =>
+                sys.error("Do something useful with StoreFailure")
+                val errors = if (overLarge.nonEmpty) List((state.ingested + toIngest.size, overLargeErrorBase))
+                             else parsed.errors.map(pe => (pe.line, pe.msg))
 
-        case None => M point {
-          val (finalResult, finalParser) = state.parser(Done)
-          state.copy(parser = finalParser)
+                state.update(updatedParser, toIngest.size, errors)
+              }
+            } 
         }
+      }
+
+      errorHandling match {
+        case StopOnFirstError => ingestUnbuffered(JSONParseState.empty(true), stream, storeMode.createStreamRef(false))
+        case IngestAllPossible => ingestUnbuffered(JSONParseState.empty(false), stream, storeMode.createStreamRef(false))
+        case AllOrNothing => ingestAllOrNothing(JSONParseState.empty(true), stream, storeMode.createStreamRef(false))
       }
     }
 
-    val parseState = errorHandling match {
-      case StopOnFirstError | AllOrNothing => JSONParseState.empty(true)
-      case IngestAllPossible => JSONParseState.empty(false)
-    }
-
-    rec(parseState, stream)
-  }
-
-  final class IngestProcessor extends IngestProcessorLike {
-    def ingest(durability: Durability, errorHandling: ErrorHandling, data: ByteChunk): Future[IngestResult] = {
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult] = {
       val dataStream = data match {
         case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
         case Right(stream) => stream
@@ -118,7 +172,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
 
       durability match {
         case LocalDurability =>
-          ingestJSONChunk(errorHandling, None, dataStream) map {
+          ingestJSONChunk(errorHandling, storeMode, None, dataStream) map {
             case JSONParseState(_, ingested, errors) =>
               errorHandling match {
                 case StopOnFirstError | AllOrNothing =>
@@ -130,7 +184,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
           }
 
         case GlobalDurability(jobId) =>
-          ingestJSONChunk(errorHandling, Some(jobId), dataStream) map {
+          ingestJSONChunk(errorHandling, storeMode, Some(jobId), dataStream) map {
             case JSONParseState(_, ingested, errors) =>
               BatchResult(ingested + errors.size, ingested, Vector(errors: _*))
           }
