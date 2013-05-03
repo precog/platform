@@ -66,7 +66,7 @@ trait EvaluatingPerfTestRunnerConfig extends PerfTestRunnerConfig {
 
 
 trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
-    with IdSourceScannerModule
+    with IdSourceScannerModule[M]
     with PerfTestRunner[M, T] {
 
   type Result = Int
