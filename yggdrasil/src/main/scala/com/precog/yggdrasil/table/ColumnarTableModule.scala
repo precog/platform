@@ -380,8 +380,15 @@ trait ColumnarTableModule[M[+_]]
       }
     }
 
-    def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)] =
-      M.point(CrossOrder.CrossLeft -> left.cross(right)(spec))
+    def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)] = {
+      import CrossOrder._
+      M.point(orderHint match {
+        case Some(CrossRight | CrossRightLeft) =>
+          CrossRight -> right.cross(left)(TransSpec2.flip(spec))
+        case _ =>
+          CrossLeft -> left.cross(right)(spec)
+      })
+    }
   }
 
   abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
