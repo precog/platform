@@ -116,7 +116,7 @@ trait CrossOrdering extends DAG {
           val left2 = memoized(left)
           val right2 = memoized(right)
           
-          val (leftIndices, rightIndices) = determineSort(left2, right2)
+          val (leftIndices, rightIndices) = dag.IdentityMatch(left2, right2).sharedIndices.unzip
           
           val leftPrefix = leftIndices zip (Stream from 0) forall { case (a, b) => a == b }
           val rightPrefix = rightIndices zip (Stream from 0) forall { case (a, b) => a == b }
@@ -161,7 +161,7 @@ trait CrossOrdering extends DAG {
           val target2 = memoized(target)
           val boolean2 = memoized(boolean)
           
-          val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
+          val (targetIndexes, booleanIndexes) = dag.IdentityMatch(target2, boolean2).sharedIndices.unzip
           
           val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
@@ -196,43 +196,5 @@ trait CrossOrdering extends DAG {
     }
     
     memoized(node)
-  }
-
-  private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
-    val leftPairs = (left2.identities, right2.identities) match {
-      case (Identities.Specs(a), Identities.Specs(b)) =>
-        a.zipWithIndex filter {
-          case (p, i) => b contains p
-        }
-      case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
-    }
-
-    val rightPairs = (right2.identities, left2.identities) match {
-      case (Identities.Specs(a), Identities.Specs(b)) =>
-        a.zipWithIndex filter {
-          case (p, i) => b contains p
-        }
-      case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
-    }
-    
-    val (_, leftIndices) = leftPairs.unzip
-    
-    val (_, rightIndices) = rightPairs sortWith {
-      case ((p1, i1), (p2, i2)) => {
-        val leftIndex = leftPairs indexWhere {
-          case (`p1`, _) => true
-          case _ => false
-        }
-        
-        val rightIndex = leftPairs indexWhere {
-          case (`p2`, _) => true
-          case _ => false
-        }
-        
-        leftIndex < rightIndex
-      }
-    } unzip
-
-    (leftIndices, rightIndices)
   }
 }
