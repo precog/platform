@@ -65,7 +65,6 @@ trait RandomForestSpecs extends EvalStackSpecs {
             features0[5]
           ]
 
-
         trainingData := {predictors: features, dependent: data.mpg}
 
         std::stats::rfRegression(trainingData, features)

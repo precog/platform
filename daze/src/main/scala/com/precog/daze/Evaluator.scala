@@ -357,6 +357,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case class IdentityJoin(ids: Vector[Int]) extends JoinKey
           case class ValueJoin(id: Int) extends JoinKey
 
+          // val idMatch = IdentityMatch(left, right)
+
           val prefixLength = sharedPrefixLength(left, right)
           val leftLength = left.identities.length
           val rightLength = right.identities.length
@@ -469,13 +471,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
-            (left.identities, right.identities) match {
-              case (Identities.Specs(_), Identities.Specs(_)) =>
-                join(graph, left, right, joinSort)(transFromBinOp(op, ctx))
-
-              case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-                monadState point PendingTable(Table.empty, graph, TransSpec1.Id, IdentitySort)
-            }
+            join(graph, left, right, joinSort)(transFromBinOp(op, ctx))
 
           case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
             // TODO binary typing

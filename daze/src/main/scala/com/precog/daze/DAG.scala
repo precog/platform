@@ -998,6 +998,7 @@ trait DAG extends Instructions {
         case IdentityPolicy.Retain.Merge => {
           // backwards compatibility with idAlignment
           if (mor.idAlignment == IdentityAlignment.MatchAlignment)
+            // IdentityMatch(left, right).identities
             (left.identities ++ right.identities).distinct
           else if (mor.idAlignment == IdentityAlignment.RightAlignment)
             right.identities
@@ -1183,9 +1184,10 @@ trait DAG extends Instructions {
     
     // TODO propagate AOT value computation
     case class Join(op: BinaryOperation, joinSort: JoinSort, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph {
+
       lazy val identities = joinSort match {
         case Cross(_) => left.identities ++ right.identities
-        case _ => (left.identities ++ right.identities).distinct
+        case _ => IdentityMatch(left, right).identities
       }
 
       def uniqueIdentities = joinSort match {
@@ -1198,12 +1200,13 @@ trait DAG extends Instructions {
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
+      
     }
     
     case class Filter(joinSort: JoinSort, target: DepGraph, boolean: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = joinSort match {
         case Cross(_) => target.identities ++ boolean.identities
-        case _ => (target.identities ++ boolean.identities).distinct
+        case _ => IdentityMatch(target, boolean).identities
       }
 
       def uniqueIdentities = joinSort match {
@@ -1338,6 +1341,44 @@ trait DAG extends Instructions {
     // case class PartialIdentityJoin(ids: Vector[Int]) extends Join
     // case class ValueJoin(id: Int) extends Join
     case class Cross(hint: Option[CrossOrder] = None) extends JoinSort
+
+    case class IdentityMatch(left: DepGraph, right: DepGraph) {
+      def identities: Identities = (left.identities, right.identities) match {
+        case (Identities.Specs(lSpecs), Identities.Specs(rSpecs)) =>
+          val specs = (sharedIndices map { case (lIdx, _) => lSpecs(lIdx) }) ++
+              (leftIndices map lSpecs) ++ (rightIndices map rSpecs)
+          Identities.Specs(specs map (_.canonicalize))
+        case (_, _) => Identities.Undefined
+      }
+
+      private def canonicalize(identities: Identities) = identities match {
+        case Identities.Specs(ids) => Identities.Specs(ids map (_.canonicalize))
+        case other => other
+      }
+
+      private val leftIdentities = canonicalize(left.identities)
+      private val rightIdentities = canonicalize(right.identities)
+
+      private def matches = (leftIdentities, rightIdentities) match {
+        case (Identities.Specs(a), Identities.Specs(b)) =>
+          a.zipWithIndex collect { case (p, i) if b contains p =>
+            (p, (i, b.indexOf(p)))
+          }
+        case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
+      }
+
+      private def extras(identities: Identities): Vector[Int] = identities match {
+        case Identities.Specs(ids) =>
+          ids.zipWithIndex collect { case (id, index) if !(sharedIds contains id) =>
+            index
+          }
+        case _ => Vector.empty
+      }
+
+      val (sharedIds, sharedIndices) = matches.unzip
+      val leftIndices = extras(leftIdentities)
+      val rightIndices = extras(rightIdentities)
+    }
   }
   
   
