@@ -166,6 +166,12 @@ trait TableModule[M[+_]] extends TransSpecModule {
      */
     def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)]
 
+    /**
+     * Performs a back-end specific cross. Unlike Table#cross, this does not
+     * guarantee a specific implementation (much like Table.join does not).
+     * Hints can be provided on how we'd prefer the table to be crossed, but
+     * the actual cross order is returned as part of the result.
+     */
     def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)]
   }
 
