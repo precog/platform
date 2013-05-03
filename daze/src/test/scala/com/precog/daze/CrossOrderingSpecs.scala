@@ -28,6 +28,7 @@ import com.precog.yggdrasil._
 object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyModule {
   import instructions._
   import dag._
+  import TableModule.CrossOrder._
 
   type Lib = RandomLibrary
   object library extends RandomLibrary
@@ -40,8 +41,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
         val right = Const(CLong(42))(line)
         
-        val input = Join(Eq, CrossRightSort, left, right)(line)
-        val expected = Join(Eq, CrossLeftSort, left, right)(line)
+        val input = Join(Eq, Cross(None), left, right)(line)
+        val expected = Join(Eq, Cross(Some(CrossLeft)), left, right)(line)
         
         orderCrosses(input) mustEqual expected
       }
@@ -52,8 +53,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val left = Const(CLong(42))(line)
         val right = dag.LoadLocal(Const(CString("/foo"))(line))(line)
         
-        val input = Join(Eq, CrossLeftSort, left, right)(line)
-        val expected = Join(Eq, CrossRightSort, left, right)(line)
+        val input = Join(Eq, Cross(None), left, right)(line)
+        val expected = Join(Eq, Cross(Some(CrossRight)), left, right)(line)
         
         orderCrosses(input) mustEqual expected
       }
@@ -65,8 +66,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val right = Const(CLong(42))(line)
       
-      val input = Join(Or, IdentitySort, Join(Eq, CrossRightSort, left, right)(line), left)(line)
-      val expected = Join(Or, IdentitySort, Join(Eq, CrossLeftSort, left, right)(line), left)(line)
+      val input = Join(Or, IdentitySort, Join(Eq, Cross(None), left, right)(line), left)(line)
+      val expected = Join(Or, IdentitySort, Join(Eq, Cross(Some(CrossLeft)), left, right)(line), left)(line)
       
       orderCrosses(input) mustEqual expected
     }
@@ -77,8 +78,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val right = Const(CLong(42))(line)
       
-      val input = Filter(IdentitySort, Join(Eq, CrossRightSort, left, right)(line), left)(line)
-      val expected = Filter(IdentitySort, Join(Eq, CrossLeftSort, left, right)(line), left)(line)
+      val input = Filter(IdentitySort, Join(Eq, Cross(None), left, right)(line), left)(line)
+      val expected = Filter(IdentitySort, Join(Eq, Cross(Some(CrossLeft)), left, right)(line), left)(line)
       
       orderCrosses(input) mustEqual expected
     }
@@ -177,13 +178,13 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val line = Line(1, 1, "")
         
         val left = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-        val right = Join(Add, CrossRightSort,
+        val right = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
           left)(line)
         
         val input = Filter(IdentitySort, left, right)(line)
         
-        val expectedRight = Join(Add, CrossLeftSort,
+        val expectedRight = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
           left)(line)
 
@@ -196,13 +197,13 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val line = Line(1, 1, "")
         
         val right = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-        val left = Join(Add, CrossRightSort,
+        val left = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
           right)(line)
         
         val input = Filter(IdentitySort, left, right)(line)
         
-        val expectedLeft = Join(Add, CrossLeftSort,
+        val expectedLeft = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
           right)(line)
         
@@ -218,14 +219,14 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
         val baz = dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line)
         
-        val left = Join(Add, CrossRightSort, bar, foo)(line)
-        val right = Join(Add, CrossRightSort, baz, foo)(line)
+        val left = Join(Add, Cross(None), bar, foo)(line)
+        val right = Join(Add, Cross(None), baz, foo)(line)
         
-        val expectedLeft = Join(Add, CrossLeftSort,
+        val expectedLeft = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line),
           foo)(line)
 
-        val expectedRight = Join(Add, CrossLeftSort,
+        val expectedRight = Join(Add, Cross(None),
           dag.LoadLocal(Const(CString("/baz"))(line), JTextT)(line),
           foo)(line)
 
@@ -244,9 +245,9 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       
       val barAdd = Join(Add, IdentitySort, bar, bar)(line)
       
-      val input = Join(Add, CrossLeftSort, foo, barAdd)(line)
+      val input = Join(Add, Cross(None), foo, barAdd)(line)
       
-      val expected = Join(Add, CrossLeftSort, foo, Memoize(barAdd, 100))(line)
+      val expected = Join(Add, Cross(None), foo, Memoize(barAdd, 100))(line)
       
       orderCrosses(input) mustEqual expected
     }
@@ -257,7 +258,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
       val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
       
-      val input = Join(Add, CrossLeftSort, foo, bar)(line)
+      val input = Join(Add, Cross(None), foo, bar)(line)
       
       orderCrosses(input) mustEqual input
     }
@@ -269,7 +270,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       
       val input =
         Join(Add, IdentitySort,
-          Join(Add, CrossLeftSort,
+          Join(Add, Cross(Some(CrossLeft)),
             foo,
             Const(CLong(42))(line))(line),
           foo)(line)
@@ -284,7 +285,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       
       val input =
         Join(Add, ValueSort(0),
-          Join(Add, CrossLeftSort,
+          Join(Add, Cross(Some(CrossLeft)),
             SortBy(foo, "a", "b", 0),
             Const(CLong(42))(line))(line),
           SortBy(foo, "a", "b", 0))(line)

@@ -47,6 +47,8 @@ trait DAG extends Instructions {
 
   import instructions._
   import library._
+
+  import TableModule.CrossOrder // TODO: Move cross order out of yggdrasil.
   
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
     import dag._
@@ -62,7 +64,7 @@ trait DAG extends Instructions {
       def processJoinInstr(instr: JoinInstr) = {
         val maybeOpSort = Some(instr) collect {
           case instructions.Map2Match(op) => (op, IdentitySort)
-          case instructions.Map2Cross(op) => (op, CrossLeftSort)
+          case instructions.Map2Cross(op) => (op, Cross(None))
         }
         
         val eitherRootsOp = maybeOpSort map {
@@ -250,7 +252,7 @@ trait DAG extends Instructions {
         }
         
         case instr @ FilterMatch => processFilter(instr, IdentitySort)
-        case instr @ FilterCross => processFilter(instr, CrossLeftSort)
+        case instr @ FilterCross => processFilter(instr, Cross(None))
         
         case Dup => {
           roots match {
@@ -1182,14 +1184,12 @@ trait DAG extends Instructions {
     // TODO propagate AOT value computation
     case class Join(op: BinaryOperation, joinSort: JoinSort, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = joinSort match {
-        case CrossRightSort => right.identities ++ left.identities
-        case CrossLeftSort => left.identities ++ right.identities
+        case Cross(_) => left.identities ++ right.identities
         case _ => (left.identities ++ right.identities).distinct
       }
 
       def uniqueIdentities = joinSort match {
-        case CrossLeftSort | CrossRightSort => left.uniqueIdentities && right.uniqueIdentities
-        case IdentitySort => left.uniqueIdentities && right.uniqueIdentities
+        case Cross(_) | IdentitySort => left.uniqueIdentities && right.uniqueIdentities
         case _ => false
       }
 
@@ -1202,14 +1202,12 @@ trait DAG extends Instructions {
     
     case class Filter(joinSort: JoinSort, target: DepGraph, boolean: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = joinSort match {
-        case CrossRightSort => boolean.identities ++ target.identities
-        case CrossLeftSort => target.identities ++ boolean.identities
+        case Cross(_) => target.identities ++ boolean.identities
         case _ => (target.identities ++ boolean.identities).distinct
       }
 
       def uniqueIdentities = joinSort match {
-        case CrossLeftSort | CrossRightSort => target.uniqueIdentities && boolean.uniqueIdentities
-        case IdentitySort => target.uniqueIdentities && boolean.uniqueIdentities
+        case IdentitySort | Cross(_) => target.uniqueIdentities && boolean.uniqueIdentities
         case _ => false
       }
       
@@ -1334,11 +1332,12 @@ trait DAG extends Instructions {
     case object IdentitySort extends TableSort
     case class PartialIdentitySort(ids: Vector[Int]) extends TableSort
     case class ValueSort(id: Int) extends TableSort
-    // case object NullSort extends TableSort -- Not USED!
     
-    // case class Cross(hint: Option[CrossOrder]) extends JoinSort
-    case object CrossLeftSort extends JoinSort
-    case object CrossRightSort extends JoinSort
+    // sealed trait Join
+    // case object IdentityJoin(ids: Vetor[Int]) extends Join
+    // case class PartialIdentityJoin(ids: Vector[Int]) extends Join
+    // case class ValueJoin(id: Int) extends Join
+    case class Cross(hint: Option[CrossOrder] = None) extends JoinSort
   }
   
   

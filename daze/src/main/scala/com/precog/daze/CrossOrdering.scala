@@ -20,9 +20,12 @@
 package com.precog
 package daze
 
+import com.precog.yggdrasil.TableModule
+
 import scala.collection.mutable
 
 trait CrossOrdering extends DAG {
+  import TableModule.CrossOrder // TODO: Move CrossOrder out somewhere else.
   import instructions._
   import dag._
 
@@ -129,20 +132,21 @@ trait CrossOrdering extends DAG {
           }
         }
         
-        case node @ Join(op, CrossLeftSort | CrossRightSort, left, right) => {
+        case node @ Join(op, Cross(hint), left, right) => {
+          import CrossOrder._
           if (right.isSingleton)
-            Join(op, CrossLeftSort, memoized(left), memoized(right))(node.loc)
+            Join(op, Cross(Some(CrossLeft)), memoized(left), memoized(right))(node.loc)
           else if (left.isSingleton)
-            Join(op, CrossRightSort, memoized(left), memoized(right))(node.loc)
+            Join(op, Cross(Some(CrossRight)), memoized(left), memoized(right))(node.loc)
           else {
             val right2 = memoized(right)
             
             right2 match {
               case _: Memoize | _: Sort | _: SortBy | _: LoadLocal =>
-                Join(op, CrossLeftSort, memoized(left), right2)(node.loc)
+                Join(op, Cross(hint), memoized(left), right2)(node.loc)
               
               case _ =>
-                Join(op, CrossLeftSort, memoized(left), Memoize(right2, 100))(node.loc)
+                Join(op, Cross(hint), memoized(left), Memoize(right2, 100))(node.loc)
             }
           }
         }
