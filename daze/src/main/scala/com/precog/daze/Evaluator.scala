@@ -303,7 +303,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                         PartialIdentitySort(ids map (_ + leftIds.size))
                       case valueSort => valueSort
                     }
-                  case CrossLeftRight =>
+                  case CrossLeftRight => // Not actually hit yet. Soon!
                     (ptLeft.sort, ptRight.sort) match {
                       case (IdentitySort, PartialIdentitySort(rIds)) =>
                         PartialIdentitySort(leftIds ++ (rIds map (_ + leftIds.size)))
@@ -313,7 +313,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                       case (IdentitySort, _) => PartialIdentitySort(leftIds)
                       case (otherSort, _) => otherSort
                     }
-                  case CrossRightLeft =>
+                  case CrossRightLeft => // Not actually hit yet. Soon!
                     (ptLeft.sort, ptRight.sort) match {
                       case (IdentitySort, IdentitySort) =>
                         PartialIdentitySort(rightIds ++ (leftIds map (_ + rightIds.size)))
