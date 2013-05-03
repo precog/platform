@@ -16,6 +16,8 @@ trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] wi
   type TS1 = trans.TransSpec1
   import library._
   import trans._
+  import TableModule.CrossOrder
+  import CrossOrder._
 
   trait ReductionFinder extends EvaluatorMethods with TransSpecable {
     import dag._ 
@@ -91,8 +93,8 @@ trait ReductionFinderModule[M[+_]] extends DAG with EvaluatorMethodsModule[M] wi
           val firstIndex = st.parentsByAncestor(ancestor).reverse indexOf parent
           val secondIndex = st.reducesByParent(parent).reverse indexOf graph
 
-          dag.Join(DerefArray, CrossLeftSort, 
-            dag.Join(DerefArray, CrossLeftSort, 
+          dag.Join(DerefArray, Cross(Some(CrossLeft)), 
+            dag.Join(DerefArray, Cross(Some(CrossLeft)), 
               left,
               Const(CLong(firstIndex))(graph.loc))(graph.loc),
             Const(CLong(secondIndex))(graph.loc))(graph.loc)
