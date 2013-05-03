@@ -40,6 +40,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
     with EvaluatorTestSupport[M]
     with LongIdMemoryDatasetConsumer[M] { self =>
   
+  import TableModule.CrossOrder._ // TODO: Move CrossOrder out somewhere else.
   import dag._
   import instructions._
   import library._
@@ -61,10 +62,10 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       def makeFilter(lhs1: DepGraph, rhs1: DepGraph, lhs2: DepGraph, rhs2: DepGraph) = 
         Filter(IdentitySort,
-          Join(Eq, CrossLeftSort,
+          Join(Eq, Cross(None),
             lhs1,
             rhs1)(line),
-          Join(Eq, CrossLeftSort,
+          Join(Eq, Cross(None),
             lhs2,
             rhs2)(line))(line)
 
@@ -104,35 +105,35 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+              Join(DerefObject, Cross(None), users, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
           
       val input =
         Filter(IdentitySort,
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               height,
-              Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-            Join(WrapObject, CrossLeftSort,
+              Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+            Join(WrapObject, Cross(None),
               name,
-              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None), users, name)(line))(line))(line),
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               users,
               userId)(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -140,12 +141,12 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             height,
-            Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
-          Join(WrapObject, CrossLeftSort,
+            Join(DerefObject, Cross(None), liftedLHS, height)(line))(line),
+          Join(WrapObject, Cross(None),
             name,
-            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
+            Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line)
 
       opt must_== expectedOpt
     }
@@ -170,37 +171,37 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
               Operate(BuiltInFunction1Op(toLowerCase),
-                Join(DerefObject, CrossLeftSort, users, userId)(line))(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+                Join(DerefObject, Cross(None), users, userId)(line))(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
           
       val input =
         Filter(IdentitySort,
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               height,
-              Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-            Join(WrapObject, CrossLeftSort,
+              Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+            Join(WrapObject, Cross(None),
               name,
-              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
-          Join(Eq, CrossLeftSort,
+              Join(DerefObject, Cross(None), users, name)(line))(line))(line),
+          Join(Eq, Cross(None),
             Operate(BuiltInFunction1Op(toLowerCase), 
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 users,
                 userId)(line))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -208,12 +209,12 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             height,
-            Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
-          Join(WrapObject, CrossLeftSort,
+            Join(DerefObject, Cross(None), liftedLHS, height)(line))(line),
+          Join(WrapObject, Cross(None),
             name,
-            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
+            Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line)
 
       opt must_== expectedOpt
     }
@@ -238,31 +239,31 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+              Join(DerefObject, Cross(None), users, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
 
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
           "key", "value", 0)
 
       val input =
         Filter(IdentitySort,
-          Join(BuiltInFunction2Op(hypot), CrossLeftSort,
-            Join(DerefObject, CrossLeftSort, users, weight)(line),
-            Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+          Join(BuiltInFunction2Op(hypot), Cross(None),
+            Join(DerefObject, Cross(None), users, weight)(line),
+            Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               users,
               userId)(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -270,8 +271,8 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Join(BuiltInFunction2Op(hypot), ValueSort(0),
-          Join(DerefObject, CrossLeftSort, liftedLHS, weight)(line),
-          Join(DerefObject, CrossLeftSort, liftedRHS, height)(line))(line)
+          Join(DerefObject, Cross(None), liftedLHS, weight)(line),
+          Join(DerefObject, Cross(None), liftedRHS, height)(line))(line)
 
       opt must_== expectedOpt
     }
@@ -297,38 +298,38 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+              Join(DerefObject, Cross(None), users, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
           
       val input =
         Filter(IdentitySort,
           Operate(BuiltInFunction1Op(toLowerCase),
-            Join(DerefObject, CrossLeftSort,
-              Join(JoinObject, CrossLeftSort,
-                Join(WrapObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
+              Join(JoinObject, Cross(None),
+                Join(WrapObject, Cross(None),
                   height,
-                  Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-                Join(WrapObject, CrossLeftSort,
+                  Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+                Join(WrapObject, Cross(None),
                   name,
-                  Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
+                  Join(DerefObject, Cross(None), users, name)(line))(line))(line),
               name)(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               users,
               userId)(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -336,14 +337,14 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Operate(BuiltInFunction1Op(toLowerCase),
-          Join(DerefObject, CrossLeftSort,
+          Join(DerefObject, Cross(None),
             Join(JoinObject, ValueSort(0),
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(None),
                 height,
-                Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
-              Join(WrapObject, CrossLeftSort,
+                Join(DerefObject, Cross(None), liftedLHS, height)(line))(line),
+              Join(WrapObject, Cross(None),
                 name,
-                Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line),
+                Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line),
             name)(line))(line)
 
       opt must_== expectedOpt
@@ -363,10 +364,10 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       val input =
         Filter(IdentitySort,
-          Join(JoinArray, CrossLeftSort,
+          Join(JoinArray, Cross(None),
             Operate(WrapArray, users)(line),
             Operate(WrapArray, users)(line))(line),
-          Join(Eq, CrossLeftSort, users, heightWeight)(line))(line)
+          Join(Eq, Cross(None), users, heightWeight)(line))(line)
 
       val opt = optimizeJoins(input, ctx, new IdGen)
 
@@ -394,20 +395,20 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val input =
         Filter(IdentitySort,
           dag.Morph1(IndexedRank,
-            Join(DerefObject, CrossLeftSort,
-              Join(JoinObject, CrossLeftSort,
-                Join(WrapObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
+              Join(JoinObject, Cross(None),
+                Join(WrapObject, Cross(None),
                   height,
-                  Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-                Join(WrapObject, CrossLeftSort,
+                  Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+                Join(WrapObject, Cross(None),
                   name,
-                  Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
+                  Join(DerefObject, Cross(None), users, name)(line))(line))(line),
               name)(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               users,
               userId)(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -439,50 +440,50 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject,CrossLeftSort,
-                Join(DerefObject,CrossLeftSort,
+              Join(DerefObject,Cross(None),
+                Join(DerefObject,Cross(None),
                   clicksData,
                   product)(line),
                 price)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, clicksData)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, clicksData)(line))(line),
           "key", "value", 0)
 
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject,CrossLeftSort,
-                Join(DerefObject,CrossLeftSort,
+              Join(DerefObject,Cross(None),
+                Join(DerefObject,Cross(None),
                   conversionsData,
                   product)(line),
                 price)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, conversionsData)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, conversionsData)(line))(line),
           "key", "value", 0)
         
       val input =
         Filter(IdentitySort,
-          Join(JoinObject,CrossLeftSort,
-            Join(WrapObject,CrossLeftSort,
+          Join(JoinObject,Cross(None),
+            Join(WrapObject,Cross(None),
               clicks,
               clicksData)(line),
-            Join(WrapObject,CrossLeftSort,
+            Join(WrapObject,Cross(None),
               price,
-              Join(DerefObject,CrossLeftSort,
-                Join(DerefObject,CrossLeftSort,
+              Join(DerefObject,Cross(None),
+                Join(DerefObject,Cross(None),
                   conversionsData,
                   product)(line),
                 id)(line))(line))(line),
-          Join(Eq,CrossLeftSort,
-            Join(DerefObject,CrossLeftSort,
-              Join(DerefObject,CrossLeftSort,
+          Join(Eq,Cross(None),
+            Join(DerefObject,Cross(None),
+              Join(DerefObject,Cross(None),
                 conversionsData,
                 product)(line),
               price)(line),
-            Join(DerefObject,CrossLeftSort,
-              Join(DerefObject,CrossLeftSort,
+            Join(DerefObject,Cross(None),
+              Join(DerefObject,Cross(None),
                 clicksData,
                 product)(line),
               price)(line))(line))(line)
@@ -491,13 +492,13 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             clicks,
             liftedLHS)(line),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             price,
-            Join(DerefObject, CrossLeftSort,
-              Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
+              Join(DerefObject, Cross(None),
                 liftedRHS,
                 product)(line),
               id)(line))(line))(line)
@@ -526,33 +527,33 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
           "key", "value", 0)
         
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+              Join(DerefObject, Cross(None), users, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
           
       val input =
         Filter(IdentitySort,
-          Join(JoinArray, CrossLeftSort,
+          Join(JoinArray, Cross(None),
             Operate(WrapArray,
-              Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
+              Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
             Operate(WrapArray,
-              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None), users, name)(line))(line))(line),
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               users,
               userId)(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               heightWeight,
               userId)(line))(line))(line)    
       
@@ -561,9 +562,9 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val expectedOpt =
         Join(JoinArray, ValueSort(0),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort, liftedLHS, height)(line))(line),
+            Join(DerefObject, Cross(None), liftedLHS, height)(line))(line),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
+            Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line)
 
       opt must_== expectedOpt
     }
@@ -589,10 +590,10 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       def makeSortBy(key: DepGraph, value: DepGraph) =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
               key)(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("value"))(line),
               value)(line))(line),
           "key", "value", 0)
@@ -600,42 +601,42 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+              Join(DerefObject, Cross(None), users, userId)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
           "key", "value", 0)
 
       val lhs = 
         Join(JoinObject, IdentitySort,
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             height,
-            Join(DerefObject, CrossLeftSort, heightWeight, height)(line))(line),
-          Join(WrapObject, CrossLeftSort,
+            Join(DerefObject, Cross(None), heightWeight, height)(line))(line),
+          Join(WrapObject, Cross(None),
             weight,
-            Join(DerefObject, CrossLeftSort, heightWeight, weight)(line))(line))(line)
+            Join(DerefObject, Cross(None), heightWeight, weight)(line))(line))(line)
 
           
       val input =
         Filter(IdentitySort,
-          Join(JoinObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
             lhs,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               name,
-              Join(DerefObject, CrossLeftSort, users, name)(line))(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort, users, userId)(line),
-            Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line))(line)
+              Join(DerefObject, Cross(None), users, name)(line))(line))(line),
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None), users, userId)(line),
+            Join(DerefObject, Cross(None), heightWeight, userId)(line))(line))(line)
 
-      val hwid = Join(DerefObject, CrossLeftSort, heightWeight, userId)(line)
+      val hwid = Join(DerefObject, Cross(None), heightWeight, userId)(line)
       val opt = optimizeJoins(input, ctx, new IdGen)
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
           makeSortBy(hwid, lhs),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             name,
-            Join(DerefObject, CrossLeftSort, liftedRHS, name)(line))(line))(line)
+            Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line)
 
        opt must_== expectedOpt
     }
@@ -659,16 +660,16 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       lazy val input =
         Filter(IdentitySort,
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               name,
-              Join(DerefObject, CrossLeftSort, users, name)(line)
+              Join(DerefObject, Cross(None), users, name)(line)
             )(line),
             heightWeight
           )(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort, users, userId)(line),
-            Join(DerefObject, CrossLeftSort, heightWeight, userId)(line)
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None), users, userId)(line),
+            Join(DerefObject, Cross(None), heightWeight, userId)(line)
           )(line)
         )(line)
 
@@ -676,23 +677,23 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
 
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             name,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               SortBy(
                 Join(JoinObject, IdentitySort,
-                  Join(WrapObject, CrossLeftSort,
+                  Join(WrapObject, Cross(Some(CrossRight)),
                     key,
-                    Join(DerefObject, CrossLeftSort, users, userId)(line))(line),
-                  Join(WrapObject, CrossLeftSort, value, users)(line))(line),
+                    Join(DerefObject, Cross(None), users, userId)(line))(line),
+                  Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
                 "key", "value", 0),
               name)(line))(line),
           SortBy(
             Join(JoinObject, IdentitySort,
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(Some(CrossRight)),
                 key,
-                Join(DerefObject, CrossLeftSort, heightWeight, userId)(line))(line),
-              Join(WrapObject, CrossLeftSort, value, heightWeight)(line))(line),
+                Join(DerefObject, Cross(None), heightWeight, userId)(line))(line),
+              Join(WrapObject, Cross(Some(CrossRight)), value, heightWeight)(line))(line),
             "key", "value", 0))(line)
 
       opt must_== expectedOpt
@@ -716,52 +717,52 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val input = Filter(IdentitySort,
-        Join(ArraySwap,CrossLeftSort,
-          Join(JoinArray,CrossLeftSort,
+        Join(ArraySwap,Cross(None),
+          Join(JoinArray,Cross(None),
             Operate(WrapArray,
-              Join(DerefObject,CrossLeftSort,
+              Join(DerefObject,Cross(None),
                 newMedals,
                 name)(line))(line),
             Operate(WrapArray,
-              Join(DerefObject,CrossLeftSort,
+              Join(DerefObject,Cross(None),
                 medals,
                 name)(line))(line))(line),
           Const(CLong(1))(line))(line),
-        Join(Eq,CrossLeftSort,
-          Join(DerefObject,CrossLeftSort,
+        Join(Eq,Cross(None),
+          Join(DerefObject,Cross(None),
             medals,
             name)(line),
-          Join(DerefObject,CrossLeftSort,
+          Join(DerefObject,Cross(None),
             newMedals,
             name)(line))(line))(line)
 
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, medals, name)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, medals)(line))(line),
+              Join(DerefObject, Cross(None), medals, name)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, medals)(line))(line),
           "key", "value", 0)
 
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
-              Join(DerefObject, CrossLeftSort, newMedals, name)(line))(line),
-            Join(WrapObject, CrossLeftSort, value, newMedals)(line))(line),
+              Join(DerefObject, Cross(None), newMedals, name)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, newMedals)(line))(line),
           "key", "value", 0)
 
       // `liftedRHS` and `liftedLHS` are swapped because of the `ArraySwap`
-      val expectedOpt = Join(ArraySwap, CrossLeftSort,
+      val expectedOpt = Join(ArraySwap, Cross(None),
         Join(JoinArray, ValueSort(0),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedRHS,
               name)(line))(line),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedLHS,
               name)(line))(line))(line),
         Const(CLong(1))(line))(line)
@@ -789,53 +790,53 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val medalsP = 
         dag.Filter(IdentitySort,
           medals,
-          Join(Eq, CrossLeftSort, 
-            Join(DerefObject, CrossLeftSort, medals, country)(line),
+          Join(Eq, Cross(None), 
+            Join(DerefObject, Cross(None), medals, country)(line),
             Const(CString("India"))(line))(line))(line)
       val medalsPP = dag.New(medalsP)(line)
-      val medalsPcountry = Join(DerefObject,CrossLeftSort, medalsP, country)(line)
-      val medalsPPcountry = Join(DerefObject,CrossLeftSort, medalsPP, country)(line)
-      val medalsPtotal = Join(DerefObject,CrossLeftSort, medalsP, total)(line)
-      val medalsPPtotal = Join(DerefObject,CrossLeftSort, medalsPP, total)(line)
+      val medalsPcountry = Join(DerefObject,Cross(None), medalsP, country)(line)
+      val medalsPPcountry = Join(DerefObject,Cross(None), medalsPP, country)(line)
+      val medalsPtotal = Join(DerefObject,Cross(None), medalsP, total)(line)
+      val medalsPPtotal = Join(DerefObject,Cross(None), medalsPP, total)(line)
       val key = Const(CString("key"))(line)
       val value = Const(CString("value"))(line)
 
       val input = Filter(IdentitySort,
-        Join(JoinArray,CrossLeftSort,
+        Join(JoinArray,Cross(None),
           Operate(WrapArray,
             medalsPcountry)(line),
           Operate(WrapArray,
             medalsPPcountry)(line))(line),
-        Join(Eq,CrossLeftSort,
+        Join(Eq,Cross(None),
           medalsPtotal,
           medalsPPtotal)(line))(line)
 
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
               medalsPtotal)(line),
-            Join(WrapObject, CrossLeftSort, value, medalsP)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, medalsP)(line))(line),
           "key", "value", 0)
 
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               key,
               medalsPPtotal)(line),
-            Join(WrapObject, CrossLeftSort, value, medalsPP)(line))(line),
+            Join(WrapObject, Cross(Some(CrossRight)), value, medalsPP)(line))(line),
           "key", "value", 0)
 
       val expectedOpt =
         Join(JoinArray, ValueSort(0),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedLHS,
               country)(line))(line),
           Operate(WrapArray,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedRHS,
               country)(line))(line))(line)
 
@@ -868,10 +869,10 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val athletes = dag.LoadLocal(Const(CString("/summer_games/athletes"))(line))(line)
 
       def wrapName(graph: DepGraph) =
-        Join(WrapObject, CrossRightSort,
+        Join(WrapObject, Cross(Some(CrossRight)),
           Const(CString("name"))(line),
           Operate(BuiltInFunction1Op(toLowerCase),
-            Join(DerefObject, CrossLeftSort, graph, Const(CString("name"))(line))(line))(line))(line)
+            Join(DerefObject, Cross(None), graph, Const(CString("name"))(line))(line))(line))(line)
       
       val medalsPrime = Join(JoinObject, IdentitySort,
         medals,
@@ -882,34 +883,34 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         wrapName(athletes))(line)
             
       val input = Filter(IdentitySort,
-        Join(JoinObject, CrossLeftSort,
-          Join(WrapObject, CrossRightSort,
+        Join(JoinObject, Cross(None),
+          Join(WrapObject, Cross(Some(CrossRight)),
             Const(CString("winner"))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               medalsPrime,
               Const(CString("Medal winner"))(line))(line))(line),
-          Join(WrapObject, CrossRightSort,
+          Join(WrapObject, Cross(Some(CrossRight)),
             Const(CString("country"))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               athletesPrime,
               Const(CString("Countryname"))(line))(line))(line))(line),
-        Join(Eq, CrossLeftSort,
-          Join(DerefObject, CrossLeftSort,
+        Join(Eq, Cross(None),
+          Join(DerefObject, Cross(None),
             medalsPrime,
             Const(CString("name"))(line))(line),
-          Join(DerefObject, CrossLeftSort,
+          Join(DerefObject, Cross(None),
             athletesPrime,
             Const(CString("name"))(line))(line))(line))(line)
 
       val liftedLHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 medalsPrime,
                 Const(CString("name"))(line))(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("value"))(line),
               medalsPrime)(line))(line),
           "key", "value", 0)
@@ -917,12 +918,12 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val liftedRHS =
         SortBy(
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 athletesPrime,
                 Const(CString("name"))(line))(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("value"))(line),
               athletesPrime)(line))(line),
           "key", "value", 0)
@@ -931,14 +932,14 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expected =
         Join(JoinObject, ValueSort(0),
-          Join(WrapObject, CrossRightSort,
+          Join(WrapObject, Cross(Some(CrossRight)),
             Const(CString("winner"))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedLHS,
               Const(CString("Medal winner"))(line))(line))(line),
-          Join(WrapObject, CrossRightSort,
+          Join(WrapObject, Cross(Some(CrossRight)),
             Const(CString("country"))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               liftedRHS,
               Const(CString("Countryname"))(line))(line))(line))(line)
             
@@ -961,52 +962,52 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       lazy val input =
         Filter(IdentitySort,
-          Join(JoinObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
             Join(JoinObject, IdentitySort,
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(None),
                 Const(CString("a"))(line),
                 clicks)(line),
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(None),
                 Const(CString("c"))(line),
                 clicks)(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("b"))(line),
               clicksP)(line))(line),
-          Join(Eq, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+          Join(Eq, Cross(None),
+            Join(DerefObject, Cross(None),
               clicks,
               Const(CString("pageId"))(line))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               clicksP,
               Const(CString("pageId"))(line))(line))(line))(line)
 
         def makeSortBy(key: DepGraph, value: DepGraph) =
           SortBy(
             Join(JoinObject, IdentitySort,
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString("key"))(line),
                 key)(line),
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString("value"))(line),
                 value)(line))(line),
             "key", "value", 0)
 
-        val clicksid = Join(DerefObject, CrossLeftSort, clicks, Const(CString("pageId"))(line))(line)
-        val clicksPid = Join(DerefObject, CrossLeftSort, clicksP, Const(CString("pageId"))(line))(line)
+        val clicksid = Join(DerefObject, Cross(None), clicks, Const(CString("pageId"))(line))(line)
+        val clicksPid = Join(DerefObject, Cross(None), clicksP, Const(CString("pageId"))(line))(line)
 
         val clicksV = 
           Join(JoinObject, IdentitySort,
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("a"))(line),
               clicks)(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("c"))(line),
               clicks)(line))(line)
         
         lazy val expected =
           Join(JoinObject, ValueSort(0),
             makeSortBy(clicksid, clicksV),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("b"))(line),
               makeSortBy(clicksPid, clicksP))(line))(line)
         

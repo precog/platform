@@ -132,7 +132,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input =
-        Join(DerefObject, CrossLeftSort,
+        Join(DerefObject, Cross(None),
           LoadLocal(Const(CString("/file"))(line))(line),
           Const(CString("column"))(line))(line)
 
@@ -151,7 +151,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           New(
-            Join(DerefObject, CrossLeftSort, 
+            Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line))(line))(line)
 
@@ -169,7 +169,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Operate(Neg,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file"))(line))(line),
             Const(CString("column"))(line))(line))(line)
 
@@ -187,7 +187,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Reduce(Mean,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file"))(line))(line),
             Const(CString("column"))(line))(line))(line)
 
@@ -205,7 +205,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Morph1(Median,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file"))(line))(line),
             Const(CString("column"))(line))(line))(line)
 
@@ -223,10 +223,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Morph2(Covariance,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column0"))(line))(line),
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file1"))(line))(line),
             Const(CString("column1"))(line))(line))(line)
 
@@ -246,7 +246,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           New(
-            Join(DerefArray, CrossLeftSort, 
+            Join(DerefArray, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CLong(0))(line))(line))(line))(line)
 
@@ -263,11 +263,11 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input =
-        Join(ArraySwap, CrossLeftSort,
-          Join(DerefObject, CrossLeftSort, 
+        Join(ArraySwap, Cross(None),
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column0"))(line))(line),
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file1"))(line))(line),
             Const(CString("column1"))(line))(line))(line)
 
@@ -285,11 +285,11 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input =
-        Join(WrapObject, CrossLeftSort,
-          Join(DerefObject, CrossLeftSort, 
+        Join(WrapObject, Cross(None),
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column0"))(line))(line),
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file1"))(line))(line),
             Const(CString("column1"))(line))(line))(line)
 
@@ -308,10 +308,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Join(BuiltInFunction2Op(min), IdentitySort,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column0"))(line))(line),
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column1"))(line))(line))(line)
 
@@ -332,10 +332,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Filter(IdentitySort,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file0"))(line))(line),
             Const(CString("column0"))(line))(line),
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/file1"))(line))(line),
             Const(CString("column1"))(line))(line))(line)
 
@@ -355,7 +355,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           Sort(
-            Join(DerefObject, CrossLeftSort, 
+            Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line),
             Vector()
@@ -377,7 +377,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           SortBy(
-            Join(DerefObject, CrossLeftSort, 
+            Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line),
             "foo", "bar", 23
@@ -399,7 +399,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           Memoize(
-            Join(DerefObject, CrossLeftSort, 
+            Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line),
             23
@@ -421,7 +421,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Operate(Neg,
           Distinct(
-            Join(DerefObject, CrossLeftSort, 
+            Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line))(line))(line)
 
@@ -447,14 +447,14 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
             1,
             clicks,
             UnfixedSolution(0, 
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 clicks,
                 Const(CString("column0"))(line))(line))),
-          Join(Add, CrossLeftSort,
-            Join(DerefObject, CrossLeftSort,
+          Join(Add, Cross(None),
+            Join(DerefObject, Cross(None),
               SplitParam(0, id)(line),
               Const(CString("column1"))(line))(line),
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               SplitGroup(1, clicks.identities, id)(line),
               Const(CString("column2"))(line))(line))(line), id)(line)
 
@@ -481,16 +481,16 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Split(
           Group(0,
-            Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line),
+            Join(DerefObject, Cross(None), clicks, Const(CString("user"))(line))(line),
             UnfixedSolution(1,
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 clicks,
                 Const(CString("user"))(line))(line))),
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               Const(CString("user"))(line),
               SplitParam(1, id)(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("num"))(line),
               Reduce(Count,
                 SplitGroup(0, clicks.identities, id)(line))(line))(line))(line), id)(line)
@@ -516,23 +516,23 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val input =
         Split(
           Group(0,
-            Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line),
+            Join(DerefObject, Cross(None), clicks, Const(CString("user"))(line))(line),
             UnfixedSolution(1,
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 clicks,
                 Const(CString("user"))(line))(line))),
-          Join(JoinObject, CrossLeftSort,
-            Join(JoinObject, CrossLeftSort,
-              Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(JoinObject, Cross(None),
+              Join(WrapObject, Cross(None),
                 Const(CString("user"))(line),
                 SplitParam(1, id)(line))(line),
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(None),
                 Const(CString("num"))(line),
                 Reduce(Count,
                   SplitGroup(0, clicks.identities, id)(line))(line))(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("age"))(line),
-              Join(DerefObject, CrossLeftSort,
+              Join(DerefObject, Cross(None),
                 clicks,
                 Const(CString("age"))(line))(line))(line))(line), id)(line)
 
@@ -553,10 +553,10 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       val input =
         Join(Add, IdentitySort,
-          Join(DerefObject, CrossLeftSort, 
+          Join(DerefObject, Cross(None), 
             LoadLocal(Const(CString("/clicks"))(line))(line),
             Const(CString("time"))(line))(line),
-          Join(DerefObject, CrossLeftSort,
+          Join(DerefObject, Cross(None),
             LoadLocal(Const(CString("/hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line))(line)
 
@@ -576,8 +576,8 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val clicks = LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val input =
-        Join(DerefObject, CrossLeftSort,
-          Join(WrapObject, CrossLeftSort,
+        Join(DerefObject, Cross(None),
+          Join(WrapObject, Cross(None),
             Const(CString("foo"))(line),
             clicks)(line),
           Const(CString("foo"))(line))(line)
@@ -598,19 +598,19 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       val id = new Identifier
       
       val clicksTime =
-        Join(DerefObject, CrossLeftSort,
+        Join(DerefObject, Cross(None),
           clicks,
           Const(CString("time"))(line))(line)
       
       val split =
         Split(
           Group(0, clicks, UnfixedSolution(1, clicksTime)),
-          Join(WrapObject, CrossLeftSort,
+          Join(WrapObject, Cross(None),
             Const(CString("foo"))(line),
             SplitGroup(0, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line), id)(line)
             
       val input =
-        Join(DerefObject, CrossLeftSort,
+        Join(DerefObject, Cross(None),
           split,
           Const(CString("foo"))(line))(line)
 

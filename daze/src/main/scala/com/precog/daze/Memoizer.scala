@@ -262,7 +262,7 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Cond(pred, left, CrossLeftSort | CrossRightSort, right, _) if !pred.isInstanceOf[Root] && !left.isInstanceOf[Root] => {
+    case Cond(pred, left, Cross(_), right, _) if !pred.isInstanceOf[Root] && !left.isInstanceOf[Root] => {
       // no, the sides here are *not* typos; don't change them
       val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
         findForcingRefs(left, OpSide.Left(graph)) |+| 
@@ -271,7 +271,7 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Cond(pred, left, _, right, CrossLeftSort | CrossRightSort) if !pred.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
+    case Cond(pred, left, _, right, Cross(_)) if !pred.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
       // no, the sides here are *not* typos; don't change them
       val merged = findForcingRefs(pred, OpSide.Right(graph)) |+| 
         findForcingRefs(left, OpSide.Left(graph)) |+| 
@@ -320,7 +320,7 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Join(_, CrossLeftSort | CrossRightSort, left, right) if !left.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
+    case Join(_, Cross(_), left, right) if !left.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
       val merged = findForcingRefs(left, OpSide.Left(graph)) |+| findForcingRefs(right, OpSide.Right(graph))
       updateMap(merged, graph, force)
     }
@@ -334,7 +334,7 @@ trait Memoizer extends DAG {
     case Join(_, _, left, right) =>
       findForcingRefs(left, force) |+| findForcingRefs(right, force)
     
-    case Filter(CrossLeftSort | CrossRightSort, target, boolean) if !target.isInstanceOf[Root] && !boolean.isInstanceOf[Root] => {
+    case Filter(Cross(_), target, boolean) if !target.isInstanceOf[Root] && !boolean.isInstanceOf[Root] => {
       val merged = findForcingRefs(target, OpSide.Left(graph)) |+| findForcingRefs(boolean, OpSide.Right(graph))
       updateMap(merged, graph, force)
     }

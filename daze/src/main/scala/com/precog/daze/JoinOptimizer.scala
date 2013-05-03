@@ -22,6 +22,7 @@ package daze
 
 import scala.collection.mutable
 
+import com.precog.yggdrasil.TableModule
 import com.precog.util.IdGen
 import com.precog.util.Timing
 import com.precog.common._
@@ -31,6 +32,8 @@ trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M
   trait JoinOptimizer extends TransSpecable {
     import dag._
     import instructions._
+    import TableModule.CrossOrder
+    import CrossOrder._
   
     def optimizeJoins(graph: DepGraph, ctx: EvaluationContext, idGen: IdGen = IdGen): DepGraph = {
 
@@ -49,10 +52,10 @@ trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M
 
           SortBy(
             Join(JoinObject, IdentitySort,
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString(key))(filter.loc),
                 keyGraph)(filter.loc),
-              Join(WrapObject, CrossLeftSort,
+              Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString(value))(filter.loc),
                 valueGraph)(filter.loc))(filter.loc),
             key, value, sortId)
@@ -63,7 +66,7 @@ trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M
 
           case j @ Join(_, _, _, Const(_)) => j
 
-          case j @ Join(op, CrossLeftSort | CrossRightSort, lhs, rhs)
+          case j @ Join(op, Cross(_), lhs, rhs)
             if (compareAncestor(lhs, eqA) && compareAncestor(rhs, eqB)) ||
                (compareAncestor(lhs, eqB) && compareAncestor(rhs, eqA)) => {
 
@@ -94,21 +97,21 @@ trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M
       transformBottomUp(graph) {
         case filter @ Filter(IdentitySort,
           body @ Join(BuiltInFunction2Op(op2), _, _, _),
-          Join(Eq, CrossLeftSort | CrossRightSort, eqA, eqB))
+          Join(Eq, Cross(_), eqA, eqB))
             if op2.rowLevel => rewrite(filter, body, eqA, eqB)
 
         case filter @ Filter(IdentitySort,
           body @ Join(BuiltInMorphism2(morph2), _, _, _),
-          Join(Eq, CrossLeftSort | CrossRightSort, eqA, eqB))
+          Join(Eq, Cross(_), eqA, eqB))
             if morph2.rowLevel => rewrite(filter, body, eqA, eqB)
 
         case filter @ Filter(IdentitySort,
           body @ Join(_, _, _, _),
-          Join(Eq, CrossLeftSort | CrossRightSort, eqA, eqB)) => rewrite(filter, body, eqA, eqB)
+          Join(Eq, Cross(_), eqA, eqB)) => rewrite(filter, body, eqA, eqB)
 
         case filter @ Filter(IdentitySort,
           body @ Operate(BuiltInFunction1Op(op1), _),
-          Join(Eq, CrossLeftSort | CrossRightSort, eqA, eqB))
+          Join(Eq, Cross(_), eqA, eqB))
             if op1.rowLevel => rewrite(filter, body, eqA, eqB)
         
         case other => other

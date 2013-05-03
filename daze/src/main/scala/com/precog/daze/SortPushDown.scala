@@ -36,10 +36,10 @@ trait SortPushDown extends DAG {
    */
   def pushDownSorts(graph: DepGraph): DepGraph = {
     graph mapDown (rewrite => {
-      case s @ Sort(Join(op, CrossLeftSort, left, const @ Const(_)), sortBy) =>
-        Join(op, CrossLeftSort, rewrite(Sort(left, sortBy)), const)(s.loc)
-      case s @ Sort(Join(op, CrossRightSort, const @ Const(_), right), sortBy) =>
-        Join(op, CrossRightSort, const, rewrite(Sort(right, sortBy)))(s.loc)
+      case s @ Sort(Join(op, Cross(hint), left, const @ Const(_)), sortBy) =>
+        Join(op, Cross(hint), rewrite(Sort(left, sortBy)), const)(s.loc)
+      case s @ Sort(Join(op, Cross(hint), const @ Const(_), right), sortBy) =>
+        Join(op, Cross(hint), const, rewrite(Sort(right, sortBy)))(s.loc)
     })
   }
 }
