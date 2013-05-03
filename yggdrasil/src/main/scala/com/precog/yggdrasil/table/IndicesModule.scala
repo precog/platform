@@ -44,7 +44,7 @@ import IndicesHelper._
 trait IndicesModule[M[+_]]
     extends Logging
     with TransSpecModule
-    with ColumnarTableTypes
+    with ColumnarTableTypes[M]
     with SliceTransforms[M] {
     self: ColumnarTableModule[M] =>
 
@@ -126,7 +126,7 @@ trait IndicesModule[M[+_]]
     def createFromTable(table: Table, groupKeys: Seq[TransSpec1], valueSpec: TransSpec1): M[TableIndex] = {
 
       def accumulate(buf: mutable.ListBuffer[SliceIndex], stream: StreamT[M, SliceIndex]): M[TableIndex] =
-        stream.uncons.flatMap {
+        stream.uncons flatMap {
           case None => M.point(new TableIndex(buf.toList))
           case Some((si, tail)) => { buf += si; accumulate(buf, tail) }
         }
@@ -136,8 +136,12 @@ trait IndicesModule[M[+_]]
       val sts = groupKeys.map(composeSliceTransform).toArray
       val vt = composeSliceTransform(valueSpec)
 
-      val indices = table.slices.map { slice =>
-        SliceIndex.createFromSlice(slice, sts, vt)
+      val indices = table.slices flatMap { slice =>
+        val streamTM = SliceIndex.createFromSlice(slice, sts, vt) map { si =>
+          si :: StreamT.empty[M, SliceIndex]
+        }
+        
+        StreamT wrapEffect streamTM
       }
 
       accumulate(mutable.ListBuffer.empty[SliceIndex], indices)
@@ -315,9 +319,9 @@ trait IndicesModule[M[+_]]
       val sts = groupKeys.map(composeSliceTransform).toArray
       val vt = composeSliceTransform(valueSpec)
 
-      table.slices.uncons map {
+      table.slices.uncons flatMap {
         case Some((slice, _)) => createFromSlice(slice, sts, vt)
-        case None => SliceIndex.empty
+        case None => M.point(SliceIndex.empty)
       }
     }
 
@@ -330,57 +334,59 @@ trait IndicesModule[M[+_]]
      * necessary to associate them into the maps and sets we
      * ultimately need to construct the SliceIndex.
      */
-    private[table] def createFromSlice(slice: Slice, sts: Array[SliceTransform1[_]], vt: SliceTransform1[_]): SliceIndex = {
+    private[table] def createFromSlice(slice: Slice, sts: Array[SliceTransform1[_]], vt: SliceTransform1[_]): M[SliceIndex] = {
       val numKeys = sts.length
       val n = slice.size
       val vals = mutable.Map.empty[Int, mutable.Set[RValue]]
       val dict = mutable.Map.empty[(Int, RValue), ArrayIntList]
       val keyset = mutable.Set.empty[Seq[RValue]]
 
-      val keys = readKeys(slice, sts)
-
-      // build empty initial jvalue sets for our group keys
-      Loop.range(0, numKeys)(vals(_) = mutable.Set.empty[RValue])
-
-      var i = 0
-      while (i < n) {
-        var dead = false
-        val row = new Array[RValue](numKeys)
-        var k = 0
-        while (!dead && k < numKeys) {
-          val jv = keys(k)(i)
-          if (jv != null) {
-            row(k) = jv
-          } else {
-            dead = true
-          }
-          k += 1
-        }
-
-        if (!dead) {
-          keyset.add(row)
-          k = 0
-          while (k < numKeys) {
-            val jv = row(k)
-            vals.get(k).map { jvs =>
-              jvs.add(jv)
-              val key = (k, jv)
-              if (dict.contains(key)) {
-                dict(key).add(i)
-              } else {
-                val as = new ArrayIntList(0)
-                as.add(i)
-                dict(key) = as
-              }
+      readKeys(slice, sts) flatMap { keys =>
+        // build empty initial jvalue sets for our group keys
+        Loop.range(0, numKeys)(vals(_) = mutable.Set.empty[RValue])
+  
+        var i = 0
+        while (i < n) {
+          var dead = false
+          val row = new Array[RValue](numKeys)
+          var k = 0
+          while (!dead && k < numKeys) {
+            val jv = keys(k)(i)
+            if (jv != null) {
+              row(k) = jv
+            } else {
+              dead = true
             }
             k += 1
           }
+  
+          if (!dead) {
+            keyset.add(row)
+            k = 0
+            while (k < numKeys) {
+              val jv = row(k)
+              vals.get(k).map { jvs =>
+                jvs.add(jv)
+                val key = (k, jv)
+                if (dict.contains(key)) {
+                  dict(key).add(i)
+                } else {
+                  val as = new ArrayIntList(0)
+                  as.add(i)
+                  dict(key) = as
+                }
+              }
+              k += 1
+            }
+          }
+          i += 1
         }
-        i += 1
+  
+        vt(slice) map {
+          case (_, slice2) =>
+            new SliceIndex(vals, dict, keyset, slice2.materialized)
+        }
       }
-
-      val valueSlice = vt(slice)._2.materialized
-      new SliceIndex(vals, dict, keyset, valueSlice)
     }
 
     /**
@@ -390,30 +396,51 @@ trait IndicesModule[M[+_]]
      * data store is column-oriented but the associations we want to
      * perform are row-oriented.
      */
-    private[table] def readKeys(slice: Slice, sts: Array[SliceTransform1[_]]): Array[Array[RValue]] = {
+    private[table] def readKeys(slice: Slice, sts: Array[SliceTransform1[_]]): M[Array[Array[RValue]]] = {
       val n = slice.size
       val numKeys = sts.length
-      val keys: Array[Array[RValue]] = Array.ofDim[RValue](numKeys, n)
+      
+      val keys: mutable.ArrayBuffer[M[Array[RValue]]] =
+        new mutable.ArrayBuffer[M[Array[RValue]]](numKeys)
+      
+      (0 until numKeys) foreach { _ => keys += null.asInstanceOf[M[Array[RValue]]] }
 
       var k = 0
       while (k < numKeys) {
-        val arr = keys(k)
         val st: SliceTransform1[_] = sts(k)
-        val (_, keySlice) = st(slice)
-
-        var i = 0
-        while (i < n) {
-          val rv = keySlice.toRValue(i)
-          rv match {
-            case CUndefined =>
-            case rv => arr(i) = rv
+        
+        keys(k) = st(slice) map {
+          case (_, keySlice) => {
+            val arr = new Array[RValue](n)
+            
+            var i = 0
+            while (i < n) {
+              val rv = keySlice.toRValue(i)
+              rv match {
+                case CUndefined =>
+                case rv => arr(i) = rv
+              }
+              i += 1
+            }
+            
+            arr
           }
-          i += 1
         }
+        
         k += 1
       }
+      
+      val back = (0 until keys.length).foldLeft(M.point(Vector.fill[Array[RValue]](numKeys)(null))) {
+        case (accM, i) => {
+          val arrM = keys(i)
+          
+          M.apply2(accM, arrM) { (acc, arr) =>
+            acc.updated(i, arr)
+          }
+        }
+      }
 
-      keys
+      back map { _.toArray }
     }
 
     private def unionBuffers(as: ArrayIntList, bs: ArrayIntList): ArrayIntList = {

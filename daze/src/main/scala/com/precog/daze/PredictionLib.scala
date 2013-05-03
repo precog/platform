@@ -37,11 +37,11 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
 
     trait LinearPredictionBase extends LinearModelBase {
       protected def morph1Apply(models: Models, trans: Double => Double): Morph1Apply = new Morph1Apply {
-        def scanner(modelSet: ModelSet): CScanner = new CScanner {
+        def scanner(modelSet: ModelSet): CScanner[M] = new CScanner[M] {
           type A = Unit
           def init: A = ()
 
-          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
             val result: Set[Map[ColumnRef, Column]] = {
               val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
                 val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
@@ -110,7 +110,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
             val monoidCols = implicitly[Monoid[Map[ColumnRef, Column]]]
             val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
-            ((), reduced)
+            M point ((), reduced)
           }
         }
 
@@ -129,11 +129,11 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
 
     trait LogisticPredictionBase extends LogisticModelBase {
       protected def morph1Apply(models: Models, trans: Double => Double): Morph1Apply = new Morph1Apply {
-        def scanner(modelSet: ModelSet): CScanner = new CScanner {
+        def scanner(modelSet: ModelSet): CScanner[M] = new CScanner[M] {
           type A = Unit
           def init: A = ()
 
-          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
             val result: Set[Map[ColumnRef, Column]] = {
               val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
                 val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
@@ -153,7 +153,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
             val monoidCols = implicitly[Monoid[Map[ColumnRef, Column]]]
             val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
-            ((), reduced)
+            M point ((), reduced)
           }
         }
 
