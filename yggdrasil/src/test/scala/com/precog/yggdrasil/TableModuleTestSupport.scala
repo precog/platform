@@ -60,8 +60,6 @@ trait TableModuleTestSupport[M[+_]] extends TableModule[M] with TestLib[M] {
   def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
 
   def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
-
-  def debugPrint(dataset: Table): Unit
 }
 
 trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck {

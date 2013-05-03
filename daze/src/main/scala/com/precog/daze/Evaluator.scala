@@ -84,7 +84,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
   
   type Evaluator[N[+_]] <: EvaluatorLike[N]
   
-  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) extends OpFinder with ReductionFinder with StaticInliner with PredicatePullups with YggConfigComponent {
+  abstract class EvaluatorLike[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
+      extends OpFinder
+      with ReductionFinder
+      with StaticInliner
+      with PredicatePullups
+      with YggConfigComponent {
+    
     type YggConfig <: EvaluatorConfig
 
     import library._  
