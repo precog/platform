@@ -60,9 +60,9 @@ trait BlockStoreColumnarTableModuleConfig {
   def maxSliceSize: Int
 }
 
-trait BlockStoreColumnarTableModule[M[+_]] extends
-  ColumnarTableModule[M] with
-  YggConfigComponent { self =>
+trait BlockStoreColumnarTableModule[M[+_]]
+    extends ColumnarTableModule[M]
+    with YggConfigComponent { self =>
 
   protected lazy val blockModuleLogger = LoggerFactory.getLogger("com.precog.yggdrasil.table.BlockStoreColumnarTableModule")
 
@@ -301,12 +301,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    object addGlobalIdScanner extends CScanner {
+    object addGlobalIdScanner extends CScanner[M] {
       type A = Long
       val init = 0l
-      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
         val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-        (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
+        M point (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
       }
     }
     
@@ -546,39 +546,51 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
               // in a left span nor a right span because we didn't have an equal case at the
               // last iteration.
 
-              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = buildRowComparator(lkey, rkey, null)
-              
-              // do some preliminary comparisons to figure out if we even need to look at the current slice
-              val nextState = findEqual(comparator, leftRow, stepleq, 0, stepreq)
-              //println("Next state: " + nextState)
-              continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)    
+              rightKeyTrans.f(rstate, rhead) flatMap {
+                case (nextB, rkey) => {
+                  val comparator = buildRowComparator(lkey, rkey, null)
+                  
+                  // do some preliminary comparisons to figure out if we even need to look at the current slice
+                  val nextState = findEqual(comparator, leftRow, stepleq, 0, stepreq)
+                  //println("Next state: " + nextState)
+                  continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
+                }
+              }
             
             case FindEqualAdvancingLeft(rightRow, rkey) => 
               // whenever we drop into buildFilters in this case, we know that we will be neither
               // in a left span nor a right span because we didn't have an equal case at the
               // last iteration.
 
-              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = buildRowComparator(lkey, rkey, null)
-              
-              // do some preliminary comparisons to figure out if we even need to look at the current slice
-              val nextState = findEqual(comparator, 0, stepleq, rightRow, stepreq)
-              continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)    
+              leftKeyTrans.f(lstate, lhead) flatMap {
+                case (nextA, lkey) => {
+                  val comparator = buildRowComparator(lkey, rkey, null)
+                  
+                  // do some preliminary comparisons to figure out if we even need to look at the current slice
+                  val nextState = findEqual(comparator, 0, stepleq, rightRow, stepreq)
+                  continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
+                }
+              }
             
             case RunRight(leftRow, lkey, rauth) =>
-              val (nextB, rkey) = rightKeyTrans.f(rstate, rhead)
-              val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
-
-              val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 0, rhead.size, new BitSet, RightSpan)
-              continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
+              rightKeyTrans.f(rstate, rhead) flatMap {
+                case (nextB, rkey) => {
+                  val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
+    
+                  val nextState = buildFilters(comparator, leftRow, lhead.size, stepleq, 0, rhead.size, new BitSet, RightSpan)
+                  continue(nextState, comparator, lstate, lkey, nextB, rkey, leftWriteState, rightWriteState)
+                }
+              }
             
             case RunLeft(rightRow, rkey, rauth) =>
-              val (nextA, lkey) = leftKeyTrans.f(lstate, lhead)
-              val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
-
-              val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, rightRow, rhead.size, stepreq, LeftSpan)
-              continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
+              leftKeyTrans.f(lstate, lhead) flatMap {
+                case (nextA, lkey) => {
+                  val comparator = buildRowComparator(lkey, rkey, rauth.orNull)
+    
+                  val nextState = buildFilters(comparator, 0, lhead.size, new BitSet, rightRow, rhead.size, stepreq, LeftSpan)
+                  continue(nextState, comparator, nextA, lkey, rstate, rkey, leftWriteState, rightWriteState)
+                }
+              }
           }
         }
         
@@ -589,12 +601,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
                 //println("Got data from both left and right.")
                 //println("initial left: \n" + lhead + "\n\n")
                 //println("initial right: \n" + rhead + "\n\n")
-                val (lstate, lkey) = leftKeyTrans(lhead)
-                val stepResult  = step(FindEqualAdvancingRight(0, lkey), 
+                val stepResult = leftKeyTrans(lhead) flatMap {
+                  case (lstate, lkey) => {
+                    step(FindEqualAdvancingRight(0, lkey), 
                                        lhead, ltail, new BitSet,
                                        rhead, rtail, new BitSet,
                                        lstate, rightKeyTrans.initial, 
                                        leftWriteState, rightWriteState)
+                  }
+                }
 
                 for {
                   writeStates <- stepResult
@@ -664,35 +679,41 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     protected def writeSlice(slice: Slice, state: WriteState, sortOrder: DesiredSortOrder, source: String = ""): M[WriteState] = {
       val WriteState(jdbmState, valueTrans, keyTrans) = state
 
-      val (valueTrans0, vslice) = valueTrans.advance(slice)
-      val (vColumnRefs, vColumns) = vslice.columns.toList.sortBy(_._1).unzip
-      val dataRowFormat = RowFormat.forValues(vColumnRefs)
-      val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
-
-      def storeTransformed(jdbmState: JDBMState, transforms: List[(SliceTransform1[_], String)], updatedTransforms: List[(SliceTransform1[_], String)]): M[(JDBMState, List[(SliceTransform1[_], String)])] = transforms match {
-        case (keyTransform, streamId) :: tail => 
-          val (nextKeyTransform, kslice) = keyTransform.advance(slice)
-          val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
-          if (keyColumnRefs.nonEmpty) {
-            val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
-            val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
-            val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
-
-            writeRawSlices(kslice, sortOrder, vslice, vColumnRefs, dataColumnEncoder,
-                           streamId, jdbmState) flatMap { newJdbmState =>
-              storeTransformed(newJdbmState, tail, (nextKeyTransform, streamId) :: updatedTransforms)
-            }
-          } else {
-            M.point((jdbmState, (nextKeyTransform, streamId) :: updatedTransforms))
+      valueTrans.advance(slice) flatMap {
+        case (valueTrans0, vslice) => {
+          val (vColumnRefs, vColumns) = vslice.columns.toList.sortBy(_._1).unzip
+          val dataRowFormat = RowFormat.forValues(vColumnRefs)
+          val dataColumnEncoder = dataRowFormat.ColumnEncoder(vColumns)
+    
+          def storeTransformed(jdbmState: JDBMState, transforms: List[(SliceTransform1[_], String)], updatedTransforms: List[(SliceTransform1[_], String)]): M[(JDBMState, List[(SliceTransform1[_], String)])] = transforms match {
+            case (keyTransform, streamId) :: tail =>
+              keyTransform.advance(slice) flatMap {
+                case (nextKeyTransform, kslice) => {
+                  val (keyColumnRefs, keyColumns) = kslice.columns.toList.sortBy(_._1).unzip
+                  if (keyColumnRefs.nonEmpty) {
+                    val keyRowFormat = RowFormat.forSortingKey(keyColumnRefs)
+                    val keyColumnEncoder = keyRowFormat.ColumnEncoder(keyColumns)
+                    val keyComparator = SortingKeyComparator(keyRowFormat, sortOrder.isAscending)
+        
+                    writeRawSlices(kslice, sortOrder, vslice, vColumnRefs, dataColumnEncoder,
+                                   streamId, jdbmState) flatMap { newJdbmState =>
+                      storeTransformed(newJdbmState, tail, (nextKeyTransform, streamId) :: updatedTransforms)
+                    }
+                  } else {
+                    M.point((jdbmState, (nextKeyTransform, streamId) :: updatedTransforms))
+                  }
+                }
+              }
+    
+            case Nil => 
+              M.point((jdbmState, updatedTransforms.reverse))
           }
-
-        case Nil => 
-          M.point((jdbmState, updatedTransforms.reverse))
-      }
-
-      storeTransformed(jdbmState, keyTrans, Nil) map {
-        case (jdbmState0, keyTrans0) => 
-          WriteState(jdbmState0, valueTrans0, keyTrans0)
+    
+          storeTransformed(jdbmState, keyTrans, Nil) map {
+            case (jdbmState0, keyTrans0) => 
+              WriteState(jdbmState0, valueTrans0, keyTrans0)
+          }
+        }
       }
     }
 

@@ -32,6 +32,7 @@ import scala.annotation.tailrec
 import scala.util.Random
 
 import scalaz._
+import scalaz.std.list._
 import scalaz.syntax.monad._
 
 trait SamplableTableModule[M[+_]]
@@ -71,40 +72,42 @@ trait SamplableColumnarTableModule[M[+_]]
     def sample(sampleSize: Int, specs: Seq[TransSpec1]): M[Seq[Table]] = {
       case class SampleState(rowInserters: Option[RowInserter], length: Int, transform: SliceTransform1[_])
 
-      def build(states: Seq[SampleState], slices: StreamT[M, Slice]): M[Seq[Table]] = {
+      def build(states: List[SampleState], slices: StreamT[M, Slice]): M[List[Table]] = {
         slices.uncons flatMap {
           case Some((origSlice, tail)) =>
-            val nextStates = states map { case SampleState(maybePrevInserters, len0, transform) =>
-            
-              val (nextTransform, slice) = transform advance origSlice
-
-              val inserter = maybePrevInserters map { _.withSource(slice) } getOrElse RowInserter(sampleSize, slice)
-
-              val defined = slice.definedAt
-            
-              @tailrec
-              def loop(i: Int, len: Int): Int = if (i < slice.size) {
-                // `k` is a number between 0 and number of rows we've seen
-                if (!defined(i)) {
-                  loop(i + 1, len)
-                } else if (len < sampleSize) {
-                  inserter.insert(src=i, dest=len)
-                  loop(i + 1, len + 1)
-                } else {
-                  val k = rng.nextInt(len + 1)
-                  if (k < sampleSize) {
-                    inserter.insert(src=i, dest=k)
+            val nextStates = states map {
+              case SampleState(maybePrevInserters, len0, transform) =>
+                transform advance origSlice map {
+                  case (nextTransform, slice) => {
+                    val inserter = maybePrevInserters map { _.withSource(slice) } getOrElse RowInserter(sampleSize, slice)
+  
+                    val defined = slice.definedAt
+                  
+                    @tailrec
+                    def loop(i: Int, len: Int): Int = if (i < slice.size) {
+                      // `k` is a number between 0 and number of rows we've seen
+                      if (!defined(i)) {
+                        loop(i + 1, len)
+                      } else if (len < sampleSize) {
+                        inserter.insert(src=i, dest=len)
+                        loop(i + 1, len + 1)
+                      } else {
+                        val k = rng.nextInt(len + 1)
+                        if (k < sampleSize) {
+                          inserter.insert(src=i, dest=k)
+                        }
+                        loop(i + 1, len + 1)
+                      }
+                    } else len
+      
+                    val newLength = loop(0, len0)
+      
+                    SampleState(Some(inserter), newLength, nextTransform)
                   }
-                  loop(i + 1, len + 1)
                 }
-              } else len
-
-              val newLength = loop(0, len0)
-
-              SampleState(Some(inserter), newLength, nextTransform)
             }
             
-            build(nextStates, tail)
+            Traverse[List].sequence(nextStates) flatMap { build(_, tail) }
 
           case None =>
             M.point { 
@@ -122,7 +125,7 @@ trait SamplableColumnarTableModule[M[+_]]
 
       val transforms = specs map { SliceTransform.composeSliceTransform }
       val states = transforms map { transform => SampleState(None, 0, transform) }
-      build(states, slices)
+      build(states.toList, slices)
     }
   }
 
