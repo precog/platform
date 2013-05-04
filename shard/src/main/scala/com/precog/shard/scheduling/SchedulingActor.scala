@@ -32,6 +32,10 @@ import scalaz.effect.IO
 
 sealed trait SchedulingMessage
 
+case class AddTask(task: ScheduledTask)
+
+case class DeleteTask(id: UUID)
+
 case object WakeForRun extends SchedulingMessage
 
 case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends SchedulingMessage
@@ -61,6 +65,14 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
     }, storageTimeout)
 
     scheduleNextTask()
+  }
+
+  override def postStop = {
+    scheduledAwake foreach { sa =>
+      if (! sa.isCancelled) {
+        sa.cancel()
+      }
+    }
   }
 
   def scheduleNextTask() = {
@@ -154,6 +166,28 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
   }
 
   def receive = {
+    case AddTask(task) =>
+      val ourself = self
+      storage.addTask(task) map { pu =>
+        Success(pu)
+        ourself ! WakeForRun
+      } recover {
+        case t: Throwable =>
+          logger.error("Error adding task", t)
+          Failure("Internal error adding task")
+      } pipeTo sender
+
+    case DeleteTask(id) =>
+      val ourself = self
+      storage.deleteTask(id) map { pu =>
+        Success(pu)
+        ourself ! WakeForRun
+      } recover {
+        case t: Throwable =>
+          logger.error("Error deleting task", t)
+          Failure("Internal error deleting task")
+      } pipeTo sender
+
     case WakeForRun =>
       val now = new DateTime
       val torun = ArrayBuffer.empty[ScheduledTask]
