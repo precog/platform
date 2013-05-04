@@ -55,6 +55,18 @@ object VersionLog {
 
   final val unsetSentinel = "unset"
 
+  final def hasCurrent(baseDir: File): IO[Boolean] = {
+    val currentFile = new File(baseDir, currentVersionFilename)
+
+    IO(currentFile.exists) flatMap { exists =>
+      if (exists) {
+        IOUtils.readFileToString(currentFile) map { _ != unsetSentinel }
+      } else {
+        IO(false)
+      }
+    }
+  }
+
   class LogFiles(val baseDir: File) {
     val headFile = new File(baseDir, currentVersionFilename)
     val logFile = new File(baseDir, logName)
