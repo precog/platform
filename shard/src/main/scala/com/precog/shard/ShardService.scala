@@ -30,6 +30,7 @@ import com.precog.common.security._
 import com.precog.common.services._
 import com.precog.daze._
 import com.precog.shard.service._
+import com.precog.yggdrasil.table.Slice
 
 import akka.dispatch.{Future, ExecutionContext, Promise}
 import akka.util.{Duration, Timeout}
@@ -70,7 +71,7 @@ object ShardStateOptions {
 }
 
 sealed trait ShardState {
-  def platform: Platform[Future, StreamT[Future, CharBuffer]]
+  def platform: Platform[Future, StreamT[Future, Slice]]
   def apiKeyFinder: APIKeyFinder[Future]
   def stoppable: Stoppable
 }
@@ -84,7 +85,7 @@ case class ManagedQueryShardState(
   options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState
 
 case class BasicShardState(
-  platform: Platform[Future, StreamT[Future, CharBuffer]],
+  platform: Platform[Future, StreamT[Future, Slice]],
   apiKeyFinder: APIKeyFinder[Future],
   stoppable: Stoppable) extends ShardState
 

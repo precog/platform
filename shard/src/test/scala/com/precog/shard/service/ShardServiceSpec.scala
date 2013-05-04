@@ -29,6 +29,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.table.Slice
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
@@ -350,13 +351,15 @@ trait TestPlatform extends ManagedPlatform { self =>
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
-  private def wrap[M[+_]: Monad](a: JArray): StreamT[M, CharBuffer] = {
-    val str = a.renderCompact
-    val buffer = CharBuffer.allocate(str.length)
-    buffer.put(str)
-    buffer.flip()
-
-    StreamT.fromStream(Stream(buffer).point[M])
+  private def wrap[M[+_]: Monad](a: JValue): StreamT[M, Slice] = {
+//    val str = a.renderCompact
+//    val buffer = CharBuffer.allocate(str.length)
+//    buffer.put(str)
+//    buffer.flip()
+//
+//    StreamT.fromStream(Stream(buffer).point[M])
+//
+    Slice.fromJValues(Stream(a)) :: StreamT.empty[M, Slice]
   }
 
   type YggConfig = ManagedQueryModuleConfig
@@ -371,16 +374,16 @@ trait TestPlatform extends ManagedPlatform { self =>
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
     Future(Success(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-    new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
+  protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
+    new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+        shardQueryMonad.point(success(wrap(JNum(2))))
       }
     }
   }

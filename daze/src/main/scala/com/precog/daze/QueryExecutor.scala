@@ -55,6 +55,9 @@ case class QueryOptions(
 )
 
 trait QueryExecutor[M[+_], +A] { self =>
+  /**
+    * Execute the provided query, returning the *values* of the result set (discarding identities)
+    */
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
 
   def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {

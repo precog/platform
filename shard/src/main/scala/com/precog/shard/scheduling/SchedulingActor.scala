@@ -29,7 +29,9 @@ import blueeyes.bkka.FutureMonad
 
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.muspelheim.Platform
 import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 
 import com.weiglewilczek.slf4s.Logging
@@ -43,7 +45,7 @@ import org.quartz.CronExpression
 
 import scala.collection.mutable.{ArrayBuffer, PriorityQueue}
 
-import scalaz.{Failure, Monad, Success}
+import scalaz.{Ordering => _, _}
 import scalaz.syntax.traverse._
 import scalaz.effect.IO
 
@@ -59,7 +61,7 @@ case class TaskFailed(id: UUID, error: String) extends SchedulingMessage
 case class TaskInProgress(task: ScheduledTask, startedAt: DateTime)
 
 
-class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: ShardQueryExecutorPlatform[Future], storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
+class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
   private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
   private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -122,7 +124,7 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
 
     (for {
       job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
-      executorV <- platform.shardExecutorFor[Future](task.apiKey)
+      executorV <- platform.executorFor(task.apiKey)
       scriptV <- {
         (projectionsActor ? Read(task.source, None, Some(task.apiKey))).mapTo[ReadResult] map {
           case ReadSuccess(_, Some(blob: Blob)) =>
@@ -130,6 +132,9 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
               case t: Throwable =>
                 IO(Failure("Execution failed reading source script: " + Option(t.getMessage).getOrElse(t.getClass.toString)))
             } unsafePerformIO
+
+          case ReadSuccess(_, Some(_)) =>
+            Failure("Execution failed on non-script source")
 
           case ReadSuccess(_, None) =>
             Failure("Execution failed on non-existent source script")
@@ -144,9 +149,9 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
       } yield {
         import task._
 
-        executor.executeToPathOps(apiKey, script, prefix, opts, sink, authorities, Some(job.id)) flatMap {
-          _ traverse {
-            _.foldLeft(0L) {
+        executor.execute(apiKey, script, prefix, opts).flatMap {
+          _ traverse { stream =>
+            QueryResultConvert.toPathOps(stream, sink, apiKey, authorities, Some(job.id)).foldLeft(0L) {
               case (total, (len, op)) =>
                 projectionsActor ! op
                 total + len

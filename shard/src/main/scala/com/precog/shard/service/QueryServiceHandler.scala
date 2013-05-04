@@ -26,6 +26,7 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.table.Slice
 
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -66,7 +67,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[Future[JValue], (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
-  def extractResponse(request: HttpRequest[Future[JValue]], a: A): HttpResponse[QueryResult]
+  def extractResponse(request: HttpRequest[Future[JValue]], a: A, outputType: QueryOutput): HttpResponse[QueryResult]
 
   private val Command = """:(\w+)\s+(.+)""".r
 
@@ -101,7 +102,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
             executor.execute(apiKey, query, path, opts) map {
               case Success(result) =>
                 appendHeaders(opts) {
-                  extractResponse(request, result)
+                  extractResponse(request, result, opts.output)
                 }
               case Failure(error) =>
                 handleErrors(qt, error)
@@ -132,11 +133,11 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 }
 
 class BasicQueryServiceHandler(
-    val platform: Platform[Future, StreamT[Future, CharBuffer]])(implicit
-    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, CharBuffer]] {
+    val platform: Platform[Future, StreamT[Future, Slice]])(implicit
+    val M: Monad[Future]) extends QueryServiceHandler[StreamT[Future, Slice]] {
 
-  def extractResponse(request: HttpRequest[Future[JValue]], stream: StreamT[Future, CharBuffer]): HttpResponse[QueryResult] = {
-    HttpResponse[QueryResult](OK, content = Some(Right(stream)))
+  def extractResponse(request: HttpRequest[Future[JValue]], stream: StreamT[Future, Slice], outputType: QueryOutput): HttpResponse[QueryResult] = {
+    HttpResponse[QueryResult](OK, content = Some(Right(QueryResultConvert.toCharBuffers(outputType, stream))))
   }
 }
 
@@ -147,10 +148,10 @@ object SyncResultFormat {
 }
 
 class SyncQueryServiceHandler(
-    val platform: Platform[Future, (Option[JobId], StreamT[Future, CharBuffer])],
+    val platform: Platform[Future, (Option[JobId], StreamT[Future, Slice])],
     jobManager: JobManager[Future],
     defaultFormat: SyncResultFormat)(implicit
-    M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, CharBuffer])] {
+    M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, Slice])] {
 
   import scalaz.syntax.std.option._
   import scalaz.std.option._
@@ -159,8 +160,10 @@ class SyncQueryServiceHandler(
   def ensureTermination(data0: StreamT[Future, CharBuffer]) =
     TerminateJson.ensure(silenceShardQueryExceptions(data0))
 
-  def extractResponse(request: HttpRequest[Future[JValue]], result: (Option[JobId], StreamT[Future, CharBuffer])): HttpResponse[QueryResult] = {
+  def extractResponse(request: HttpRequest[Future[JValue]], result: (Option[JobId], StreamT[Future, Slice]), outputType: QueryOutput): HttpResponse[QueryResult] = {
     import SyncResultFormat._
+
+    val charBuffers = QueryResultConvert.toCharBuffers(outputType, result._2)
 
     val format = request.parameters get 'format map {
       case "simple" => Right(Simple)
@@ -168,7 +171,7 @@ class SyncQueryServiceHandler(
       case badFormat => Left("unknown format '%s'" format badFormat)
     } getOrElse Right(defaultFormat)
 
-    (format, result._1, result._2) match {
+    (format, result._1, charBuffers) match {
       case (Left(msg), _, _) =>
         HttpResponse[QueryResult](HttpStatus(BadRequest, msg))
 
@@ -238,7 +241,7 @@ class SyncQueryServiceHandler(
 }
 
 class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
-  def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId): HttpResponse[QueryResult] = {
+  def extractResponse(request: HttpRequest[Future[JValue]], jobId: JobId, outputType: QueryOutput): HttpResponse[QueryResult] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result)))
   }

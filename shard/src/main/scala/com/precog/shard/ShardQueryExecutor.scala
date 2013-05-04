@@ -85,36 +85,17 @@ object Fault {
   case class Error(pos: Option[FaultPosition], message: String) extends Fault
 }
 
+object QueryResultConvert {
+  def toCharBuffers[N[+_]: Monad](output: QueryOutput, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
+    output match {
+      case JSONOutput =>
+          (CharBuffer.wrap("[") :: (ColumnarTableModule.renderJson(slices, ','))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer])
 
-trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
-  case class StackException(error: StackError) extends Exception(error.toString)
-
-  def shardExecutorFor[N[+_]](apiKey: APIKey): M[Validation[String, ShardQueryExecutor[N]]]
-
-  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
-      extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, CharBuffer]] {
-
-    type YggConfig <: ShardQueryExecutorConfig
-    protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
-
-    implicit val M: Monad[M]
-    private implicit val N: Monad[N] = N0
-
-    implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
-      def decompose(line: instructions.Line): JValue = {
-        JObject(JField("lineNum", JNum(line.line)), JField("colNum", JNum(line.col)), JField("detail", JString(line.text)))
-      }
+      case CSVOutput => ColumnarTableModule.renderCsv(slices)
     }
+  }
 
-    lazy val report = queryReport contramap { (l: instructions.Line) =>
-      Option(FaultPosition(l.line, l.col, l.text))
-    }
-
-    def queryReport: QueryLogger[N, Option[FaultPosition]]
-
-    // Returns a Stream of (record count, Op)
-    def executeToPathOps(apiKey: String, query: String, prefix: Path, opts: QueryOptions, dest: Path, authorities: Authorities, jobId: Option[JobId]): N[Validation[EvaluationError, StreamT[M, (Long, PathOp)]]] = {
-
+  def toPathOps[N[+_]](slices: StreamT[N, Slice], dest: Path, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId])(implicit N: Monad[N]): StreamT[N, (Long, PathOp)] = {
       val streamId = java.util.UUID.randomUUID
       val writeTo = WriteTo.Version(streamId)
 
@@ -134,34 +115,53 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
         jvalues
       }
 
-      def writeAll(n: Long, stream: StreamT[M, Slice]): N[StreamT[M, (Long, PathOp)]] = {
-        def pathOps: StreamT[M, (Long, PathOp)] =
-          StreamT.unfoldM[M, (Long, PathOp), (Long, StreamT[M, Slice])]((1L, stream)) {
-            case (n, _) if n < 0L =>
-              M.point(None)
-            case (n, stream) => stream.uncons.flatMap {
-              case Some((slice, tail)) =>
-                val jvalues = jvaluesFromSlice(slice)
-                val pathOp = Append(dest, NIHDBData(Seq((n, jvalues))), writeTo, jobId)
-                M.point(Some(((slice.size, pathOp), (n + 1, tail))))
-              case None =>
-                val pathOp = MakeCurrent(dest, streamId, jobId)
-                M.point(Some(((0L, pathOp), (-1L, StreamT.empty[M, Slice]))))
-            }
+      def writeAll(n: Long, stream: StreamT[N, Slice]): StreamT[N, (Long, PathOp)] = {
+        StreamT.unfoldM[N, (Long, PathOp), (Long, StreamT[N, Slice])]((1L, stream)) {
+          case (n, _) if n < 0L =>
+            N.point(None)
+          case (n, stream) => stream.uncons.map {
+            case Some((slice, tail)) =>
+              val jvalues = jvaluesFromSlice(slice)
+              val pathOp = Append(dest, NIHDBData(Seq((n, jvalues))), writeTo, jobId)
+              Some(((slice.size, pathOp), (n + 1, tail)))
+            case None =>
+              val pathOp = MakeCurrent(dest, streamId, jobId)
+              Some(((0L, pathOp), (-1L, StreamT.empty[N, Slice])))
           }
-        queryReport.done.map(_ => pathOps)
+        }
       }
 
-      executeToTable(apiKey, query, prefix, opts).flatMap {
-        case Failure(error) =>
-          N.point(Failure(error))
-        case Success(table) =>
-          val cnv = CreateNewVersion(dest, NIHDBData(Seq()), streamId, apiKey, authorities, true)
-          writeAll(1L, table.slices).map(st => Success((0L, cnv) :: st))
+    (0L, CreateNewVersion(dest, NIHDBData(Seq()), streamId, apiKey, authorities, true)) :: writeAll(1L, slices)
+  }
+}
+
+trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]] with */ ParseEvalStack[M] {
+  case class StackException(error: StackError) extends Exception(error.toString)
+
+  abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
+      extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, Slice]] {
+
+    type YggConfig <: ShardQueryExecutorConfig
+    protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
+
+    implicit val M: Monad[M]
+    private implicit val N: Monad[N] = N0
+
+    implicit def LineDecompose: Decomposer[instructions.Line] = new Decomposer[instructions.Line] {
+      def decompose(line: instructions.Line): JValue = {
+        JObject(JField("lineNum", JNum(line.line)), JField("colNum", JNum(line.col)), JField("detail", JString(line.text)))
       }
     }
 
-    def executeToTable(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, Table]] = {
+    lazy val report = queryReport contramap { (l: instructions.Line) =>
+      Option(FaultPosition(l.line, l.col, l.text))
+    }
+
+    def queryReport: QueryLogger[N, Option[FaultPosition]]
+
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, Slice]]] = {
+      import trans._
+      val valuesOnlySpec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
       queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
@@ -212,16 +212,11 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
       N.point(solution).flatMap {
         case Failure(e) => N.point(Failure(SystemError(e)))
         case Success(Failure(err)) => N.point(Failure(err))
-        case Success(Success(nt)) => nt.map(Success(_))
-      }
-    }
-
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, CharBuffer]]] = {
-      executeToTable(apiKey, query, prefix, opts).flatMap {
-        case Success(table) =>
-          queryReport.done.map(_ => Success(outputChunks(opts.output)(N.point(table))))
-        case Failure(error) =>
-          N.point(Failure(error))
+        case Success(Success(nt)) => queryReport.done.flatMap { _ =>
+          nt.map { table =>
+            Success(implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(valuesOnlySpec).slices))
+          }
+        }
       }
     }
 
@@ -291,31 +286,6 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           (Set(fault), None)
       }
     }
-
-    private def outputChunks(output: QueryOutput)(tableM: N[Table]): StreamT[N, CharBuffer] =
-      output match {
-        case JSONOutput => jsonChunks(tableM)
-        case CSVOutput => csvChunks(tableM)
-      }
-
-    private def csvChunks(tableM: N[Table]): StreamT[N, CharBuffer] = {
-      import trans._
-      val spec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
-      StreamT.wrapEffect(tableM.map(_.transform(spec).renderCsv.trans(mn)))
-    }
-
-    private def jsonChunks(tableM: N[Table]): StreamT[N, CharBuffer] = {
-      import trans._
-
-      StreamT.wrapEffect(
-        tableM flatMap { table =>
-          renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
-        }
-      )
-    }
-
-    private def renderStream(table: Table): N[StreamT[N, CharBuffer]] =
-      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))
   }
 }
 // vim: set ts=4 sw=4 et:

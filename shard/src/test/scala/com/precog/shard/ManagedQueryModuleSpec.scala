@@ -239,7 +239,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
-  def actorSystem: ActorSystem  
+  def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -262,7 +262,7 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
 
         WriterT(createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
           val ticks = new AtomicInteger()
-          val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
+          val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
             case i if i < numTicks =>
               schedule(1) {
                 ticks.getAndIncrement()
