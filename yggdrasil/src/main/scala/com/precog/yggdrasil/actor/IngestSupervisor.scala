@@ -128,7 +128,7 @@ class IngestSupervisor( ingestActor: Option[ActorRef],
     logger.debug("Beginning processing of %d messages".format(messages.size))
     //implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
 
-    val updates = routingTable.batchMessages(messages)
+    val updates = routingTable.batchMessages(messages.toStream, mutable.Map())
     logger.debug("Sending " + updates.size + " update message(s)")
     batchCoordinator ! ProjectionUpdatesExpected(updates.size)
     for (update <- updates) projectionsActor.tell(update, batchCoordinator)

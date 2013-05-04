@@ -122,7 +122,7 @@ class StressTest {
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
-        nihdb.insert(Seq((eventid, results)))
+        nihdb.insert(Seq(NIHDB.Batch(eventid, results)))
 
 
         eventid += 1L

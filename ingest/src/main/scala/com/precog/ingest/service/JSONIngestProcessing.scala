@@ -124,7 +124,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
         }
       }
 
-      def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef)(continue: JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
+      def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef)(continue: => JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
         (errorHandling: @unchecked) match {
           case IngestAllPossible =>
             val (toIngest, overLarge) = expandArraysAtRoot(parsed.values) partition { jv => jv.flattenWithPath.size <= maxFields }

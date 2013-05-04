@@ -37,9 +37,10 @@ import com.precog.common.Path
 import com.precog.common.accounts.AccountId
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.niflheim.NIHDB
+import com.precog.yggdrasil.nihdb._
 import com.precog.util.PrecogUnit
 import com.precog.util.cache.Cache
-import com.precog.yggdrasil.nihdb._
 
 import java.util.UUID
 
@@ -63,7 +64,7 @@ object PathData {
 }
 
 case class BlobData(data: Array[Byte], mimeType: MimeType) extends PathData(PathData.BLOB)
-case class NIHDBData(data: Seq[(Long, Seq[JValue])]) extends PathData(PathData.NIHDB)
+case class NIHDBData(data: Seq[NIHDB.Batch]) extends PathData(PathData.NIHDB)
 
 object NIHDBData {
   val Empty = NIHDBData(Seq.empty)
@@ -76,22 +77,6 @@ sealed trait PathOp {
 
 sealed trait PathUpdateOp extends PathOp
 
-sealed trait WriteTo {
-  def writeId: Option[UUID]
-}
-object WriteTo {
-  // You'll either use the API key to check against current authorities, or the
-  // api key will be used to check for create permissions and the authorities
-  // will be used if the create permission check succeeds.
-  case class Current(as: APIKey, authorities: Authorities) extends WriteTo {
-    val writeId = None
-  }
-
-  case class Version(streamId: UUID) extends WriteTo {
-    val writeId = Some(streamId)
-  }
-}
-
 /**
   * Appends data to a resource. If the streamId is non-empty, this Append is
   * part of an atomic version update sequence (see
@@ -100,7 +85,7 @@ object WriteTo {
   * If there is no current version available, a new version will be created as
   * long as the apiKey has create permissions for the path.
   */
-case class Append(path: Path, data: PathData, writeTo: WriteTo, jobId: Option[JobId]) extends PathUpdateOp
+case class Append(path: Path, data: PathData, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId]) extends PathUpdateOp
 
 /**
   * Creates a new version of the given resource based on the streamId. This

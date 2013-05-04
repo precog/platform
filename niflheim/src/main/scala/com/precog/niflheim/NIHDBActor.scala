@@ -54,7 +54,7 @@ import scala.collection.JavaConverters._
 
 import shapeless._
 
-case class Insert(batch: Seq[(Long, Seq[JValue])])
+case class Insert(batch: Seq[NIHDB.Batch])
 
 case object GetSnapshot
 
@@ -69,6 +69,8 @@ case class Structure(columns: Set[(CPath, CType)])
 case object GetAuthorities
 
 object NIHDB {
+  case class Batch(offset: Long, values: Seq[JValue])
+
   final val projectionIdGen = new AtomicInteger()
 
   final def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
@@ -85,7 +87,7 @@ object NIHDB {
 trait NIHDB {
   def authorities: Future[Authorities]
 
-  def insert(batch: Seq[(Long, Seq[JValue])]): Future[PrecogUnit]
+  def insert(batch: Seq[NIHDB.Batch]): Future[PrecogUnit]
 
   def getSnapshot(): Future[NIHDBSnapshot]
 
@@ -116,7 +118,7 @@ private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: T
   def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
 
-  def insert(batch: Seq[(Long, Seq[JValue])]): Future[PrecogUnit] =
+  def insert(batch: Seq[NIHDB.Batch]): Future[PrecogUnit] =
     (actor ? Insert(batch)) map { _ => PrecogUnit }
 
   def getSnapshot(): Future[NIHDBSnapshot] =
@@ -332,12 +334,12 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
       if (batch.isEmpty) {
         logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
       } else {
-        val (skipValues, keepValues) = batch.partition(_._1 <= currentState.maxOffset)
+        val (skipValues, keepValues) = batch.partition(_.offset <= currentState.maxOffset)
         if (keepValues.isEmpty) {
-          logger.warn("Skipping entirely seen batch of %d rows prior to offset %d".format(batch.flatMap(_._2).size, currentState.maxOffset))
+          logger.warn("Skipping entirely seen batch of %d rows prior to offset %d".format(batch.flatMap(_.values).size, currentState.maxOffset))
         } else {
-          val values = keepValues.flatMap(_._2)
-          val offset = keepValues.map(_._1).max
+          val values = keepValues.flatMap(_.values)
+          val offset = keepValues.map(_.offset).max
 
           logger.debug("Inserting %d rows, skipping %d rows at offset %d for %s".format(values.length, skipValues.length, offset, baseDir.getCanonicalPath))
           blockState.rawLog.write(offset, values)

@@ -223,41 +223,28 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         } pipeTo sender
       }
 
-    case Append(_, bd: BlobData, writeTo, jobIdOpt) =>
+    case Append(_, bd: BlobData, _, _, jobIdOpt) =>
       Future {
         val errMsg = "Append not yet supported for blob data"
         logger.error(errMsg)
         UpdateFailure(path, nels(GeneralError(errMsg)))
       }
 
-    case Append(_, data @ NIHDBData(events), writeTo, jobIdOpt) =>
-      val resourceVF = writeTo match {
-        case WriteTo.Version(versionId) => 
-          getNihdb(versionId) map { _ map { projection =>
-            projection.db.insert(events)
-          } fold (
-            e => UpdateFailure(path, e),
-            _ => UpdateSuccess(path)
-          )}
-
-        case WriteTo.Current(key, authorities) =>
-          versionLog.current map { version =>
-            getNihdb(version.id) map { _ map { projection =>
-              projection.db.insert(events)
-            } fold (
-              e => UpdateFailure(path, e),
-              _ => UpdateSuccess(path)
-            )}
-          } getOrElse {
-            val version = UUID.randomUUID
-            for {
-              created <- performCreate(key, data, version, authorities)
-              _       <- promoteVersion(version)
-            } yield created
-          }
-      }
-
-      resourceVF.recover {
+    case Append(_, data @ NIHDBData(events), key, authorities, jobIdOpt) =>
+      versionLog.current map { version =>
+        getNihdb(version.id) map { _ map { projection =>
+          projection.db.insert(events)
+        } fold (
+          e => UpdateFailure(path, e),
+          _ => UpdateSuccess(path)
+        )}
+      } getOrElse {
+        val version = UUID.randomUUID
+        for {
+          created <- performCreate(key, data, version, authorities)
+          _       <- promoteVersion(version)
+        } yield created
+      } recover {
         case t: Throwable =>
           val msg = "Failure during append to " + path
           logger.error(msg, t)

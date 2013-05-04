@@ -24,6 +24,7 @@ import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
+import com.precog.niflheim.NIHDB
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.vfs._
 
@@ -101,9 +102,9 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
-    val records = (eventId.uid, readRows(data))
+    val records = NIHDB.Batch(eventId.uid, readRows(data))
 
-    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), WriteTo.Current(apiKey, Authorities(accountId)), None)).flatMap { _ =>
+    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), apiKey, Authorities(accountId), None)).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
       (projectionsActor ? Read(path, None, None)).mapTo[List[NIHDBResource]]

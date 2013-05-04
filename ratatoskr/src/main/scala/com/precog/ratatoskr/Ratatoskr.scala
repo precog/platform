@@ -844,7 +844,7 @@ object ImportTools extends Command with Logging {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
           }
           val eventidobj = EventId(pid, sid.getAndIncrement)
-          val update = Append(Path(db), NIHDBData(Seq((eventidobj.uid, results))), WriteTo.Current(config.apiKey, authorities), None)
+          val update = Append(Path(db), NIHDBData(Seq(NIHDB.Batch(eventidobj.uid, results))), config.apiKey, authorities, None)
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
           bb.flip()

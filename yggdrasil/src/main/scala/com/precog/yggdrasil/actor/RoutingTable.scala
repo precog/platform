@@ -26,7 +26,9 @@ import util.CPathUtils
 import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.vfs._
 
@@ -38,72 +40,78 @@ import java.util.UUID
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.annotation.tailrec
+
+sealed trait BufferingState {
+  def writeId: Option[UUID]
+}
+
+object BufferingState {
+  // You'll either use the API key to check against current authorities, or the
+  // api key will be used to check for create permissions and the authorities
+  // will be used if the create permission check succeeds.
+  case class Current(as: APIKey, writeAs: Authorities) extends BufferingState {
+    val writeId = None
+  }
+
+  case class Version(as: APIKey, writeAs: Authorities, streamId: UUID, canOverwrite: Boolean) extends BufferingState {
+    val writeId = Some(streamId)
+  }
+}
 
 trait RoutingTable extends Logging {
+  import NIHDB.Batch
+  import BufferingState._
 
-  private type Batch = (Long, Seq[JValue])
+  // this method exists solely o fool scalac into allowing batchMessages to @tailrec
+  private def batchMessages0(events: Stream[(Long, EventMessage)], buffers: mutable.Map[Path, (BufferingState, Option[JobId], ArrayBuffer[Batch])]) = batchMessages(events, buffers)
+  @tailrec final def batchMessages(events: Stream[(Long, EventMessage)], buffers: mutable.Map[Path, (BufferingState, Option[JobId], ArrayBuffer[Batch])]): Stream[PathUpdateOp] = {
+    events match {
+      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, StreamRef.Append)) #:: xs =>
+        sys.error("todo")
 
-  // DREAMON: Some day, make this a stream transformer
-  def batchMessages(events: Seq[(Long, EventMessage)]): Seq[PathUpdateOp] = {
-    sys.error("todo") /*
-    val start = System.currentTimeMillis
+      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, StreamRef.NewVersion(streamId, terminal, canOverwrite))) #:: xs =>
+        val records = data.map(_.value)
+        buffers.get(path) match {
+          case Some((writeTo @ Current(otherApiKey, otherWriteAs), otherJobId, buf)) =>
+            // previously was appending to the current head at this path, so emit the accumulated append
+            Append(path, NIHDBData(buf), otherApiKey, otherWriteAs, otherJobId) #::
+            (if (terminal) {
+              // this is a single-element create, so emit both the create and the makeCurrent
+              CreateNewVersion(path, NIHDBData(List(Batch(offset, records))), streamId, apiKey, writeAs, canOverwrite) #::
+              MakeCurrent(path, streamId, jobId) #::
+              batchMessages0(xs, buffers -= path)
+            } else {
+              // accumulate buffered
+              batchMessages0(xs, buffers += (path -> (Version(apiKey, writeAs, streamId, canOverwrite), jobId, ArrayBuffer(Batch(offset, records)))))
+            })
 
-    // the sequence of ProjectionUpdate objects to return
-    val updates = ArrayBuffer.empty[PathUpdateOp]
+          case Some((thisVersion @ Version(_, _, `streamId`, _), otherJobId, buf)) =>
+            // appending to the same version, so just add to the buffer but don't fuss about the stream
+            batchMessages(xs, buffers += (path -> (thisVersion, otherJobId, buf += Batch(offset, records))))
 
-    // map used to aggregate IngestMessages by (Path, AccountId)
-    val recordsByPath = mutable.Map.empty[Path, (WriteTo, ArrayBuffer[Batch])]
-
-    // process each message, aggregating ingest messages
-    events.foreach {
-      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId, mode @ (StoreMode.Create | StoreMode.Replace))) => 
-        // Send along whatever we've batched up to this point, then start a new
-        // update. This could get messy if the create fails due to not
-        // overwriting existing data, but more ingests are coming along
-        // expecting to be a part of this. We probably want to require that
-        // "CreateMode" ingests provide a stream ID
-        val version = streamId getOrElse {
-          UUID.randomUUID
-        }
-
-        recordsByPath.get(path) foreach {
-          case (k0, a0, buffer) if buffer.length > 0 =>
-            updates += Append(path, NIHDBData(buffer), WriteTo.Current(k0, a0), jobId)
-            recordsByPath -= path
-        }
-
-        updates += CreateNewVersion(path, NIHDBData(data), version, apiKey, writeAs, mode == StoreMode.Replace)
-
-      case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, streamId, StoreMode.Append)) => 
-        // find whether there's an existing stream that we should be appending to
-        // depending upon store mode, we may need creates and replaces put into the stream of updates
-        recordsByPath.get(path) match {
-          case Some((`apiKey`, `writeAs`, buffer)) =>
-            buffer += (offset -> data.map(_.value))
-
-          case Some((k0, a0, buffer)) =>
-            updates += Append(path, NIHDBData(buffer), WriteTo.Current(k0, a0), jobId)
-            recordsByPath += (path -> (apiKey, writeAs, ArrayBuffer[Batch]((offset, data.map(_.value)))))
+          case Some((Version(otherApiKey, otherWriteAs, otherStreamId, otherCanOverwrite), otherJobId, buf)) =>
+            // flush the existing buffers, then buffer the data from the current message (or emit if it's terminal)
+            CreateNewVersion(path, NIHDBData(buf), otherStreamId, otherApiKey, otherWriteAs, otherCanOverwrite) #::
+            MakeCurrent(path, otherStreamId, otherJobId) #::
+            (if (terminal) {
+              CreateNewVersion(path, NIHDBData(List(Batch(offset, records))), streamId, apiKey, writeAs, canOverwrite) #::
+              MakeCurrent(path, streamId, jobId) #::
+              batchMessages0(xs, buffers -= path)
+            } else {
+              batchMessages0(xs, buffers += (path -> (Version(apiKey, writeAs, streamId, canOverwrite), jobId, ArrayBuffer(Batch(offset, records)))))
+            })
 
           case None =>
-            recordsByPath += (path -> (apiKey, writeAs, ArrayBuffer[Batch]((offset, data.map(_.value)))))
+            batchMessages(xs, buffers += (path -> (Version(apiKey, writeAs, streamId, canOverwrite), jobId, ArrayBuffer(Batch(offset, records)))))
         }
 
-      // Should StoreFileMessage carry a store mode?
-      case (offset, StoreFileMessage(apiKey, path, writeAs, jobId, eventId, fileContent, timestamp, streamId)) =>
-        val version = streamId.getOrElse(UUID.randomUUID)
-        updates += CreateNewVersion(path, BlobData(fileContent.data, fileContent.mimeType), version, apiKey, writeAs, false)
-        updates += MakeCurrent(path, version)
+      case (offset, StoreFileMessage(apiKey, path, writeAs, jobId, eventId, fileContent, _, streamRef)) #:: xs =>
+        sys.error("todo")
 
-      case (_, ArchiveMessage(key, path, jobId, eventId, timestamp)) =>
-        updates += ArchivePath(path, jobId)
+      case (offset, ArchiveMessage(_, path, jobId, _, _)) #:: xs =>
+        ArchivePath(path, jobId) #:: batchMessages0(xs, buffers)
     }
-
-    // Flush any remaining records by path here
-
-    logger.debug("Batched %d events into %d updates in %d ms".format(events.size, updates.size, System.currentTimeMillis - start))
-    updates
-    */
   }
 }
 
