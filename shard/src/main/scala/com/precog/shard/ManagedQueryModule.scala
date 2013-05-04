@@ -48,11 +48,11 @@ trait ManagedQueryModuleConfig {
  * can be useful as it allows the query to be affected by cancellation requests,
  * for instance.
  *
- * The main idea is to run the query itself within a `ShardQuery[+_]`. The
- * monad instance for a `ShardQuery` is obtained through `createJob(...)`. This
+ * The main idea is to run the query itself within a `JobQueryTF[+_]`. The
+ * monad instance for a `JobQueryTF` is obtained through `createJob(...)`. This
  * is then stripped off by `completeJob(...)`.
  *
- * Note that if the job service is down, then a ShardQueryMonad will still be
+ * Note that if the job service is down, then a JobQueryTFMonad will still be
  * returned, it just won't actually have a job associated with it and, thus,
  * cannot be cancelled (though timeouts still work fine).
  */
@@ -62,7 +62,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
 
   type YggConfig <: ManagedQueryModuleConfig
 
-  trait ShardQueryMonad extends QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
+  trait JobQueryTFMonad extends QueryTMonad[JobQueryState, Future] with QueryTHoist[JobQueryState] {
     def jobId: Option[JobId]
     def Q: JobQueryStateMonad
   }
@@ -74,7 +74,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    * errors.
    */
   trait ShardQueryLogger[M[+_], P] extends QueryLogger[M, P] {
-    def M: ShardQueryMonad
+    def M: JobQueryTFMonad
 
     abstract override def die(): M[Unit] = {
       M.Q.abort()
@@ -88,15 +88,15 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
 
   /**
    * Creates a new job with the given apiKey, and uses that to construct a
-   * ShardQueryMonad that is bound to this job. The behaviour of the
-   * ShardQueryMonad depends on the job state and allows computations running
+   * JobQueryTFMonad that is bound to this job. The behaviour of the
+   * JobQueryTFMonad depends on the job state and allows computations running
    * within the monad to be cancelled, expired, etc.
    *
-   * Queries that are run within the ShardQueryMonad should be completed with
+   * Queries that are run within the JobQueryTFMonad should be completed with
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[ShardQueryMonad] = {
+  def createJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[JobQueryTFMonad] = {
     val start = System.currentTimeMillis
     val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).onComplete {
       _ => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start))
@@ -109,7 +109,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
         mgr
       } getOrElse FakeJobQueryStateManager(yggConfig.clock.now() plus timeout.getOrElse(defaultTimeout).toMillis)
     } yield {
-      new ShardQueryMonad {
+      new JobQueryTFMonad {
         val jobId = job map (_.id)
         val Q: JobQueryStateMonad = queryStateManager
         val M: Monad[Future] = new blueeyes.bkka.FutureMonad(asyncContext)
@@ -118,15 +118,15 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
   }
 
   /**
-   * This acts as a sink for `ShardQuery`, turning it into a plain future. It
+   * This acts as a sink for `JobQueryTF`, turning it into a plain future. It
    * will deal with cancelled and expired queries by updating the job and
    * throwing either a `QueryCancelledException` or a `QueryExpiredException`.
    * If a value is successfully pulled out of `f`, then it will be returned.
    * However, `sink` will not mark the job as successful here. It onyl deals
    * with failures.
    */
-  implicit def sink(implicit M: ShardQueryMonad) = new (ShardQuery ~> Future) {
-    def apply[A](f: ShardQuery[A]): Future[A] = f.run recover {
+  implicit def sink(implicit M: JobQueryTFMonad) = new (JobQueryTF ~> Future) {
+    def apply[A](f: JobQueryTF[A]): Future[A] = f.run recover {
         case ex =>
           M.jobId map { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.ServerError, JString("Internal server error."))
@@ -154,13 +154,13 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    * This also turns the result stream into a simple StreamT[Future, A], as
    * this method is essentially the sink for managed queries.
    */
-  def completeJob[N[+_], A](result: StreamT[ShardQuery, A])(implicit M: ShardQueryMonad, t: ShardQuery ~> N): StreamT[N, A] = {
-    val finish: StreamT[ShardQuery, A] = StreamT[ShardQuery, A](M.point(StreamT.Skip {
+  def completeJob[N[+_], A](result: StreamT[JobQueryTF, A])(implicit M: JobQueryTFMonad, t: JobQueryTF ~> N): StreamT[N, A] = {
+    val finish: StreamT[JobQueryTF, A] = StreamT[JobQueryTF, A](M.point(StreamT.Skip {
       M.jobId map (jobManager.finish(_, yggConfig.clock.now()))
-      StreamT.empty[ShardQuery, A]
+      StreamT.empty[JobQueryTF, A]
     }))
 
-    implicitly[Hoist[StreamT]].hoist[ShardQuery, N](t).apply(result ++ finish)
+    implicitly[Hoist[StreamT]].hoist[JobQueryTF, N](t).apply(result ++ finish)
   }
 
   // This can be used when the Job service is down.
