@@ -125,9 +125,7 @@ trait TypeInferencer extends DAG {
           case Filter(_, target, boolean) =>
             inner(Some(JBooleanT), inner(jtpe, typing, splits, target), splits, boolean)
     
-          case Sort(parent, _) => inner(jtpe, typing, splits, parent)
-    
-          case SortBy(parent, _, _, _) => inner(jtpe, typing, splits, parent)
+          case AddSortKey(parent, _, _, _) => inner(jtpe, typing, splits, parent)
           
           case Memoize(parent, _) => inner(jtpe, typing, splits, parent)
     

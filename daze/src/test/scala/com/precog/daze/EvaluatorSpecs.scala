@@ -3258,8 +3258,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Join(
         Add,
         ValueSort(0),
-        SortBy(clicks, "time", "time", 0),
-        SortBy(clicks2, "time", "time", 0))(line)
+        AddSortKey(clicks, "time", "time", 0),
+        AddSortKey(clicks2, "time", "time", 0))(line)
         
       testEval(dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line)) { expected =>
         val decimalValues = expected.toList collect {
@@ -3301,8 +3301,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Join(Eq, IdentitySort,
         dag.Join(Add, ValueSort(0),
-          SortBy(clicks, "time", "time", 0),
-          SortBy(clicks2, "time", "time", 0))(line),
+          AddSortKey(clicks, "time", "time", 0),
+          AddSortKey(clicks2, "time", "time", 0))(line),
         dag.Join(Mul, Cross(None),
           dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line),
           Const(CLong(2))(line))(line))(line)
@@ -3327,11 +3327,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Filter(
         ValueSort(0),
-        SortBy(clicks, "time", "time", 0),
+        AddSortKey(clicks, "time", "time", 0),
         dag.Join(
           Gt,
           Cross(None),
-          SortBy(clicks2, "time", "time", 0),
+          AddSortKey(clicks2, "time", "time", 0),
           Const(CLong(500))(line))(line))(line)
         
       testEval(dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line)) { expected =>

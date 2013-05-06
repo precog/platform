@@ -82,9 +82,7 @@ trait DAGTransform extends DAG {
         case graph @ Filter(cross, target, boolean) =>
           f(Filter(cross, transformAux(target), transformAux(boolean))(graph.loc))
   
-        case Sort(parent, indices) => f(Sort(transformAux(parent), indices))
-
-        case SortBy(parent, sortField, valueField, id) => f(SortBy(transformAux(parent), sortField, valueField, id))
+        case AddSortKey(parent, sortField, valueField, id) => f(AddSortKey(transformAux(parent), sortField, valueField, id))
         
         case Memoize(parent, priority) => f(Memoize(transformAux(parent), priority))
   

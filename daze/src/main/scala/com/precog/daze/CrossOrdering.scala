@@ -108,30 +108,6 @@ trait CrossOrdering extends DAG {
         case node @ Diff(left, right) =>
           Diff(memoized(left), memoized(right))(node.loc)
         
-        case node @ Join(op, ValueSort(id), left, right) =>
-          Join(op, ValueSort(id), memoized(left), memoized(right))(node.loc)
-
-        case node @ Join(op, IdentitySort, left, right) => {
-          //Join(op, IdentitySort, memoized(left), memoized(right))(node.loc)
-          val left2 = memoized(left)
-          val right2 = memoized(right)
-          
-          val (leftIndices, rightIndices) = dag.IdentityMatch(left2, right2).sharedIndices.unzip
-          
-          val leftPrefix = leftIndices zip (Stream from 0) forall { case (a, b) => a == b }
-          val rightPrefix = rightIndices zip (Stream from 0) forall { case (a, b) => a == b }
-          
-          def sortLeft = Sort(left2, leftIndices)
-          def sortRight = Sort(right2, rightIndices)
-          
-          (leftPrefix, rightPrefix) match {
-            case (true, true) => Join(op, IdentitySort, left2, right2)(node.loc)
-            case (true, false) => Join(op, IdentitySort, left2, sortRight)(node.loc)
-            case (false, true ) => Join(op, IdentitySort, sortLeft, right2)(node.loc)
-            case (false, false) => Join(op, IdentitySort, sortLeft, sortRight)(node.loc)
-          }
-        }
-        
         case node @ Join(op, Cross(hint), left, right) => {
           import CrossOrder._
           if (right.isSingleton)
@@ -142,7 +118,7 @@ trait CrossOrdering extends DAG {
             val right2 = memoized(right)
             
             right2 match {
-              case _: Memoize | _: Sort | _: SortBy | _: LoadLocal =>
+              case _: Memoize | _: AddSortKey | _: LoadLocal =>
                 Join(op, Cross(hint), memoized(left), right2)(node.loc)
               
               case _ =>
@@ -154,36 +130,11 @@ trait CrossOrdering extends DAG {
         case node @ Join(op, joinSort, left, right) =>
           Join(op, joinSort, memoized(left), memoized(right))(node.loc)
         
-        case node @ Filter(ValueSort(id), target, boolean) =>
-          Filter(ValueSort(id), memoized(target), memoized(boolean))(node.loc)
-          
-        case node @ Filter(IdentitySort, target, boolean) => {
-          val target2 = memoized(target)
-          val boolean2 = memoized(boolean)
-          
-          val (targetIndexes, booleanIndexes) = dag.IdentityMatch(target2, boolean2).sharedIndices.unzip
-          
-          val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
-          val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
-          
-          def sortTarget     = Sort(target2, targetIndexes)
-          def sortBoolean    = Sort(boolean2, booleanIndexes)
-
-          (targetPrefix, booleanPrefix) match {
-            case (true, true ) => Filter(IdentitySort, target2, boolean2)(node.loc)
-            case (true, false) => Filter(IdentitySort, target2, sortBoolean)(node.loc)
-            case (false, true ) => Filter(IdentitySort, sortTarget, boolean2)(node.loc)
-            case (false, false) => Filter(IdentitySort, sortTarget, sortBoolean)(node.loc)
-          }
-        }
-
         case node @ Filter(joinSort, target, boolean) =>
           Filter(joinSort, memoized(target), memoized(boolean))(node.loc)
         
-        case Sort(parent, _) => memoized(parent)
-        
-        case SortBy(parent, sortField, valueField, id) =>
-          SortBy(memoized(parent), sortField, valueField, id)
+        case AddSortKey(parent, sortField, valueField, id) =>
+          AddSortKey(memoized(parent), sortField, valueField, id)
         
         case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }

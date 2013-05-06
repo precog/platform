@@ -111,9 +111,7 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 
       case Filter(_, target, boolean) => merge(extractLoads(target), extractLoads(boolean))
 
-      case Sort(parent, _) => extractLoads(parent)
-
-      case SortBy(parent, _, _, _) => extractLoads(parent)
+      case AddSortKey(parent, _, _, _) => extractLoads(parent)
 
       case Memoize(parent, _) => extractLoads(parent)
 
@@ -349,34 +347,12 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
       result must_== expected
     }
 
-    "propagate structure/type information through Sort nodes" in {
+    "propagate structure/type information through AddSortKey nodes" in {
       val line = Line(1, 1, "")
 
       val input =
         Operate(Neg,
-          Sort(
-            Join(DerefObject, Cross(None), 
-              LoadLocal(Const(CString("/file"))(line))(line),
-              Const(CString("column"))(line))(line),
-            Vector()
-          )
-        )(line)
-
-      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
-
-      val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
-      )
-
-      result must_== expected
-    }
-
-    "propagate structure/type information through SortBy nodes" in {
-      val line = Line(1, 1, "")
-
-      val input =
-        Operate(Neg,
-          SortBy(
+          AddSortKey(
             Join(DerefObject, Cross(None), 
               LoadLocal(Const(CString("/file"))(line))(line),
               Const(CString("column"))(line))(line),
@@ -637,6 +613,4 @@ trait TypeInferencerSpecs[M[+_]] extends Specification
 }
 
 object TypeInferencerSpecs extends TypeInferencerSpecs[test.YId] with test.YIdInstances
-
-// vim: set ts=4 sw=4 et:
 

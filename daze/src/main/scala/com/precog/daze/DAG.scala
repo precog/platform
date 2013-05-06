@@ -506,9 +506,7 @@ trait DAG extends Instructions {
 
           case graph @ dag.Filter(joinSort, target, boolean) => dag.Filter(joinSort, memoized(target), memoized(boolean))(graph.loc)
 
-          case dag.Sort(parent, indexes) => dag.Sort(memoized(parent), indexes)
-
-          case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
+          case dag.AddSortKey(parent, sortField, valueField, id) => dag.AddSortKey(memoized(parent), sortField, valueField, id)
 
           case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
         }
@@ -699,11 +697,8 @@ trait DAG extends Instructions {
                       newBoolean <- memoized(boolean)
                     } yield dag.Filter(joinSort, newTarget, newBoolean)(graph.loc)
         
-                  case dag.Sort(parent, indexes) =>
-                    for { newParent <- memoized(parent) } yield dag.Sort(newParent, indexes)
-        
-                  case dag.SortBy(parent, sortField, valueField, id) =>
-                    for { newParent <- memoized(parent) } yield dag.SortBy(newParent, sortField, valueField, id)
+                  case dag.AddSortKey(parent, sortField, valueField, id) =>
+                    for { newParent <- memoized(parent) } yield dag.AddSortKey(newParent, sortField, valueField, id)
         
                   case dag.Memoize(parent, priority) =>
                     for { newParent <- memoized(parent) } yield dag.Memoize(newParent, priority)
@@ -865,9 +860,7 @@ trait DAG extends Instructions {
           val acc2 = foldDown0(target, acc |+| f(target))
           foldDown0(boolean, acc2 |+| f(boolean))
 
-        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))
-
-        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
+        case dag.AddSortKey(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))
       }
@@ -1220,31 +1213,6 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
     
-    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
-      val loc = parent.loc
-      
-      lazy val identities = parent.identities.fold(specs => {
-        val (first, second) = specs.zipWithIndex partition {
-          case (_, i) => indexes contains i
-        }
-        
-        val prefix = first sortWith {
-          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
-        }
-        
-        val (back, _) = (prefix ++ second).unzip
-        Identities.Specs(back)
-      }, Identities.Undefined)
-      
-      def uniqueIdentities = parent.uniqueIdentities
-
-      def valueKeys = Set.empty
-      
-      lazy val isSingleton = parent.isSingleton
-      
-      lazy val containsSplitArg = parent.containsSplitArg
-    }
-    
     /**
      * Evaluator will deref by `sortField` to get the sort ordering and `valueField`
      * to get the actual value set that is being sorted.  Thus, `parent` is
@@ -1256,7 +1224,7 @@ trait DAG extends Instructions {
      * share the same identity.  This is very important to ensure correctness in
      * evaluation of the `Join` node.
      */
-    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
+    case class AddSortKey(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
       val loc = parent.loc
 
       lazy val identities = parent.identities
