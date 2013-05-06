@@ -42,21 +42,11 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
 
-sealed trait BufferingState {
-  def writeId: Option[UUID]
-}
+sealed trait BufferingState 
 
 object BufferingState {
-  // You'll either use the API key to check against current authorities, or the
-  // api key will be used to check for create permissions and the authorities
-  // will be used if the create permission check succeeds.
-  case class Current(as: APIKey, writeAs: Authorities) extends BufferingState {
-    val writeId = None
-  }
-
-  case class Version(as: APIKey, writeAs: Authorities, streamId: UUID, canOverwrite: Boolean) extends BufferingState {
-    val writeId = Some(streamId)
-  }
+  case class Current(as: APIKey, writeAs: Authorities) extends BufferingState 
+  case class Version(as: APIKey, writeAs: Authorities, streamId: UUID, canOverwrite: Boolean) extends BufferingState 
 }
 
 trait RoutingTable extends Logging {
@@ -68,7 +58,22 @@ trait RoutingTable extends Logging {
   @tailrec final def batchMessages(events: Stream[(Long, EventMessage)], buffers: mutable.Map[Path, (BufferingState, Option[JobId], ArrayBuffer[Batch])]): Stream[PathUpdateOp] = {
     events match {
       case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, StreamRef.Append)) #:: xs =>
-        sys.error("todo")
+        val records = data.map(_.value)
+        buffers.get(path) match {
+          case Some((writeTo @ Current(`apiKey`, `writeAs`), `jobId`, buf)) =>
+            batchMessages(xs, buffers += (path -> (writeTo, jobId, buf += Batch(offset, records))))
+
+          case Some((writeTo @ Current(otherApiKey, otherWriteAs), otherJobId, buf)) =>
+            Append(path, NIHDBData(buf), otherApiKey, otherWriteAs, otherJobId) #::
+            batchMessages0(xs, buffers += (path -> (Current(apiKey, writeAs), jobId, ArrayBuffer(Batch(offset, records)))))
+
+          case Some((Version(otherApiKey, otherWriteAs, otherStreamId, otherCanOverwrite), otherJobId, buf)) =>
+            CreateNewVersion(path, NIHDBData(buf), otherStreamId, otherApiKey, otherWriteAs, otherCanOverwrite) #::
+            batchMessages0(xs, buffers += (path -> (Current(apiKey, writeAs), jobId, ArrayBuffer(Batch(offset, records)))))
+
+          case None =>
+            batchMessages(xs, buffers += (path -> (Current(apiKey, writeAs), jobId, ArrayBuffer(Batch(offset, records)))))
+        }
 
       case (offset, IngestMessage(apiKey, path, writeAs, data, jobId, _, StreamRef.NewVersion(streamId, terminal, canOverwrite))) #:: xs =>
         val records = data.map(_.value)
@@ -88,12 +93,17 @@ trait RoutingTable extends Logging {
 
           case Some((thisVersion @ Version(_, _, `streamId`, _), otherJobId, buf)) =>
             // appending to the same version, so just add to the buffer but don't fuss about the stream
-            batchMessages(xs, buffers += (path -> (thisVersion, otherJobId, buf += Batch(offset, records))))
+            if (terminal) {
+              CreateNewVersion(path, NIHDBData(buf :+ Batch(offset, records), streamId, apiKey, writeAs, canOverwrite) #::
+              MakeCurrent(path, streamId, jobId) #::
+              batchMessages0(xs, buffers -= path)
+            } else {
+              batchMessages(xs, buffers += (path -> (thisVersion, otherJobId, buf += Batch(offset, records))))
+            }
 
           case Some((Version(otherApiKey, otherWriteAs, otherStreamId, otherCanOverwrite), otherJobId, buf)) =>
             // flush the existing buffers, then buffer the data from the current message (or emit if it's terminal)
             CreateNewVersion(path, NIHDBData(buf), otherStreamId, otherApiKey, otherWriteAs, otherCanOverwrite) #::
-            MakeCurrent(path, otherStreamId, otherJobId) #::
             (if (terminal) {
               CreateNewVersion(path, NIHDBData(List(Batch(offset, records))), streamId, apiKey, writeAs, canOverwrite) #::
               MakeCurrent(path, streamId, jobId) #::
@@ -107,7 +117,7 @@ trait RoutingTable extends Logging {
         }
 
       case (offset, StoreFileMessage(apiKey, path, writeAs, jobId, eventId, fileContent, _, streamRef)) #:: xs =>
-        sys.error("todo")
+        
 
       case (offset, ArchiveMessage(_, path, jobId, _, _)) #:: xs =>
         ArchivePath(path, jobId) #:: batchMessages0(xs, buffers)

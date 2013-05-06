@@ -88,12 +88,9 @@ sealed trait PathUpdateOp extends PathOp
 case class Append(path: Path, data: PathData, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId]) extends PathUpdateOp
 
 /**
-  * Creates a new version of the given resource based on the streamId. This
-  * message represents an atomic version update sequence. In an atomic version
-  * update sequence, the Create will generate a new version, but that version
-  * is not automatically promoted to HEAD. The Create must be followed by zero
-  * or more Append messages with matching streamIds, and then a final Replace
-  * message with matching streamId to indicate promotion to HEAD.
+  * Creates a new version of the given resource based on the streamId, or append
+  * to an existing resource with that streamId. This assumes idempotence of 
+  * appends.
   */
 case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, apiKey: APIKey, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp {
   val jobId = None
