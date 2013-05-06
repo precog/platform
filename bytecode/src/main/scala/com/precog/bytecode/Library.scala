@@ -63,7 +63,7 @@ object IdentityPolicy {
   case object Synthesize extends IdentityPolicy
   case object Strip extends IdentityPolicy
 
-  // case class Composite(left: IdentityPolicy, right: IdentityPolicy)
+  case class Product(left: IdentityPolicy, right: IdentityPolicy) extends IdentityPolicy
 }
 
 trait FunctionLike {

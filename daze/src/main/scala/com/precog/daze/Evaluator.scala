@@ -524,13 +524,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               pendingTable <- prepareEval(parent, splits)
               back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
             } yield {
-              import IdentityPolicy._
-              val sort = mor.idPolicy match {
-                case Synthesize => IdentityOrder.single
-                case Strip => IdentityOrder.empty
-                case (_: Retain) => pendingTable.sort
-              }
-              PendingTable(back, graph, TransSpec1.Id, sort)
+              PendingTable(back, graph, TransSpec1.Id, findMorphOrder(mor.idPolicy, pendingTable.sort))
             }
         
           // TODO: There are many thigns wrong. Morph2 needs to get join info from compiler, which
@@ -574,14 +568,8 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             joined flatMap { case (morph1, PendingTable(joinedTable, _, _, sort)) =>
-              import IdentityPolicy._
-              val finalSort = mor.idPolicy match {
-                case Synthesize => IdentityOrder.single
-                case Strip => IdentityOrder.empty
-                case (_: Retain) => sort
-              }
               transState liftM mn(morph1(joinedTable, ctx)) map { table =>
-                PendingTable(table, graph, TransSpec1.Id, sort)
+                PendingTable(table, graph, TransSpec1.Id, findMorphOrder(mor.idPolicy, sort))
               }
             }
         
@@ -1133,6 +1121,21 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       val result = left.cogroup(leftKey, rightKey, right)(emptySpec, emptySpec, trans.WrapArray(spec))
 
       result.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
+    }
+
+    private def findMorphOrder(policy: IdentityPolicy, order: TableOrder): TableOrder = {
+      import IdentityPolicy._
+      def rec(policy: IdentityPolicy): Vector[Int] = policy match {
+        case Product(leftPolicy, rightPolicy) =>
+          rec(leftPolicy) ++ rec(rightPolicy)
+        case Synthesize => IdentityOrder.single.ids
+        case Strip => IdentityOrder.empty.ids
+        case (_: Retain) => order match {
+          case IdentityOrder(ids) => ids
+          case _ => IdentityOrder.empty.ids
+        }
+      }
+      IdentityOrder(rec(policy))
     }
 
     private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
