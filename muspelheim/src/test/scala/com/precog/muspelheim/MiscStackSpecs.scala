@@ -2691,6 +2691,14 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       evalE(input) must haveSize(1)
     }
+
+    "compute edit distance of strings" in {
+      val input = """
+        | std::string::editDistance("gruesome", "awesome")
+        | """.stripMargin
+        
+      eval(input) must_== Set(SDecimal(3))
+    }
   }
 }
 
