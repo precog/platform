@@ -69,7 +69,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     with TypeInferencer
     with CondRewriter
     with JoinOptimizerModule[M]
-    with SortPushDown
     with OpFinderModule[M] 
     with StaticInlinerModule[M] 
     with ReductionFinderModule[M]
@@ -136,7 +135,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           //predicatePullups(_, ctx),
           inferTypes(JType.JUniverseT),
           { g => megaReduce(g, findReductions(g, ctx)) },
-          pushDownSorts,
           memoize
         ))
     }
@@ -765,45 +763,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case f @ dag.Filter(Cross(hint), target, boolean) => 
             cross(graph, target, boolean, hint)(trans.Filter(_, _))
           
-          case Sort(parent, indexes) => 
-            val identityOrder = Vector(0 until indexes.length: _*)
-            prepareEval(parent, splits) flatMap { pending =>
-              if (indexes == identityOrder) {
-                transState liftM N.point(pending)
-              } else {
-                val fullOrder = indexes ++ ((0 until parent.identities.length) filterNot (indexes contains))
-                val idSpec = buildIdShuffleSpec(fullOrder)
-                val table = pending.table.transform(liftToValues(pending.trans))
-                val shuffled = table.transform(makeTableTrans(Map(paths.Key -> idSpec)))
-                val idLength = parent.identities.length
-
-                def adjustSort(ids: Vector[Int]): TableOrder = {
-                  val ids0 = ids map { id =>
-                    val id0 = indexes.indexOf(id)
-                    if (id0 < 0) id + indexes.size else id0
-                  }
-                  IdentityOrder(ids0)
-                }
-
-                val adjustedSort = pending.sort match {
-                  case IdentityOrder(ids) => adjustSort(ids)
-                  case valueSort => valueSort
-                }
-                
-                for {
-                  sorted <- monadState point shuffled
-                  sortedResult = if (parent.valueKeys.isEmpty) sorted else {
-                    sorted.transform(ObjectDelete(Leaf(Source), parent.valueKeys map { id =>
-                      CPathField("sort-" + id)
-                    }))
-                  }
-                } yield {
-                  PendingTable(sortedResult, graph, TransSpec1.Id, adjustedSort)
-                }
-              }
-            }
-          
-          case s @ SortBy(parent, sortField, valueField, id) => 
+          case s @ AddSortKey(parent, sortField, valueField, id) => 
             val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(sortField))
             val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), CPathField(valueField))
             if (parent.valueKeys contains id) {
@@ -987,8 +947,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case dag.Join(_, _, left, right) => queue2 enqueue left enqueue right
             case dag.Filter(_, left, right) => queue2 enqueue left enqueue right
             
-            case dag.Sort(parent, _) => queue2 enqueue parent
-            case dag.SortBy(parent, _, _, _) => queue2 enqueue parent
+            case dag.AddSortKey(parent, _, _, _) => queue2 enqueue parent
             
             case dag.Memoize(parent, _) => queue2 enqueue parent
           }
@@ -1092,8 +1051,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case Join(_, _, left, right) => Set(left, right)
       case dag.Filter(_, target, boolean) => Set(target, boolean)
       
-      case Sort(parent, _) => Set(parent)
-      case SortBy(parent, _, _, _) => Set(parent)
+      case AddSortKey(parent, _, _, _) => Set(parent)
       
       case Memoize(parent, _) => Set(parent)
     }

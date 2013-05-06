@@ -50,7 +50,7 @@ trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M
           val key = "key"
           val value = "value"
 
-          SortBy(
+          AddSortKey(
             Join(JoinObject, IdentitySort,
               Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString(key))(filter.loc),
