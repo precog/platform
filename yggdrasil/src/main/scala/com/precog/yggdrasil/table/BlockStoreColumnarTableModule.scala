@@ -842,12 +842,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
     }
 
     override def join(left0: Table, right0: Table, orderHint: Option[JoinOrder] = None)
-        (keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
+        (leftKeySpec: TransSpec1, rightKeySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
 
       def hashJoin(index: Slice, table: Table, flip: Boolean): Table = {
-        val initKeyTrans = composeSliceTransform(keySpec)
-        val (_, indexKey) = initKeyTrans.advance(index)
+        val (indexKeySpec, tableKeySpec) = if (flip) (rightKeySpec, leftKeySpec) else (leftKeySpec, rightKeySpec)
+
+        val (_, indexKey) = composeSliceTransform(indexKeySpec).advance(index)
         val hashed = HashedSlice(indexKey)
+
+        val initKeyTrans = composeSliceTransform(tableKeySpec)
         val initJoinTrans = composeSliceTransform2(joinSpec)
 
         def joinWithHash(stream: StreamT[M, Slice], keyTrans: SliceTransform1[_],
@@ -906,12 +909,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
           case (leftE, rightE) =>
             val idT = Predef.identity[Table](_)
-            val left = leftE.fold(idT, idT)
-            val right = rightE.fold(idT, idT)
-            super.join(left, right, orderHint)(keySpec, joinSpec)
+            val (left, right) = (leftE.fold(idT, idT), rightE.fold(idT, idT))
+            super.join(left, right, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
         }
       } else {
-        super.join(left0, right0, orderHint)(keySpec, joinSpec)
+        super.join(left0, right0, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
       }
     }
 

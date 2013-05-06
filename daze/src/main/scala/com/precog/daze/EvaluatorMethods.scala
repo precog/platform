@@ -116,17 +116,17 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       components reduceLeft { trans.InnerArrayConcat(_, _) }
     }
     
-    def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int, valueKeys: Set[Int] = Set.empty)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    def buildWrappedJoinSpec(idMatch: IdentityMatch, valueKeys: Set[Int] = Set.empty)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
       val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
       val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
       
-      val sharedDerefs = for (i <- 0 until sharedLength)
+      val sharedDerefs = for ((i, _) <- idMatch.sharedIndices)
         yield trans.WrapArray(DerefArrayStatic(leftIdentitySpec, CPathIndex(i)))
       
-      val unsharedLeft = for (i <- sharedLength until leftLength)
+      val unsharedLeft = for (i <- idMatch.leftIndices)
         yield trans.WrapArray(DerefArrayStatic(leftIdentitySpec, CPathIndex(i)))
       
-      val unsharedRight = for (i <- sharedLength until rightLength)
+      val unsharedRight = for (i <- idMatch.rightIndices)
         yield trans.WrapArray(DerefArrayStatic(rightIdentitySpec, CPathIndex(i)))
       
       val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
