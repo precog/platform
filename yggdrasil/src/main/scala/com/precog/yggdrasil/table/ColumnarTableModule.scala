@@ -375,12 +375,12 @@ trait ColumnarTableModule[M[+_]]
       )
     }
 
-    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(leftKeySpec: TransSpec1, rightKeySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
       val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
       for {
-        left0 <- left.sort(keySpec)
-        right0 <- right.sort(keySpec)
-        cogrouped = left0.cogroup(keySpec, keySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
+        left0 <- left.sort(leftKeySpec)
+        right0 <- right.sort(rightKeySpec)
+        cogrouped = left0.cogroup(leftKeySpec, rightKeySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
       } yield {
         JoinOrder.KeyOrder -> cogrouped.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
       }

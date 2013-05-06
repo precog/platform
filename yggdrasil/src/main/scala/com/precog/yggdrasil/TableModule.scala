@@ -164,7 +164,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
      * but must be a valid `JoinOrder`. This method should not assume any
      * particular order of the tables, unlike `cogroup`.
      */
-    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(keySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)]
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(leftKeySpec: TransSpec1, rightKeySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)]
 
     /**
      * Performs a back-end specific cross. Unlike Table#cross, this does not

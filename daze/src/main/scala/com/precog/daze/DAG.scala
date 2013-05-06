@@ -998,8 +998,7 @@ trait DAG extends Instructions {
         case IdentityPolicy.Retain.Merge => {
           // backwards compatibility with idAlignment
           if (mor.idAlignment == IdentityAlignment.MatchAlignment)
-            // IdentityMatch(left, right).identities
-            (left.identities ++ right.identities).distinct
+            IdentityMatch(left, right).identities
           else if (mor.idAlignment == IdentityAlignment.RightAlignment)
             right.identities
           else if (mor.idAlignment == IdentityAlignment.LeftAlignment)
@@ -1298,6 +1297,7 @@ trait DAG extends Instructions {
     
     sealed trait IdentitySpec {
       def canonicalize: IdentitySpec = this
+      def possibilities: Set[IdentitySpec] = Set(this)
     }
 
     case class LoadIds(path: String) extends IdentitySpec
@@ -1314,7 +1314,7 @@ trait DAG extends Instructions {
         pos reduceOption CoproductIds orElse pos.headOption getOrElse this2
       }
       
-      private def possibilities: Set[IdentitySpec] = {
+      override def possibilities: Set[IdentitySpec] = {
         val leftPos = left match {
           case left: CoproductIds => left.possibilities
           case _ => Set(left)
@@ -1333,7 +1333,6 @@ trait DAG extends Instructions {
     sealed trait TableSort extends JoinSort
     
     case object IdentitySort extends TableSort
-    case class PartialIdentitySort(ids: Vector[Int]) extends TableSort
     case class ValueSort(id: Int) extends TableSort
     
     // sealed trait Join
@@ -1359,11 +1358,25 @@ trait DAG extends Instructions {
       private val leftIdentities = canonicalize(left.identities)
       private val rightIdentities = canonicalize(right.identities)
 
+      private def intersects(a: IdentitySpec, b: IdentitySpec): Boolean =
+        !(a.possibilities intersect b.possibilities).isEmpty
+
+      private def union(a: IdentitySpec, b: IdentitySpec): IdentitySpec = (a, b) match {
+        case (CoproductIds(_, _), CoproductIds(_, _)) =>
+          (a.possibilities ++ b.possibilities).reduceRight(CoproductIds(_, _))
+        case (CoproductIds(_, _), _) => a
+        case (_, CoproductIds(_, _)) => b
+        case _ => a
+      }
+
+      private def findMatch(specs: Vector[IdentitySpec])(spec: (IdentitySpec, Int)): Option[(IdentitySpec, (Int, Int))] = {
+        val idx = specs indexWhere { s => intersects(spec._1, s) }
+        if (idx < 0) None else Some((union(spec._1, specs(idx)), (spec._2, idx)))
+      }
+
       private def matches = (leftIdentities, rightIdentities) match {
         case (Identities.Specs(a), Identities.Specs(b)) =>
-          a.zipWithIndex collect { case (p, i) if b contains p =>
-            (p, (i, b.indexOf(p)))
-          }
+          a.zipWithIndex flatMap findMatch(b)
         case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
       }
 
@@ -1378,6 +1391,16 @@ trait DAG extends Instructions {
       val (sharedIds, sharedIndices) = matches.unzip
       val leftIndices = extras(leftIdentities)
       val rightIndices = extras(rightIdentities)
+
+      def mapLeftIndex(i: Int): Int = {
+        val j = sharedIndices.unzip._1.indexOf(i)
+        if (j < 0) leftIndices.indexOf(i) + sharedIndices.size else j
+      }
+
+      def mapRightIndex(i: Int): Int = {
+        val j = sharedIndices.unzip._2.indexOf(i)
+        if (j < 0) rightIndices.indexOf(i) + sharedIndices.size + leftIndices.size else j
+      }
     }
   }
   

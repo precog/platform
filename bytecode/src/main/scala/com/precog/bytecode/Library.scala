@@ -56,11 +56,14 @@ object IdentityPolicy {
   object Retain {
     case object Left extends Retain
     case object Right extends Retain
+    /** This should also be used in Morph1 to indicate the IDs are retained. */
     case object Merge extends Retain
   }
   
   case object Synthesize extends IdentityPolicy
   case object Strip extends IdentityPolicy
+
+  // case class Composite(left: IdentityPolicy, right: IdentityPolicy)
 }
 
 trait FunctionLike {
