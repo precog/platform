@@ -76,11 +76,8 @@ object VFSPathUtils extends Logging {
     new File(baseDir, prefix.mkString(File.separator))
   }
 
-  def versionsDir(pathDir: File): File = new File(pathDir, versionsSubdir)
+  def versionsSubdir(pathDir: File): File = new File(pathDir, versionsSubdir)
 
-  // FIXME: This will not work with versioned dirs as we've now
-  // constructed them. We're going to need to recurse to find things
-  // that actually have current data
   def findChildren(baseDir: File, path: Path, apiKey: APIKey, permissionsFinder: PermissionsFinder[Future]): Future[Set[Path]] = {
     for {
       allowedPaths <- permissionsFinder.findBrowsableChildren(apiKey, path)
@@ -104,8 +101,8 @@ object VFSPathUtils extends Logging {
         }).map {
           _.collect {
             case (path, true) => path
-          }
-        }.unsafePerformIO.toSet
+          }.toSet
+        }.unsafePerformIO
       } getOrElse {
         logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
         Set.empty
@@ -116,6 +113,7 @@ object VFSPathUtils extends Logging {
   def hasCurrentData(dir: File): IO[Boolean] = {
     IO(dir.isDirectory) flatMap { isDir =>
       if (isDir) {
+        // hasCurrent relies on atomic reads of disk blocks and the fact that a "current version" fits entirely within a block
         VersionLog.hasCurrent(dir) flatMap { hasCurrent =>
           if (hasCurrent) {
             IO(true)

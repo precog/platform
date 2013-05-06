@@ -106,6 +106,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       Promise.successful(PrecogUnit)
     } else {
       Future {
+        // ERROR: not safe
         versionLog.completeVersion(version) unsafePerformIO
       }
     }
@@ -131,6 +132,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, clock.instant) map { okToWrite =>
       if (okToWrite) {
         (for {
+        // ERROR: not safe
           _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
           created <- data match {
             case BlobData(bytes, mimeType) =>
@@ -140,6 +142,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
               resources.createNIHDB(versionDir(version), authorities)
           }
           cached <- created traverse {
+            // ERROR: not safe
             _ tap { resource => IO { versions += (version -> resource) } }
           }
         } yield {
@@ -160,6 +163,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       case uhoh => Promise successful Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))
     } orElse {
       versionLog.find(version) map { _ =>
+        // ERROR: not safe, and we don't cache the version here...
         Future { resources.openNIHDB(versionDir(version)).unsafePerformIO }
       }
     } getOrElse {
@@ -272,7 +276,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           } map {
             _ valueOr { errors =>
               ReadFailure(path, errors)
-            } 
+            }
           }
         }
       } getOrElse {
