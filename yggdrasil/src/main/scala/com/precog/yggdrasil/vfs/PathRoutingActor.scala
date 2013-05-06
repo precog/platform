@@ -50,7 +50,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
 
       VersionLog.open(pathDir) map {
         _ map { versionLog =>
-          context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsDir(pathDir), versionLog, resources, permissionsFinder, shutdownTimeout, jobManager, clock))) unsafeTap { newActor =>
+          context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, resources, permissionsFinder, shutdownTimeout, jobManager, clock))) unsafeTap { newActor =>
             pathActors += (path -> newActor)
           }
         } valueOr { error =>
