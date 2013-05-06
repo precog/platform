@@ -963,13 +963,14 @@ trait DAG extends Instructions {
     }
 
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = mor.idPolicy match {
-        case _: IdentityPolicy.Retain => parent.identities
-        
-        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
-        
-        case IdentityPolicy.Strip => Identities.Specs.empty
+      private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
+        case IdentityPolicy.Product(left, right) => specs(left) ++ specs(right)
+        case (_: IdentityPolicy.Retain) => parent.identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
+        case IdentityPolicy.Strip => Vector.empty
       }
+
+      lazy val identities = Identities.Specs(specs(mor.idPolicy))
 
       def uniqueIdentities = false
       
@@ -981,29 +982,29 @@ trait DAG extends Instructions {
     }
 
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = mor.idPolicy match {
-        case IdentityPolicy.Retain.Left =>
-          left.identities
-        
-        case IdentityPolicy.Retain.Right =>
-          right.identities
-        
+
+      private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
+        case IdentityPolicy.Product(left, right) => specs(left) ++ specs(right)
+        case IdentityPolicy.Retain.Left => left.identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Retain.Right => right.identities.fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Retain.Merge => {
           // backwards compatibility with idAlignment
-          if (mor.idAlignment == IdentityAlignment.MatchAlignment)
+          val ids0 = if (mor.idAlignment == IdentityAlignment.MatchAlignment)
             IdentityMatch(left, right).identities
           else if (mor.idAlignment == IdentityAlignment.RightAlignment)
             right.identities
           else if (mor.idAlignment == IdentityAlignment.LeftAlignment)
             left.identities
           else
-            left.identities ++ right.identities
+            (left.identities ++ right.identities)
+
+          ids0.fold(Predef.identity, Vector.empty)
         }
-        
-        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
-        
-        case IdentityPolicy.Strip => Identities.Specs.empty
+        case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
+        case IdentityPolicy.Strip => Vector.empty
       }
+
+      lazy val identities = Identities.Specs(specs(mor.idPolicy))
 
       def uniqueIdentities = false
       
