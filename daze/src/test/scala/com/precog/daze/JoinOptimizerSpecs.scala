@@ -84,7 +84,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -93,7 +93,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
         
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -150,7 +150,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -159,7 +159,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
         
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -218,7 +218,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -227,7 +227,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
 
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -277,7 +277,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -286,7 +286,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
         
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -419,7 +419,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
         
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -432,7 +432,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
 
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -506,7 +506,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val value = Const(CString("value"))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -515,7 +515,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
         
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -568,8 +568,8 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val key = Const(CString("key"))(line)
       val value = Const(CString("value"))(line)
 
-      def makeSortBy(key: DepGraph, value: DepGraph) =
-        SortBy(
+      def makeAddSortKey(key: DepGraph, value: DepGraph) =
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
@@ -580,7 +580,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
         
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -614,7 +614,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       
       val expectedOpt =
         Join(JoinObject, ValueSort(0),
-          makeSortBy(hwid, lhs),
+          makeAddSortKey(hwid, lhs),
           Join(WrapObject, Cross(None),
             name,
             Join(DerefObject, Cross(None), liftedRHS, name)(line))(line))(line)
@@ -661,7 +661,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           Join(WrapObject, Cross(None),
             name,
             Join(DerefObject, Cross(None),
-              SortBy(
+              AddSortKey(
                 Join(JoinObject, IdentitySort,
                   Join(WrapObject, Cross(Some(CrossRight)),
                     key,
@@ -669,7 +669,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
                   Join(WrapObject, Cross(Some(CrossRight)), value, users)(line))(line),
                 "key", "value", 0),
               name)(line))(line),
-          SortBy(
+          AddSortKey(
             Join(JoinObject, IdentitySort,
               Join(WrapObject, Cross(Some(CrossRight)),
                 key,
@@ -718,7 +718,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             name)(line))(line))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -727,7 +727,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
 
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -793,7 +793,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           medalsPPtotal)(line))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -802,7 +802,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
 
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               key,
@@ -884,7 +884,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             Const(CString("name"))(line))(line))(line))(line)
 
       val liftedLHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
@@ -897,7 +897,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
           "key", "value", 0)
       
       val liftedRHS =
-        SortBy(
+        AddSortKey(
           Join(JoinObject, IdentitySort,
             Join(WrapObject, Cross(Some(CrossRight)),
               Const(CString("key"))(line),
@@ -962,8 +962,8 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
               clicksP,
               Const(CString("pageId"))(line))(line))(line))(line)
 
-        def makeSortBy(key: DepGraph, value: DepGraph) =
-          SortBy(
+        def makeAddSortKey(key: DepGraph, value: DepGraph) =
+          AddSortKey(
             Join(JoinObject, IdentitySort,
               Join(WrapObject, Cross(Some(CrossRight)),
                 Const(CString("key"))(line),
@@ -987,10 +987,10 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         
         lazy val expected =
           Join(JoinObject, ValueSort(0),
-            makeSortBy(clicksid, clicksV),
+            makeAddSortKey(clicksid, clicksV),
             Join(WrapObject, Cross(None),
               Const(CString("b"))(line),
-              makeSortBy(clicksPid, clicksP))(line))(line)
+              makeAddSortKey(clicksPid, clicksP))(line))(line)
         
       optimizeJoins(input, ctx, new IdGen) mustEqual expected
     }
