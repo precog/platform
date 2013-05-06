@@ -50,22 +50,21 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
       this.copy(parser = newParser, ingested = this.ingested + newIngested, errors = this.errors ++ newErrors, total = this.total + newIngested + newErrors.size)
   }
 
-  def ingestJSONChunk(state: JSONParseState, stream: StreamT[Future, ByteBuffer])(implicit M: Monad[Future], executor: ExecutionContext): Future[JSONParseState] =
+  def ingestJSONChunk(state: JSONParseState, stream: StreamT[Future, ByteBuffer], stopOnFirstError: Boolean)(implicit M: Monad[Future], executor: ExecutionContext): Future[JSONParseState] =
     stream.uncons.flatMap {
       case Some((head, rest)) =>
-        import state._
         // Dup and rewind to ensure we have something to parse
         val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
         logger.trace("Async parse on " + toParse)
-        val (parsed, updatedParser) = parser(Some(toParse))
-        ingestBlock(state, parsed, parser) { ingestJSONChunk(_: JSONParseState, rest) }
+        val (parsed, updatedParser) = state.parser(Some(toParse))
+        ingestBlock(state, parsed, updatedParser, stopOnFirstError) { ingestJSONChunk(_: JSONParseState, rest, stopOnFirstError) }
 
       case None => 
         val (finalResult, finalParser) = state.parser(None)
-        ingestBlock(state, finalResult, finalParser) { Promise successful _ }
+        ingestBlock(state, finalResult, finalParser, stopOnFirstError) { Promise successful _ }
     }
 
-  def ingestBlock(state: JSONParseState, parsed: AsyncParse, parser: AsyncParser)(continue: JSONParseState => Future[JSONParseState])(implicit M: Monad[Future]): Future[JSONParseState] = {
+  def ingestBlock(state: JSONParseState, parsed: AsyncParse, parser: AsyncParser, stopOnFirstError: Boolean)(continue: JSONParseState => Future[JSONParseState])(implicit M: Monad[Future]): Future[JSONParseState] = {
     val records = recordStyle match {
       case JsonValueStyle => 
         parsed.values flatMap {
@@ -78,11 +77,16 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
     }
 
     if (records.size > 0) {
-      val (toIngest, oversizeIdxs, total) = records.foldLeft((ArrayBuffer.empty[JValue], ArrayBuffer.empty[(Int, Int)], 0)) {
-        case ((toIngest, errorIdx, idx), jv) => 
+      val (toIngest, oversizeIdxs, total) = if (stopOnFirstError) {
+        val (prefix, suffix) = records.span(jv => jv.flattenWithPath.size <= maxFields)
+        if (suffix.nonEmpty) (prefix, Seq((prefix.size, suffix.head.flattenWithPath.size)), prefix.size)
+        else (prefix, Nil, prefix.size)
+      } else {
+        records.foldLeft((ArrayBuffer.empty[JValue], ArrayBuffer.empty[(Int, Int)], 0)) { case ((toIngest, errorIdx, idx), jv) => 
           val eventSize = jv.flattenWithPath.size
           if (eventSize <= maxFields) (toIngest += jv, errorIdx, idx + 1)
           else (toIngest, errorIdx += (state.total + idx -> eventSize), idx + 1)
+        }
       }
 
       if (toIngest.size == records.size) {
@@ -95,7 +99,11 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
         }
 
         ingest.store(apiKey, path, authorities, toIngest, state.jobId) flatMap { _ =>
-          continue(state.update(parser, toIngest.size, sizeErrs ++ parsed.errors.map(pe => pe.line -> pe.msg)))
+          if (stopOnFirstError) {
+            M point state.update(parser, toIngest.size, sizeErrs ++ parsed.errors.map(pe => pe.line -> pe.msg))
+          } else {
+            continue(state.update(parser, toIngest.size, sizeErrs ++ parsed.errors.map(pe => pe.line -> pe.msg)))
+          }
         }
       }
     } else {
@@ -105,10 +113,12 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
   }
 
   def processBatch(data: ByteChunk, parseDirectives: Set[ParseDirective], jobId: JobId, sync: Boolean): Future[BatchIngestResult] = {
-    val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(false), Some(jobId), 0, Vector.empty, 0), data match {
+    val dataStream = data match {
       case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
       case Right(stream) => stream
-    })
+    }
+
+    val parseFuture = ingestJSONChunk(JSONParseState(AsyncParser(false), Some(jobId), 0, Vector.empty, 0), dataStream, false)
 
     if (sync) {
       parseFuture.map {
@@ -121,10 +131,12 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
   }
 
   def processStream(data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[StreamingIngestResult] = {
-    ingestJSONChunk(JSONParseState(AsyncParser(true), None, 0, Vector.empty, 0), data match {
+    val dataStream = data match {
       case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
       case Right(stream) => stream
-    }).map {
+    }
+
+    ingestJSONChunk(JSONParseState(AsyncParser(true), None, 0, Vector.empty, 0), dataStream, true).map {
       case JSONParseState(_, _, ingested, errors, total) =>
         StreamingSyncResult(ingested, errors.headOption.map(_._2))
     }.recover {
