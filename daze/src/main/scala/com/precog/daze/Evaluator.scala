@@ -539,11 +539,11 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               case MorphismAlignment.Cross(morph1) =>
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, None)(spec)).tupled
 
-              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) > 0 =>
+              case MorphismAlignment.Match(morph1) if areJoinable(left, right) =>
                 ((transState liftM mn(morph1)) |@| join(graph, left, right, IdentitySort)(spec)).tupled
 
               // TODO: Remove and see if things break. Also, 
-              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) == 0 =>
+              case MorphismAlignment.Match(morph1) =>
                 val hint = if (left.isSingleton || !right.isSingleton) CrossOrder.CrossRight
                            else CrossOrder.CrossLeft
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, Some(hint))(spec)).tupled
@@ -1085,14 +1085,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case (a, CoproductIds(left, right)) => disjunctiveEquals(a, left) || disjunctiveEquals(a, right)
       case (a, b) => a == b
     }
-    
-    private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = (left.identities, right.identities) match {
-      case (Identities.Specs(a), Identities.Specs(b)) =>
-        a zip b takeWhile disjunctiveEquals length
-      case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-        0
-    }
 
+    private def areJoinable(left: DepGraph, right: DepGraph): Boolean =
+      IdentityMatch(left, right).sharedIndices.size > 0
+    
     private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
       case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
       case IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)

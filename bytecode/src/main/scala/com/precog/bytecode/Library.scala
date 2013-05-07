@@ -71,6 +71,8 @@ trait FunctionLike {
 trait Morphism1Like extends FunctionLike {
   val tpe: UnaryOperationType
   val isInfinite: Boolean = false
+
+  /** This specifies how identities are returned by the Morphism1. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 
@@ -81,6 +83,8 @@ object Morphism1Like {
 
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
+
+  /** This specifies how identities are returned by the Morphism2. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 
