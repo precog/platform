@@ -224,10 +224,10 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(fields)), _), _) =>
           val JArray(errors) = fields("errors")
-            errors.exists {
-              case JString(msg) => msg.startsWith("Cannot ingest values with more than 1024 primitive fields.")
-              case _ => false
-            } must_== true
+          forall(errors) {
+            case JString(msg) => msg must contain("cannot ingest values with more than 1024 primitive fields.")
+            case _ => ko
+          } 
       }
     }
 
