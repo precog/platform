@@ -29,6 +29,7 @@ import blueeyes.bkka.FutureMonad
 
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.daze.QueryOptions
 import com.precog.muspelheim.Platform
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.table.Slice
@@ -62,9 +63,6 @@ case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends Schedu
 case class TaskFailed(id: UUID, error: String) extends SchedulingMessage
 
 
-case class TaskInProgress(task: ScheduledTask, startedAt: DateTime)
-
-
 class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
   private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
@@ -73,6 +71,8 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
   private[this] val scheduleQueue = PriorityQueue.empty[(DateTime, ScheduledTask)]
 
   private[this] var scheduledAwake: Option[Cancellable] = None
+
+  private case class TaskInProgress(task: ScheduledTask, startedAt: DateTime)
 
   private[this] var running = Map.empty[UUID, TaskInProgress]
 
@@ -161,7 +161,7 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
       } yield {
         import task._
 
-        executor.execute(apiKey, script, prefix, opts).flatMap {
+        executor.execute(apiKey, script, prefix, QueryOptions(timeout = task.timeout)).flatMap {
           _ traverse { stream =>
             QueryResultConvert.toPathOps(stream, sink, apiKey, authorities, Some(job.id)).foldLeft(0L) {
               case (total, (len, op)) =>
@@ -234,7 +234,7 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
         case Some(TaskInProgress(task, startAt)) =>
           val now = new DateTime
           logger.warn("Scheduled task %s failed after %d millis: %s".format(id, (new JodaDuration(startAt, now)).getMillis, error))
-          storage.reportRun(ScheduledRunReport(id, startAt, now, 0, Seq(error)))
+          storage.reportRun(ScheduledRunReport(id, startAt, now, 0, List(error)))
           rescheduleTask(task)
           running -= id
 
