@@ -712,9 +712,10 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
   protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => M[(A, Slice)], source: Option[TransSpec[SourceType]] = None) {
     def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
 
-    def advance(s1: Slice, s2: Slice): (SliceTransform2[A], Slice)  = {
-      val (a0, s0) = f(initial, s1, s2)
-      (this.copy(initial = a0), s0)
+    def advance(s1: Slice, s2: Slice): M[(SliceTransform2[A], Slice)] = {
+      f(initial, s1, s2) map { case (a0, s0) =>
+        (this.copy(initial = a0), s0)
+      }
     }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {

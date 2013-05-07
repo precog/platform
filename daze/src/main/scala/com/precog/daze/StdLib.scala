@@ -77,7 +77,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     object MorphismAlignment {
       case class Match(morph: M[Morph1Apply]) extends MorphismAlignment 
       case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
-      case class Custom(alignment: IdentityAlignment, f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
+      case class Custom(alignment: IdentityPolicy, f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
     }
 
     abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like with Morph1Apply {
@@ -90,11 +90,6 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       val rowLevel: Boolean = false
       val multivariate: Boolean = false
       def alignment: MorphismAlignment
-      override final def idAlignment: IdentityAlignment = alignment match {
-        case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
-        case MorphismAlignment.Cross(_) => IdentityAlignment.CrossAlignment
-        case MorphismAlignment.Custom(alignment, _) => alignment
-      }
     }
 
     abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {

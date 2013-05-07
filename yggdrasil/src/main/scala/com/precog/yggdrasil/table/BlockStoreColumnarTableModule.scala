@@ -865,68 +865,72 @@ trait BlockStoreColumnarTableModule[M[+_]]
     override def join(left0: Table, right0: Table, orderHint: Option[JoinOrder] = None)
         (leftKeySpec: TransSpec1, rightKeySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
 
-      def hashJoin(index: Slice, table: Table, flip: Boolean): Table = {
+      def hashJoin(index: Slice, table: Table, flip: Boolean): M[Table] = {
         val (indexKeySpec, tableKeySpec) = if (flip) (rightKeySpec, leftKeySpec) else (leftKeySpec, rightKeySpec)
-
-        val (_, indexKey) = composeSliceTransform(indexKeySpec).advance(index)
-        val hashed = HashedSlice(indexKey)
 
         val initKeyTrans = composeSliceTransform(tableKeySpec)
         val initJoinTrans = composeSliceTransform2(joinSpec)
 
         def joinWithHash(stream: StreamT[M, Slice], keyTrans: SliceTransform1[_],
-            joinTrans: SliceTransform2[_]): StreamT[M, Slice] = {
-          StreamT(stream.uncons map {
+            joinTrans: SliceTransform2[_], hashed: HashedSlice): StreamT[M, Slice] = {
+
+          StreamT(stream.uncons flatMap {
             case Some((head, tail)) =>
-              val headBuf = new ArrayIntList(head.size)
-              val indexBuf = new ArrayIntList(index.size)
+              keyTrans.advance(head) flatMap { case (keyTrans0, headKey) =>
+                val headBuf = new ArrayIntList(head.size)
+                val indexBuf = new ArrayIntList(index.size)
 
-              val (keyTrans0, headKey) = keyTrans.advance(head)
-              val rowMap = hashed.mapRowsFrom(headKey)
+                val rowMap = hashed.mapRowsFrom(headKey)
 
-              @tailrec def loop(row: Int): Unit = if (row < head.size) {
-                rowMap(row) { indexRow =>
-                  headBuf.add(row)
-                  indexBuf.add(indexRow)
+                @tailrec def loop(row: Int): Unit = if (row < head.size) {
+                  rowMap(row) { indexRow =>
+                    headBuf.add(row)
+                    indexBuf.add(indexRow)
+                  }
+                  loop(row + 1)
                 }
-                loop(row + 1)
-              }
 
-              loop(0)
+                loop(0)
 
-              val (index0, head0) = (index.remap(indexBuf), head.remap(headBuf))
-              val (joinTrans0, slice) = if (flip) {
-                joinTrans.advance(head0, index0)
-              } else {
-                joinTrans.advance(index0, head0)
+                val (index0, head0) = (index.remap(indexBuf), head.remap(headBuf))
+                val resultM = if (flip) {
+                  joinTrans.advance(head0, index0)
+                } else {
+                  joinTrans.advance(index0, head0)
+                }
+                resultM map { case (joinTrans0, slice) =>
+                  StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0, hashed))
+                }
               }
-              StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0))
 
             case None =>
-              StreamT.Done
+              M.point(StreamT.Done)
           })
         }
 
-        Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans), UnknownSize)
+        composeSliceTransform(indexKeySpec).advance(index) map { case (_, indexKey) =>
+          val hashed = HashedSlice(indexKey)
+          Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize)
+        }
       }
 
       if (yggConfig.hashJoins) {
         (left0.toInternalTable().toEither |@| right0.toInternalTable().toEither).tupled flatMap {
           case (Right(left), Right(right)) =>
-            M point (orderHint match {
+            orderHint match {
               case Some(JoinOrder.LeftOrder) =>
-                (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
+                hashJoin(right.slice, left, flip=true) map (JoinOrder.LeftOrder -> _)
               case Some(JoinOrder.RightOrder) =>
-                (JoinOrder.RightOrder, hashJoin(left.slice, right, flip=false))
+                hashJoin(left.slice, right, flip=false) map (JoinOrder.RightOrder -> _)
               case _ =>
-                (JoinOrder.LeftOrder, hashJoin(right.slice, left, flip=true))
-            })
+                hashJoin(right.slice, left, flip=true) map (JoinOrder.LeftOrder -> _)
+            }
 
           case (Right(left), Left(right)) =>
-            M point (JoinOrder.RightOrder -> hashJoin(left.slice, right, flip=false))
+            hashJoin(left.slice, right, flip=false) map (JoinOrder.RightOrder -> _)
 
           case (Left(left), Right(right)) =>
-            M point (JoinOrder.LeftOrder -> hashJoin(right.slice, left, flip=true))
+            hashJoin(right.slice, left, flip=true) map (JoinOrder.LeftOrder -> _)
 
           case (leftE, rightE) =>
             val idT = Predef.identity[Table](_)

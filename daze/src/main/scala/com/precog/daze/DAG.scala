@@ -987,19 +987,10 @@ trait DAG extends Instructions {
         case IdentityPolicy.Product(left, right) => specs(left) ++ specs(right)
         case IdentityPolicy.Retain.Left => left.identities.fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Retain.Right => right.identities.fold(Predef.identity, Vector.empty)
-        case IdentityPolicy.Retain.Merge => {
-          // backwards compatibility with idAlignment
-          val ids0 = if (mor.idAlignment == IdentityAlignment.MatchAlignment)
-            IdentityMatch(left, right).identities
-          else if (mor.idAlignment == IdentityAlignment.RightAlignment)
-            right.identities
-          else if (mor.idAlignment == IdentityAlignment.LeftAlignment)
-            left.identities
-          else
-            (left.identities ++ right.identities)
-
-          ids0.fold(Predef.identity, Vector.empty)
-        }
+        case IdentityPolicy.Retain.Merge =>
+          IdentityMatch(left, right).identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Retain.Cross =>
+          (left.identities ++ right.identities).fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
         case IdentityPolicy.Strip => Vector.empty
       }

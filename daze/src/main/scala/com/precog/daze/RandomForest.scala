@@ -529,7 +529,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
       val dependentSpec = trans.DerefObjectStatic(TransSpec1.Id, CPathField(dependent))
 
       override val idPolicy = IdentityPolicy.Retain.Merge
-      lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.RightAlignment, alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityPolicy.Retain.Right, alignCustom _)
 
       def extractDependent(table: Table): M[Array[A]]
 
