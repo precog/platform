@@ -548,21 +548,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                            else CrossOrder.CrossLeft
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, Some(hint))(spec)).tupled
 
-              case MorphismAlignment.Custom(alignment, f) =>
+              case MorphismAlignment.Custom(idPolicy, f) =>
                 val pair = (prepareEval(left, splits) |@| prepareEval(right, splits)).tupled
                 pair flatMap { case (ptLeft, ptRight) =>
                   val leftTable = ptLeft.table.transform(liftToValues(ptLeft.trans))
                   val rightTable = ptRight.table.transform(liftToValues(ptRight.trans))
-                  val sort = alignment match {
-                    case IdentityAlignment.CrossAlignment =>
-                      IdentityOrder(Vector.range(0, left.identities.length))
-                    case IdentityAlignment.MatchAlignment =>
-                      IdentityOrder(graph) // Incorrect, but we don't really know what the Morph2 did.
-                    case IdentityAlignment.RightAlignment => ptRight.sort // Correct.
-                    case IdentityAlignment.LeftAlignment => ptLeft.sort // Correct.
+                  def sort(policy: IdentityPolicy): TableOrder = policy match {
+                    case IdentityPolicy.Retain.Left => ptLeft.sort
+                    case IdentityPolicy.Retain.Right => ptRight.sort
+                    case IdentityPolicy.Retain.Merge => IdentityOrder.empty
+                    case IdentityPolicy.Retain.Cross => ptLeft.sort
+                    case IdentityPolicy.Synthesize => IdentityOrder.single
+                    case IdentityPolicy.Strip => IdentityOrder.empty
+                    case IdentityPolicy.Product(leftPolicy, _) => sort(leftPolicy)
                   }
+
                   transState liftM mn(f(leftTable, rightTable) map { case (table, morph1) =>
-                    (morph1, PendingTable(table, graph, TransSpec1.Id, sort))
+                    (morph1, PendingTable(table, graph, TransSpec1.Id, sort(idPolicy)))
                   })
                 }
             }
@@ -1149,8 +1151,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       extraCount: Int = 0
     )
 
-    private sealed trait TableOrder
-    private case class ValueOrder(id: Int) extends TableOrder
+    private sealed trait TableOrder {
+      def ids: Vector[Int]
+    }
+    private case class ValueOrder(id: Int) extends TableOrder {
+      def ids: Vector[Int] = Vector.empty
+    }
     private case class IdentityOrder(ids: Vector[Int]) extends TableOrder
     private object IdentityOrder {
       def apply(node: DepGraph): IdentityOrder = IdentityOrder(Vector.range(0, node.identities.length))

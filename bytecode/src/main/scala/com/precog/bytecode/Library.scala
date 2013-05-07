@@ -20,49 +20,41 @@
 package com.precog
 package bytecode
 
-sealed trait IdentityAlignment
-
-object IdentityAlignment {
-
-  /**
-   * Both IDs are kept. For each ID on the left, we fully traverse the right
-   * side. This matches what Table does. Thus, the result is only ordered by
-   * the left IDs, and not both.
-   *
-   * TODO: Once table guarantees an order-preserving cross, then the result
-   *       of a Custom Morph2 should be forced to be order preserving too.
-   */
-  object CrossAlignment extends IdentityAlignment
-
-  /**
-   * All IDs are kept. Prefix first, then remaining left IDs, then remaining
-   * right IDs. The result is in order of the prefix/key.
-   *
-   * TODO: Much like join, custom Morph2's should be allowed to specify order
-   *       after the join.
-   */
-  object MatchAlignment extends IdentityAlignment
-
-  /** Left IDs are discarded, right IDs are kept, in order. */
-  object RightAlignment extends IdentityAlignment
-
-  /** Right IDs are discarded, left IDs are kept, in order. */
-  object LeftAlignment extends IdentityAlignment
-}
-    
 sealed trait IdentityPolicy
 object IdentityPolicy {
   sealed trait Retain extends IdentityPolicy
   object Retain {
+    /** Right IDs are discarded, left IDs are kept, in order. */
     case object Left extends Retain
+
+    /** Left IDs are discarded, right IDs are kept, in order. */
     case object Right extends Retain
-    /** This should also be used in Morph1 to indicate the IDs are retained. */
+
+    /**
+     * All IDs are kept. Prefix first, then remaining left IDs, then remaining
+     * right IDs. The result is in order of the prefix/key.
+     *
+     * This should also be used in Morph1 to indicate the IDs are retained.
+     *
+     * TODO: Much like join, custom Morph2's should be allowed to specify order
+     *       after the join.
+     */
     case object Merge extends Retain
+
+    /**
+     * Both IDs are kept, with the left sides first. The left IDs remain in
+     * order.
+     */
+    case object Cross extends Retain
   }
   
+  /** A new single column of IDs are synthesized and all other IDs are discarded. */
   case object Synthesize extends IdentityPolicy
+
+  /** All IDs are discarded. */
   case object Strip extends IdentityPolicy
 
+  /** Both identity policies are adhered to, and then concatenated. */
   case class Product(left: IdentityPolicy, right: IdentityPolicy) extends IdentityPolicy
 }
 
@@ -90,9 +82,6 @@ object Morphism1Like {
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
-  
-  @deprecated("use idPolicy", "now")
-  def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
 }
 
 object Morphism2Like {
