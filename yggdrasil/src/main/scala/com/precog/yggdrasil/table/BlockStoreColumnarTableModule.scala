@@ -853,44 +853,40 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
         def joinWithHash(stream: StreamT[M, Slice], keyTrans: SliceTransform1[_],
             joinTrans: SliceTransform2[_], hashed: HashedSlice): StreamT[M, Slice] = {
 
-          StreamT(stream.uncons flatMap {
+          StreamT(stream.uncons map {
             case Some((head, tail)) =>
-              keyTrans.advance(head) flatMap { case (keyTrans0, headKey) =>
-                val headBuf = new ArrayIntList(head.size)
-                val indexBuf = new ArrayIntList(index.size)
+              val (keyTrans0, headKey) = keyTrans.advance(head)
+              val headBuf = new ArrayIntList(head.size)
+              val indexBuf = new ArrayIntList(index.size)
 
-                val rowMap = hashed.mapRowsFrom(headKey)
+              val rowMap = hashed.mapRowsFrom(headKey)
 
-                @tailrec def loop(row: Int): Unit = if (row < head.size) {
-                  rowMap(row) { indexRow =>
-                    headBuf.add(row)
-                    indexBuf.add(indexRow)
-                  }
-                  loop(row + 1)
+              @tailrec def loop(row: Int): Unit = if (row < head.size) {
+                rowMap(row) { indexRow =>
+                  headBuf.add(row)
+                  indexBuf.add(indexRow)
                 }
-
-                loop(0)
-
-                val (index0, head0) = (index.remap(indexBuf), head.remap(headBuf))
-                val resultM = if (flip) {
-                  joinTrans.advance(head0, index0)
-                } else {
-                  joinTrans.advance(index0, head0)
-                }
-                resultM map { case (joinTrans0, slice) =>
-                  StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0, hashed))
-                }
+                loop(row + 1)
               }
 
+              loop(0)
+
+              val (index0, head0) = (index.remap(indexBuf), head.remap(headBuf))
+              val (joinTrans0, slice) = if (flip) {
+                joinTrans.advance(head0, index0)
+              } else {
+                joinTrans.advance(index0, head0)
+              }
+              StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0, hashed))
+
             case None =>
-              M.point(StreamT.Done)
+              StreamT.Done
           })
         }
 
-        composeSliceTransform(indexKeySpec).advance(index) map { case (_, indexKey) =>
-          val hashed = HashedSlice(indexKey)
-          Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize)
-        }
+        val (_, indexKey) = composeSliceTransform(indexKeySpec).advance(index)
+        val hashed = HashedSlice(indexKey)
+        Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize).point[M]
       }
 
       if (yggConfig.hashJoins) {
