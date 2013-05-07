@@ -195,11 +195,11 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
 
       override val idPolicy = IdentityPolicy.Retain.Merge
 
-      def scanner = new CScanner {
+      def scanner = new CScanner[M] {
         type A = Unit
         def init = ()
 
-        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
           val startCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(start) => col }
           val endCol = cols collectFirst { case (ref, col: DateColumn) if ref.selector == CPath(end) => col }
           val stepCol = cols collectFirst { case (ref, col: PeriodColumn) if ref.selector == CPath(step) => col }
@@ -262,7 +262,7 @@ trait TimeLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMetho
             } toMap
           }
 
-          ((), result)
+          M point ((), result)
         }
       }
 
