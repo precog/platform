@@ -48,9 +48,11 @@ import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
+import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+import scalaz.syntax.traverse._
 
 trait Blah {
 }
@@ -140,7 +142,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
-      extends Evaluator[N](N0) with QueryExecutor[N, StreamT[N, Slice]] {
+      extends Evaluator[N](N0) with QueryExecutor[N, (Set[Fault], StreamT[N, Slice])] {
 
     type YggConfig <: ShardQueryExecutorConfig
     protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
@@ -160,9 +162,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, StreamT[N, Slice]]] = {
-      import trans._
-      val valuesOnlySpec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, Slice])]] = {
+      import trans.constants._
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
       queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
@@ -172,7 +173,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
       // This should be executed within the outer N returned above, so keep
       // this as a def, and use within an N.point.
 
-      def solution: Validation[Throwable, Validation[EvaluationError, N[Table]]] = Validation.fromTryCatch {
+      def solution: Validation[Throwable, Validation[EvaluationError, (Set[Fault], N[Table])]] = Validation.fromTryCatch {
         val (faults, bytecode) = asBytecode(query)
 
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
@@ -198,24 +199,23 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
         }
 
         resultVN.map { nt =>
-          faults map {
-            case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
-            case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
-          } reduceOption { (a, b) =>
-            (a |@| b)(_ || _)
-          } getOrElse (N point false) flatMap {
-            case true => N.point(Table.empty)
-            case false => nt
+          faults -> {
+            faults.toStream traverse {
+              case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
+              case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
+            } flatMap { errors =>
+              if (errors.exists(_ == true)) N.point(Table.empty) else nt
+            }
           }
         }
-      }
+      } 
 
       N.point(solution).flatMap {
         case Failure(e) => N.point(Failure(SystemError(e)))
         case Success(Failure(err)) => N.point(Failure(err))
-        case Success(Success(nt)) => queryReport.done.flatMap { _ =>
+        case Success(Success((faults, nt))) => queryReport.done.flatMap { _ =>
           nt.map { table =>
-            Success(implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(valuesOnlySpec).slices))
+            Success(faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(SourceValue.Single).slices))
           }
         }
       }

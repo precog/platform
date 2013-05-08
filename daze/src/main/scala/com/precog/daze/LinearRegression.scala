@@ -24,7 +24,7 @@ import yggdrasil._
 import yggdrasil.table._
 
 import common._
-
+import com.precog.util.BitSetUtil
 
 import bytecode._
 import TableModule._
@@ -114,14 +114,9 @@ trait LinearRegressionLibModule[M[+_]]
         def append(r1: CoeffAcc, r2: => CoeffAcc) = {
           if (r1.beta isEmpty) r2
           else if (r2.beta isEmpty) r1
-          else {
-            if (r1.removed == r2.removed)
-              CoeffAcc(arraySum(r1.beta, r2.beta), r1.count + r2.count, r1.removed ++ r2.removed)
-            else
-              // FIXME ultimately we do not want to throw an IllegalArgumentException here
-              // once the framework is in place, we will return the empty set and issue a warning to the user
-              throw new IllegalArgumentException("Could not return result due to non-uniformly sorted data.")
-          }
+          //columns are only `removed` if they are not present in *all* slices seen so far
+          //this semantic ensures that stdErr computing knows which columns to consider
+          else CoeffAcc(arraySum(r1.beta, r2.beta), r1.count + r2.count, r1.removed & r2.removed)
         }
       }
 
@@ -162,6 +157,60 @@ trait LinearRegressionLibModule[M[+_]]
               case Some(c2) => Some(c1 ++ c2)
             }
           }
+        }
+      }
+
+      // inserts the Double value `0` at all `indices` in `values`
+      def insertZeroAt(values: Array[Double], indices0: Array[Int]): Array[Double] = {
+        val vlength = values.length
+        val indices = indices0 filter { i =>
+          (i >= 0) && (i < vlength + indices0.length)
+        }
+
+        if (indices.isEmpty) {
+          values
+        } else {
+          val zero = 0D
+          val length = vlength + indices.length
+          val bitset = BitSetUtil.create(indices)
+          val acc = new Array[Double](length)
+
+          var i = 0
+          var j = 0
+          while (i < length) {
+            val idx = {
+              if (bitset(i)) { j += 1; zero }
+              else values(i - j)
+            }
+            acc(i) = idx
+            i += 1
+          }
+          acc
+        }
+      }
+
+      // removes `indices` from `values`
+      def removeAt(values: Array[Double], indices0: Array[Int]): Array[Double] = {
+        val vlength = values.length
+        val indices = indices0 filter { i =>
+          (i >= 0) && (i < vlength)
+        }
+
+        if (indices.isEmpty) {
+          values
+        } else {
+          val length = vlength - indices.length
+          val bitset = BitSetUtil.create(indices)
+          val acc = new Array[Double](length)
+
+          val kept = (0 until values.length) filterNot { bitset(_) }
+
+          var i = 0
+          while (i < length) {
+            acc(i) = values(kept(i))
+            i += 1
+          }
+          acc
         }
       }
 
@@ -273,10 +322,11 @@ trait LinearRegressionLibModule[M[+_]]
           // We weight the results to handle slices of different sizes.
           // Even though we canonicalize the slices to bound their size,
           // but their sizes still may vary
-          val weightedRes = res map { _ * count }
+          val weightedRes0 = res map { _ * count }
 
           val removed = cleaned map { _._2 } getOrElse Set.empty[Int]
-          
+          val weightedRes = insertZeroAt(weightedRes0, removed.toArray) 
+
           CoeffAcc(weightedRes, count, removed)
         }
       }
@@ -300,7 +350,10 @@ trait LinearRegressionLibModule[M[+_]]
           val matrixProduct = matrixX map { matrix => matrix.transpose() times matrix } getOrElse { stdErrorMonoid.zero.product }
 
           val actualY0 = y0 map { arr => (new Matrix(Array(arr))).transpose() }
-          val weightedBeta = acc.beta map { _ / acc.count }
+
+          val retainedBeta = removeAt(acc.beta, acc.removed.toArray)
+          val weightedBeta = retainedBeta map { _ / acc.count }
+
           val predictedY0 = matrixX map { _.times((new Matrix(Array(weightedBeta))).transpose()) }
 
           val rssOpt = for {
@@ -327,7 +380,7 @@ trait LinearRegressionLibModule[M[+_]]
       def extract(coeffs: CoeffAcc, errors: StdErrorAcc, jtype: JType): Table = {
         val cpaths = Schema.cpath(jtype)
 
-        val tree = CPath.makeTree(cpaths, Range(1, coeffs.beta.length + coeffs.removed.size).toSeq :+ 0)
+        val tree = CPath.makeTree(cpaths, Range(1, coeffs.beta.length).toSeq :+ 0)
 
         val spec = TransSpec.concatChildren(tree)
 
@@ -341,24 +394,13 @@ trait LinearRegressionLibModule[M[+_]]
         val inverse = errors.product.inverse()
         val varianceCovariance = inverse.times(varianceEst)
 
-        val stdErrors = (0 until colDim) map { case i => math.sqrt(varianceCovariance.get(i, i)) }
+        val stdErrors0 = (0 until colDim) map { case i => math.sqrt(varianceCovariance.get(i, i)) }
+        val stdErrors = insertZeroAt(stdErrors0.toArray, coeffs.removed.toArray)
 
         assert(weightedBeta.length == stdErrors.length)
 
-        val resultCoeffs0: Array[CValue] = weightedBeta.map(CNum(_)).toArray
-        val resultErrors0: Array[CValue] = stdErrors.map(CNum(_)).toArray
-
-        val indices = coeffs.removed.toArray.sorted.reverse
-
-        def insertAt(values: Array[CValue], indices: Array[Int]) = {
-          indices.foldLeft(values) { case (acc, idx) =>
-            val (pref, suff) = acc.splitAt(idx)
-            (pref :+ CNull) ++ suff
-          }
-        }
-
-        val resultCoeffs = insertAt(resultCoeffs0, indices)
-        val resultErrors = insertAt(resultErrors0, indices)
+        val resultCoeffs: Array[CValue] = weightedBeta.map(CNum(_)).toArray
+        val resultErrors: Array[CValue] = stdErrors.map(CNum(_)).toArray
 
         val arr = resultCoeffs.zip(resultErrors) map { case (beta, error) =>
           RObject(Map("estimate" -> beta, "standardError" -> error))
@@ -469,7 +511,7 @@ trait LinearRegressionLibModule[M[+_]]
     object LinearPrediction extends Morphism2(Stats2Namespace, "predictLinear") with LinearPredictionBase {
       val tpe = BinaryOperationType(JType.JUniverseT, JObjectUnfixedT, JObjectUnfixedT)
 
-      override val retainIds = true
+      override val idPolicy = IdentityPolicy.Retain.Merge
 
       lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
 

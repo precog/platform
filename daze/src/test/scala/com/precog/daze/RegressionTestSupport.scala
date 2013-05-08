@@ -112,7 +112,8 @@ trait RegressionTestSupport[M[+_]] {
   def isOk(actual: Double, computed: List[Double]): Boolean = {  
     val (mad, median) = madMedian(computed)
     val diff = math.abs(median - actual)
+    val numStdDev = 4D
 
-    diff < mad * 3D
+    diff < mad * numStdDev
   }
 }
