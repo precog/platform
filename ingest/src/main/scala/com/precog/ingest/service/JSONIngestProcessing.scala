@@ -39,6 +39,7 @@ import java.nio.ByteBuffer
 
 import scalaz._
 import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
 
 sealed trait JSONRecordStyle
 case object JSONValueStyle extends JSONRecordStyle
@@ -86,8 +87,10 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
               val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
               val (parsed, updatedParser) = state.parser(More(toParse))
               val ingestSize = parsed.values.size
-              val errors = if (parsed.errors.isEmpty && parsed.values.exists(_.flattenWithPath.size > maxFields)) List((state.report.ingested, overLargeErrorBase))
-                           else parsed.errors.map(pe => (pe.line, pe.msg))
+
+              val overLargeIdx = parsed.values.indexWhere(_.flattenWithPath.size > maxFields)
+              val errors = parsed.errors.map(pe => (pe.line, pe.msg)) ++ 
+                           (overLargeIdx >= 0).option(overLargeIdx + state.report.ingested -> overLargeErrorBase)
 
               if (errors.isEmpty) {
                 accumulate(state.update(updatedParser, ingestSize), records ++ parsed.values, rest)
@@ -97,15 +100,17 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
 
             case None =>
               val (parsed, finalParser) = state.parser(Done)
-              val ingestSize = parsed.values.size
-              val errors = if (parsed.errors.isEmpty && parsed.values.exists(_.flattenWithPath.size > maxFields)) List((state.report.ingested, overLargeErrorBase))
-                           else parsed.errors.map(pe => (pe.line, pe.msg))
+
+              val overLargeIdx = parsed.values.indexWhere(_.flattenWithPath.size > maxFields)
+              val errors = parsed.errors.map(pe => (pe.line, pe.msg)) ++ 
+                           (overLargeIdx >= 0).option(overLargeIdx + state.report.ingested -> overLargeErrorBase)
 
               if (errors.isEmpty) {
-                storage.store(apiKey, path, authorities, records ++ parsed.values, jobId, streamRef.terminate) map {
+                val completedRecords = records ++ parsed.values
+                storage.store(apiKey, path, authorities, completedRecords, jobId, streamRef.terminate) map {
                   _.fold(
                     storeFailure => IngestReport(0, (0, storeFailure.message) :: Nil),
-                    _ => IngestReport(ingestSize, Nil)
+                    _ => IngestReport(completedRecords.size, Nil)
                   )
                 }
               } else {
@@ -123,12 +128,20 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
             // Dup and rewind to ensure we have something to parse
             val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
             val (parsed, updatedParser) = state.parser(More(toParse))
-            ingestBlock(parsed, updatedParser, state, streamRef) { ingestUnbuffered(_, rest, streamRef) }
+
+            rest.isEmpty flatMap {
+              case false => ingestBlock(parsed, updatedParser, state, streamRef) { ingestUnbuffered(_, rest, streamRef) }
+              case true  => ingestFinalBlock(parsed, updatedParser, state, streamRef)
+            }
 
           case None =>
             val (parsed, finalParser) = state.parser(Done)
-            ingestBlock(parsed, finalParser, state, streamRef.terminate) { (_: JSONParseState).point[Future] }
+            ingestFinalBlock(parsed, finalParser, state, streamRef)
         }
+      }
+
+      def ingestFinalBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef) = {
+        ingestBlock(parsed, updatedParser, state, streamRef.terminate) { (_: JSONParseState).point[Future] }
       }
 
       def ingestBlock(parsed: AsyncParse, updatedParser: AsyncParser, state: JSONParseState, streamRef: StreamRef)(continue: => JSONParseState => Future[JSONParseState]): Future[JSONParseState] = {
@@ -139,7 +152,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
 
             storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { 
               _.fold(
-                storeFailure => sys.error("Do something useful with StoreFailure"),
+                storeFailure => sys.error("Do something useful with %s" format storeFailure.message),
                 _ => {
                   val overLargeError = (-1, (overLargeErrorBase + " (%d records affected)").format(overLarge.size))
                   continue(state.update(updatedParser, ingestSize, parsed.errors.map(pe => (pe.line, pe.msg)) :+ overLargeError))
@@ -154,19 +167,19 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
             if (overLarge.isEmpty && parsed.errors.isEmpty) {
               storage.store(apiKey, path, authorities, toIngest, jobId, streamRef) flatMap { 
                 _.fold(
-                  storeFailure => sys.error("Do something useful with StoreFailure"),
+                  storeFailure => sys.error("Do something useful with %s" format storeFailure.message),
                   _ => continue(state.update(updatedParser, ingestSize, Nil))
                 )
               }
             } else {
               storage.store(apiKey, path, authorities, toIngest, jobId, streamRef.terminate) map {
                 _.fold(
-                  storeFailure => sys.error("Do something useful with StoreFailure"),
+                  storeFailure => sys.error("Do something useful with%s" format storeFailure.message),
                   _ => {
                     val errors = if (overLarge.nonEmpty) List((state.report.ingested + toIngest.size, overLargeErrorBase))
                                  else parsed.errors.map(pe => (pe.line, pe.msg))
 
-                    state.update(updatedParser, toIngest.size, errors)
+                    state.update(updatedParser, ingestSize, errors)
                   }
                 )
               }

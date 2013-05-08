@@ -88,13 +88,9 @@ class IngestServiceHandler(
 
   object ingestStore extends IngestStore {
     def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit] = {
-      if (data.nonEmpty) {
-        val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), streamRef)
-        logger.trace("Saving event: " + eventInstance)
-        eventStore.save(eventInstance, ingestTimeout)
-      } else {
-        Promise successful -\/(StoreFailure("Unable to ingest empty set of values for %s at %s".format(apiKey, path.toString)))
-      }
+      val eventInstance = Ingest(apiKey, path, Some(authorities), data, jobId, clock.instant(), streamRef)
+      logger.trace("Saving event: " + eventInstance)
+      eventStore.save(eventInstance, ingestTimeout)
     }
   }
 
