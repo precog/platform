@@ -3,107 +3,99 @@ package daze
 
 import scala.collection.mutable
 
+import com.precog.yggdrasil.TableModule
 import com.precog.util.IdGen
 import com.precog.util.Timing
 import com.precog.common._
 
-trait JoinOptimizer extends DAGTransform {
-  import dag._
-  import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
+trait JoinOptimizerModule[M[+_]] extends DAGTransform with TransSpecableModule[M] {
 
-  def optimizeJoins(graph: DepGraph, idGen: IdGen = IdGen): DepGraph = {
-    
-    def determinedBy(determinee: DepGraph, determiner: DepGraph): Boolean = {
-      
-      def merge(x: (Boolean, Boolean), y: (Boolean, Boolean)) = (x, y) match {
-        case ((false, _),  (false, _))  => (false, true)
-        case ((false, _),  (true, rhs)) => (true, rhs)
-        case ((true, lhs), (false, _))  => (true, lhs)
-        case ((true, lhs), (true, rhs)) => (true, lhs && rhs)
-      }
-      
-      def determinedByAux(determinee: DepGraph, determiner: DepGraph): (Boolean, Boolean) = determinee match {
-        case g if g == determiner => (true, true)
-        
-        case r : Root => (false, true)
-        
-        case Join(_, _, left, right) =>
-          merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
+  trait JoinOptimizer extends TransSpecable {
+    import dag._
+    import instructions._
+    import TableModule.CrossOrder
+    import CrossOrder._
+  
+    def optimizeJoins(graph: DepGraph, ctx: EvaluationContext, idGen: IdGen = IdGen): DepGraph = {
 
-        case Filter(IdentitySort, body, _) => determinedByAux(body, determiner)
+      def compareAncestor(lhs: DepGraph, rhs: DepGraph): Boolean =
+        findAncestor(lhs, ctx) == findAncestor(rhs, ctx)
 
-        case Operate(_, body) => determinedByAux(body, determiner)
-        
-        case Memoize(parent, _) => determinedByAux(parent, determiner)
-    
-        case _ => (true, false)
-      }
-      
-      determinedByAux(determinee, determiner) match {
-        case (false, _)  => false
-        case (true, det) => det
-      }
-    }
+      def liftRewrite(graph: DepGraph, eq: DepGraph, lifted: DepGraph): DepGraph =
+        transformBottomUp(graph) { g => if (g == eq) lifted else g }
 
-    def liftRewrite(graph: DepGraph, eq: DepGraph, lifted: DepGraph): DepGraph = {
-      transformBottomUp(graph) { g => if(g == eq) lifted else g }
-    }
+      def rewrite(filter: dag.Filter, body: DepGraph, eqA: DepGraph, eqB: DepGraph): DepGraph = {
+        val sortId = idGen.nextInt()
 
-    def rewriteUnderEq(graph: DepGraph, eqA: DepGraph, eqB: DepGraph, liftedA: DepGraph, liftedB: DepGraph, sortId: Int): DepGraph =
-      transformBottomUp(graph) {
-        _ match {
-          case j @ Join(op, CrossLeftSort | CrossRightSort, lhs, rhs)
-            if (determinedBy(lhs, eqA) && determinedBy(rhs, eqB)) ||
-               (determinedBy(lhs, eqB) && determinedBy(rhs, eqA)) => {
-            
-            val (eqLHS, eqRHS, liftedLHS, liftedRHS) =
-              if (determinedBy(lhs, eqA)) (eqA, eqB, liftedA, liftedB) else(eqB, eqA, liftedB, liftedA) 
-              
-              Join(op, ValueSort(sortId),
-                liftRewrite(lhs, eqLHS, liftedLHS),
-                liftRewrite(rhs, eqRHS, liftedRHS))(j.loc)
-          }
+        def lift(keyGraph: DepGraph, valueGraph: DepGraph): DepGraph = {
+          val key = "key"
+          val value = "value"
 
-          case j @ Join(op, IdentitySort, lhs, rhs)
-            if (determinedBy(lhs, eqA) && determinedBy(rhs, eqA)) ||
-               (determinedBy(lhs, eqB) && determinedBy(rhs, eqB)) => {
-            Join(op, ValueSort(sortId), lhs, rhs)(j.loc)
+          AddSortKey(
+            Join(JoinObject, IdentitySort,
+              Join(WrapObject, Cross(Some(CrossRight)),
+                Const(CString(key))(filter.loc),
+                keyGraph)(filter.loc),
+              Join(WrapObject, Cross(Some(CrossRight)),
+                Const(CString(value))(filter.loc),
+                valueGraph)(filter.loc))(filter.loc),
+            key, value, sortId)
+        }
+
+        val rewritten = transformBottomUp(body) {
+          case j @ Join(_, _, Const(_), _) => j
+
+          case j @ Join(_, _, _, Const(_)) => j
+
+          case j @ Join(op, Cross(_), lhs, rhs)
+            if (compareAncestor(lhs, eqA) && compareAncestor(rhs, eqB)) ||
+               (compareAncestor(lhs, eqB) && compareAncestor(rhs, eqA)) => {
+
+            val (eqLHS, eqRHS) = {
+              if (compareAncestor(lhs, eqA))
+                (eqA, eqB)
+              else
+                (eqB, eqA)
+            }
+
+            val ancestorLHS = findOrderAncestor(lhs, ctx) getOrElse lhs
+            val ancestorRHS = findOrderAncestor(rhs, ctx) getOrElse rhs
+
+            val liftedLHS = lift(eqLHS, ancestorLHS)
+            val liftedRHS = lift(eqRHS, ancestorRHS)
+
+            Join(op, ValueSort(sortId),
+              liftRewrite(lhs, ancestorLHS, liftedLHS),
+              liftRewrite(rhs, ancestorRHS, liftedRHS))(j.loc)
           }
 
           case other => other
         }
+
+        if (rewritten == body) filter else rewritten
       }
 
-    transformBottomUp(graph) {
-      _ match {
-        case
-          f @ Filter(IdentitySort,
-            body,
-            Join(Eq, CrossLeftSort | CrossRightSort,
-              Join(DerefObject, CrossLeftSort,
-                eqLHS,
-                Const(CString(sortFieldLHS))),
-              Join(DerefObject, CrossLeftSort,
-                eqRHS,
-                Const(CString(sortFieldRHS))))) => {
-                  
-            val sortId = idGen.nextInt()
-            
-            def lift(graph: DepGraph, sortField: String) = {
-              SortBy(
-                Join(JoinObject, IdentitySort,
-                  Join(WrapObject, CrossLeftSort,
-                    Const(CString("key"))(f.loc),
-                    Join(DerefObject, CrossLeftSort, graph, Const(CString(sortField))(f.loc))(f.loc))(f.loc),
-                  Join(WrapObject, CrossLeftSort, Const(CString("value"))(f.loc), graph)(f.loc))(f.loc),
-                "key", "value", sortId)
-            }
-            
-            val rewritten = rewriteUnderEq(body, eqLHS, eqRHS, lift(eqLHS, sortFieldLHS), lift(eqRHS, sortFieldRHS), sortId)
-            if(rewritten == body) f else rewritten
-          }
+      transformBottomUp(graph) {
+        case filter @ Filter(IdentitySort,
+          body @ Join(BuiltInFunction2Op(op2), _, _, _),
+          Join(Eq, Cross(_), eqA, eqB))
+            if op2.rowLevel => rewrite(filter, body, eqA, eqB)
+
+        case filter @ Filter(IdentitySort,
+          body @ Join(BuiltInMorphism2(morph2), _, _, _),
+          Join(Eq, Cross(_), eqA, eqB))
+            if morph2.rowLevel => rewrite(filter, body, eqA, eqB)
+
+        case filter @ Filter(IdentitySort,
+          body @ Join(_, _, _, _),
+          Join(Eq, Cross(_), eqA, eqB)) => rewrite(filter, body, eqA, eqB)
+
+        case filter @ Filter(IdentitySort,
+          body @ Operate(BuiltInFunction1Op(op1), _),
+          Join(Eq, Cross(_), eqA, eqB))
+            if op1.rowLevel => rewrite(filter, body, eqA, eqB)
         
-        case other => other 
+        case other => other
       }
     }
   }

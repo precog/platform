@@ -1,31 +1,49 @@
 package com.precog
 package bytecode
 
-sealed trait IdentityAlignment
-object IdentityAlignment {
-  object CrossAlignment extends IdentityAlignment
-  object MatchAlignment extends IdentityAlignment
-  object RightAlignment extends IdentityAlignment
-  object LeftAlignment extends IdentityAlignment
-}
-    
 sealed trait IdentityPolicy
 object IdentityPolicy {
   sealed trait Retain extends IdentityPolicy
   object Retain {
+    /** Right IDs are discarded, left IDs are kept, in order. */
     case object Left extends Retain
+
+    /** Left IDs are discarded, right IDs are kept, in order. */
     case object Right extends Retain
+
+    /**
+     * All IDs are kept. Prefix first, then remaining left IDs, then remaining
+     * right IDs. The result is in order of the prefix/key.
+     *
+     * This should also be used in Morph1 to indicate the IDs are retained.
+     *
+     * TODO: Much like join, custom Morph2's should be allowed to specify order
+     *       after the join.
+     */
     case object Merge extends Retain
+
+    /**
+     * Both IDs are kept, with the left sides first. The left IDs remain in
+     * order.
+     */
+    case object Cross extends Retain
   }
   
+  /** A new single column of IDs are synthesized and all other IDs are discarded. */
   case object Synthesize extends IdentityPolicy
+
+  /** All IDs are discarded. */
   case object Strip extends IdentityPolicy
+
+  /** Both identity policies are adhered to, and then concatenated. */
+  case class Product(left: IdentityPolicy, right: IdentityPolicy) extends IdentityPolicy
 }
 
 trait FunctionLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val rowLevel: Boolean
   val deprecation: Option[String] = None
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
@@ -34,6 +52,8 @@ trait FunctionLike {
 trait Morphism1Like extends FunctionLike {
   val tpe: UnaryOperationType
   val isInfinite: Boolean = false
+
+  /** This specifies how identities are returned by the Morphism1. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 
@@ -44,10 +64,9 @@ object Morphism1Like {
 
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
+
+  /** This specifies how identities are returned by the Morphism2. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
-  
-  @deprecated("use idPolicy", "now")
-  def idAlignment: IdentityAlignment = IdentityAlignment.CrossAlignment
 }
 
 object Morphism2Like {
