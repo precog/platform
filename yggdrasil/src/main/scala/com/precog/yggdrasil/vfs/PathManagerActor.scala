@@ -231,7 +231,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         }
 
       case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
-        IO(sys.error("todo"): PrecogUnit)
+        versionLog.clearHead >> IO(requestor ! UpdateSuccess(path))
     } map {
       _ => PrecogUnit
     }
