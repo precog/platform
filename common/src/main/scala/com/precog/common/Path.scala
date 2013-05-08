@@ -46,7 +46,7 @@ class Path private (val elements: String*) {
   def / (that: Path) = new Path(elements ++ that.elements: _*)
   def - (that: Path): Option[Path] = elements.startsWith(that.elements).option(new Path(elements.drop(that.elements.length): _*))
 
-  def isEqualOrParent(that: Path) = that.elements.startsWith(this.elements)
+  def isEqualOrParentOf(that: Path) = that.elements.startsWith(this.elements)
 
   def isChildOf(that: Path) = elements.startsWith(that.elements) && length > that.length
 

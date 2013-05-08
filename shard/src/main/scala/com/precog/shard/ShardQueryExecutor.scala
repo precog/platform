@@ -30,7 +30,7 @@ import com.precog.common.security._
 
 import com.precog.daze._
 import com.precog.muspelheim._
-
+import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
@@ -97,7 +97,6 @@ object QueryResultConvert {
 
   def toPathOps[N[+_]](slices: StreamT[N, Slice], dest: Path, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId])(implicit N: Monad[N]): StreamT[N, (Long, PathOp)] = {
       val streamId = java.util.UUID.randomUUID
-      val writeTo = WriteTo.Version(streamId)
 
       def jvaluesFromSlice(slice: Slice): Seq[JValue] = {
         val len = slice.size
@@ -122,7 +121,7 @@ object QueryResultConvert {
           case (n, stream) => stream.uncons.map {
             case Some((slice, tail)) =>
               val jvalues = jvaluesFromSlice(slice)
-              val pathOp = Append(dest, NIHDBData(Seq((n, jvalues))), writeTo, jobId)
+              val pathOp = CreateNewVersion(dest, NIHDBData(Seq(NIHDB.Batch(n, jvalues))), streamId, apiKey, authorities, false)
               Some(((slice.size, pathOp), (n + 1, tail)))
             case None =>
               val pathOp = MakeCurrent(dest, streamId, jobId)

@@ -43,7 +43,8 @@ import com.precog.niflheim.NIHDB
 import java.io.{IOException, File, FileOutputStream}
 import java.util.concurrent.ScheduledThreadPoolExecutor
 
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz._
+import scalaz.NonEmptyList._
 import scalaz.effect.IO
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.monad._
@@ -87,12 +88,17 @@ class DefaultResourceBuilder(
   }
 
   def openNIHDB(descriptorDir: File): IO[ValidationNel[ResourceError, NIHDBResource]] = {
-    NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem).map (_.map { dbV =>
-      val resV = dbV map {
-        case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
+    NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem) map {
+      _ map { dbV =>
+        dbV map {
+          case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
+        } leftMap {
+          fromExtractorErrorNel("Failed to open NIHDB") 
+        }
+      } getOrElse {
+        Failure(nels(MissingData("No NIHDB projection found in " + descriptorDir)))
       }
-      fromExtractorErrorNel("Failed to open NIHDB") <-: resV
-    }.getOrElse(Failure(NEL(MissingData("No NIHDB projection found in " + descriptorDir)))))
+    }
   }
 
   final val blobMetadataFilename = "blob_metadata"

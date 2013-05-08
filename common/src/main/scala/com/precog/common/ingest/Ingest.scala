@@ -172,13 +172,24 @@ sealed trait StreamRef {
   def split(n: Int): Seq[StreamRef]
 }
 
+
 object StreamRef {
-  case class Create(streamRef: UUID, terminal: Boolean) extends StreamRef {
+  object NewVersion {
+    def unapply(ref: StreamRef): Option[(UUID, Boolean, Boolean)] = {
+      ref match {
+        case Append => None
+        case Create(uuid, terminal) => Some((uuid, terminal, false))
+        case Replace(uuid, terminal) => Some((uuid, terminal, true))
+      }
+    }
+  }
+
+  case class Create(streamId: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
     def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
 
-  case class Replace(streamRef: UUID, terminal: Boolean) extends StreamRef {
+  case class Replace(streamId: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
     def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }

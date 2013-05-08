@@ -144,9 +144,7 @@ trait NIHDBQueryExecutorComponent  {
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
       val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
       val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
-
-      val shardActors @ ShardActors(ingestSupervisor, _) =
-        initShardActors(permissionsFinder, projectionsActor)
+      val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
       trait TableCompanion extends NIHDBColumnarTableCompanion //{
 //        import scalaz.std.anyVal._
@@ -191,10 +189,10 @@ trait NIHDBQueryExecutorComponent  {
       }
 
       def shutdown() = for {
-        _ <- Stoppable.stop(shardActors.stoppable)
-        _ <- ShardActors.actorStop(yggConfig, projectionsActor, "projections")
-        _ <- ShardActors.actorStop(yggConfig, masterChef, "masterChef")
-        _ <- chefs.map(ShardActors.actorStop(yggConfig, _, "masterChef")).sequence
+        _ <- Stoppable.stop(ingestSystem.map(_.stoppable).getOrElse(Stoppable.fromFuture(Future(()))))
+        _ <- IngestSystem.actorStop(yggConfig, projectionsActor, "projections")
+        _ <- IngestSystem.actorStop(yggConfig, masterChef, "masterChef")
+        _ <- chefs.map(IngestSystem.actorStop(yggConfig, _, "masterChef")).sequence
       } yield {
         queryLogger.info("Actor ecossytem shutdown complete.")
         jobActorSystem.shutdown()

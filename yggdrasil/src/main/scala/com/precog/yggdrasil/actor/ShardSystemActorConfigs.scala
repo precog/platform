@@ -114,6 +114,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
                                    permissionsFinder = permissionsFinder,
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
+                                   idleDelay = yggConfig.batchStoreDelay,
                                    ingestTimeout = conf.batchTimeout,
                                    maxCacheSize = conf.maxParallel,
                                    maxConsecutiveFailures = conf.maxConsecutiveFailures) {
