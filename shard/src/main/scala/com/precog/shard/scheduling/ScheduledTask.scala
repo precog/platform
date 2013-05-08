@@ -55,6 +55,8 @@ object CronExpressionSerialization {
 }
 
 case class ScheduledTask(id: UUID, schedule: CronExpression, apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]) {
+  def fqSource = prefix / source
+  def fqSink = prefix / sink
   def taskName = "Scheduled %s -> %s".format(source, sink)
   def timeout = timeoutMillis map { to => Duration(to, TimeUnit.MILLISECONDS) }
 }

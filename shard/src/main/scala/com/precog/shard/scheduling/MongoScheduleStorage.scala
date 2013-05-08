@@ -84,26 +84,33 @@ class MongoScheduleStorage private[MongoScheduleStorage] (mongo: Mongo, database
   def addTask(task: ScheduledTask) = insertTask(-\/(task), settings.tasks)
 
   private def insertTask(task: ScheduledTask \/ JObject, collection: String) =
-    database(insert(task.valueOr { st => st.serialize.asInstanceOf[JObject] }).into(collection)) map { _ => PrecogUnit }
+    database(insert(task.valueOr { st => st.serialize.asInstanceOf[JObject] }).into(collection)) map { _ => Success(PrecogUnit) }
 
-  def deleteTask(id: UUID): Future[Option[ScheduledTask]] =
+  def deleteTask(id: UUID) =
     database(selectOne().from(settings.tasks).where(".id" === id.toString)) flatMap { ot =>
       ot map { task =>
         for {
           _ <- insertTask(\/-(task), settings.deletedTasks)
           _ <- database(remove.from(settings.tasks)where(".id" === id.toString))
-        } yield ot.map { _.deserialize[ScheduledTask] }
+        } yield Success(ot.map { _.deserialize[ScheduledTask] })
       } getOrElse {
         logger.warn("Could not locate task %s for deletion".format(id))
-        Promise successful None
+        Promise successful Success(None)
       }
     }
 
   def reportRun(report: ScheduledRunReport) =
     database(insert(report.serialize.asInstanceOf[JObject]).into(settings.reports)) map { _ => PrecogUnit }
 
-  def historyFor(id: UUID) =
-    database(selectAll.from(settings.reports).where(".id" === id.toString)) map { _.toSeq map { _.deserialize[ScheduledRunReport] } }
+  def statusFor(id: UUID, limit: Option[Int]) = {
+    database(selectOne().from(settings.tasks).where(".id" === id.toString)) flatMap { taskOpt =>
+      database(selectAll.from(settings.reports).where(".id" === id.toString)/* TODO: limit */) map { history =>
+        taskOpt map { task =>
+          (task.deserialize[ScheduledTask], history.toSeq map { _.deserialize[ScheduledRunReport] })
+        }
+      }
+    }
+  }
 
   def listTasks = database(selectAll.from(settings.tasks)) map { _.toSeq map { _.deserialize[ScheduledTask] } }
 }

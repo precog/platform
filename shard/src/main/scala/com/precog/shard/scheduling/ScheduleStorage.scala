@@ -24,14 +24,16 @@ import com.precog.util.PrecogUnit
 
 import java.util.UUID
 
-trait ScheduleStorage[M[+_]] {
-  def addTask(task: ScheduledTask): M[PrecogUnit]
+import scalaz.Validation
 
-  def deleteTask(id: UUID): M[Option[ScheduledTask]]
+trait ScheduleStorage[M[+_]] {
+  def addTask(task: ScheduledTask): M[Validation[String, PrecogUnit]]
+
+  def deleteTask(id: UUID): M[Validation[String, Option[ScheduledTask]]]
 
   def reportRun(report: ScheduledRunReport): M[PrecogUnit]
 
-  def historyFor(id: UUID): M[Seq[ScheduledRunReport]]
+  def statusFor(id: UUID, lastLimit: Option[Int]): M[Option[(ScheduledTask, Seq[ScheduledRunReport])]]
 
   def listTasks: M[Seq[ScheduledTask]]
 }

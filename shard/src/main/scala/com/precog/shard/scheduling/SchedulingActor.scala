@@ -56,6 +56,8 @@ case class AddTask(task: ScheduledTask)
 
 case class DeleteTask(id: UUID)
 
+case class StatusForTask(id: UUID, limit: Option[Int])
+
 case object WakeForRun extends SchedulingMessage
 
 case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends SchedulingMessage
@@ -188,23 +190,30 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
     case AddTask(task) =>
       val ourself = self
       storage.addTask(task) map { pu =>
-        Success(pu)
         ourself ! WakeForRun
+        Success(pu)
       } recover {
         case t: Throwable =>
-          logger.error("Error adding task", t)
+          logger.error("Error adding task " + task, t)
           Failure("Internal error adding task")
       } pipeTo sender
 
     case DeleteTask(id) =>
       val ourself = self
       storage.deleteTask(id) map { pu =>
-        Success(pu)
         ourself ! WakeForRun
+        Success(pu)
       } recover {
         case t: Throwable =>
-          logger.error("Error deleting task", t)
+          logger.error("Error deleting task " + id, t)
           Failure("Internal error deleting task")
+      } pipeTo sender
+
+    case StatusForTask(id, limit) =>
+      storage.statusFor(id, limit) map(Success(_)) recover {
+        case t: Throwable =>
+          logger.error("Error getting status for task " + id, t)
+          Failure("Internal error getting status for task")
       } pipeTo sender
 
     case WakeForRun =>
