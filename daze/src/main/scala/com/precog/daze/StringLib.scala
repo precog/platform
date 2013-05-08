@@ -421,11 +421,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     object editDistance extends Op2F2(StringNamespace, "editDistance") {
-      import java.util.regex.Pattern
-
-      val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
-      val decPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
-
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JNumberT)
 
