@@ -824,6 +824,9 @@ object ImportTools extends Command with Logging {
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
 
+    // Blanket write access ;)
+    val perms = Map(config.apiKey -> Set[Permission](WritePermission(Path("/"), Permission.WriteAs(config.accountId))))
+
     config.input.foreach {
       case (db, input) =>
 
@@ -834,7 +837,7 @@ object ImportTools extends Command with Logging {
         val ch = new FileInputStream(f).getChannel
         val bb = ByteBuffer.allocate(bufSize)
 
-        @tailrec def loop(p: AsyncParser) {
+        @tailrec def loop(offset: Long, p: AsyncParser) {
           val n = ch.read(bb)
           bb.flip()
 
@@ -844,15 +847,18 @@ object ImportTools extends Command with Logging {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
           }
           val eventidobj = EventId(pid, sid.getAndIncrement)
-          val update = Append(Path(db), NIHDBData(Seq(NIHDB.Batch(eventidobj.uid, results))), config.apiKey, authorities, None)
+          val update = IngestBundle(
+            Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, results map (IngestRecord(eventidobj, _)), None, yggConfig.clock.instant, StreamRef.Append))),
+            perms
+          )
           Await.result(projectionsActor ? update, Duration(300, "seconds"))
           logger.info("Batch saved")
           bb.flip()
-          if (n >= 0) loop(parser)
+          if (n >= 0) loop(offset + 1, parser)
         }
 
         try {
-          loop(AsyncParser(true))
+          loop(0L, AsyncParser(true))
         } finally {
           ch.close()
         }

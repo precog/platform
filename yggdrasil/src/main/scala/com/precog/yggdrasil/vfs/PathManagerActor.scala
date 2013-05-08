@@ -121,7 +121,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   }
 
   private def openResource(version: UUID): IO[Option[ValidationNel[ResourceError, Resource]]] = {
-    versions.get(version) map { r => 
+    versions.get(version) map { r =>
       IO(Some(Success(r)))
     } getOrElse {
       versionLog.find(version) traverse { versionEntry =>
@@ -134,8 +134,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             IO(resourceV foreach { r => versions += (version -> r) })
           }
         }
-      } 
-    } 
+      }
+    }
   }
 
   private def openNIHDB(version: UUID): IO[Option[ValidationNel[ResourceError, NIHDBResource]]] = {
@@ -150,7 +150,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           }
         }
       }
-    } 
+    }
   }
 
   private def performCreate(apiKey: APIKey, data: PathData, version: UUID, writeAs: Authorities, complete: Boolean): IO[PathActionResponse] = {
@@ -165,7 +165,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       }
       _ <- created traverse { resource =>
         for {
-          _ <- IO { versions += (version -> resource) } 
+          _ <- IO { versions += (version -> resource) }
           _ <- complete.whenM(versionLog.completeVersion(version))
         } yield PrecogUnit
       }
@@ -186,27 +186,27 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
 
       openNIHDB(streamId) flatMap {
-        case None => 
+        case None =>
           if (createIfAbsent) {
             performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
-              maybeCompleteJob(msg, terminal, response) pipeTo requestor 
+              maybeCompleteJob(msg, terminal, response) pipeTo requestor
               PrecogUnit
-            } 
+            }
           } else {
             //TODO: update job
             IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
           }
 
-        case Some(Success(resource)) => 
-          for { 
-            futureSuccess <- IO(resource.db.insert(batch(msg))) 
+        case Some(Success(resource)) =>
+          for {
+            futureSuccess <- IO(resource.db.insert(batch(msg)))
             _ <- terminal.whenM(versionLog.completeVersion(streamId))
           } yield {
             futureSuccess flatMap { _ => maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) } pipeTo requestor
             PrecogUnit
           }
 
-        case Some(Failure(errors)) => 
+        case Some(Failure(errors)) =>
           IO(requestor ! UpdateFailure(msg.path, errors))
       }
     }
@@ -214,9 +214,9 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
       if (createIfAbsent) {
         performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal) map { response =>
-          maybeCompleteJob(msg, terminal, response) pipeTo requestor 
+          maybeCompleteJob(msg, terminal, response) pipeTo requestor
           PrecogUnit
-        } 
+        }
       } else {
         //TODO: update job
         IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
@@ -230,11 +230,11 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             persistNIHDB(versionLog.current.isEmpty && !versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Replace(streamId, terminal) =>
-            persistNIHDB(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal) 
+            persistNIHDB(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
-            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) 
+            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false)
         }
 
       case (offset, msg @ StoreFileMessage(_, path, _, _, _, _, _, streamRef)) =>
@@ -275,7 +275,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
           case None =>
             Promise successful ReadFailure(path, nels(MissingData("Unable to find version %s".format(version))))
-        } 
+        }
       } getOrElse {
         IO(Promise successful ReadSuccess(path, None))
       } map { resVF =>

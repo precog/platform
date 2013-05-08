@@ -75,34 +75,6 @@ sealed trait PathOp {
   def jobId: Option[JobId]
 }
 
-sealed trait PathUpdateOp extends PathOp
-
-/**
-  * Appends data to a resource. If the streamId is non-empty, this Append is
-  * part of an atomic version update sequence (see
-  * [[com.precog.yggdrasil.vfs.Create]] for details on the semantics). If the
-  * streamId is empty, then this Append is applied to the current HEAD version.
-  * If there is no current version available, a new version will be created as
-  * long as the apiKey has create permissions for the path.
-  */
-case class Append(path: Path, data: PathData, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId]) extends PathUpdateOp
-
-/**
-  * Creates a new version of the given resource based on the streamId, or append
-  * to an existing resource with that streamId. This assumes idempotence of 
-  * appends.
-  */
-case class CreateNewVersion(path: Path, data: PathData, streamId: UUID, apiKey: APIKey, authorities: Authorities, canOverwrite: Boolean) extends PathUpdateOp {
-  val jobId = None
-}
-
-/**
-  * Replace the current HEAD with the version specified by the streamId.
-  */
-case class MakeCurrent(path: Path, streamId: UUID, jobId: Option[JobId]) extends PathUpdateOp
-
-case class ArchivePath(path: Path, jobId: Option[JobId]) extends PathUpdateOp
-
 case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp {
   val jobId = None
 }

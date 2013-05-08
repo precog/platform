@@ -19,6 +19,9 @@
  */
 package com.precog.ragnarok
 
+import blueeyes.json._
+import blueeyes.util.Clock
+
 import com.precog.yggdrasil._
 import com.precog.common._
 import com.precog.common.accounts._
@@ -33,8 +36,6 @@ import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
 
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
-
-import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
@@ -95,16 +96,18 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root"): IO[PrecogUnit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", clock: Clock = Clock.System): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     implicit val to = storageTimeout
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
-    val records = NIHDB.Batch(eventId.uid, readRows(data))
+    val records = readRows(data) map (IngestRecord(eventId, _))
 
-    val projection = (projectionsActor ? Append(path, NIHDBData(Seq(records)), apiKey, Authorities(accountId), None)).flatMap { _ =>
+    val perms = Map(apiKey -> Set[Permission](WritePermission(path, Permission.WriteAs(accountId))))
+
+    val projection = (projectionsActor ? IngestBundle(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append))), perms)).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
       (projectionsActor ? Read(path, None, None)).mapTo[List[NIHDBResource]]

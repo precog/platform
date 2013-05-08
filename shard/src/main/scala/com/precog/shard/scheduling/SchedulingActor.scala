@@ -26,6 +26,7 @@ import akka.pattern.{ask, pipe}
 import akka.util.{Duration, Timeout}
 
 import blueeyes.bkka.FutureMonad
+import blueeyes.util.Clock
 
 import com.precog.common.jobs._
 import com.precog.common.security._
@@ -46,7 +47,7 @@ import org.quartz.CronExpression
 
 import scala.collection.mutable.{ArrayBuffer, PriorityQueue}
 
-import scalaz.{Ordering => _, _}
+import scalaz.{Ordering => _, idInstance => _, _}
 import scalaz.syntax.traverse._
 import scalaz.effect.IO
 
@@ -65,7 +66,7 @@ case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends Schedu
 case class TaskFailed(id: UUID, error: String) extends SchedulingMessage
 
 
-class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
+class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], permissionsFinder: PermissionsFinder[Future], clock: Clock, storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
   private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
   private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -163,14 +164,19 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
       } yield {
         import task._
 
-        executor.execute(apiKey, script, prefix, QueryOptions(timeout = task.timeout)).flatMap {
-          _ traverse { stream =>
-            QueryResultConvert.toPathOps(stream, sink, apiKey, authorities, Some(job.id)).foldLeft(0L) {
-              case (total, (len, op)) =>
-                projectionsActor ! op
-                total + len
-            } map { total =>
-              ourself ! TaskComplete(task.id, new DateTime, total)
+        permissionsFinder.writePermissions(apiKey, fqSink, clock.instant()) flatMap { perms =>
+          val allPerms = Map(apiKey -> perms.toSet[Permission])
+
+          executor.execute(apiKey, script, prefix, QueryOptions(timeout = task.timeout)).flatMap {
+            _.traverse { stream =>
+              QueryResultConvert.toIngest(stream, fqSink, apiKey, authorities, Some(job.id), clock).foldLeft((0, 0L)) {
+                case ((offset, total), (len, msg)) =>
+                  projectionsActor ! IngestBundle(Seq((offset, msg)), allPerms)
+                  (offset + 1, total + len)
+              } map { case (_, total) =>
+                ourself ! TaskComplete(task.id, new DateTime, total)
+                total
+              }
             }
           }
         }

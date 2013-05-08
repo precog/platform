@@ -25,6 +25,7 @@ import blueeyes.util.Clock
 
 import com.precog.common._
 import com.precog.common.accounts._
+import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
 import com.precog.common.security._
 
@@ -95,7 +96,7 @@ object QueryResultConvert {
     }
   }
 
-  def toPathOps[N[+_]](slices: StreamT[N, Slice], dest: Path, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId])(implicit N: Monad[N]): StreamT[N, (Long, PathOp)] = {
+  def toIngest[N[+_]](slices: StreamT[N, Slice], dest: Path, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId], clock: Clock)(implicit N: Monad[N]): StreamT[N, (Long, EventMessage)] = {
       val streamId = java.util.UUID.randomUUID
 
       def jvaluesFromSlice(slice: Slice): Seq[JValue] = {
@@ -114,23 +115,24 @@ object QueryResultConvert {
         jvalues
       }
 
-      def writeAll(n: Long, stream: StreamT[N, Slice]): StreamT[N, (Long, PathOp)] = {
-        StreamT.unfoldM[N, (Long, PathOp), (Long, StreamT[N, Slice])]((1L, stream)) {
+      def writeAll(n: Long, stream: StreamT[N, Slice]): StreamT[N, (Long, EventMessage)] = {
+        StreamT.unfoldM[N, (Long, EventMessage), (Long, StreamT[N, Slice])]((1L, stream)) {
           case (n, _) if n < 0L =>
             N.point(None)
           case (n, stream) => stream.uncons.map {
             case Some((slice, tail)) =>
               val jvalues = jvaluesFromSlice(slice)
-              val pathOp = CreateNewVersion(dest, NIHDBData(Seq(NIHDB.Batch(n, jvalues))), streamId, apiKey, authorities, false)
-              Some(((slice.size, pathOp), (n + 1, tail)))
+              // FIXME: Probably not the safest way to get an EventId, but we don't even use them right nowx
+              val ingest = IngestMessage(apiKey, dest, authorities, jvalues map (IngestRecord(EventId.fromLong(n), _)), jobId, clock.instant, StreamRef.Create(streamId, false))
+              Some(((slice.size, ingest), (n + 1, tail)))
             case None =>
-              val pathOp = MakeCurrent(dest, streamId, jobId)
-              Some(((0L, pathOp), (-1L, StreamT.empty[N, Slice])))
+              val ingest = IngestMessage(apiKey, dest, authorities, Seq.empty, jobId, clock.instant, StreamRef.Create(streamId, true))
+              Some(((0L, ingest), (-1L, StreamT.empty[N, Slice])))
           }
         }
       }
 
-    (0L, CreateNewVersion(dest, NIHDBData(Seq()), streamId, apiKey, authorities, true)) :: writeAll(1L, slices)
+    (0L, IngestMessage(apiKey, dest, authorities, Seq.empty, jobId, clock.instant, StreamRef.Create(streamId, false))) :: writeAll(1L, slices)
   }
 }
 
