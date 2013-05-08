@@ -35,7 +35,7 @@ object WrittenByPermission {
 
 case class WritePermission(path: Path, writeAs: WriteAs) extends Permission {
   def implies(other: Permission): Boolean = other match {
-    case WritePermission(p0, w0) => path.isEqualOrParent(p0) && (writeAs == WriteAsAny || writeAs == w0)
+    case WritePermission(p0, w0) => path.isEqualOrParentOf(p0) && (writeAs == WriteAsAny || writeAs == w0)
     case _ => false
   }
 }
@@ -83,7 +83,7 @@ object Permission {
 
   object WrittenBy {
     def implies(permission: WrittenByPermission, candidate: WrittenByPermission): Boolean = {
-      permission.path.isEqualOrParent(candidate.path) &&
+      permission.path.isEqualOrParentOf(candidate.path) &&
       (permission.writtenBy match {
         case WrittenByAny => true
         case WrittenByAccount(accountId) => candidate.writtenBy match {
