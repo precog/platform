@@ -22,6 +22,7 @@ package yggdrasil
 package vfs
 
 import akka.actor.Actor
+import akka.actor.ActorRef
 import akka.dispatch.{Await, ExecutionContext, Future, Promise}
 import akka.pattern.pipe
 import akka.util.Duration
@@ -36,6 +37,7 @@ import com.google.common.cache.RemovalCause
 
 import com.precog.common.Path
 import com.precog.common.accounts.AccountId
+import com.precog.common.ingest._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import Permission._
@@ -60,10 +62,13 @@ import scalaz.std.stream._
 import scalaz.std.tuple._
 import scalaz.syntax.effect.id._
 import scalaz.syntax.semigroup._
+import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
 import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
+
+case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[Permission]])
 
 /**
   * An actor that manages resources under a given path. The baseDir is the version
@@ -76,47 +81,17 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private[this] implicit val futureM = new FutureMonad(executor)
 
-  private def versionDir(version: UUID) = new File(baseDir, version.toString)
-
-  private def dirOpt(dir: File) = dir.isDirectory.option(dir)
-
-  private def createVersion(version: UUID, typeName: String): IO[PrecogUnit] = {
-    if (versionLog.isCompleted(version)) {
-      IO(PrecogUnit)
-    } else {
-      for {
-        _ <- versionLog.addVersion(VersionEntry(version, typeName))
-        vDir = versionDir(version)
-        makeDir <- dirOpt(vDir) map { _ =>
-          // If a dir for this vesion exists currently, we need to wipe it since
-          // we're restarting this sequence
-          IOUtils.recursiveDelete(vDir) flatMap { _ =>
-            IOUtils.makeDirectory(vDir)
-          }
-        } getOrElse {
-          IOUtils.makeDirectory(vDir)
-        }
-      } yield makeDir
-    }
-  }
-
-  private def promoteVersion(version: UUID): Future[PrecogUnit] = {
-    // we only promote if the requested version is in progress
-    if (versionLog.isCompleted(version)) {
-      Promise.successful(PrecogUnit)
-    } else {
-      Future {
-        // ERROR: not safe
-        versionLog.completeVersion(version) unsafePerformIO
-      }
-    }
-  }
-
   // Keeps track of the resources for a given version/authority pair
   // TODO: make this an LRU cache
   private[this] var versions = Map[UUID, Resource]()
 
-  private def checkPermissions[A](value: A, writtenBy: Authorities, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Option[A]] = {
+  override def postStop = {
+    Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
+  }
+
+  private def versionDir(version: UUID) = new File(baseDir, version.toString)
+
+  private def checkReadPermissions[A](value: A, writtenBy: Authorities, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Option[A]] = {
     apiKey.map { key =>
       writtenBy.accountIds.toList.traverse { id =>
         permissionsFinder.apiKeyFinder.hasCapability(key, permsFor(id), Some(clock.now))
@@ -128,94 +103,161 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
-  private def performCreate(apiKey: APIKey, data: PathData, version: UUID, authorities: Authorities): Future[PathActionResponse] = {
-    permissionsFinder.checkWriteAuthorities(authorities, apiKey, path, clock.instant) map { okToWrite =>
-      if (okToWrite) {
-        (for {
-        // ERROR: not safe
-          _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
-          created <- data match {
-            case BlobData(bytes, mimeType) =>
-              resources.createBlob[IO](versionDir(version), mimeType, authorities, bytes :: StreamT.empty[IO, Array[Byte]])
+  private def openNIHDBProjection(version: UUID): Future[Option[ValidationNel[ResourceError, NIHDBProjection]]] = {
+    Future { openNIHDB(version).unsafePerformIO } flatMap { _ traverse { _ traverse { NIHDBProjection.wrap _ } } }
+  }
 
-            case NIHDBData(data) =>
-              resources.createNIHDB(versionDir(version), authorities)
-          }
-          cached <- created traverse {
-            // ERROR: not safe
-            _ tap { resource => IO { versions += (version -> resource) } }
-          }
-        } yield {
-          created.fold(
-            e => UpdateFailure(path, nels(e)),
-            _ => UpdateSuccess(path)
-          )
-        }).unsafePerformIO
-      } else {
-        UpdateFailure(path, nels(PermissionsError("Key %s does not have permission to write to %s under %d".format(apiKey, path, authorities))))
-      }
+  private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
+    PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
+  }
+
+  private def canReplace(path: Path, permissions: Set[Permission]): Boolean = {
+    sys.error("todo")
+  }
+
+  private def promoteVersion(version: UUID): IO[PrecogUnit] = {
+    // we only promote if the requested version is in progress
+    if (versionLog.isCompleted(version)) {
+      IO(PrecogUnit)
+    } else {
+      versionLog.completeVersion(version)
     }
   }
 
-  private def getNihdb(version: UUID): Future[ValidationNel[ResourceError, NIHDBResource]] = {
-    versions.get(version) map {
-      case nr: NIHDBResource => Promise successful Success(nr)
-      case uhoh => Promise successful Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))
-    } orElse {
-      versionLog.find(version) map { _ =>
-        // ERROR: not safe, and we don't cache the version here...
-        Future { resources.openNIHDB(versionDir(version)).unsafePerformIO }
-      }
+  private def openResource(version: UUID): IO[Option[ValidationNel[ResourceError, Resource]]] = {
+    versions.get(version) map { r => 
+      IO(Some(Success(r)))
     } getOrElse {
-      Promise successful Failure(nels(MissingData("No matching version could be found for " + version)))
-    }
+      versionLog.find(version) traverse { versionEntry =>
+        val dir = versionDir(version)
+        val openf = if (NIHDB.hasProjection(dir)) { resources.openNIHDB _ }
+                    else { resources.openBlob _ }
+
+        openf(dir) flatMap {
+          _ tap { resourceV =>
+            IO(resourceV foreach { r => versions += (version -> r) })
+          }
+        }
+      } 
+    } 
   }
 
-  private def getNihdbProjection(version: UUID): Future[ValidationNel[ResourceError, NIHDBProjection]] = {
-    getNihdb(version) flatMap { nv =>
-      nv traverse { nr =>
-        NIHDBProjection.wrap(nr)
-      }
-    }
-  }
-
-  private def getResource(version: UUID): Future[ValidationNel[ResourceError, Resource]] = {
-    versions.get(version) map { res =>
-      Promise successful Success(res)
-    } orElse {
-      versionLog.find(version) map { _ =>
-        Future {
-          (if (NIHDB.hasProjection(versionDir(version))) {
-            resources.openNIHDB(versionDir(version))
-          } else {
-            resources.openBlob(versionDir(version))
-          }).unsafePerformIO
+  private def openNIHDB(version: UUID): IO[Option[ValidationNel[ResourceError, NIHDBResource]]] = {
+    versions.get(version) map {
+      case nr: NIHDBResource => IO(Some(Success(nr)))
+      case uhoh => IO(Some(Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))))
+    } getOrElse {
+      versionLog.find(version) traverse { versionEntry =>
+        resources.openNIHDB(versionDir(version)) flatMap {
+          _ tap { resourceV =>
+            IO(resourceV foreach { r => versions += (version -> r) })
+          }
         }
       }
-    } getOrElse {
-      Promise successful Failure(nels(MissingData("No matching version could be found for " + version)))
+    } 
+  }
+
+  private def performCreate(apiKey: APIKey, data: PathData, version: UUID, writeAs: Authorities, complete: Boolean): IO[PathActionResponse] = {
+    for {
+      _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
+      created <- data match {
+        case BlobData(bytes, mimeType) =>
+          resources.createBlob[IO](versionDir(version), mimeType, writeAs, bytes :: StreamT.empty[IO, Array[Byte]])
+
+        case NIHDBData(data) =>
+          resources.createNIHDB(versionDir(version), writeAs)
+      }
+      _ <- created traverse { resource =>
+        for {
+          _ <- IO { versions += (version -> resource) } 
+          _ <- complete.whenM(versionLog.completeVersion(version))
+        } yield PrecogUnit
+      }
+    } yield {
+      created.fold(
+        error => UpdateFailure(path, nels(error)),
+        _ => UpdateSuccess(path)
+      )
     }
   }
 
-  private def hasData(version: Option[UUID]): Boolean = {
-    (for {
-      v <- version
-      dir <- dirOpt(versionDir(v))
-      files <- Option(dir.list)
-    } yield {
-      files.size > 0
-    }) getOrElse false
-  }
+  def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
+    def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
+      def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
+      def maybeCompleteJob(response: PathActionResponse) = {
+        (response == UpdateSuccess(msg.path) && terminal).option(msg.jobId).join traverse { jobsManager.finish(_, clock.now()) } map { _ => response }
+      }
 
-  override def postStop = {
-    Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
-  }
+      openNIHDB(streamId) flatMap {
+        case None => 
+          if (createIfAbsent) {
+            performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
+              maybeCompleteJob(response) pipeTo requestor 
+              PrecogUnit
+            } 
+          } else {
+            IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
+          }
 
+        case Some(Success(resource)) => 
+          for { 
+            futureSuccess <- IO(resource.db.insert(batch(msg))) 
+            _ <- terminal.whenM(versionLog.completeVersion(streamId))
+          } yield {
+            futureSuccess flatMap { _ => maybeCompleteJob(UpdateSuccess(msg.path)) } pipeTo requestor
+            PrecogUnit
+          }
+
+        case Some(Failure(errors)) => 
+          IO(requestor ! UpdateFailure(msg.path, errors))
+      }
+    }
+
+    def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
+      sys.error("todo")
+    }
+
+    msgs traverse {
+      case (offset, msg @ IngestMessage(apiKey, path, _, _, _, _, streamRef)) =>
+        streamRef match {
+          case StreamRef.Create(streamId, terminal) =>
+            persistNIHDB(versionLog.current.isEmpty && !versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
+
+          case StreamRef.Replace(streamId, terminal) =>
+            persistNIHDB(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal) 
+
+          case StreamRef.Append =>
+            val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
+            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) 
+        }
+
+      case (offset, msg @ StoreFileMessage(_, path, _, _, _, _, _, streamRef)) =>
+        streamRef match {
+          case StreamRef.Create(streamId, terminal) =>
+            persistFile(versionLog.current.isEmpty && !versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
+
+          case StreamRef.Replace(streamId, terminal) =>
+            persistFile(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
+
+          case StreamRef.Append =>
+            IO(requestor ! UpdateFailure(path, nels(GeneralError("Append is not yet supported for binary files."))))
+        }
+
+      case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
+        IO(sys.error("todo"): PrecogUnit)
+    } map {
+      _ => PrecogUnit
+    }
+  }
 
 
   def receive = {
+    case IngestBundle(messages, permissions) =>
+      processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
+
+/*
     case CreateNewVersion(_, data, version, apiKey, authorities, overwrite) =>
-      if (!overwrite && hasData(versionLog.current.map(_.id))) {
+      if (!overwrite && versionLog.current.nonEmpty) {
         // TODO: add backchannel error
         sender ! UpdateFailure(path, nels(GeneralError("Non-overwrite create request on existing data")))
       } else {
@@ -264,44 +306,50 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           logger.error(msg, t)
           UpdateFailure(path, nels(IOError(t)))
       } pipeTo sender
+      */
 
     case Read(_, id, auth) =>
-      val resVF: Future[ReadResult] = (id orElse versionLog.current.map(_.id)).map { version =>
-        getResource(version) flatMap {
-          _ traverse { resource =>
-          // TODO: should we even be checking perms here?
-            checkPermissions(resource, resource.authorities, auth, id => Set(ReadPermission(path, WrittenByAccount(id)))) map { resOpt =>
-              ReadSuccess(path, resOpt)
+      val io: IO[Future[ReadResult]] = (id orElse versionLog.current.map(_.id)) map { version =>
+        openResource(version) map {
+          case Some(resourceV) =>
+            resourceV traverse { resource =>
+              checkReadPermissions(resource, resource.authorities, auth, id => Set(ReadPermission(path, WrittenByAccount(id)))) map { resOpt =>
+                ReadSuccess(path, resOpt)
+              }
+            } map {
+              _ valueOr { ReadFailure(path, _) }
             }
-          } map {
-            _ valueOr { errors =>
-              ReadFailure(path, errors)
-            }
-          }
-        }
+
+          case None =>
+            Promise successful ReadFailure(path, nels(MissingData("Unable to find version %s".format(version))))
+        } 
       } getOrElse {
-        Promise successful ReadSuccess(path, None)
+        IO(Promise successful ReadSuccess(path, None))
+      } map { resVF =>
+        resVF recover {
+          case t: Throwable =>
+            val msg = "Error during read on " + id
+            logger.error(msg, t)
+            ReadFailure(path, nels(IOError(t)))
+        } pipeTo sender
       }
 
-      resVF recover {
-        case t: Throwable =>
-          val msg = "Error during read on " + id
-          logger.error(msg, t)
-          ReadFailure(path, nels(IOError(t)))
-      } pipeTo sender
+      io.unsafePerformIO
 
     case ReadProjection(_, id, auth) =>
       val projectionVF = (id orElse versionLog.current.map(_.id)) map { version =>
-        getNihdbProjection(version) map {
-          _ traverse { projection =>
-            checkPermissions(projection, projection.authorities, auth, id => Set(ReducePermission(path, WrittenByAccount(id)))) map { projOpt =>
-              ReadProjectionSuccess(path, projOpt)
+        openNIHDBProjection(version) map {
+          case Some(resourceV) =>
+            resourceV traverse { projection =>
+              checkReadPermissions(projection, projection.authorities, auth, id => Set(ReducePermission(path, WrittenByAccount(id)))) map { projOpt =>
+                ReadProjectionSuccess(path, projOpt)
+              }
+            } map {
+              _ valueOr { ReadProjectionFailure(path, _) }
             }
-          } map {
-            _ valueOr { errors =>
-              ReadProjectionFailure(path, errors)
-            }
-          }
+
+          case None =>
+            Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
         }
       } getOrElse {
         Promise successful ReadProjectionSuccess(path, None)

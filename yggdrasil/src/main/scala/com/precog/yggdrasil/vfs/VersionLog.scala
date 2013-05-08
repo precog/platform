@@ -44,6 +44,7 @@ import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
 import scalaz.syntax.applicative._
 import scalaz.syntax.effect.id._
+import scalaz.syntax.std.boolean._
 
 import shapeless._
 
@@ -111,6 +112,7 @@ object VersionLog {
     (currentVersion |@| allVersions |@| completedVersions) { new VersionLog(logFiles, _, _, _) }
   }
 }
+
 /**
   * Track path versions. This class is not thread safe
   */
@@ -141,32 +143,32 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
     }
   }
 
-  def completeVersion(version: UUID): IO[PrecogUnit] = allVersions.find(_.id == version) traverse { _ =>
-    IOUtils.writeToFile(version.serialize.renderCompact + "\n", completedFile)
-  } map {
-    _ getOrElse { throw new IllegalStateException("Cannot completed unknown version " + version) }
+  def completeVersion(version: UUID): IO[PrecogUnit] = {
+    if (allVersions.exists(_.id == version)) {
+      !isCompleted(version) whenM {
+        IOUtils.writeToFile(version.serialize.renderCompact + "\n", completedFile)
+      } map { _ => PrecogUnit }
+    } else {
+      IO.throwIO(new IllegalStateException("Cannot make nonexistent version %s current" format version))
+    }
   }
 
   def setHead(newHead: UUID): IO[PrecogUnit] = {
-    if (currentVersion.exists(_.id == newHead)) {
-      IO(PrecogUnit)
-    } else {
+    currentVersion.exists(_.id == newHead) unlessM {
       allVersions.find(_.id == newHead) traverse { entry =>
         IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile) map { _ =>
           currentVersion = Some(entry);
-          PrecogUnit 
         }
-      } map {
-        _ getOrElse { throw new IllegalStateException("Attempt to set head to nonexistent version: " + newHead) }
+      } flatMap {
+        _.isEmpty.whenM(IO.throwIO(new IllegalStateException("Attempt to set head to nonexistent version %s" format newHead)))
       }
-    }
+    } map { _ => PrecogUnit }
   }
 
   def clearHead = IOUtils.writeToFile(unsetSentinel, headFile).map { _ =>
     currentVersion = None
   }
 }
-
 
 case class VersionEntry(id: UUID, typeName: String)
 

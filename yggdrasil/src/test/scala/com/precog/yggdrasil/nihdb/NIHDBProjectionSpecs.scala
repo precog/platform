@@ -113,7 +113,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val toInsert = (0L to 2L).toSeq.map { i =>
-        (i, Seq(JNum(i)))
+        NIHDB.Batch(i, Seq(JNum(i)))
       }
 
       val results =
@@ -138,16 +138,16 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L), JNum(3L), JNum(4L))
 
       nihdb.insert((0L to 2L).toSeq.map { i =>
-        i -> Seq(JNum(i))
+        NIHDB.Batch(i, Seq(JNum(i)))
       })
 
       // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
       nihdb.insert((0L to 2L).toSeq.map { i =>
-        i -> Seq(JNum(i))
+        NIHDB.Batch(i, Seq(JNum(i)))
       })
 
       nihdb.insert((0L to 4L).toSeq.map { i =>
-        i -> Seq(JNum(i))
+        NIHDB.Batch(i, Seq(JNum(i)))
       })
 
       val result = for {
@@ -176,9 +176,9 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
-      (0L to 1950L).map {
-        i => JNum(i)
-      }.grouped(400).zipWithIndex.foreach { case (values, id) => nihdb.insert(Seq(id.toLong -> values)) }
+      (0L to 1950L).map(JNum(_)).grouped(400).zipWithIndex.foreach { 
+        case (values, id) => nihdb.insert(Seq(NIHDB.Batch(id.toLong, values))) 
+      }
 
       var waits = 10
 

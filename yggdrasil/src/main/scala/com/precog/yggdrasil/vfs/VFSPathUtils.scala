@@ -91,7 +91,7 @@ object VFSPathUtils extends Logging {
         (files.toList.flatMap { f =>
           // First pass filtering checks perms against the path
           val fPath = unescapePath(path / Path(f.getName))
-          allowedPaths.exists(_.isEqualOrParent(fPath)).option(fPath -> f)
+          allowedPaths.exists(_.isEqualOrParentOf(fPath)).option(fPath -> f)
         } traverse {
           // Second pass filtering ensures that the child has current data somewhere under it
           case (path, dir) =>

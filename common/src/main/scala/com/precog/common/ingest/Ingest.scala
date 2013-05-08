@@ -184,12 +184,12 @@ object StreamRef {
     }
   }
 
-  case class Create(streamRef: UUID, terminal: Boolean) extends StreamRef {
+  case class Create(streamId: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
     def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
 
-  case class Replace(streamRef: UUID, terminal: Boolean) extends StreamRef {
+  case class Replace(streamId: UUID, terminal: Boolean) extends StreamRef {
     def terminate = copy(terminal = true)
     def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
