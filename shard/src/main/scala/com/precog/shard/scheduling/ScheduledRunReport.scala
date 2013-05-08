@@ -20,37 +20,28 @@
 package com.precog.shard
 package scheduling
 
-import akka.dispatch.{ExecutionContext, Future, Promise}
-
-import com.precog.util.PrecogUnit
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Versioned._
+import blueeyes.json.serialization.DefaultSerialization._
 
 import java.util.UUID
 
-class InMemoryScheduleStorage(implicit executor: ExecutionContext) extends ScheduleStorage[Future] {
-  private[this] var tasks = Map.empty[UUID, ScheduledTask]
-  private[this] var history = Map.empty[UUID, Seq[ScheduledRunReport]]
+import org.joda.time.DateTime
 
-  def addTask(task: ScheduledTask) = Promise successful {
-    tasks += (task.id -> task)
-    PrecogUnit
-  }
+import scalaz._
 
-  def deleteTask(id: UUID) = Promise successful {
-    val found = tasks.get(id)
-    tasks -= id
-    found
-  }
+import shapeless._
 
-  def reportRun(report: ScheduledRunReport) = Promise successful {
-    history += (report.id -> (history.getOrElse(report.id, Seq.empty[ScheduledRunReport]) :+ report))
-    PrecogUnit
-  }
+object ScheduledRunReport {
+  import com.precog.common.ingest.JavaSerialization._
 
-  def historyFor(id: UUID) = Promise successful {
-    history.getOrElse(id, Seq.empty[ScheduledRunReport])
-  }
+  implicit val iso = Iso.hlist(ScheduledRunReport.apply _, ScheduledRunReport.unapply _)
 
-  def listTasks = Promise successful {
-    tasks.values.toSeq
-  }
+  val schemaV1 = "id" :: "startedAt" :: "endedAt" :: "records" :: "messages" :: HNil
+
+  implicit val decomposer = decomposerV[ScheduledRunReport](schemaV1, Some("1.0".v))
+  implicit val extractor  = extractorV[ScheduledRunReport](schemaV1, Some("1.0".v))
 }
+
+case class ScheduledRunReport(id: UUID, startedAt: DateTime, endedAt: DateTime, records: Long, messages: List[String] = Nil)
