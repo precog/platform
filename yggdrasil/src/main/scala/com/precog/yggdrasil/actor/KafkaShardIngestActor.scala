@@ -196,7 +196,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      permissionsFinder: PermissionsFinder[Future],
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
-                                     idleDelay: Duration = sys.error("todo"),
+                                     idleDelay: Duration = 1 seconds,
                                      ingestTimeout: Timeout = 120 seconds,
                                      maxCacheSize: Int = 5,
                                      maxConsecutiveFailures: Int = 3) extends Actor {

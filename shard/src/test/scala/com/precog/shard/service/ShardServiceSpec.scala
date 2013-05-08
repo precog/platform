@@ -384,14 +384,7 @@ trait TestPlatform extends ManagedPlatform { self =>
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
-  private def wrap[M[+_]: Monad](a: JValue): StreamT[M, Slice] = {
-//    val str = a.renderCompact
-//    val buffer = CharBuffer.allocate(str.length)
-//    buffer.put(str)
-//    buffer.flip()
-//
-//    StreamT.fromStream(Stream(buffer).point[M])
-//
+  private def toSlice[M[+_]: Monad](a: JValue): StreamT[M, Slice] = {
     Slice.fromJValues(Stream(a)) :: StreamT.empty[M, Slice]
   }
 
@@ -417,14 +410,15 @@ trait TestPlatform extends ManagedPlatform { self =>
     new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         if (query == "bad query") {
-          val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
+          val mu = shardQueryMonad.jobId traverse { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
-          } getOrElse ().point[Future]
-          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] {
-            mu map { _ => success(wrap(JArray(List(JNum(2))))) }
+          } 
+
+          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
+            mu map { _ => success(toSlice(JArray(List(JNum(2))))) }
           }
         } else {
-          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+          shardQueryMonad.point(success(toSlice(JArray(List(JNum(2))))))
         }
       }
     }
