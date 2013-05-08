@@ -51,10 +51,11 @@ import org.quartz.CronExpression
 
 import scalaz._
 import scalaz.std.option._
-import scalaz.syntax.std.boolean._
-import scalaz.syntax.std.list._
+import scalaz.std.string._
 import scalaz.syntax.apply._
 import scalaz.syntax.plus._
+import scalaz.syntax.std.boolean._
+import scalaz.syntax.std.list._
 import scalaz.syntax.traverse._
 
 class AddScheduledQueryServiceHandler(scheduleActor: ActorRef, permissionsFinder: PermissionsFinder[Future], clock: Clock)(implicit executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
@@ -141,16 +142,9 @@ class DeleteScheduledQueryServiceHandler[A](scheduleActor: ActorRef)(implicit ex
 class ScheduledQueryStatusServiceHandler[A](scheduleActor: ActorRef, permissionsFinder: PermissionsFinder[Future], clock: Clock)(implicit executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[A, Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => Success({
     request.parameters.get('scheduleId) map { idStr =>
-      //val lastLimitV: Validation[String, Option[Int]] = request.parameters.get('last) traverse { lastStr =>
-      //  Validation.fromTryCatch { lastStr.toInt } leftMap { _ => "Invalid last limit: " + lastStr }
-      //}
-
-      val lastLimitV: Validation[String, Option[Int]] = request.parameters.get('last) match {
-        case Some(lastStr) => Validation.fromTryCatch { Some(lastStr.toInt) } leftMap { _ => "Invalid last limit: " + lastStr }
-        case None => Success(None)
-      }
-
-      lastLimitV flatMap { limit =>
+      Validation.fromTryCatch { request.parameters.get('last) map(_.toInt) } leftMap {
+        case ex: NumberFormatException => "Invalid last limit: " + ex.getMessage
+      } flatMap { limit =>
         Validation.fromTryCatch { UUID.fromString(idStr) } map { id =>
           (scheduleActor ? StatusForTask(id, limit)).mapTo[Validation[String, Option[(ScheduledTask, Seq[ScheduledRunReport])]]] map {
             _ map {
