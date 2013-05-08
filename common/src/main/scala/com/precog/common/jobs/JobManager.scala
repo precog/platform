@@ -18,6 +18,7 @@ object JobManager {
     val Info = "info"
     val Log = "log"
     val ServerError = "serverError"
+    val ServerWarning = "serverWarning"
   }
 }
 
