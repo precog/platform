@@ -808,13 +808,21 @@ object ImportTools extends Command with Logging {
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
+
+      logger.info("Starting APIKeyFinder")
       val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+      logger.info("Starting PermissionsFinder")
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
       val authorities = Authorities(config.accountId)
 
+      logger.info("Starting ResourceBuilder")
       val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+
+      logger.info("Starting Projections Actor")
       val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
+
+      logger.info("Shard module complete")
     }
 
     import shardModule._
@@ -823,9 +831,6 @@ object ImportTools extends Command with Logging {
     val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
-
-    // Blanket write access ;)
-    val perms = Map(config.apiKey -> Set[Permission](WritePermission(Path("/"), Permission.WriteAs(config.accountId))))
 
     config.input.foreach {
       case (db, input) =>
@@ -845,14 +850,15 @@ object ImportTools extends Command with Logging {
           val (AsyncParse(errors, results), parser) = p(input)
           if (!errors.isEmpty) {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
+          } else if (results.size > 0) {
+            val eventidobj = EventId(pid, sid.getAndIncrement)
+            logger.info("Sending %d events".format(results.size))
+            val update = IngestData(
+              Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, results map (IngestRecord(eventidobj, _)), None, yggConfig.clock.instant, StreamRef.Append)))
+            )
+            Await.result(projectionsActor ? update, Duration(300, "seconds"))
+            logger.info("Batch saved")
           }
-          val eventidobj = EventId(pid, sid.getAndIncrement)
-          val update = IngestBundle(
-            Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, results map (IngestRecord(eventidobj, _)), None, yggConfig.clock.instant, StreamRef.Append))),
-            perms
-          )
-          Await.result(projectionsActor ? update, Duration(300, "seconds"))
-          logger.info("Batch saved")
           bb.flip()
           if (n >= 0) loop(offset + 1, parser)
         }

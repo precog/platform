@@ -87,6 +87,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   override def postStop = {
     Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
+    versionLog.close
+    logger.trace("Shutdown of path actor %s complete".format(path))
   }
 
   private def versionDir(version: UUID) = new File(baseDir, version.toString)

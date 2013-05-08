@@ -31,6 +31,7 @@ import blueeyes.bkka.FutureMonad
 import blueeyes.util.Clock
 
 import com.precog.common.Path
+import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.yggdrasil.actor._
@@ -51,17 +52,24 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
 
   private[this] var pathActors = Map.empty[Path, ActorRef]
 
+  override def postStop = {
+    logger.info("Shutdown of path actors complete")
+  }
+
   private[this] def targetActor(path: Path): IO[ActorRef] = {
     pathActors.get(path).map(IO(_)) getOrElse {
       val pathDir = VFSPathUtils.pathDir(baseDir, path)
 
-      VersionLog.open(pathDir) map {
-        _ map { versionLog =>
-          context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, resources, permissionsFinder, shutdownTimeout, jobManager, clock))) unsafeTap { newActor =>
-            pathActors += (path -> newActor)
+      IOUtils.makeDirectory(pathDir) flatMap { _ =>
+        VersionLog.open(pathDir) map {
+          _ map { versionLog =>
+            logger.debug("Creating new PathManagerActor for " + path)
+            context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, resources, permissionsFinder, shutdownTimeout, jobManager, clock))) unsafeTap { newActor =>
+              pathActors += (path -> newActor)
+            }
+          } valueOr { error =>
+            throw new Exception(error.message)
           }
-        } valueOr { error =>
-          throw new Exception(error.message)
         }
       }
     }
@@ -81,6 +89,12 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
             }
           } map { allPerms =>
             targetActor(path) map { pathActor =>
+              val (totalArchives, totalEvents) = pathMessages.foldLeft((0, 0)) {
+                case ((archived, events), (_, IngestMessage(_, _, _, data, _, _, _))) => (archived, events + data.size)
+                case ((archived, events), (_, am: ArchiveMessage)) => (archived + 1, events)
+                case (tally, _) => tally
+              }
+              logger.debug("Sending %d archives and %d events to %s".format(totalArchives, totalEvents, path))
               pathActor.tell(IngestBundle(pathMessages, allPerms.toMap), requestor)
             } except {
               case t: Throwable => IO(logger.error("Failure during version log open on " + path, t))
