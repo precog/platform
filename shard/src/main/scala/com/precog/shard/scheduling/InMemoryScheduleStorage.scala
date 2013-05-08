@@ -17,8 +17,9 @@ class InMemoryScheduleStorage(implicit executor: ExecutionContext) extends Sched
   }
 
   def deleteTask(id: UUID) = Promise successful {
+    val found = tasks.get(id)
     tasks -= id
-    PrecogUnit
+    found
   }
 
   def reportRun(report: ScheduledRunReport) = Promise successful {
