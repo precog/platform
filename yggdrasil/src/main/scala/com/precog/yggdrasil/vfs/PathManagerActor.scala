@@ -111,10 +111,6 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
   }
 
-  private def canReplace(path: Path, permissions: Set[Permission]): Boolean = {
-    sys.error("todo")
-  }
-
   private def promoteVersion(version: UUID): IO[PrecogUnit] = {
     // we only promote if the requested version is in progress
     if (versionLog.isCompleted(version)) {
@@ -181,21 +177,23 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
+  private def maybeCompleteJob(msg: EventMessage, terminal: Boolean, response: PathActionResponse) = {
+    (response == UpdateSuccess(msg.path) && terminal).option(msg.jobId).join traverse { jobsManager.finish(_, clock.now()) } map { _ => response }
+  }
+
   def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
     def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
       def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
-      def maybeCompleteJob(response: PathActionResponse) = {
-        (response == UpdateSuccess(msg.path) && terminal).option(msg.jobId).join traverse { jobsManager.finish(_, clock.now()) } map { _ => response }
-      }
 
       openNIHDB(streamId) flatMap {
         case None => 
           if (createIfAbsent) {
             performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
-              maybeCompleteJob(response) pipeTo requestor 
+              maybeCompleteJob(msg, terminal, response) pipeTo requestor 
               PrecogUnit
             } 
           } else {
+            //TODO: update job
             IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
           }
 
@@ -204,7 +202,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             futureSuccess <- IO(resource.db.insert(batch(msg))) 
             _ <- terminal.whenM(versionLog.completeVersion(streamId))
           } yield {
-            futureSuccess flatMap { _ => maybeCompleteJob(UpdateSuccess(msg.path)) } pipeTo requestor
+            futureSuccess flatMap { _ => maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) } pipeTo requestor
             PrecogUnit
           }
 
@@ -214,7 +212,15 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
 
     def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
-      sys.error("todo")
+      if (createIfAbsent) {
+        performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal) map { response =>
+          maybeCompleteJob(msg, terminal, response) pipeTo requestor 
+          PrecogUnit
+        } 
+      } else {
+        //TODO: update job
+        IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
+      }
     }
 
     msgs traverse {
@@ -254,59 +260,6 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   def receive = {
     case IngestBundle(messages, permissions) =>
       processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
-
-/*
-    case CreateNewVersion(_, data, version, apiKey, authorities, overwrite) =>
-      if (!overwrite && versionLog.current.nonEmpty) {
-        // TODO: add backchannel error
-        sender ! UpdateFailure(path, nels(GeneralError("Non-overwrite create request on existing data")))
-      } else {
-        performCreate(apiKey, data, version, authorities) recover {
-          case t: Throwable =>
-            val msg = "Error during data creation " + path
-            logger.error(msg, t)
-            UpdateFailure(path, nels(GeneralError(msg)))
-        } pipeTo sender
-      }
-
-    case Append(_, bd: BlobData, _, _, jobIdOpt) =>
-      Future {
-        val errMsg = "Append not yet supported for blob data"
-        logger.error(errMsg)
-        UpdateFailure(path, nels(GeneralError(errMsg)))
-      }
-
-    case Append(_, data @ NIHDBData(events), key, authorities, jobIdOpt) =>
-      versionLog.current map { version =>
-        getNihdb(version.id) map { _ map { projection =>
-          projection.db.insert(events)
-        } fold (
-          e => UpdateFailure(path, e),
-          _ => UpdateSuccess(path)
-        )}
-      } getOrElse {
-        val version = UUID.randomUUID
-        for {
-          created <- performCreate(key, data, version, authorities)
-          _       <- promoteVersion(version)
-        } yield created
-      } recover {
-        case t: Throwable =>
-          val msg = "Failure during append to " + path
-          logger.error(msg, t)
-          UpdateFailure(path, nels(IOError(t)))
-      } pipeTo sender
-
-    case MakeCurrent(_, id, jobId) =>
-      promoteVersion(id) map {
-        _ => UpdateSuccess(path)
-      } recover {
-        case t: Throwable =>
-          val msg = "Error during promotion of " + id + " to current"
-          logger.error(msg, t)
-          UpdateFailure(path, nels(IOError(t)))
-      } pipeTo sender
-      */
 
     case Read(_, id, auth) =>
       val io: IO[Future[ReadResult]] = (id orElse versionLog.current.map(_.id)) map { version =>
@@ -364,6 +317,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
     case Execute(_, auth) =>
       // Return projection snapshot if possible.
+
     case Stat(_, _) =>
       // Owners, a bit of history, mime type, etc.
   }
