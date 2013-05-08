@@ -47,7 +47,7 @@ object Event {
 }
 
 /**
- * If writeAs is None, then the downstream 
+ * If writeAs is None, then the downstream
  */
 case class Ingest(apiKey: APIKey, path: Path, writeAs: Option[Authorities], data: Seq[JValue], jobId: Option[JobId], timestamp: Instant, streamRef: StreamRef) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = ingest(this)
@@ -79,8 +79,8 @@ object Ingest {
         obj.validated[Path]("path") |@|
         obj.validated[Option[AccountId]]("ownerAccountId") ) { (apiKey, path, ownerAccountId) =>
           val jv = (obj \ "data")
-          Ingest(apiKey, path, ownerAccountId.map(Authorities(_)), 
-                 if (jv == JUndefined) Vector() else Vector(jv), 
+          Ingest(apiKey, path, ownerAccountId.map(Authorities(_)),
+                 if (jv == JUndefined) Vector() else Vector(jv),
                  None, EventMessage.defaultTimestamp, StreamRef.Append)
         }
     }
@@ -175,11 +175,11 @@ object StreamRef {
     def split(n: Int): Seq[StreamRef] = Vector.fill(n - 1) { copy(terminal = false) } :+ this
   }
 
-  case object Append extends StreamRef { 
-    val terminal = false 
+  case object Append extends StreamRef {
+    val terminal = false
     def terminate = this
     def split(n: Int): Seq[StreamRef] = Vector.fill(n) { this }
-  } 
+  }
 
   implicit val decomposer: Decomposer[StreamRef] = new Decomposer[StreamRef] {
     def decompose(streamRef: StreamRef) = streamRef match {
@@ -192,8 +192,8 @@ object StreamRef {
   implicit val extractor: Extractor[StreamRef] = new Extractor[StreamRef] {
     def validated(jv: JValue) = jv match {
       case JString("append") => Success(Append)
-      case other => 
-        ((other \? "create") map { jv => (jv, Create.apply _) }) orElse ((other \? "replace") map { jv => (jv, Replace.apply _) }) map { 
+      case other =>
+        ((other \? "create") map { jv => (jv, Create.apply _) }) orElse ((other \? "replace") map { jv => (jv, Replace.apply _) }) map {
           case (jv, f) => (jv.validated[UUID]("uuid") |@| jv.validated[Boolean]("terminal")) { f }
         } getOrElse {
           Failure(Invalid("Storage mode %s not recogized.".format(other)))
@@ -208,7 +208,7 @@ case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileCont
     val splitSize = content.data.length / n
     content.data.grouped(splitSize).map(d => this.copy(content = FileContent(d, content.mimeType, content.encoding))).toList
   }
-    
+
   def length = content.data.length
 }
 

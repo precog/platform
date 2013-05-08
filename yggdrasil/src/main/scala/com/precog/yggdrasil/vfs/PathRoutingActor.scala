@@ -55,9 +55,9 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
     case IngestData(messages) =>
       val requestor = sender
       val groupedAndPermissioned = messages.groupBy({ case (_, event) => event.path }).toStream traverse {
-        case (path, pathMessages) => 
+        case (path, pathMessages) =>
           pathMessages.map(_._2.apiKey).distinct.toStream traverse { apiKey =>
-            permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { perms => 
+            permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { perms =>
               apiKey -> perms.toSet[Permission]
             }
           } map { allPerms =>
@@ -66,7 +66,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
             } except {
               case t: Throwable => IO(logger.error("Failure during version log open on " + path, t))
             }
-          } 
+          }
       }
 
       groupedAndPermissioned.foreach(_.sequence.unsafePerformIO)
