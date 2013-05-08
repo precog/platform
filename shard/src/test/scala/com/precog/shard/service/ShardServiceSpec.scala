@@ -59,6 +59,7 @@ import blueeyes.core.data._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.service._
@@ -127,8 +128,9 @@ trait TestShardService extends
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
-      override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)
+      override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)(self.M)
       val defaultTimeout = Duration(90, TimeUnit.SECONDS)
+      val M = self.M
 
       override val jobManager = self.jobManager
 
@@ -146,19 +148,36 @@ trait TestShardService extends
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
-     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
-       req map {
-         case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
-         case Right(stream) => Right(stream.map(utf8.encode))
-       }
+    def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
+      req map {
+        case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+        case Right(stream) => Right(stream.map(utf8.encode))
+      }
 
-     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
-       fres map {
-         _ map {
-           case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
-           case Right(stream) => Right(stream.map(utf8.decode))
-         }
-       }
+    def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
+      fres map { response =>
+        val contentType = response.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption)
+        response.status.code match {
+          case OK | Accepted => //assume application/json
+            response map {
+              case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _)) 
+              case Right(stream) => Right(stream.map(utf8.decode))
+            }
+
+          case error =>
+            if (contentType.exists(_ == MimeTypes.application/json)) {
+              response map {
+                case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
+                case Right(stream) => Right(stream.map(utf8.decode))
+              }
+            } else {
+              response map { 
+                case Left(bb) => Left(JString(new String(bb.array, "UTF-8")))
+                case chunk => Right(StreamT.wrapEffect(chunkToFutureString.apply(chunk).map(s => CharBuffer.wrap(JString(s).renderCompact) :: StreamT.empty[Future, CharBuffer])))
+              }
+            }
+        }
+      }
    }
 
   lazy val queryService = client.contentType[QueryResult](application/(MimeTypes.json))
@@ -268,12 +287,22 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject query when no API key provided" in {
       query(simpleQuery, None).copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, _, _) => ok
       }
     }
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+          content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
+      }
+    }
+    "return 400 and errors if format is 'simple'" in {
+      val result = for {
+        HttpResponse(HttpStatus(BadRequest, _), _, Some(Left(result)), _) <- query("bad query")
+      } yield result
+
+      result.copoint must beLike {
+        case JArray(JString("ERROR!") :: Nil) => ok
       }
     }
     "return warnings/errors if format is 'detailed'" in {
@@ -284,6 +313,7 @@ class ShardServiceSpec extends TestShardService {
 
       val expected = JObject(
         JField("serverErrors", JArray(Nil)) ::
+        JField("serverWarnings", JArray(Nil)) ::
         JField("warnings", JArray(Nil)) ::
         JField("errors", JArray(Nil)) ::
         JField("data", JArray(JNum(2) :: Nil)) ::
@@ -323,12 +353,13 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject browse when no API key provided" in {
       browse(None).copoint must beLike {
-        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, None, _) => ok
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, _, _) => ok
       }
     }
     "reject browse when API key not found" in {
       browse(Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(Left(JString("The specified API key does not exist: not-gonna-find-it"))), _) => ok
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+          content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
     "return error response on browse failure" in {
@@ -347,6 +378,8 @@ trait TestPlatform extends ManagedPlatform { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   val to = Duration(3, "seconds")
+
+  implicit def M: Monad[Future]
 
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
@@ -383,7 +416,16 @@ trait TestPlatform extends ManagedPlatform { self =>
   protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
     new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        shardQueryMonad.point(success(wrap(JNum(2))))
+        if (query == "bad query") {
+          val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
+            jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
+          } getOrElse ().point[Future]
+          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] {
+            mu map { _ => success(wrap(JArray(List(JNum(2))))) }
+          }
+        } else {
+          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+        }
       }
     }
   }

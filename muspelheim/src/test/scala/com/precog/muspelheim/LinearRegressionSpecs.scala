@@ -30,11 +30,11 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
     obj("standardError") must beLike { case SDecimal(_) => ok }
   }
 
-  def handleNull(obj: Map[String, SValue]) = {
+  def handleZero(obj: Map[String, SValue]) = {
     obj.keys mustEqual Set("estimate", "standardError")
 
-    obj("estimate") mustEqual SNull
-    obj("standardError") mustEqual SNull
+    obj("estimate") mustEqual SDecimal(0)
+    obj("standardError") mustEqual SDecimal(0)
   }
 
   def checkFields(fields: Map[String, SValue]) = {
@@ -103,7 +103,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
           val SObject(fields) = elems("model1")
 
           val SArray(arr) = fields("coefficients")
-          arr(0) must beLike { case SObject(obj) => handleNull(obj) }
+          arr(0) must beLike { case SObject(obj) => handleZero(obj) }
           arr(1) must beLike { case SObject(obj) => handleCoeffs(obj) }
 
           checkFields(fields)
@@ -171,8 +171,8 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
               case SObject(const) => 
                 const.keys mustEqual Set("estimate", "standardError")
 
-                const("estimate") mustEqual SNull
-                const("standardError") mustEqual SNull
+                const("estimate") mustEqual SDecimal(0)
+                const("standardError") mustEqual SDecimal(0)
             }
           } else {
             ok
@@ -221,7 +221,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
         |
         | data := { const: medals''.const, height: medals''.HeightIncm }
         | model := std::stats::linearRegression(medals''.Weight, data)
-        | input := { height: medals.HeightIncm + 4 }
+        | input := { const: 12, height: medals.HeightIncm + 4 }
         |
         | std::stats::predictLinear(input, model)
       """.stripMargin
@@ -337,7 +337,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
               case SObject(height) =>  handleCoeffs(height)
             }
             obj("rate") must beLike {
-              case SObject(const) => handleNull(const)
+              case SObject(const) => handleZero(const)
             }
           }
 
@@ -383,7 +383,7 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
               case SObject(rateprice) => handleCoeffs(rateprice)
             }
             obj("price") must beLike {
-              case SObject(price) => handleNull(price)
+              case SObject(price) => handleZero(price)
             }
           }
 
@@ -424,16 +424,16 @@ trait LinearRegressionSpecs extends EvalStackSpecs {
             obj.keys mustEqual Set("rate", "rateprice", "price", "zzz")
 
             obj("price") must beLike {
-              case SObject(price) => handleNull(price)
+              case SObject(price) => handleZero(price)
             }
             obj("rateprice") must beLike {
-              case SObject(rateprice) => handleNull(rateprice)
+              case SObject(rateprice) => handleCoeffs(rateprice)
             }
             obj("zzz") must beLike {
               case SObject(zzz) => handleCoeffs(zzz)
             }
             obj("rate") must beLike {
-              case SObject(rate) => handleCoeffs(rate)
+              case SObject(rate) => handleZero(rate)
             }
           }
 

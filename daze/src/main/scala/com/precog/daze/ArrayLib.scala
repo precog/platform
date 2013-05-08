@@ -37,6 +37,8 @@ trait ArrayLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       
       val tpe = UnaryOperationType(JArrayUnfixedT, JType.JUniverseT)
       
+      override val idPolicy = IdentityPolicy.Synthesize
+      
       def apply(table: Table, ctx: EvaluationContext) = M point {
         var totalMaxLength = 0      // TODO can probably get better results from avg length
         

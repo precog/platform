@@ -185,6 +185,8 @@ trait NIHDBQueryExecutorComponent  {
           type YggConfig = NIHDBQueryExecutorConfig
           val yggConfig = platform.yggConfig
           val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
+        } map { case (faults, result) =>
+          result
         }
       }
 
