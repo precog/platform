@@ -109,12 +109,12 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
       }
     }
 
-    @tailrec final def readBatch(reader: CSVReader, batch: Vector[Array[String]]): Vector[Array[String]] = {
+    @tailrec final def readBatch(reader: CSVReader, batch: Vector[Array[String]]): (Boolean, Vector[Array[String]]) = {
       if (batch.size >= batchSize) {
-        batch 
+        (false, batch)
       } else {
         val nextRow = reader.readNext()
-        if (nextRow == null) batch else readBatch(reader, batch :+ nextRow)
+        if (nextRow == null) (true, batch) else readBatch(reader, batch :+ nextRow)
       }
     }
 
@@ -146,12 +146,15 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
     def ingestSync(reader: CSVReader, jobId: Option[JobId], streamRef: StreamRef): Future[IngestResult] = {
       def readBatches(paths: Array[JPath], reader: CSVReader, total: Int, ingested: Int, errors: Vector[(Int, String)]): Future[IngestResult] = {
         // TODO: handle errors in readBatch
-        M.point(readBatch(reader, Vector())) flatMap { batch =>
+        M.point(readBatch(reader, Vector())) flatMap { case (done, batch) =>
           if (batch.isEmpty) {
-            // the batch will only be empty if there's nothing left to read
-            // TODO: Write out job completion information to the queue.
-            sys.error("Need to terminate the streamRef here.") //FIXME
-            M.point(BatchResult(total, ingested, errors))
+            // the batch will only be empty if there's nothing left to read, but the batch size 
+            // boundary was hit on the previous read and so it was not discovered that we didn't
+            // need to continue until now. This could be cleaner via a more CPS'ed style, but meh.
+            // This empty record is just stored to send the terminated streamRef.
+            ingestStore.store(apiKey, path, authorities, Nil, jobId, streamRef.terminate) flatMap { _ =>
+              M.point(BatchResult(total, ingested, errors))
+            }
           } else {
             val types = CsvType.inferTypes(batch.iterator)
             val jvals = batch map { row =>
@@ -160,8 +163,9 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
               }
             }
 
-            ingestStore.store(apiKey, path, authorities, jvals, jobId, streamRef) flatMap { _ =>
-              readBatches(paths, reader, total + batch.length, ingested + batch.length, errors)
+            ingestStore.store(apiKey, path, authorities, jvals, jobId, if (done) streamRef.terminate else streamRef) flatMap { _ =>
+              if (done) M.point(BatchResult(total + batch.length, ingested + batch.length, errors))
+              else readBatches(paths, reader, total + batch.length, ingested + batch.length, errors)
             }
           }
         }

@@ -40,11 +40,11 @@ extends AccountFinder[M] {
 object TestAccounts {
   def newAccountId() = java.util.UUID.randomUUID.toString.toUpperCase
 
-  def newAccount[M[+_]: Monad](email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId], profile: Option[JValue])(f: (AccountId, Path) => M[APIKey]): M[Account] = {
+  def createAccount[M[+_]: Monad](email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId], profile: Option[JValue])(f: AccountId => M[APIKey]): M[Account] = {
     for {
       accountId <- newAccountId().point[M]
       path = Path(accountId)
-      apiKey <- f(accountId, path)
+      apiKey <- f(accountId)
     } yield {
       val salt = Account.randomSalt()
       Account(

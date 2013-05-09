@@ -79,10 +79,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import scalaz.effect.IO
 import scalaz.std.list._
-import scalaz.syntax.std.boolean._
+import scalaz.std.stream._
 import scalaz.syntax.bifunctor._
-import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
+import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
+import scalaz.syntax.std.option._
 
 import scala.collection.SortedSet
 import scala.collection.SortedMap
@@ -810,7 +812,8 @@ object ImportTools extends Command with Logging {
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
 
       logger.info("Starting APIKeyFinder")
-      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+      val apiKeyManager = new InMemoryAPIKeyManager[Future](Clock.System)
+      val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
       logger.info("Starting PermissionsFinder")
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
@@ -832,52 +835,60 @@ object ImportTools extends Command with Logging {
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
 
-    config.input.foreach {
-      case (db, input) =>
+    val createAPIKeyRecord = shardModule.apiKeyManager.newStandardAPIKeyRecord(config.accountId)
 
+    val runIngest = config.input.toStream traverse {
+      case (db, input) =>
         logger.info("Inserting batch: %s:%s".format(db, input))
-        import scala.annotation.tailrec
+
         val bufSize = 8 * 1024 * 1024
         val f = new File(input)
         val ch = new FileInputStream(f).getChannel
         val bb = ByteBuffer.allocate(bufSize)
 
-        @tailrec def loop(offset: Long, p: AsyncParser) {
+        def loop(offset: Long, p: AsyncParser): Future[Unit] = {
           val n = ch.read(bb)
           bb.flip()
 
           val input = if (n >= 0) More(bb) else Done
           val (AsyncParse(errors, results), parser) = p(input)
+
           if (!errors.isEmpty) {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
           } else if (results.size > 0) {
             val eventidobj = EventId(pid, sid.getAndIncrement)
             logger.info("Sending %d events".format(results.size))
+            val records = results map { IngestRecord(eventidobj, _) }
             val update = IngestData(
-              Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, results map (IngestRecord(eventidobj, _)), None, yggConfig.clock.instant, StreamRef.Append)))
+              Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, records, None, yggConfig.clock.instant, StreamRef.Append)))
             )
-            Await.result(projectionsActor ? update, Duration(300, "seconds"))
-            logger.info("Batch saved")
-          }
-          bb.flip()
-          if (n >= 0) loop(offset + 1, parser)
-        }
 
-        try {
-          loop(0L, AsyncParser(true))
-        } finally {
-          ch.close()
+            (projectionsActor ? update) flatMap { _ =>
+              logger.info("Batch saved")
+              bb.flip()
+              if (n >= 0) loop(offset + 1, parser) else Future(())
+            }
+          } else {
+            if (n >= 0) loop(offset + 1, parser) else Future(())
+          }
+        }
+        
+        loop(0L, AsyncParser(true)) onComplete { 
+          case _ => ch.close()
         }
     }
 
-    logger.info("Finalizing chef work-in-progress")
-    Await.result(chefs.toList.traverse(gracefulStop(_, stopTimeout)), stopTimeout)
+    val complete = 
+      createAPIKeyRecord >>
+      runIngest >>
+      Future(logger.info("Finalizing chef work-in-progress")) >>
+      chefs.toList.traverse(gracefulStop(_, stopTimeout)) >>
+      gracefulStop(masterChef, stopTimeout) >>
+      Future(logger.info("Completed chef shutdown")) >>
+      Future(logger.info("Waiting for shard shutdown")) >>
+      gracefulStop(projectionsActor, stopTimeout)
 
-    Await.result(gracefulStop(masterChef, stopTimeout), stopTimeout)
-    logger.info("Completed chef shutdown")
-
-    logger.info("Waiting for shard shutdown")
-    Await.result(gracefulStop(projectionsActor, stopTimeout), stopTimeout)
+    Await.result(complete, stopTimeout)
     actorSystem.shutdown()
 
     logger.info("Shutdown")
@@ -1028,7 +1039,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
 
   def create(accountId: String, apiKeyName: String, apiKeyManager: APIKeyManager[Future]) = {
-    apiKeyManager.newStandardAPIKeyRecord(accountId, Path(accountId), Some(apiKeyName))
+    apiKeyManager.newStandardAPIKeyRecord(accountId, Some(apiKeyName))
   }
 
   def delete(t: String, apiKeyManager: APIKeyManager[Future]) = sys.error("todo")

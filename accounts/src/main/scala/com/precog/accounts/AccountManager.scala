@@ -94,7 +94,7 @@ trait AccountManager[M[+_]] extends AccountFinder[M] {
     }
   }
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None, profile: Option[JValue] = None)(f: (AccountId, Path) => M[APIKey]): M[Account]
+  def createAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parentId: Option[AccountId] = None, profile: Option[JValue] = None)(f: AccountId => M[APIKey]): M[Account]
 
   def findAccountByEmail(email: String) : M[Option[Account]]
 

@@ -35,6 +35,7 @@ import com.precog.yggdrasil.actor.IngestData
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
 import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
 
+import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
 

@@ -89,8 +89,8 @@ trait TestEventService extends
   private val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
 
   protected val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
-  protected val testAccount = TestAccounts.newAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
-    case (accountId, path) => apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey)
+  protected val testAccount = TestAccounts.createAccount("test@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
+    accountId => apiKeyManager.newStandardAPIKeyRecord(accountId).map(_.apiKey)
   } copoint
 
   private val accountFinder = new TestAccountFinder[Future](Map(testAccount.apiKey -> testAccount.accountId), Map(testAccount.accountId -> testAccount))
@@ -106,9 +106,9 @@ trait TestEventService extends
     DeletePermission(testAccount.rootPath, WrittenByAny)
   )
 
-  val expiredAccount = TestAccounts.newAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
-    case (accountId, path) =>
-      apiKeyManager.newStandardAPIKeyRecord(accountId, path).map(_.apiKey).flatMap { expiredAPIKey =>
+  val expiredAccount = TestAccounts.createAccount("expired@example.com", "open sesame", new DateTime, AccountPlan.Free, None, None) {
+    accountId =>
+      apiKeyManager.newStandardAPIKeyRecord(accountId).map(_.apiKey).flatMap { expiredAPIKey =>
         apiKeyManager.deriveAndAddGrant(None, None, testAccount.apiKey, accessTest, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
       }
   } copoint
