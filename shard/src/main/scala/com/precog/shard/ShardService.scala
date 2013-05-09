@@ -29,9 +29,11 @@ import com.precog.common.jobs.JobManager
 import com.precog.common.security._
 import com.precog.common.services._
 import com.precog.daze._
+import com.precog.shard.scheduling._
 import com.precog.shard.service._
 import com.precog.yggdrasil.table.Slice
 
+import akka.actor.ActorRef
 import akka.dispatch.{Future, ExecutionContext, Promise}
 import akka.util.{Duration, Timeout}
 
@@ -75,12 +77,17 @@ sealed trait ShardState {
 
   def platform: Platform[Future, Result]
   def apiKeyFinder: APIKeyFinder[Future]
+  def accountFinder: AccountFinder[Future]
+  def scheduler: Scheduler[Future]
+  def clock: Clock
   def stoppable: Stoppable
 }
 
 case class ManagedQueryShardState(
     override val platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
+    accountFinder: AccountFinder[Future],
+    scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
     stoppable: Stoppable,
@@ -91,6 +98,9 @@ case class ManagedQueryShardState(
 case class BasicShardState(
     platform: Platform[Future, (Set[Fault], StreamT[Future, Slice])],
     apiKeyFinder: APIKeyFinder[Future],
+    accountFinder: AccountFinder[Future],
+    scheduler: Scheduler[Future],
+    clock: Clock,
     stoppable: Stoppable) extends ShardState {
   type Result = (Set[Fault], StreamT[Future, Slice])
 }
@@ -162,17 +172,17 @@ trait ShardService extends
 
   private def asyncQueryService(state: ShardState) = {
     state match {
-      case BasicShardState(_, _, _) | ManagedQueryShardState(_, _, _, _, _, DisableAsyncQueries) =>
+      case BasicShardState(_, _, _, _, _, _) | ManagedQueryShardState(_, _, _, _, _, _, _, DisableAsyncQueries) =>
         new QueryServiceNotAvailable
-      case ManagedQueryShardState(platform, _, _, _, _, _) =>
+      case ManagedQueryShardState(platform, _, _, _, _, _, _, _) =>
         new AsyncQueryServiceHandler(platform.asynchronous)
     }
   }
 
   private def syncQueryService(state: ShardState) = state match {
-    case BasicShardState(platform, _, _) =>
+    case BasicShardState(platform, _, _, _, _, _) =>
       new BasicQueryServiceHandler(platform)
-    case ManagedQueryShardState(platform, _, jobManager, _, _, _) =>
+    case ManagedQueryShardState(platform, _, _, _, jobManager, _, _, _) =>
       new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
   }
 
@@ -197,7 +207,7 @@ trait ShardService extends
       }
 
     state match {
-      case ManagedQueryShardState(_, apiKeyFinder, jobManager, clock, _, _) =>
+      case ManagedQueryShardState(_, apiKeyFinder, _, _, jobManager, clock, _, _) =>
         path("/analytics") {
           jsonAPIKey(apiKeyFinder) {
             path("/queries") {
@@ -220,11 +230,11 @@ trait ShardService extends
         dataPath("/analytics/fs") {
           shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
             query[QueryResult] {
-              { 
+              {
                 get { syncQueryService(state) } ~
-                post { syncQueryService(state) } 
-              } 
-            } 
+                post { syncQueryService(state) }
+              }
+            }
           } ~
           options {
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
@@ -244,6 +254,23 @@ trait ShardService extends
     }
   }
 
+  private def scheduledHandler(state: ShardState) = {
+    implicit val actTimeout = timeout
+
+    jsonp {
+      jvalue[ByteChunk] {
+        path("/scheduled/") {
+          jsonAPIKey(state.apiKeyFinder) {
+            post { new AddScheduledQueryServiceHandler(state.scheduler, state.apiKeyFinder, state.accountFinder, state.clock) }
+          } ~
+          path("'scheduleId") {
+            get { new ScheduledQueryStatusServiceHandler[Future[JValue]](state.scheduler) } ~
+            delete { new DeleteScheduledQueryServiceHandler(state.scheduler) }
+          }
+        }
+      }
+    }
+  }
 
   lazy val analyticsService = this.service("analytics", "2.0") {
     requestLogging(timeout) {
@@ -255,7 +282,12 @@ trait ShardService extends
         request { state =>
           import CORSHeaderHandler.allowOrigin
           allowOrigin("*", executionContext) {
-            asyncHandler(state) ~ syncHandler(state)
+            // TODO: unhack this
+            if (state.scheduler.enabled) {
+              asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state)
+            } else {
+              asyncHandler(state) ~ syncHandler(state)
+            }
           }
         } ->
         stop { state: ShardState =>

@@ -29,6 +29,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
+import com.precog.shard.scheduling.NoopScheduler
 import com.precog.yggdrasil.table.Slice
 
 import java.nio.ByteBuffer
@@ -144,7 +145,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -420,7 +421,7 @@ trait TestPlatform extends ManagedPlatform { self =>
           val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
           } getOrElse ().point[Future]
-          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] {
+          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
             mu map { _ => success(wrap(JArray(List(JNum(2))))) }
           }
         } else {

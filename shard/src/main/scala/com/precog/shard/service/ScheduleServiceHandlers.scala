@@ -34,6 +34,7 @@ import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _
 import blueeyes.util.Clock
 
 import com.precog.common.Path
+import com.precog.common.accounts.AccountFinder
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
@@ -58,8 +59,9 @@ import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
 import scalaz.syntax.traverse._
 
-class AddScheduledQueryServiceHandler(scheduleActor: ActorRef, permissionsFinder: PermissionsFinder[Future], clock: Clock)(implicit executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
+class AddScheduledQueryServiceHandler(scheduler: Scheduler[Future], apiKeyFinder: APIKeyFinder[Future], accountFinder: AccountFinder[Future], clock: Clock)(implicit M: Monad[Future], executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => Success({ apiKey : APIKey =>
+    val permissionsFinder = new PermissionsFinder[Future](apiKeyFinder, accountFinder, clock.instant)
     request.content map { futureContent =>
       for {
         body <- futureContent
@@ -95,7 +97,7 @@ class AddScheduledQueryServiceHandler(scheduleActor: ActorRef, permissionsFinder
         }
         addResultV <- taskV match {
           case Success(task) =>
-            (scheduleActor ? AddTask(task)).mapTo[Validation[String, PrecogUnit]] map {
+            scheduler.addTask(task) map {
               _ leftMap { error =>
                 logger.error("Failure adding scheduled execution: " + error)
                 HttpResponse(status = HttpStatus(InternalServerError), content = Some("An error occurred scheduling your query".serialize))
@@ -120,11 +122,11 @@ class AddScheduledQueryServiceHandler(scheduleActor: ActorRef, permissionsFinder
   val metadata = DescriptionMetadata("Add a new scheduled query")
 }
 
-class DeleteScheduledQueryServiceHandler[A](scheduleActor: ActorRef)(implicit executor: ExecutionContext, deleteTimeout: Timeout) extends CustomHttpService[A, Future[HttpResponse[JValue]]] with Logging {
+class DeleteScheduledQueryServiceHandler[A](scheduler: Scheduler[Future])(implicit executor: ExecutionContext, deleteTimeout: Timeout) extends CustomHttpService[A, Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => Success({
     request.parameters.get('scheduleId) map { idStr =>
       Validation.fromTryCatch { UUID.fromString(idStr) } map { id =>
-        (scheduleActor ? DeleteTask(id)).mapTo[Validation[String, PrecogUnit]] map {
+        scheduler.deleteTask(id) map {
           case Success(_) => ok[String](None)
           case Failure(error) => HttpResponse(status = HttpStatus(InternalServerError), content = Some("An error occurred deleting your query".serialize))
         }
@@ -139,14 +141,14 @@ class DeleteScheduledQueryServiceHandler[A](scheduleActor: ActorRef)(implicit ex
   val metadata = DescriptionMetadata("Delete a scheduled entry")
 }
 
-class ScheduledQueryStatusServiceHandler[A](scheduleActor: ActorRef, permissionsFinder: PermissionsFinder[Future], clock: Clock)(implicit executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[A, Future[HttpResponse[JValue]]] with Logging {
+class ScheduledQueryStatusServiceHandler[A](scheduler: Scheduler[Future])(implicit executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[A, Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[A]) => Success({
     request.parameters.get('scheduleId) map { idStr =>
       Validation.fromTryCatch { request.parameters.get('last) map(_.toInt) } leftMap {
         case ex: NumberFormatException => "Invalid last limit: " + ex.getMessage
       } flatMap { limit =>
         Validation.fromTryCatch { UUID.fromString(idStr) } map { id =>
-          (scheduleActor ? StatusForTask(id, limit)).mapTo[Validation[String, Option[(ScheduledTask, Seq[ScheduledRunReport])]]] map {
+          scheduler.statusForTask(id, limit) map {
             _ map {
               case Some((task, reports)) =>
                 val body: JValue = JObject(

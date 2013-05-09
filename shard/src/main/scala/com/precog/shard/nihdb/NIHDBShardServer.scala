@@ -25,6 +25,7 @@ import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.client._
+import com.precog.shard.scheduling._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -33,7 +34,11 @@ import blueeyes.util.Clock
 import akka.dispatch.Future
 import akka.dispatch.Promise
 import akka.dispatch.ExecutionContext
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
+import akka.pattern.GracefulStopSupport
+import akka.util.Timeout
+
+import java.util.concurrent.TimeUnit
 
 import org.streum.configrity.Configuration
 
@@ -41,7 +46,8 @@ import scalaz._
 
 object NIHDBShardServer extends BlueEyesServer
     with ShardService
-    with NIHDBQueryExecutorComponent {
+    with NIHDBQueryExecutorComponent
+    with GracefulStopSupport {
   import WebJobManager._
 
   val clock = Clock.System
@@ -59,23 +65,30 @@ object NIHDBShardServer extends BlueEyesServer
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-
     val (asyncQueries, jobManager) = {
       if (config[Boolean]("jobs.service.in_memory", false)) {
         (ShardStateOptions.DisableAsyncQueries, ExpiringJobManager[Future](config.detach("jobs")))
       } else {
         WebJobManager(config.detach("jobs")) map { webJobManager =>
           (ShardStateOptions.NoOptions, webJobManager.withM[Future])
-        } valueOr { errs => 
+        } valueOr { errs =>
           sys.error("Unable to build new WebJobManager: " + errs.list.mkString("\n", "\n", ""))
         }
       }
     }
 
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
-    val stoppable = Stoppable.fromFuture(platform.shutdown)
+    val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config.detach("scheduling"))
 
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, clock, stoppable, asyncQueries)
+    val schedulingTimeout = new Timeout(config[Int]("scheduling.timeout_ms", 10000))
+
+    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+
+    val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, scheduleStorage, platform.projectionsActor, platform, apiKeyFinder, accountFinder, clock)))
+    val scheduleActorStoppable = Stoppable.fromFuture(gracefulStop(scheduleActor, schedulingTimeout.duration)(actorSystem))
+
+    val stoppable = scheduleActorStoppable.append(Stoppable.fromFuture(platform.shutdown)).append(scheduleStorageStoppable)
+
+    ManagedQueryShardState(platform, apiKeyFinder, accountFinder, new ActorScheduler(scheduleActor)(schedulingTimeout), jobManager, clock, stoppable, asyncQueries)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")

@@ -43,9 +43,11 @@ import org.streum.configrity.Configuration
 import scalaz.Monad
 
 import com.precog.accounts._
+import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.shard._
+import com.precog.shard.scheduling.NoopScheduler
 import java.awt.Desktop
 import java.net.URI
 
@@ -82,7 +84,7 @@ trait StandaloneShardServer
     }
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
     // We always want a managed shard now, for better error reporting and Labcoat compatibility
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, Clock.System, stoppable)
+    ManagedQueryShardState(platform, apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, Clock.System, stoppable)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
