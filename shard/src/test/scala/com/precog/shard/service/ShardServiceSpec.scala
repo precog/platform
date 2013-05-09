@@ -29,6 +29,7 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
+import com.precog.shard.scheduling.NoopScheduler
 import com.precog.yggdrasil.table.Slice
 
 import java.nio.ByteBuffer
@@ -144,7 +145,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {

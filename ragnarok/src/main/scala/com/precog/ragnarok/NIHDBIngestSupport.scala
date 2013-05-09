@@ -30,6 +30,7 @@ import com.precog.common.security._
 import com.precog.niflheim.NIHDB
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.actor.IngestData
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
 import java.io.{ File, InputStreamReader, FileReader, BufferedReader }

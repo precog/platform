@@ -28,6 +28,7 @@ import akka.util.{Duration, Timeout}
 import blueeyes.bkka.FutureMonad
 import blueeyes.util.Clock
 
+import com.precog.common.accounts.AccountFinder
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.daze.QueryOptions
@@ -66,7 +67,7 @@ case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends Schedu
 case class TaskFailed(id: UUID, error: String) extends SchedulingMessage
 
 
-class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], permissionsFinder: PermissionsFinder[Future], clock: Clock, storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
+class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], apiKeyFinder: APIKeyFinder[Future], accountFinder: AccountFinder[Future], clock: Clock, storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
   private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
   private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -163,6 +164,8 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
         executor <- executorV
       } yield {
         import task._
+
+        val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, clock.instant)
 
         permissionsFinder.writePermissions(apiKey, fqSink, clock.instant()) flatMap { perms =>
           val allPerms = Map(apiKey -> perms.toSet[Permission])
