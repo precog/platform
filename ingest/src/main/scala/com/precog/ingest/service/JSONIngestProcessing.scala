@@ -63,7 +63,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
   }
 
   object JSONParseState {
-    def empty(stopOnFirstError: Boolean) = JSONParseState(AsyncParser(stopOnFirstError), IngestReport.Empty)
+    def empty(stopOnFirstError: Boolean) = JSONParseState(AsyncParser.stream(), IngestReport.Empty)
   }
 
   final class IngestProcessor extends IngestProcessorLike {

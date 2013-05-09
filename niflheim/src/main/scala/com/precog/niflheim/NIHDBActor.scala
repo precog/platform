@@ -54,7 +54,7 @@ import scala.collection.JavaConverters._
 
 import shapeless._
 
-case class Insert(batch: Seq[NIHDB.Batch])
+case class Insert(batch: Seq[NIHDB.Batch], responseRequested: Boolean)
 
 case object GetSnapshot
 
@@ -67,6 +67,10 @@ case object GetStructure
 case class Structure(columns: Set[(CPath, CType)])
 
 case object GetAuthorities
+
+sealed trait InsertResult
+case class Inserted(offset: Long, size: Int) extends InsertResult
+case object Skipped extends InsertResult
 
 object NIHDB {
   case class Batch(offset: Long, values: Seq[JValue])
@@ -87,7 +91,9 @@ object NIHDB {
 trait NIHDB {
   def authorities: Future[Authorities]
 
-  def insert(batch: Seq[NIHDB.Batch]): Future[PrecogUnit]
+  def insert(batch: Seq[NIHDB.Batch]): IO[PrecogUnit]
+
+  def insertVerified(batch: Seq[NIHDB.Batch]): Future[InsertResult]
 
   def getSnapshot(): Future[NIHDBSnapshot]
 
@@ -118,8 +124,11 @@ private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: T
   def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
 
-  def insert(batch: Seq[NIHDB.Batch]): Future[PrecogUnit] =
-    (actor ? Insert(batch)) map { _ => PrecogUnit }
+  def insert(batch: Seq[NIHDB.Batch]): IO[PrecogUnit] =
+    IO(actor ! Insert(batch, false)) 
+
+  def insertVerified(batch: Seq[NIHDB.Batch]): Future[InsertResult] =
+    (actor ? Insert(batch, true)).mapTo[InsertResult] 
 
   def getSnapshot(): Future[NIHDBSnapshot] =
     (actor ? GetSnapshot).mapTo[NIHDBSnapshot]
@@ -330,13 +339,15 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
       ProjectionState.toFile(currentState, descriptorFile).unsafePerformIO
       txLog.completeCook(id)
 
-    case Insert(batch) =>
+    case Insert(batch, responseRequested) =>
       if (batch.isEmpty) {
         logger.warn("Skipping insert with an empty batch on %s".format(baseDir.getCanonicalPath))
+        if (responseRequested) sender ! Skipped
       } else {
         val (skipValues, keepValues) = batch.partition(_.offset <= currentState.maxOffset)
         if (keepValues.isEmpty) {
           logger.warn("Skipping entirely seen batch of %d rows prior to offset %d".format(batch.flatMap(_.values).size, currentState.maxOffset))
+          if (responseRequested) sender ! Skipped
         } else {
           val values = keepValues.flatMap(_.values)
           val offset = keepValues.map(_.offset).max
@@ -357,10 +368,11 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
             txLog.startCook(toCook.id)
             chef ! Prepare(toCook.id, cookSequence.getAndIncrement, cookedDir, toCook)
           }
+
           logger.debug("Insert complete on %d rows at offset %d for %s".format(values.length, offset, baseDir.getCanonicalPath))
+          if (responseRequested) sender ! Inserted(offset, values.length)
         }
       }
-      sender ! ()
 
     case GetStatus =>
       sender ! Status(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)

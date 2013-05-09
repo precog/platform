@@ -63,7 +63,7 @@ object JsonUtil {
       }
     }
 
-    rec(stream, AsyncParser(true))
+    rec(stream, AsyncParser.json())
   }
 
 
@@ -72,7 +72,7 @@ object JsonUtil {
 
   def parseManyFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): StreamT[M, AsyncParse] = {
     // create a new stream, using the current stream and parser
-    StreamT.unfoldM((stream, AsyncParser(false))) {
+    StreamT.unfoldM((stream, AsyncParser.stream())) {
       case (stream, parser) => stream.uncons map {
         case Some((bb, tail)) =>
           // parse the current byte buffer, keeping track of the

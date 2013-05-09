@@ -118,7 +118,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val results =
         for {
-          _ <- nihdb.insert(toInsert)
+          _ <- nihdb.insertVerified(toInsert)
           result <- projection.getBlockAfter(None, None)
         } yield result
 

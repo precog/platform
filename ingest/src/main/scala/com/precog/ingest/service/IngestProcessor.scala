@@ -28,7 +28,7 @@ import blueeyes.core.http.HttpHeaders._
 import blueeyes.core.http.HttpRequest
 import blueeyes.core.http.MimeTypes._
 import blueeyes.json.{AsyncParser, AsyncParse }
-import AsyncParser._
+import AsyncParser.{More, Done}
 
 import com.precog.common.Path
 import com.precog.common.ingest._
@@ -110,7 +110,7 @@ class DefaultIngestProcessingSelectors(maxFields: Int, batchSize: Int, ingestSto
 
   class JSONIngestProcessingSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends IngestProcessingSelector {
     def select(partialData: Array[Byte], request: HttpRequest[_]): Option[IngestProcessing] = {
-      val (AsyncParse(errors, values), parser) = AsyncParser(true).apply(More(ByteBuffer.wrap(partialData)))
+      val (AsyncParse(errors, values), parser) = AsyncParser.stream().apply(More(ByteBuffer.wrap(partialData)))
       if (errors.isEmpty && !values.isEmpty) {
         request.headers.header[`Content-Type`].toSeq.flatMap(_.mimeTypes) collectFirst {
           case JSON_STREAM => new JSONIngestProcessing(apiKey, path, authorities, JSONStreamStyle, maxFields, ingestStore)

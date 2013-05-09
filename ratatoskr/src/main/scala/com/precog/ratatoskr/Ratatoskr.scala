@@ -893,7 +893,7 @@ object ImportTools extends Command with Logging {
           }
         }
         
-        loop(0L, AsyncParser(true)) onComplete { 
+        loop(0L, AsyncParser.stream()) onComplete { 
           case _ => ch.close()
         }
     }

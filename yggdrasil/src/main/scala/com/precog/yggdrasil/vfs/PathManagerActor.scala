@@ -164,7 +164,9 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           resources.createBlob[IO](versionDir(version), mimeType, writeAs, bytes :: StreamT.empty[IO, Array[Byte]])
 
         case NIHDBData(data) =>
-          resources.createNIHDB(versionDir(version), writeAs)
+          resources.createNIHDB(versionDir(version), writeAs) flatMap { 
+            _ traverse { _ tap { _.db.insert(data) } }
+          }
       }
       _ <- created traverse { resource =>
         for {
@@ -207,11 +209,12 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
         case Some(Success(resource)) =>
           for {
-            futureSuccess <- IO(resource.db.insert(batch(msg)))
+            _ <- resource.db.insert(batch(msg))
             _ <- terminal.whenM(versionLog.completeVersion(streamId))
           } yield {
             logger.trace("Sent insert message for " + msg + " to nihdb")
-            futureSuccess flatMap { _ => maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) } pipeTo requestor
+            // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
+            maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) pipeTo requestor
             PrecogUnit
           }
 
@@ -246,7 +249,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           case StreamRef.Append =>
             logger.trace("Received append for %s".format(path.path))
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
-            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false)
+            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) >> 
+            versionLog.completeVersion(streamId)
         }
 
       case (offset, msg @ StoreFileMessage(_, path, _, _, _, _, _, streamRef)) =>
@@ -273,7 +277,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     case IngestBundle(messages, permissions) =>
       processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
 
-    case Read(_, id, auth) =>
+    case msg @ Read(_, id, auth) =>
+      logger.debug("Received ReadProjection request " + msg)
       val io: IO[Future[ReadResult]] = (id orElse versionLog.current.map(_.id)) map { version =>
         openResource(version) map {
           case Some(resourceV) =>
@@ -301,12 +306,15 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
       io.unsafePerformIO
 
-    case ReadProjection(_, id, auth) =>
-      val projectionVF = (id orElse versionLog.current.map(_.id)) map { version =>
+    case msg @ ReadProjection(_, id, auth) =>
+      logger.debug("Received ReadProjection request " + msg)
+      (id orElse versionLog.current.map(_.id)) map { version =>
         openNIHDBProjection(version) map {
           case Some(resourceV) =>
             resourceV traverse { projection =>
+              logger.debug("Found " + projection + " for NIHDB projection version " + version)
               checkReadPermissions(projection, projection.authorities, auth, id => Set(ReducePermission(path, WrittenByAccount(id)))) map { projOpt =>
+                logger.debug("Permission check succeeded for projection " + id)
                 ReadProjectionSuccess(path, projOpt)
               }
             } map {
@@ -314,13 +322,13 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             }
 
           case None =>
+            logger.warn("Version log contained version " + version + " but it could not be opened as a NIHDB projection.")
             Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
         }
       } getOrElse {
+        logger.warn("Projection version " + id + " not found in version log. (None == current)")
         Promise successful ReadProjectionSuccess(path, None)
-      }
-
-      projectionVF recover {
+      } recover {
         case t: Throwable =>
           val msg = "Error during read projection on " + id
           logger.error(msg, t)

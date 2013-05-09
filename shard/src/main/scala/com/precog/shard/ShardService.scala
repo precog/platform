@@ -283,11 +283,11 @@ trait ShardService extends
           import CORSHeaderHandler.allowOrigin
           allowOrigin("*", executionContext) {
             // TODO: unhack this
-            if (state.scheduler.enabled) {
-              asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state)
-            } else {
-              asyncHandler(state) ~ syncHandler(state)
-            }
+              if (state.scheduler.enabled) {
+                asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state) 
+              } else {
+                asyncHandler(state) ~ syncHandler(state)
+              }
           }
         } ->
         stop { state: ShardState =>
@@ -297,26 +297,12 @@ trait ShardService extends
     }
   }
 
-/*
-  lazy val analysisService = this.service("analysis", "1.0") {
-    requestLogging(timeout) {
-      healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
-        startup {
-
-        } ->
-        request { state =>
-          import CORSHeaderHandler.allowOrigin
-          allowOrigin("*", executionContext) {
-            path("/analysis") {
-              dataPath("/fs") {
-                get {
-                }
-              }
-            }
-          }
-        } ->
-        stop { state: ShardState =>
-          state.stoppable
+/*j
+  private def analysisHandler(state: ShardState) = {
+    path("/analysis") {
+      dataPath("/fs") {
+        get[ByteChunk, (APIKey, Path) => Future[HttpResponse[ByteChunk]]] {
+          sys.error("todo")
         }
       }
     }
