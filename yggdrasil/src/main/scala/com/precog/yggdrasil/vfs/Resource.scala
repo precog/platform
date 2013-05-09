@@ -37,7 +37,7 @@ sealed trait Resource {
   def mimeType: MimeType
   def authorities: Authorities
   def close: Future[PrecogUnit]
-  def append(data: PathData): Future[PrecogUnit]
+  def append(data: PathData): IO[PrecogUnit]
 }
 
 sealed trait ResourceError {
@@ -78,11 +78,12 @@ object ResourceError {
 case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource {
   val mimeType: MimeType = Resource.QuirrelData
   def close: Future[PrecogUnit] = db.close(as)
-  def append(data: PathData): Future[PrecogUnit] = data match {
+  def append(data: PathData): IO[PrecogUnit] = data match {
     case NIHDBData(batch) =>
       db.insert(batch)
 
-    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-event data to NIHDB"))
+    case _ => 
+      IO.throwIO(new IllegalArgumentException("Attempt to insert non-event data to NIHDB"))
   }
 }
 
@@ -144,8 +145,8 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
     }
   }
 
-  def append(data: PathData): Future[PrecogUnit] = data match {
-    case _ => Promise.failed(new IllegalArgumentException("Blob append not yet supported"))
+  def append(data: PathData): IO[PrecogUnit] = data match {
+    case _ => IO.throwIO(new IllegalArgumentException("Blob append not yet supported"))
 
 //    case BlobData(bytes, mimeType) => Future {
 //      if (mimeType != metadata.mimeType) {
