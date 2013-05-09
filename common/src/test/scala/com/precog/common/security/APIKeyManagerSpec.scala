@@ -1,6 +1,8 @@
 package com.precog.common
 package security
 
+import accounts._
+
 import com.precog.common.security.service._
 
 import org.specs2.mutable.Specification
@@ -19,10 +21,11 @@ trait APIKeyManagerSpec[M[+_]] extends Specification {
       val path = Path("/user1/")
       val mgr = new InMemoryAPIKeyManager[M](blueeyes.util.Clock.System)
 
-      val grantRequest = v1.NewGrantRequest.newGrant("012345", path, Some("testGrant"), None, Set(), None)
       val grantParentage = for {
         rootKey <- mgr.rootAPIKey
         rootGrantId <- mgr.rootGrantId
+        perms = Account.newAccountPermissions("012345", Path("/012345/"))
+        grantRequest = v1.NewGrantRequest(Some("testGrant"), None, Set(rootGrantId), perms, None)
         record <- mgr.newAPIKeyWithGrants(Some("test"), None, rootKey, Set(grantRequest))
         grants <- record.toList.flatMap(_.grants).map(mgr.findGrant).sequence
       } yield {
