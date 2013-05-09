@@ -291,8 +291,9 @@ object Console extends App {
         val yggConfig = replConfig
 
         val accountFinder = None
+        val apiKeyManager = new InMemoryAPIKeyManager[Future](yggConfig.clock)
 
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](yggConfig.clock))
+        val accessControl = new DirectAPIKeyFinder(apiKeyManager)
         val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))

@@ -86,7 +86,8 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   object Table extends TableCompanion
 
   val accountFinder = new StaticAccountFinder[Future]("", "")
-  val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
+  val apiKeyManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
+  val accessControl = new DirectAPIKeyFinder(apiKeyManager)
   val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
   val storageTimeout = Timeout(testTimeout)

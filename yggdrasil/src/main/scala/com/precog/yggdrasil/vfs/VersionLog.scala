@@ -75,6 +75,10 @@ object VersionLog {
   }
 
   def open(baseDir: File) = IO {
+    if (!baseDir.isDirectory) {
+      if (!baseDir.mkdirs) throw new IllegalStateException(baseDir + " cannot be created as a directory.")
+    } 
+
     val logFiles = new LogFiles(baseDir)
     import logFiles._
 
@@ -120,7 +124,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   import VersionLog._
   import logFiles._
 
-  private[this] val workLock = FileLock(baseDir, lockName)
+  private[this] val workLock = FileLock(logFiles.baseDir, lockName)
 
   private[this] var currentVersion: Option[VersionEntry] = initVersion
   private[this] var allVersions: List[VersionEntry] = initAllVersions

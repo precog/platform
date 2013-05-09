@@ -110,6 +110,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   }
 
   private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
+    logger.debug("Checking write permission for " + path + " as " + authorities + " among " + permissions)
     PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
   }
 
@@ -180,22 +181,27 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   }
 
   private def maybeCompleteJob(msg: EventMessage, terminal: Boolean, response: PathActionResponse) = {
+    //TODO: Add job progress updates
     (response == UpdateSuccess(msg.path) && terminal).option(msg.jobId).join traverse { jobsManager.finish(_, clock.now()) } map { _ => response }
   }
 
   def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
+    logger.debug("About to persist %d messages".format(msgs.size))
+
     def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
       def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
 
       openNIHDB(streamId) flatMap {
         case None =>
           if (createIfAbsent) {
+            logger.debug("Creating new nihdb database for streamId " + streamId)
             performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
               maybeCompleteJob(msg, terminal, response) pipeTo requestor
               PrecogUnit
             }
           } else {
             //TODO: update job
+            logger.warn("Cannot overwrite existing database for " + streamId)
             IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
           }
 
@@ -204,6 +210,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             futureSuccess <- IO(resource.db.insert(batch(msg)))
             _ <- terminal.whenM(versionLog.completeVersion(streamId))
           } yield {
+            logger.debug("Sent insert message for " + msg + " to nihdb")
             futureSuccess flatMap { _ => maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) } pipeTo requestor
             PrecogUnit
           }

@@ -117,7 +117,8 @@ object NIHDBPlatformActor extends Logging {
         implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
 
         val accountFinder = new StaticAccountFinder[Future]("", "", Some("/"))
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
+        val accountManager = new InMemoryAPIKeyManager[Future](blueeyes.util.Clock.System)
+        val accessControl = new DirectAPIKeyFinder(accountManager)
         val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))

@@ -108,7 +108,7 @@ trait TestShardService extends
   val rootAPIKey = apiKeyManager.rootAPIKey.copoint
 
   val testPath = Path("/test")
-  val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey).copoint
+  val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test").map(_.apiKey).copoint
 
   import Permission._
   val testPermissions = Set[Permission](
@@ -119,7 +119,7 @@ trait TestShardService extends
 
   val expiredPath = Path("expired")
 
-  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey =>
+  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired").map(_.apiKey).flatMap { expiredAPIKey =>
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, testPermissions, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
 

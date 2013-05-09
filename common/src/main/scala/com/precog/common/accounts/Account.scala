@@ -21,7 +21,8 @@ package com.precog.common
 package accounts
 
 import com.precog.common.Path
-import com.precog.common.security.APIKey
+import com.precog.common.security.{ APIKey, Permission, ReadPermission, WritePermission, DeletePermission }
+import Permission._
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -98,6 +99,16 @@ object Account {
     val hashBytes = md.digest()
 
     hashBytes.flatMap(byte => Integer.toHexString(0xFF & byte))(collection.breakOut) : String
+  }
+
+  def newAccountPermissions(accountId: AccountId, accountPath: Path): Set[Permission] = {
+    // Path is "/" so that an account may read data it wrote no matter what path it exists under. 
+    // See AccessControlSpec, NewGrantRequest
+    Set[Permission](
+      WritePermission(accountPath, WriteAsAny),
+      DeletePermission(accountPath, WrittenByAny),
+      ReadPermission(Path.Root, WrittenByAccount(accountId))
+    )
   }
 }
 

@@ -163,26 +163,26 @@ class SecurityServiceSpec extends TestAPIKeyService with FutureMatchers with Tag
   val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
   val rootGrantId = Await.result(apiKeyManager.rootGrantId, to)
 
-  val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Path("user1"), Some("user1-key"), None), to)
+  val user1 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user1", Some("user1-key"), None), to)
   val user1Grant = Await.result(apiKeyManager.findGrant(user1.grants.head), to).get
 
-  val user2 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user2", Path("user2"), Some("user2-key"), None), to)
+  val user2 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user2", Some("user2-key"), None), to)
   val user2Grant = Await.result(apiKeyManager.findGrant(user2.grants.head), to).get
 
-  val user3 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user3", Path("user3"), Some("user3-key"), None), to)
+  val user3 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user3", Some("user3-key"), None), to)
   val user3Grant = Await.result(apiKeyManager.findGrant(user3.grants.head), to).get
 
-  val user4 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user4", Path("user4"), Some("user4-key"), None), to)
+  val user4 = Await.result(apiKeyManager.newStandardAPIKeyRecord("user4", Some("user4-key"), None), to)
   val user4Grant = Await.result(apiKeyManager.findGrant(user4.grants.head), to).get
   val user4DerivedGrant = Await.result(
-    apiKeyManager.newGrant(None, None, user4.apiKey, Set(user4Grant.grantId), standardPermissions("user4"), None), to)
+    apiKeyManager.createGrant(None, None, user4.apiKey, Set(user4Grant.grantId), standardPermissions("user4"), None), to)
 
-  val user5 = Await.result(apiKeyManager.newAPIKey(Some("user5-key"), None, user1.apiKey, Set.empty), to)
-  val user6 = Await.result(apiKeyManager.newAPIKey(Some("user6-key"), None, user1.apiKey, Set.empty), to)
+  val user5 = Await.result(apiKeyManager.createAPIKey(Some("user5-key"), None, user1.apiKey, Set.empty), to)
+  val user6 = Await.result(apiKeyManager.createAPIKey(Some("user6-key"), None, user1.apiKey, Set.empty), to)
 
   val expiredGrant = Await.result(
-    apiKeyManager.newGrant(None, None, user1.apiKey, Set(user1Grant.grantId), standardPermissions("user1"), Some(new DateTime().minusYears(1000))), to)
-  val expired = Await.result(apiKeyManager.newAPIKey(None, None, user1.apiKey, Set(expiredGrant.grantId)), to)
+    apiKeyManager.createGrant(None, None, user1.apiKey, Set(user1Grant.grantId), standardPermissions("user1"), Some(new DateTime().minusYears(1000))), to)
+  val expired = Await.result(apiKeyManager.createAPIKey(None, None, user1.apiKey, Set(expiredGrant.grantId)), to)
 
   val allAPIKeys = Await.result(apiKeyManager.listAPIKeys(), to)
   val allGrants = Await.result(apiKeyManager.listGrants(), to)

@@ -79,15 +79,8 @@ object v1 {
 
     val schemaV1 = "name" :: "description" :: ("parentIds" ||| Set.empty[GrantId]) :: "permissions" :: "expirationDate" :: HNil
 
-    implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewGrantRequest](schemaV1)
-
-    def newGrant(accountId: AccountId, path: Path, name: Option[String], description: Option[String], parentIds: Set[GrantId], expiration: Option[DateTime]): NewGrantRequest = {
-      import Permission._
-      // Path is "/" so that an account may read data it owns no matter what path it exists under. See AccessControlSpec, APIKeyManager.newAccountGrant
-      val readPerms =  Set(ReadPermission, ReducePermission).map(_(Path.Root, WrittenByAccount(accountId)) : Permission)
-      val writePerms = Set(WritePermission(path, WriteAsAny), DeletePermission(path, WrittenByAny))
-      NewGrantRequest(name, description, parentIds, readPerms ++ writePerms, expiration)
-    }
+    implicit val decomposerV1 = IsoSerialization.decomposer[NewGrantRequest](schemaV1)
+    implicit val extractorV1 = IsoSerialization.extractor[NewGrantRequest](schemaV1)
   }
 
   case class NewAPIKeyRequest(name: Option[String], description: Option[String], grants: Set[NewGrantRequest])
@@ -99,9 +92,12 @@ object v1 {
 
     implicit val (decomposerV1, extractorV1) = IsoSerialization.serialization[NewAPIKeyRequest](schemaV1)
 
-    def newAccount(accountId: String, path: Path, name: Option[String] = None, description: Option[String] = None, parentIds: Set[GrantId] = Set()) = {
-      val grants = NewGrantRequest.newGrant(accountId, path, name.map(_+"-grant"), description.map(_+" standard account grant"), parentIds, None)
-      NewAPIKeyRequest(name, description, Set(grants))
+    def newAccount(accountId: AccountId, name: Option[String] = None, description: Option[String] = None, parentIds: Set[GrantId] = Set()) = {
+      val path = Path("/%s/".format(accountId))
+      val permissions = Account.newAccountPermissions(accountId, path)
+      val grantRequest = NewGrantRequest(name.map(_+"-grant"), description.map(_+" standard account grant"), parentIds, permissions, None)
+
+      NewAPIKeyRequest(name, description, Set(grantRequest))
     }
   }
 }
