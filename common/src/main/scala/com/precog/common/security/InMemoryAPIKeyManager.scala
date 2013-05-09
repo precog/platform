@@ -61,6 +61,12 @@ class InMemoryAPIKeyManager[M[+_]](clock: Clock)(implicit val M: Monad[M]) exten
   private val deletedAPIKeys = mutable.Map.empty[APIKey, APIKeyRecord]
   private val deletedGrants = mutable.Map.empty[GrantId, Grant]
 
+  def populateAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, apiKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
+    val record = APIKeyRecord(apiKey, name, description, issuerKey, grants, false)
+    apiKeys.put(record.apiKey, record)
+    record.point[M]
+  }
+
   def createAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
     val record = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     apiKeys.put(record.apiKey, record)

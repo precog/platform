@@ -88,7 +88,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   override def postStop = {
     Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
     versionLog.close
-    logger.trace("Shutdown of path actor %s complete".format(path))
+    logger.info("Shutdown of path actor %s complete".format(path))
   }
 
   private def versionDir(version: UUID) = new File(baseDir, version.toString)
@@ -110,7 +110,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   }
 
   private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
-    logger.debug("Checking write permission for " + path + " as " + authorities + " among " + permissions)
+    logger.trace("Checking write permission for " + path + " as " + authorities + " among " + permissions)
     PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
   }
 
@@ -194,7 +194,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       openNIHDB(streamId) flatMap {
         case None =>
           if (createIfAbsent) {
-            logger.debug("Creating new nihdb database for streamId " + streamId)
+            logger.trace("Creating new nihdb database for streamId " + streamId)
             performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
               maybeCompleteJob(msg, terminal, response) pipeTo requestor
               PrecogUnit
@@ -210,7 +210,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             futureSuccess <- IO(resource.db.insert(batch(msg)))
             _ <- terminal.whenM(versionLog.completeVersion(streamId))
           } yield {
-            logger.debug("Sent insert message for " + msg + " to nihdb")
+            logger.trace("Sent insert message for " + msg + " to nihdb")
             futureSuccess flatMap { _ => maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) } pipeTo requestor
             PrecogUnit
           }
@@ -236,12 +236,15 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       case (offset, msg @ IngestMessage(apiKey, path, _, _, _, _, streamRef)) =>
         streamRef match {
           case StreamRef.Create(streamId, terminal) =>
+            logger.trace("Received create for %s stream %s: current: %b, complete: %b".format(path.path, streamId, versionLog.current.isEmpty, versionLog.isCompleted(streamId)))
             persistNIHDB(versionLog.current.isEmpty && !versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Replace(streamId, terminal) =>
+            logger.trace("Received replace for %s stream %s: complete: %b".format(path.path, streamId, versionLog.isCompleted(streamId)))
             persistNIHDB(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
+            logger.trace("Received append for %s".format(path.path))
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
             persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false)
         }

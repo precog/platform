@@ -28,6 +28,8 @@ import com.weiglewilczek.slf4s.Logging
 import org.joda.time.DateTime
 import org.joda.time.Instant
 
+import com.weiglewilczek.slf4s.Logging
+
 import scalaz._
 import scalaz.\/._
 import scalaz.std.option.optionInstance
@@ -51,17 +53,13 @@ object PermissionsFinder {
   }
 }
 
-class PermissionsFinder[M[+_]: Monad](val apiKeyFinder: APIKeyFinder[M], val accountFinder: AccountFinder[M], timestampRequiredAfter: Instant) {
+class PermissionsFinder[M[+_]: Monad](val apiKeyFinder: APIKeyFinder[M], val accountFinder: AccountFinder[M], timestampRequiredAfter: Instant) extends Logging {
   import PermissionsFinder._
   import Permission._
 
   private def filterWritePermissions(keyDetails: v1.APIKeyDetails, path: Path, at: Option[Instant]): Set[WritePermission] = {
     keyDetails.grants filter { g =>
-      at map { timestamp =>
-        g.isValidAt(timestamp)
-      } getOrElse {
-        g.createdAt.isBefore(timestampRequiredAfter)
-      }
+      (at exists { g.isValidAt _ }) || g.createdAt.isBefore(timestampRequiredAfter)
     } flatMap {
       _.permissions collect { 
         case perm @ WritePermission(path0, _) if path0.isEqualOrParentOf(path) => perm
@@ -98,9 +96,13 @@ class PermissionsFinder[M[+_]: Monad](val apiKeyFinder: APIKeyFinder[M], val acc
 
   def writePermissions(apiKey: APIKey, path: Path, at: Instant): M[Set[WritePermission]] = {
     apiKeyFinder.findAPIKey(apiKey, None) map {
-      _.toSet flatMap { details => 
+      case Some(details) =>
+        logger.debug("Filtering write grants from " + details + " for " + path + " at " + at)
         filterWritePermissions(details, path, Some(at))
-      }
+      
+      case None =>
+        logger.warn("No API key details found for %s %s at %s".format(apiKey, path.path, at.toString))
+        Set()
     }
   }
 

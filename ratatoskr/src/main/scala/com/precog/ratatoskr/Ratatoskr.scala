@@ -753,8 +753,8 @@ object ImportTools extends Command with Logging {
   class Config(
     var input: Vector[(String, String)] = Vector.empty,
     val batchSize: Int = 10000,
-    var apiKey: APIKey = "root",     // FIXME
-    var accountId: AccountId = "",
+    var apiKey: APIKey = "not-a-real-key",
+    var accountId: AccountId = "not-a-real-account",
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
     var archiveRoot: File = new File("./archive")
@@ -812,7 +812,13 @@ object ImportTools extends Command with Logging {
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
 
       logger.info("Starting APIKeyFinder")
+      //// ****** WARNING ****** ////
+      // IF YOU EVER CHANGE THE FOLLOWING LINE TO USE ANYTHING BUT THE IN-MEMORY SYSTEM,
+      // YOU MUST FIX grantWrite OR YOU'LL GIVE ROOT PERMISSIONS TO THE API KEY BEING
+      // USED FOR THE WRITE
       val apiKeyManager = new InMemoryAPIKeyManager[Future](Clock.System)
+      //// ****** END WARNING ****** ////
+
       val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
       logger.info("Starting PermissionsFinder")
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
@@ -835,10 +841,24 @@ object ImportTools extends Command with Logging {
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
 
-    val createAPIKeyRecord = shardModule.apiKeyManager.newStandardAPIKeyRecord(config.accountId)
+    def grantWrite(key: APIKey) = 
+      for { 
+        rootKey <- apiKeyManager.rootAPIKey 
+        rootGrantId <- apiKeyManager.rootGrantId 
+        _ <- apiKeyManager.populateAPIKey(None, None, rootKey, key, Set(rootGrantId)) onComplete {
+          case Left(error) => logger.error("Could not add grant " + rootGrantId + " to apiKey " + key, error)
+          case Right(success) => logger.info("Updated API key record: " + success)
+        }
+      } yield key
 
-    val runIngest = config.input.toStream traverse {
+    def logGrants(key: APIKey) = shardModule.apiKeyManager.validGrants(key, None) onComplete {
+      case Left(error) => logger.error("Could not retrieve grants for api key " + key, error)
+      case Right(success) => logger.info("Grants for " + key + ": " + success)
+    }
+
+    def runIngest(apiKey: APIKey) = config.input.toStream traverse {
       case (db, input) =>
+        val path = Path(db)
         logger.info("Inserting batch: %s:%s".format(db, input))
 
         val bufSize = 8 * 1024 * 1024
@@ -860,7 +880,7 @@ object ImportTools extends Command with Logging {
             logger.info("Sending %d events".format(results.size))
             val records = results map { IngestRecord(eventidobj, _) }
             val update = IngestData(
-              Seq((offset, IngestMessage(config.apiKey, Path(db), authorities, records, None, yggConfig.clock.instant, StreamRef.Append)))
+              Seq((offset, IngestMessage(apiKey, path, authorities, records, None, yggConfig.clock.instant, StreamRef.Append)))
             )
 
             (projectionsActor ? update) flatMap { _ =>
@@ -879,8 +899,9 @@ object ImportTools extends Command with Logging {
     }
 
     val complete = 
-      createAPIKeyRecord >>
-      runIngest >>
+      grantWrite(config.apiKey) >>
+      logGrants(config.apiKey) >> 
+      runIngest(config.apiKey) >>
       Future(logger.info("Finalizing chef work-in-progress")) >>
       chefs.toList.traverse(gracefulStop(_, stopTimeout)) >>
       gracefulStop(masterChef, stopTimeout) >>
