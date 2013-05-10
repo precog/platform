@@ -50,27 +50,17 @@ import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
-final class QueryServiceNotAvailable(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
-  val service = { (request: HttpRequest[ByteChunk]) =>
-    success({ (r: APIKey, p: Path, q: String, opts: QueryOptions) =>
-      M.point(HttpResponse(HttpStatus(NotFound, "This service is not available in this version.")))
-    })
-  }
-
-  val metadata = DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query.")
-}
-
-abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+abstract class QueryServiceHandler[A](implicit M: Monad[Future]) 
+    extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
   def extractResponse(request: HttpRequest[_], a: A, outputType: QueryOutput): Future[HttpResponse[QueryResult]]
 
   private val Command = """:(\w+)\s+(.+)""".r
 
-  private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
+  private def handleErrors[A](query: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
     case SystemError(error) =>
-      error.printStackTrace()
-      logger.error("An error occurred processing the query: " + qt, error)
+      logger.error("An error occurred processing the query: " + query, error)
       HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
 
     case InvalidStateError(error) =>
@@ -88,64 +78,37 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomH
     }
   }
 
-  lazy val service = (request: HttpRequest[ByteChunk]) => {
-    success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
-      case Command("ls"|"list", arg) => list(apiKey, Path(arg.trim))
-      case Command("ds"|"describe", arg) => describe(apiKey, Path(arg.trim))
-      case qt =>
-        platform.executorFor(apiKey) flatMap {
-          case Success(executor) =>
-            executor.execute(apiKey, query, path, opts) flatMap {
-              case Success(result) =>
-                extractResponse(request, result, opts.output) map (appendHeaders(opts))
-              case Failure(error) =>
-                handleErrors(qt, error).point[Future]
-            }
+  val service = (request: HttpRequest[ByteChunk]) => {
+    success { (apiKey: APIKey, path: Path, query: String, opts: QueryOptions) =>
+      platform.executorFor(apiKey) flatMap {
+        case Success(executor) =>
+          executor.execute(apiKey, query, path, opts) flatMap {
+            case Success(result) =>
+              extractResponse(request, result, opts.output) map (appendHeaders(opts))
+            case Failure(error) =>
+              handleErrors(query, error).point[Future]
+          }
 
-          case Failure(error) =>
-            logger.error("Failure during evaluator setup: " + error)
-            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
-        }
-    })
+        case Failure(error) =>
+          logger.error("Failure during evaluator setup: " + error)
+          HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
+      }
+    }
   }
 
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
-
-  def list(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.browse(apiKey, p).map {
-      case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
-      case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
-    }
-  }
-
-  def describe(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.structure(apiKey, p, CPath.Identity).map {
-      case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
-      case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
-    }
-  }
 }
 
-class BasicQueryServiceHandler(
-    val platform: Platform[Future, (Set[Fault], StreamT[Future, Slice])])(implicit
-    val M: Monad[Future]) extends QueryServiceHandler[(Set[Fault], StreamT[Future, Slice])] {
-
-  def extractResponse(request: HttpRequest[_], result: (Set[Fault], StreamT[Future, Slice]), outputType: QueryOutput): Future[HttpResponse[QueryResult]] = M.point {
-    val (faults, stream) = result
-    if (faults.isEmpty) {
-      HttpResponse[QueryResult](OK, content = Some(Right(QueryResultConvert.toCharBuffers(outputType, stream))))
-    } else {
-      val json = JArray(faults.toList map { fault =>
-        JObject(
-          JField("message", JString(fault.message)) ::
-          (fault.pos map { pos =>
-            JField("position", pos.serialize) :: Nil
-          } getOrElse Nil)
-        )
-      })
-      HttpResponse[QueryResult](BadRequest, content = Some(Left(json)))
+class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]])(implicit M: Monad[Future]) 
+    extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
+  val service = (request: HttpRequest[ByteChunk]) => {
+    success { (apiKey: APIKey, path: Path) => 
+      val queryOptions = ShardServiceCombinators.queryOpts(request)
+      sys.error("todo")
     }
   }
+
+  def metadata = DescriptionMetadata("""Returns the result of executing a stored query.""")
 }
 
 sealed trait SyncResultFormat

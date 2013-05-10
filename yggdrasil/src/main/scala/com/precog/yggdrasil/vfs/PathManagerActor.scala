@@ -164,7 +164,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private def performCreate(apiKey: APIKey, data: PathData, version: UUID, writeAs: Authorities, complete: Boolean): IO[PathActionResponse] = {
     for {
-      _ <- versionLog.addVersion(VersionEntry(version, data.typeName))
+      _ <- versionLog.addVersion(VersionEntry(version, data.typeName, clock.instant()))
       created <- data match {
         case BlobData(bytes, mimeType) =>
           resources.createBlob[IO](versionDir(version), mimeType, writeAs, bytes :: StreamT.empty[IO, Array[Byte]])
@@ -350,6 +350,9 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       }       
 
       io.unsafePerformIO
+
+    case CurrentVersion(_, auth) =>
+      sender ! versionLog.current
 
     case Execute(_, auth) =>
       // Return projection snapshot if possible.

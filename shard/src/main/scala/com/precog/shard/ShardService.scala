@@ -72,37 +72,15 @@ object ShardStateOptions {
   case object DisableAsyncQueries extends ShardStateOptions
 }
 
-sealed trait ShardState {
-  type Result
-
-  def platform: Platform[Future, Result]
-  def apiKeyFinder: APIKeyFinder[Future]
-  def accountFinder: AccountFinder[Future]
-  def scheduler: Scheduler[Future]
-  def clock: Clock
-  def stoppable: Stoppable
-}
-
-case class ManagedQueryShardState(
-    override val platform: ManagedPlatform,
+case class ShardState(
+    platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
     stoppable: Stoppable,
-    options: ShardStateOptions = ShardStateOptions.NoOptions) extends ShardState {
-  type Result = StreamT[Future, Slice]
-}
-
-case class BasicShardState(
-    platform: Platform[Future, (Set[Fault], StreamT[Future, Slice])],
-    apiKeyFinder: APIKeyFinder[Future],
-    accountFinder: AccountFinder[Future],
-    scheduler: Scheduler[Future],
-    clock: Clock,
-    stoppable: Stoppable) extends ShardState {
-  type Result = (Set[Fault], StreamT[Future, Slice])
+    options: ShardStateOptions = ShardStateOptions.NoOptions) {
 }
 
 trait ShardService extends
@@ -119,7 +97,6 @@ trait ShardService extends
   /**
    * This provides the configuration for the service and expects a `ShardState`
    * in return. The exact `ShardState` can be either a `BasicShardState` or a
-   * `ManagedQueryShardState`. If a `ManagedQueryShardState` is returned, then
    * all features, including async queries and detailed query output are
    * enabled. Otherwise, if only a `BasicShardState` is returned, then only
    * basic synchronous queries will be allowed.
@@ -170,23 +147,7 @@ trait ShardService extends
     }
   }
 
-  private def asyncQueryService(state: ShardState) = {
-    state match {
-      case BasicShardState(_, _, _, _, _, _) | ManagedQueryShardState(_, _, _, _, _, _, _, DisableAsyncQueries) =>
-        new QueryServiceNotAvailable
-      case ManagedQueryShardState(platform, _, _, _, _, _, _, _) =>
-        new AsyncQueryServiceHandler(platform.asynchronous)
-    }
-  }
-
-  private def syncQueryService(state: ShardState) = state match {
-    case BasicShardState(platform, _, _, _, _, _) =>
-      new BasicQueryServiceHandler(platform)
-    case ManagedQueryShardState(platform, _, _, _, jobManager, _, _, _) =>
-      new SyncQueryServiceHandler(platform.synchronous, jobManager, SyncResultFormat.Simple)
-  }
-
-  private def cf = implicitly[ByteChunk => Future[JValue]]
+  //private def cf = implicitly[ByteChunk => Future[JValue]]
 
   def shardService[F[+_]](service: HttpService[ByteChunk, F[Future[HttpResponse[QueryResult]]]])(implicit
       F: Functor[F]): HttpService[ByteChunk, F[Future[HttpResponse[ByteChunk]]]] = {
@@ -194,45 +155,32 @@ trait ShardService extends
   }
 
   private def asyncHandler(state: ShardState) = {
-    val queryHandler =
-      path("/analytics") {
-        jsonAPIKey(state.apiKeyFinder) {
-          path("/queries") {
-            // async handler *always* returns a JSON object containing the job ID
-            shardService[({ type λ[+α] = (APIKey => α) })#λ] {
-              asyncQuery(post(asyncQueryService(state)))
-            }
+    path("/analytics") {
+      jsonAPIKey(state.apiKeyFinder) {
+        path("/queries") {
+          path("/'jobId") {
+            get(new AsyncQueryResultServiceHandler(state.jobManager)) ~
+            delete(new QueryDeleteHandler[ByteChunk](state.jobManager, state.clock))
+          } ~
+          // async handler *always* returns a JSON object containing the job ID
+          shardService[({ type λ[+α] = (APIKey => α) })#λ] {
+            asyncQuery(post(new AsyncQueryServiceHandler(state.platform.asynchronous)))
           }
         }
       }
-
-    state match {
-      case ManagedQueryShardState(_, apiKeyFinder, _, _, jobManager, clock, _, _) =>
-        path("/analytics") {
-          jsonAPIKey(apiKeyFinder) {
-            path("/queries") {
-              path("/'jobId") {
-                get(new AsyncQueryResultServiceHandler(jobManager)) ~
-                delete(new QueryDeleteHandler[ByteChunk](jobManager, clock))
-              }
-            }
-          }
-        } ~ queryHandler
-
-      case _ =>
-        queryHandler
     }
   }
 
   private def syncHandler(state: ShardState) = {
+    val queryService = new SyncQueryServiceHandler(state.platform.synchronous, state.jobManager, SyncResultFormat.Simple)
     jsonp {
       jsonAPIKey(state.apiKeyFinder) {
         dataPath("/analytics/fs") {
           shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
             query[QueryResult] {
               {
-                get { syncQueryService(state) } ~
-                post { syncQueryService(state) }
+                get { queryService } ~
+                post { queryService }
               }
             }
           } ~
@@ -242,9 +190,9 @@ trait ShardService extends
         } ~
         dataPath("/meta/fs") {
           get {
-            shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
-              new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder)
-            }
+            produce(application/json)(
+              new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder) map { _ map { _ map { _ map { jvalueToChunk } } } }
+            )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
           } ~
           options {
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
@@ -267,6 +215,16 @@ trait ShardService extends
             get { new ScheduledQueryStatusServiceHandler[Future[JValue]](state.scheduler) } ~
             delete { new DeleteScheduledQueryServiceHandler(state.scheduler) }
           }
+        }
+      }
+    }
+  }
+
+  private def analysisHandler[A](state: ShardState) = {
+    dataPath("/analysis/fs") {
+      get {
+        shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
+          new AnalysisServiceHandler(state.platform)
         }
       }
     }
@@ -296,16 +254,4 @@ trait ShardService extends
       }
     }
   }
-
-/*j
-  private def analysisHandler(state: ShardState) = {
-    path("/analysis") {
-      dataPath("/fs") {
-        get[ByteChunk, (APIKey, Path) => Future[HttpResponse[ByteChunk]]] {
-          sys.error("todo")
-        }
-      }
-    }
-  }
-  */
 }

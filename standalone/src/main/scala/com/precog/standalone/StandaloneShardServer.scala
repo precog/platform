@@ -84,7 +84,7 @@ trait StandaloneShardServer
     }
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
     // We always want a managed shard now, for better error reporting and Labcoat compatibility
-    ManagedQueryShardState(platform, apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, Clock.System, stoppable)
+    ShardState(platform, apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, Clock.System, stoppable)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

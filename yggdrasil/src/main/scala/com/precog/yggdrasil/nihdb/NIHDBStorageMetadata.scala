@@ -67,6 +67,10 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
       }
     } getOrElse PathStructure.Empty
   }
+
+  def currentVersion(path: Path) = {
+    (projectionsActor ? CurrentVersion(path, apiKey)).mapTo[Option[VersionEntry]]
+  }
 }
 
 trait NIHDBStorageMetadataSource extends StorageMetadataSource[Future] {

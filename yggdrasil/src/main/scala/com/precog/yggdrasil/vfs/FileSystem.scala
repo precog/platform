@@ -72,35 +72,18 @@ object NIHDBData {
 
 sealed trait PathOp {
   def path: Path
-  def jobId: Option[JobId]
 }
 
-case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp {
-  val jobId = None
-}
-
-case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp {
-  val jobId = None
-}
-
-case class Execute(path: Path, auth: Option[APIKey]) extends PathOp {
-  val jobId = None
-}
-
-case class Stat(path: Path, auth: Option[APIKey]) extends PathOp {
-  val jobId = None
-}
-
-case class FindChildren(path: Path, auth: APIKey) extends PathOp {
-  val jobId = None
-}
-
-
+case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp 
+case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp 
+case class Execute(path: Path, auth: Option[APIKey]) extends PathOp 
+case class Stat(path: Path, auth: Option[APIKey]) extends PathOp 
+case class FindChildren(path: Path, auth: APIKey) extends PathOp
+case class CurrentVersion(path: Path, auth: APIKey) extends PathOp 
 
 sealed trait PathActionResponse
 
 case class PathFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
-
 case class UpdateSuccess(path: Path) extends PathActionResponse
 case class UpdateFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
 

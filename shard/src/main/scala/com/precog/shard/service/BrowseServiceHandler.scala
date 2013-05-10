@@ -39,58 +39,47 @@ import akka.dispatch.{ Future, ExecutionContext }
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
+import scalaz.Validation._
 import scalaz.std.string._
 import scalaz.syntax.bifunctor._
-import scalaz.syntax.validation._
+//import scalaz.syntax.validation._
 import scalaz.syntax.apply._
 
 class BrowseServiceHandler[A](metadataClient: MetadataClient[Future], accessControl: AccessControl[Future])(implicit executor: ExecutionContext)
-extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
-  val service = (request: HttpRequest[A]) => Success({ (apiKey: APIKey, path: Path) =>
-    val result: Future[Validation[(HttpStatusCode, NonEmptyList[String]), JObject]] = request.parameters.get('type).map(_.toLowerCase) match {
-      case Some("size") =>
+extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[A]) => success { (apiKey: APIKey, path: Path) =>
+    request.parameters.get('type).map(_.toLowerCase) map {
+      case "size" =>
         metadataClient.size(apiKey, path) map { v =>
           {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JNum => JObject("size" -> a) }
         }
 
-      case Some("children") =>
+      case "children" =>
         metadataClient.browse(apiKey, path) map { v =>
           {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { a: JArray => JObject("children" -> a) }
         }
 
-      case Some("structure") =>
+      case "structure" =>
         val cpath = request.parameters.get('property).map(CPath(_)).getOrElse(CPath.Identity)
         metadataClient.structure(apiKey, path, cpath) map { v =>
           {s: String => (InternalServerError, NonEmptyList(s))} <-: v :-> { o: JObject => JObject("structure" -> o) }
         }
-
-      case _ =>
-        (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map {
-          case ((sizeV, childrenV), structureV) =>
-            {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: {
-              (sizeV.toValidationNel |@| childrenV.toValidationNel |@| structureV.toValidationNel) { (size, children, structure) =>
-                JObject("size" -> size, "children" -> children, "structure" -> structure)
-              }
+    } getOrElse {
+      (metadataClient.size(apiKey, path) zip metadataClient.browse(apiKey, path) zip metadataClient.structure(apiKey, path, CPath.Identity)) map {
+        case ((sizeV, childrenV), structureV) =>
+          {errs: NonEmptyList[String] => (InternalServerError, errs)} <-: {
+            (sizeV.toValidationNel |@| childrenV.toValidationNel |@| structureV.toValidationNel) { (size, children, structure) =>
+              JObject("size" -> size, "children" -> children, "structure" -> structure)
             }
-        }
-    }
-
-    result.map {
-      _ map { jobj =>
-        HttpResponse[QueryResult](OK, content = Some(Left(jobj)))
-      } valueOr {
-        case (code, errors) =>
-          HttpResponse[QueryResult](code, content = Some(Left(errors.list.distinct.serialize)))
+          }
       }
-    }.map { resp =>
-      // Force proper content type here
-      import blueeyes.core.http.HttpHeaders._
-      import blueeyes.core.http.DispositionTypes._
-      import blueeyes.core.http.MimeTypes._
-
-      resp.copy(headers = resp.headers + `Content-Type`(application/json))
+    } map {
+      case Success(jobj) =>
+        HttpResponse[JValue](OK, content = Some(jobj))
+      case Failure((code, errors)) =>
+        HttpResponse[JValue](code, content = Some(JObject("errors" -> errors.list.distinct.serialize)))
     }
-  })
+  }
 
   val metadata = DescriptionMetadata("""Browse the children of the given path.""")
 }

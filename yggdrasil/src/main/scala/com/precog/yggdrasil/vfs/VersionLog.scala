@@ -27,6 +27,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.Versioned._
+import blueeyes.json.serialization.JodaSerializationImplicits._
 
 import com.precog.common.serialization._
 import com.precog.util.{FileLock, IOUtils, PrecogUnit}
@@ -35,6 +36,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io._
 import java.util.UUID
+import org.joda.time.Instant
 
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect.IO
@@ -174,12 +176,12 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   }
 }
 
-case class VersionEntry(id: UUID, typeName: String)
+case class VersionEntry(id: UUID, typeName: String, timestamp: Instant)
 
 object VersionEntry {
   implicit val versionEntryIso = Iso.hlist(VersionEntry.apply _, VersionEntry.unapply _)
 
-  val schemaV1 = "id" :: "typeName" :: HNil
+  val schemaV1 = "id" :: "typeName" :: "timestamp" :: HNil
 
   implicit val Decomposer: Decomposer[VersionEntry] = decomposerV(schemaV1, Some("1.0".v))
   implicit val Extractor: Extractor[VersionEntry] = extractorV(schemaV1, Some("1.0".v))

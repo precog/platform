@@ -51,4 +51,6 @@ class MongoStorageMetadata(mongo: Mongo)(implicit asyncContext: ExecutionContext
   def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
 
   def findStructure(path: Path, selector: CPath) = Promise.successful(PathStructure.Empty)
+
+  def currentVersion(path: Path) = Promise.successful(None)
 }
