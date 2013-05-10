@@ -19,7 +19,8 @@ import scalaz.syntax.show._
 
 trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging {
   def dataPath[A, B](prefix: String)(next: HttpService[A, (APIKey, Path) => Future[B]]) = {
-    path("""%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n\.])*)/?)?)""".format(prefix)) { 
+    path("""%s/(?<prefixPath>(?:(?!/\.+/)(?!//)[^\n])+)?""".format(prefix)) { 
+    //path("""%s/(?:(?<prefixPath>(?:(?:[^\n](?!\.))(?:[^\n/]|/[^\n/](?!\.))*)/?)?)""".format(prefix)) { 
       new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
