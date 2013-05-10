@@ -96,16 +96,6 @@ class NIHDBFileStoreSpec extends Specification with Logging {
         case UpdateSuccess(_) => ok
       }
 
-      (projectionsActor ? Read(testPath, Some(streamId), Some(testAPIKey))).mapTo[ReadResult].copoint must beLike {
-        case ReadSuccess(_, Some(db: NIHDBResource)) =>
-          EventuallyResults.eventually(10, 1.second) {
-            db.db.length.copoint mustEqual 2
-          }
-
-        case _ => throw new Exception("Failed to locate in-progress NIHDBD")
-      }
-
-
       (projectionsActor ? ReadProjection(testPath, None, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
         case ReadProjectionSuccess(_, Some(proj)) => proj.length mustEqual 2
       }
