@@ -94,8 +94,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
 }
 
 trait LongIdMemoryDatasetConsumer[M[+_]] extends MemoryDatasetConsumer[M] {
-  type IdType = Long
-  def extractIds(jv: JValue): Seq[Long] = (jv --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }
+  type IdType = JValue
+  def extractIds(jv: JValue): Seq[JValue] = (jv --> classOf[JArray]).elements
 }
 
 /**

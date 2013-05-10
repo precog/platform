@@ -506,7 +506,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
-              
               tableM2 = pendingTable.table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
             } yield PendingTable(tableM2, graph, TransSpec1.Id, IdentityOrder(graph))
         
@@ -534,7 +533,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             val spec: (TransSpec2, TransSpec2) => TransSpec2 = { (srcLeft, srcRight) =>
               trans.InnerArrayConcat(trans.WrapArray(srcLeft), trans.WrapArray(srcRight))
             }
-            
+
             val joined: StateT[N, EvaluatorState, (Morph1Apply, PendingTable)] = mor.alignment match {
               case MorphismAlignment.Cross(morph1) =>
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, None)(spec)).tupled

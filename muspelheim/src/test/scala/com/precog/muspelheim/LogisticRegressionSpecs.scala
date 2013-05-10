@@ -115,27 +115,27 @@ trait LogisticRegressionSpecs extends EvalStackSpecs {
       }
     }
 
-    "join predicted results with original dataset" in {
-      val input = """
-        medals := //summer_games/london_medals
-        
-        gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
-        model := std::stats::logisticRegression(gender, { HeightIncm: medals.HeightIncm })
+    //"join predicted results with original dataset" in {
+    //  val input = """
+    //    medals := //summer_games/london_medals
+    //    
+    //    gender := (1 where medals.Sex = "F") union (0 where medals.Sex = "M")
+    //    model := std::stats::logisticRegression(gender, { HeightIncm: medals.HeightIncm })
 
-        predictions := std::stats::predictLogistic(medals, model)
+    //    predictions := std::stats::predictLogistic(medals, model)
 
-        medals with { predictedGender: predictions }
-      """
+    //    medals with { predictedGender: predictions }
+    //  """
 
-      val input2 = """ 
-        medals := //summer_games/london_medals
+    //  val input2 = """ 
+    //    medals := //summer_games/london_medals
 
-        h := medals where std::type::isNumber(medals.HeightIncm)
-        count(h)
-      """
+    //    h := medals where std::type::isNumber(medals.HeightIncm)
+    //    count(h)
+    //  """
 
-      testJoinLogistic(input, input2, false)
-    }
+    //  testJoinLogistic(input, input2, false)
+    //}
 
     "join predicted results with original dataset when model is `new`ed" in {
       val input = """
