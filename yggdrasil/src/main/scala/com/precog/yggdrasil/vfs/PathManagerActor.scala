@@ -125,8 +125,10 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private def openResource(version: UUID): IO[Option[ValidationNel[ResourceError, Resource]]] = {
     versions.get(version) map { r =>
+      logger.debug("Located existing resource for " + version)
       IO(Some(Success(r)))
     } getOrElse {
+      logger.debug("Opening new resource for " + version)
       versionLog.find(version) traverse { versionEntry =>
         val dir = versionDir(version)
         val openf = if (NIHDB.hasProjection(dir)) { resources.openNIHDB _ }
@@ -143,12 +145,12 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private def openNIHDB(version: UUID): IO[Option[ValidationNel[ResourceError, NIHDBResource]]] = {
     versions.get(version) map {
-      case nr: NIHDBResource => 
+      case nr: NIHDBResource =>
         IO {
           logger.debug("Returning cached resource for version " + version)
           Some(Success(nr))
         }
-      case uhoh => 
+      case uhoh =>
         IO(Some(Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))))
     } getOrElse {
       versionLog.find(version) traverse { versionEntry =>
@@ -170,7 +172,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           resources.createBlob[IO](versionDir(version), mimeType, writeAs, bytes :: StreamT.empty[IO, Array[Byte]])
 
         case NIHDBData(data) =>
-          resources.createNIHDB(versionDir(version), writeAs) flatMap { 
+          resources.createNIHDB(versionDir(version), writeAs) flatMap {
             _ traverse { _ tap { _.db.insert(data) } }
           }
       }
@@ -216,7 +218,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         case Some(Success(resource)) =>
           for {
             _ <- resource.db.insert(batch(msg))
-            _ <- terminal.whenM(versionLog.completeVersion(streamId))
+            _ <- terminal.whenM(versionLog.completeVersion(streamId) flatMap { _ => versionLog.setHead(streamId) })
           } yield {
             logger.trace("Sent insert message for " + msg + " to nihdb")
             // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
@@ -230,8 +232,19 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
 
     def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
+      logger.debug("Persisting file on %s for offset %d".format(path, offset))
+      // TODO: I think the semantics here of createIfAbsent aren't
+      // quite right. If we're in a replay we don't want to return
+      // errors if we're already complete
       if (createIfAbsent) {
-        performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal) map { response =>
+        for {
+          response <- performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal)
+          _ <- if (terminal) {
+            versionLog.setHead(streamId)
+          } else {
+            IO(())
+          }
+        } yield {
           maybeCompleteJob(msg, terminal, response) pipeTo requestor
           PrecogUnit
         }
@@ -256,7 +269,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             logger.trace("Received append for %s".format(path.path))
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
             for {
-              _ <- persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) 
+              _ <- persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false)
               _ <- versionLog.completeVersion(streamId)
               _ <- versionLog.setHead(streamId)
             } yield PrecogUnit
@@ -265,9 +278,15 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       case (offset, msg @ StoreFileMessage(_, path, _, _, _, _, _, streamRef)) =>
         streamRef match {
           case StreamRef.Create(streamId, terminal) =>
+            if (! terminal) {
+              logger.warn("Non-terminal BLOB for %s will not currently behave correctly!".format(path))
+            }
             persistFile(versionLog.current.isEmpty && !versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Replace(streamId, terminal) =>
+            if (! terminal) {
+              logger.warn("Non-terminal BLOB for %s will not currently behave correctly!".format(path))
+            }
             persistFile(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
@@ -287,11 +306,12 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
 
     case msg @ Read(_, id, auth) =>
-      logger.debug("Received ReadProjection request " + msg)
+      logger.debug("Received Read request " + msg)
       val io: IO[Future[ReadResult]] = (id orElse versionLog.current.map(_.id)) map { version =>
         openResource(version) map {
           case Some(resourceV) =>
             resourceV traverse { resource =>
+              logger.debug("Located resource for read: " + resource)
               checkReadPermissions(resource, resource.authorities, auth, id => Set(ReadPermission(path, WrittenByAccount(id)))) map { resOpt =>
                 ReadSuccess(path, resOpt)
               }
@@ -328,12 +348,12 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
                   logger.debug("Permission check succeeded for projection " + version + " results in " + projOpt)
                   ReadProjectionSuccess(path, projOpt)
                 }
-              } 
-              
+              }
+
               resourceVF map {
                 _ valueOr { ReadProjectionFailure(path, _) }
               }
-            
+
             case None =>
               logger.warn("Version log contained version " + version + " but it could not be opened as a NIHDB projection.")
               Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
@@ -347,7 +367,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       } getOrElse {
         logger.warn("Projection version " + id + " not found in version log. (None == current)")
         IO(sender ! ReadProjectionSuccess(path, None))
-      }       
+      }
 
       io.unsafePerformIO
 

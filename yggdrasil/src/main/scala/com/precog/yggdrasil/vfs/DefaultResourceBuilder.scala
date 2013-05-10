@@ -39,6 +39,9 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import com.precog.common.security.{Authorities, PermissionsFinder}
 import com.precog.niflheim.NIHDB
+import com.precog.util.IOUtils
+
+import com.weiglewilczek.slf4s.Logging
 
 import java.io.{IOException, File, FileOutputStream}
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -62,7 +65,7 @@ class DefaultResourceBuilder(
   cookThreshold: Int,
   storageTimeout: Timeout,
   permissionsFinder: PermissionsFinder[Future],
-  txLogSchedulerSize: Int = 20) { // default for now, should come from config in the future
+  txLogSchedulerSize: Int = 20) extends Logging { // default for now, should come from config in the future
 
   import ResourceError._
 
@@ -109,9 +112,10 @@ class DefaultResourceBuilder(
    * Open the blob for reading in `baseDir`.
    */
   def openBlob(versionDir: File): IO[ValidationNel[ResourceError, Blob]] = IO {
-    val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
-    val metadata = metadataStore.json.validated[BlobMetadata]
-    val resource = metadata map { metadata =>
+    //val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
+    //val metadata = metadataStore.json.validated[BlobMetadata]
+    val metadataV = JParser.parseFromFile(new File(versionDir, blobMetadataFilename)).leftMap(Error.thrown).flatMap(_.validated[BlobMetadata])
+    val resource = metadataV map { metadata =>
       Blob(new File(versionDir, "data"), metadata)(actorSystem.dispatcher)
     }
     fromExtractorErrorNel("Error reading metadata") <-: resource
@@ -124,33 +128,48 @@ class DefaultResourceBuilder(
       data: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Blob]] = {
 
     val file = new File(versionDir, "data")
-    val out = new FileOutputStream(file)
-    def write(size: Long, stream: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Long]] = {
-      stream.uncons.flatMap {
-        case Some((bytes, tail)) =>
-          try {
-            out.write(bytes)
-            write(size + bytes.length, tail)
-          } catch { case (ioe: IOException) =>
+
+    logger.debug("Creating new blob at " + file)
+
+    IOUtils.makeDirectory(versionDir) map { _ =>
+      logger.debug("Writing blob data")
+      val out = new FileOutputStream(file)
+      def write(size: Long, stream: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Long]] = {
+        stream.uncons.flatMap {
+          case Some((bytes, tail)) =>
+            try {
+              out.write(bytes)
+              write(size + bytes.length, tail)
+            } catch { case (ioe: IOException) =>
+                out.close()
+                Failure(IOError(ioe)).point[M]
+            }
+
+          case None =>
             out.close()
-            Failure(IOError(ioe)).point[M]
-          }
-
-        case None =>
-          out.close()
-          Success(size).point[M]
+            Success(size).point[M]
+        }
       }
-    }
 
-    write(0L, data) map (_ flatMap { size =>
-      try {
-        val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
-        val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
-        metadataStore.json = metadata.serialize
-        Success(Blob(file, metadata)(actorSystem.dispatcher))
-      } catch { case (ioe: IOException) =>
-        Failure(IOError(ioe))
-      }
-    })
+      write(0L, data) map (_ flatMap { size =>
+        try {
+          logger.debug("Write complete on " + file)
+          val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
+          //val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
+          //metadataStore.json = metadata.serialize
+          IOUtils.writeToFile(metadata.serialize.renderCompact, new File(versionDir, blobMetadataFilename)) map { _ =>
+            Success(Blob(file, metadata)(actorSystem.dispatcher))
+          } except {
+            case t: Throwable =>
+              IO(Failure(IOError(t)))
+          } unsafePerformIO
+        } catch { case (ioe: IOException) =>
+            Failure(IOError(ioe))
+        }
+      })
+    } except {
+      case t: Throwable =>
+        IO(Failure(IOError(t)).point[M])
+    } unsafePerformIO
   }
 }

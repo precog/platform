@@ -78,14 +78,16 @@ import org.streum.configrity.io.BlockFormat
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
-object NIHDBPlatformActor extends Logging {
+object NIHDBPlatformSpecsActor extends NIHDBPlatformSpecsActor(Option(System.getProperty("precog.storage.root")))
+
+class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
   abstract class YggConfig
       extends EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig {
     val config = Configuration parse {
-      Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
+      rootPath map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
     // None of this is used, but is required to satisfy the cake
@@ -105,18 +107,22 @@ object NIHDBPlatformActor extends Logging {
   private[this] var state: Option[SystemState] = None
   private[this] val users = new AtomicInteger
 
+  def actorSystem = users.synchronized {
+    state.map(_.actorSystem)
+  }
+
   def actor = users.synchronized {
     users.getAndIncrement
 
     if (state.isEmpty) {
       logger.info("Allocating new projections actor in " + this.hashCode)
       state = {
-        val actorSystem = ActorSystem("NIHDBPlatformActor")
+        val actorSystem = ActorSystem("NIHDBPlatformSpecsActor")
         val storageTimeout = Timeout(300 * 1000)
 
         implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
 
-        val accountFinder = new StaticAccountFinder[Future]("", "", Some("/"))
+        val accountFinder = new StaticAccountFinder[Future](ParseEvalStackSpecs.testAccount, ParseEvalStackSpecs.testAPIKey, Some("/"))
         val accessControl = new StaticAPIKeyFinder[Future](ParseEvalStackSpecs.testAPIKey)
         val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
@@ -194,7 +200,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storageTimeout = Timeout(300 * 1000)
 
-  val projectionsActor = NIHDBPlatformActor.actor
+  val projectionsActor = NIHDBPlatformSpecsActor.actor
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M
@@ -207,7 +213,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   def startup() { }
 
   def shutdown() {
-    NIHDBPlatformActor.release
+    NIHDBPlatformSpecsActor.release
   }
 }
 
