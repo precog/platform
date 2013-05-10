@@ -153,7 +153,7 @@ trait PerfTestSuite extends Logging {
                   delta.toPrettyString
 
                 case OutputFormat.Json =>
-                  delta.toJson.toString
+                  delta.toJson.renderCompact
               }))
             }
 
@@ -163,7 +163,7 @@ trait PerfTestSuite extends Logging {
                 result.toPrettyString
 
               case OutputFormat.Json =>
-                result.toJson.toString
+                result.toJson.renderCompact
             }))
         }
       }
