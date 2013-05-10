@@ -28,6 +28,7 @@ import akka.util.Duration
 
 
 import blueeyes.bkka.FutureMonad
+import blueeyes.json.serialization.Extractor.Thrown
 import blueeyes.util.Clock
 
 import com.precog.common.Path
@@ -67,8 +68,12 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
             context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, resources, permissionsFinder, shutdownTimeout, jobManager, clock))) unsafeTap { newActor =>
               pathActors += (path -> newActor)
             }
-          } valueOr { error =>
-            throw new Exception(error.message)
+          } valueOr {
+            case Thrown(t) =>
+              throw t
+
+            case error =>
+              throw new Exception(error.message)
           }
         }
       }
@@ -78,6 +83,16 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
   def receive = {
     case FindChildren(path, apiKey) =>
       VFSPathUtils.findChildren(baseDir, path, apiKey, permissionsFinder) pipeTo sender
+
+    case op: PathOp =>
+      val requestor = sender
+      targetActor(op.path) map { pathActor =>
+        pathActor.tell(op, requestor)
+      } except {
+        case t: Throwable =>
+          logger.error("Error obtaining path actor for " + op.path, t)
+          IO { requestor ! PathFailure(op.path, NonEmptyList(ResourceError.GeneralError("Error opening resources at " + op.path))) }
+      } unsafePerformIO
 
     case IngestData(messages) =>
       val requestor = sender

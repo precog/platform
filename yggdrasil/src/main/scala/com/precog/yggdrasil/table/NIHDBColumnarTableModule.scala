@@ -58,7 +58,10 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
         projections    <- paths.toList traverse { path =>
                             logger.debug("  Loading path: " + path)
                             implicit val timeout = storageTimeout
-                            (projectionsActor ? ReadProjection(path, None, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
+                            (projectionsActor ? ReadProjection(path, None, Some(apiKey))).mapTo[PathActionResponse].map {
+                              case ReadProjectionSuccess(_, projection) => projection
+                              case _ => None // How to report an error here?
+                            }
                           } map {
                             _.flatten
                           }

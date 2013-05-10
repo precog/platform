@@ -105,8 +105,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
-  private def openNIHDBProjection(version: UUID): Future[Option[ValidationNel[ResourceError, NIHDBProjection]]] = {
-    Future { openNIHDB(version).unsafePerformIO } flatMap { _ traverse { _ traverse { NIHDBProjection.wrap _ } } }
+  private def openNIHDBProjection(version: UUID): IO[Future[Option[ValidationNel[ResourceError, NIHDBProjection]]]] = {
+    openNIHDB(version) map { _ traverse { _ traverse { NIHDBProjection.wrap _ } } }
   }
 
   private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
@@ -143,10 +143,16 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private def openNIHDB(version: UUID): IO[Option[ValidationNel[ResourceError, NIHDBResource]]] = {
     versions.get(version) map {
-      case nr: NIHDBResource => IO(Some(Success(nr)))
-      case uhoh => IO(Some(Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))))
+      case nr: NIHDBResource => 
+        IO {
+          logger.debug("Returning cached resource for version " + version)
+          Some(Success(nr))
+        }
+      case uhoh => 
+        IO(Some(Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))))
     } getOrElse {
       versionLog.find(version) traverse { versionEntry =>
+        logger.info("Opening new resource at path " + path + " version " + version)
         resources.openNIHDB(versionDir(version)) flatMap {
           _ tap { resourceV =>
             IO(resourceV foreach { r => versions += (version -> r) })
@@ -249,8 +255,11 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           case StreamRef.Append =>
             logger.trace("Received append for %s".format(path.path))
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
-            persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) >> 
-            versionLog.completeVersion(streamId)
+            for {
+              _ <- persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false) 
+              _ <- versionLog.completeVersion(streamId)
+              _ <- versionLog.setHead(streamId)
+            } yield PrecogUnit
         }
 
       case (offset, msg @ StoreFileMessage(_, path, _, _, _, _, _, streamRef)) =>
@@ -308,32 +317,39 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
     case msg @ ReadProjection(_, id, auth) =>
       logger.debug("Received ReadProjection request " + msg)
-      (id orElse versionLog.current.map(_.id)) map { version =>
+      val requestor = sender
+      val io = (id orElse versionLog.current.map(_.id)) map { version =>
         openNIHDBProjection(version) map {
-          case Some(resourceV) =>
-            resourceV traverse { projection =>
-              logger.debug("Found " + projection + " for NIHDB projection version " + version)
-              checkReadPermissions(projection, projection.authorities, auth, id => Set(ReducePermission(path, WrittenByAccount(id)))) map { projOpt =>
-                logger.debug("Permission check succeeded for projection " + id)
-                ReadProjectionSuccess(path, projOpt)
+          _ flatMap {
+            case Some(resourceV) =>
+              val resourceVF: Future[ValidationNel[ResourceError, ReadProjectionResult]] = resourceV traverse { projection =>
+                logger.debug("Found " + projection + " for NIHDB projection version " + version)
+                checkReadPermissions(projection, projection.authorities, auth, accountId => Set(ReducePermission(path, WrittenByAccount(accountId)))) map { projOpt =>
+                  logger.debug("Permission check succeeded for projection " + version + " results in " + projOpt)
+                  ReadProjectionSuccess(path, projOpt)
+                }
+              } 
+              
+              resourceVF map {
+                _ valueOr { ReadProjectionFailure(path, _) }
               }
-            } map {
-              _ valueOr { ReadProjectionFailure(path, _) }
-            }
-
-          case None =>
-            logger.warn("Version log contained version " + version + " but it could not be opened as a NIHDB projection.")
-            Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
+            
+            case None =>
+              logger.warn("Version log contained version " + version + " but it could not be opened as a NIHDB projection.")
+              Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
+          } recover {
+            case t: Throwable =>
+              val msg = "Error during read projection on " + id
+              logger.error(msg, t)
+              ReadProjectionFailure(path, nels(IOError(t)))
+          } pipeTo requestor
         }
       } getOrElse {
         logger.warn("Projection version " + id + " not found in version log. (None == current)")
-        Promise successful ReadProjectionSuccess(path, None)
-      } recover {
-        case t: Throwable =>
-          val msg = "Error during read projection on " + id
-          logger.error(msg, t)
-          ReadProjectionFailure(path, nels(IOError(t)))
-      } pipeTo sender
+        IO(sender ! ReadProjectionSuccess(path, None))
+      }       
+
+      io.unsafePerformIO
 
     case Execute(_, auth) =>
       // Return projection snapshot if possible.

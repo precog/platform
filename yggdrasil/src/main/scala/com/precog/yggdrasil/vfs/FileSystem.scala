@@ -99,6 +99,8 @@ case class FindChildren(path: Path, auth: APIKey) extends PathOp {
 
 sealed trait PathActionResponse
 
+case class PathFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
+
 case class UpdateSuccess(path: Path) extends PathActionResponse
 case class UpdateFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
 

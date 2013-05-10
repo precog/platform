@@ -106,7 +106,7 @@ object VersionLog {
 
     val completedVersions: Validation[Error, Set[UUID]] = if (completedFile.exists) {
       for {
-        jvs <- JParser.parseManyFromFile(logFile).leftMap(Error.thrown)
+        jvs <- JParser.parseManyFromFile(completedFile).leftMap(Error.thrown)
         versions <- jvs.toList.traverse[({ type λ[α] = Validation[Error, α] })#λ, UUID](_.validated[UUID])
       } yield versions.toSet
     } else {

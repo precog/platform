@@ -59,10 +59,15 @@ import org.slf4j.LoggerFactory
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
+object ParseEvalStackSpecs {
+  val testAPIKey = "dummyAPIKey"
+}
+
 trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with MemoryDatasetConsumer[M]
     with IdSourceScannerModule { self =>
+  import ParseEvalStackSpecs._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -111,7 +116,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val tree = forest.head
 
     val Right(dag) = decorate(emit(tree))
-    consumeEval("dummyAPIKey", dag, Path.Root) match {
+    consumeEval(testAPIKey, dag, Path.Root) match {
       case Success(result) =>
         parseEvalLogger.debug("Evaluation complete for query: " + str)
         result
