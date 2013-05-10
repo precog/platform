@@ -506,16 +506,14 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             SliceTransform1[scanner.A](
               scanner.init,
               { (state: scanner.A, slice: Slice) =>
-                scanner.scan(state, slice.columns, 0 until slice.size) map {
-                  case (newState, newCols) => {
-                    val newSlice = new Slice {
-                      val size = slice.size
-                      val columns = newCols
-                    }
-    
-                    (newState, newSlice)
-                  }
+                val (newState, newCols) = scanner.scan(state, slice.columns, 0 until slice.size)
+                
+                val newSlice = new Slice {
+                  val size = slice.size
+                  val columns = newCols
                 }
+
+                (newState, newSlice)
               }
             )
           }
@@ -625,28 +623,80 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
     }  
   }
 
-  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => M[(A, Slice)]) {
-    def apply(s: Slice) = f(initial, s)
+  protected case class SliceTransform1[A](initial: A, f: Either[(A, Slice) => (A, Slice), (A, Slice) => M[(A, Slice)]]) {
+    def apply(s: Slice) = {
+      f.fold(
+        left = { f => f(initial, s) },
+        right = { f =>
+          val (a, s2) = f(initial, s)
+          M point (a, s2)
+        })
+    }
 
-    def advance(s: Slice): M[(SliceTransform1[A], Slice)]  = {
-      f(initial, s) map {
-        case (a0, s0) =>
-          (this.copy(initial = a0), s0)
+    def advance(s: Slice): M[(SliceTransform1[A], Slice)] = {
+      this(s) map {
+        case (a, s2) =>
+          (this.copy(initial = a), s2)
       }
     }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
       SliceTransform1(
         (initial, t.initial), {
-          case ((a, b), s) => {
-            for {
-              pairA <- f(a, s)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, sa)
-              (b0, sb) = pairB
-            } yield ((a0, b0), sb)
+          val leftLeft = for {
+            leftF <- this.f.left.toOption
+            rightF <- t.f.left.toOption
+          } yield {
+            Left({ (pair: (A, B), s: Slice) =>
+              val (a0, sa) = leftF(a, s)
+              val (b0, sb) = rightF(b, sa)
+              ((a0, b0), sb)
+            })
           }
+          
+          val leftRight = for {
+            leftF <- this.f.left.toOption
+            rightF <- that.f.right.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              val (a0, sa) = leftF(a, s)
+              rightF(b, sa) map {
+                case (b0, sb) =>
+                  ((a0, b0), sb)
+              }
+            })
+          }
+          
+          val rightLeft = for {
+            leftF <- this.f.right.toOption
+            rightF <- that.f.left.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              leftF(a, s) map {
+                case (a0, sa) => {
+                  val (b0, sb) = rightF(b, sa)
+                  ((a0, b0), sb)
+                }
+              }
+            })
+          }
+          
+          val rightRight = for {
+            leftF <- this.f.right.toOption
+            rightF <- that.f.right.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              for {
+                pairLeft <- leftF(a, s)
+                (a0, sa) = pairLeft
+                
+                pairRight <- rightF(b, sa)
+                (b0, sb) = pairRight
+              } yield ((a0, b0), sb)
+            })
+          }
+          
+          leftLeft orElse leftRight orElse rightLeft orElse rightRight get
         }
       )
     }
@@ -654,17 +704,57 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
     def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
       SliceTransform1(
         (initial, t.initial), {
-          case ((a, b), s) => {
-            for {
-              pairA <- f(a, s)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, s)
-              (b0, sb) = pairB
-              
-              _ = assert(sa.size == sb.size) 
-            } yield ((a0, b0), combine(sa, sb))
+          val leftLeft = for {
+            leftF <- this.f.left.toOption
+            rightF <- t.f.left.toOption
+          } yield {
+            Left({ (pair: (A, B), s: Slice) =>
+              val (a0, sa) = leftF(a, s)
+              val (b0, sb) = rightF(b, s)
+              ((a0, b0), combine(sa, sb))
+            })
           }
+          
+          val leftRight = for {
+            leftF <- this.f.left.toOption
+            rightF <- that.f.right.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              val (a0, sa) = leftF(a, s)
+              rightF(b, s) map {
+                case (b0, sb) =>
+                  ((a0, b0), combine(sa, sb))
+              }
+            })
+          }
+          
+          val rightLeft = for {
+            leftF <- this.f.right.toOption
+            rightF <- that.f.left.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              leftF(a, s) map {
+                case (a0, sa) => {
+                  val (b0, sb) = rightF(b, s)
+                  ((a0, b0), combine(sa, sb))
+                }
+              }
+            })
+          }
+          
+          val rightRight = for {
+            leftF <- this.f.right.toOption
+            rightF <- that.f.right.toOption
+          } yield {
+            Right({ (pair: (A, B), s: Slice) =>
+              M.apply2(leftF(a, s), rightF(b, s)) {
+                case ((a0, sa), (b0, sb)) =>
+                  ((a0, b0), combine(sa, sb))
+              }
+            })
+          }
+          
+          leftLeft orElse leftRight orElse rightLeft orElse rightRight get
         }
       )
     }
@@ -673,19 +763,62 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
       SliceTransform1(
         (initial, t.initial, t2.initial), {
           case ((a, b, c), s) => {
-            for {
-              pairA <- f(a, s)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, s)
-              (b0, sb) = pairB
-              
-              pairC <- t2.f(c, s)
-              (c0, sc) = pairC
-              
-              _ = assert(sa.size == sb.size)
-              _ = assert(sb.size == sc.size)
-            } yield ((a0, b0, c0), combine(sa, sb, sc))
+            import SliceHelpers._
+            
+            val tp = t.zip(t2)(pair)
+            
+            val leftLeft = for {
+              leftF <- tp.f.left.toOption
+              rightF <- t.f.left.toOption
+            } yield {
+              Left({ (pair: (A, B), s: Slice) =>
+                val ((a0, b0), sp) = leftF((a, b), s)
+                val (c0, sc) = rightF(c, s)
+                val (sa, sb) = unpair(sp)
+                ((a0, b0, c0), combine(sa, sb, sc))
+              })
+            }
+            
+            val leftRight = for {
+              leftF <- tp.f.left.toOption
+              rightF <- that.f.right.toOption
+            } yield {
+              Right({ (pair: (A, B), s: Slice) =>
+                val (a0, sa) = leftF(a, s)
+                rightF(b, s) map {
+                  case (b0, sb) =>
+                    ((a0, b0), combine(sa, sb))
+                }
+              })
+            }
+            
+            val rightLeft = for {
+              leftF <- tp.f.right.toOption
+              rightF <- that.f.left.toOption
+            } yield {
+              Right({ (pair: (A, B), s: Slice) =>
+                leftF(a, s) map {
+                  case (a0, sa) => {
+                    val (b0, sb) = rightF(b, s)
+                    ((a0, b0), combine(sa, sb))
+                  }
+                }
+              })
+            }
+            
+            val rightRight = for {
+              leftF <- tp.f.right.toOption
+              rightF <- that.f.right.toOption
+            } yield {
+              Right({ (pair: (A, B), s: Slice) =>
+                M.apply2(leftF(a, s), rightF(b, s)) {
+                  case ((a0, sa), (b0, sb)) =>
+                    ((a0, b0), combine(sa, sb))
+                }
+              })
+            }
+            
+            leftLeft orElse leftRight orElse rightLeft orElse rightRight get
           }
         }
       )
@@ -893,3 +1026,54 @@ trait ObjectConcatHelpers extends ConcatHelpers {
   }
 }
 
+object SliceHelpers {
+  
+  /**
+   * Merges two slices preserving information such that unpair can restore the
+   * original slices.  Only defined where left.size == right.size.
+   */
+  def pair(left: Slice, right: Slice): Slice = new Slice {
+    val size = left.size
+    
+    val columns = {
+      val left2 = left.columns map {
+        case (ColumnRef(CPath(components @ _*), tpe), col) =>
+          ColumnRef(CPath(CPathField("left") :: components), tpe) -> col
+      }
+      
+      val right2 = right.columns map {
+        case (ColumnRef(CPath(components @ _*), tpe), col) =>
+          ColumnRef(CPath(CPathField("right") :: components), tpe) -> col
+      }
+      
+      left2 ++ right2
+    }
+  }
+  
+  /**
+   * Unmerges two slices that have been merged using pair.  Assumes left.size == right.size.
+   */
+  def unpair(slice: Slice): (Slice, Slice) = {
+    val left = slice.columns collect {
+      case (ColumnRef(CPath(CPathField("left"), components @ _*), tpe), col) =>
+        ColumnRef(CPath(components), tpe) -> col
+    }
+    
+    val right = slice.columns collect {
+      case (ColumnRef(CPath(CPathField("right"), components @ _*), tpe), col) =>
+        ColumnRef(CPath(components), tpe) -> col
+    }
+    
+    val leftSlice = new Slice {
+      val size = slice.size
+      val columns = left
+    }
+    
+    val rightSlice = new Slice {
+      val size = slice.size
+      val columns = right
+    }
+    
+    (leftSlice, rightSlice)
+  }
+}

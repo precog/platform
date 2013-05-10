@@ -115,10 +115,10 @@ object CF2P {
   }
 }
 
-trait CScanner[M[+_]] {
+trait CScanner {
   type A
   def init: A
-  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])]
+  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column])
 }
 
 trait CSchema {
