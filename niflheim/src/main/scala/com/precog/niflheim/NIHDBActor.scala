@@ -103,6 +103,8 @@ trait NIHDB {
 
   def length: Future[Long]
 
+  def projectionId: Int
+
   def status: Future[Status]
 
   def structure: Future[Set[(CPath, CType)]]
@@ -120,6 +122,8 @@ trait NIHDB {
 
 private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: Timeout)(implicit executor: ExecutionContext) extends NIHDB with GracefulStopSupport with AskSupport {
   private implicit val impTimeout = timeout
+
+  val projectionId = NIHDB.projectionIdGen.getAndIncrement
 
   def authorities: Future[Authorities] =
     (actor ? GetAuthorities).mapTo[Authorities]
