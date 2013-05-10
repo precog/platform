@@ -276,9 +276,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             val resultM = Table.cross(lTable.compact(valueSpec), rTable.compact(valueSpec), hint)(crossSpec)
 
             transState liftM mn(resultM map { case (joinOrder, table) =>
-              def leftIds: Vector[Int] = Vector.range(0, left.identities.length)
-              def rightIds: Vector[Int] = Vector.range(0, right.identities.length)
-
               val sort = joinOrder match {
                 case CrossLeft =>
                   ptLeft.sort match {
@@ -287,7 +284,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                         case IdentityOrder(rIds) if graph.uniqueIdentities => rIds
                         case _ => Vector.empty
                       }
-                      IdentityOrder(ids ++ rIds.map(_ + leftIds.size))
+                      IdentityOrder(ids ++ rIds.map(_ + left.identities.length))
 
                     case otherSort => otherSort
                   }
@@ -299,7 +296,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                         case IdentityOrder(lIds) if graph.uniqueIdentities => lIds
                         case _ => Vector.empty
                       }
-                      IdentityOrder(ids.map(_ + leftIds.size) ++ lIds)
+                      IdentityOrder(ids.map(_ + left.identities.length) ++ lIds)
 
                     case valueOrder => valueOrder
                   }
@@ -307,14 +304,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 case CrossLeftRight => // Not actually hit yet. Soon!
                   (ptLeft.sort, ptRight.sort) match {
                     case (IdentityOrder(lIds), IdentityOrder(rIds)) =>
-                      IdentityOrder(lIds ++ rIds.map(_ + leftIds.size))
+                      IdentityOrder(lIds ++ rIds.map(_ + left.identities.length))
                     case (otherSort, _) => otherSort
                   }
 
                 case CrossRightLeft => // Not actually hit yet. Soon!
                   (ptLeft.sort, ptRight.sort) match {
                     case (IdentityOrder(lIds), IdentityOrder(rIds)) =>
-                      IdentityOrder(rIds.map(_ + leftIds.size) ++ lIds)
+                      IdentityOrder(rIds.map(_ + left.identities.length) ++ lIds)
                     case (otherSort, _) => otherSort
                   }
               }
