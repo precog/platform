@@ -143,6 +143,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   def addVersion(entry: VersionEntry): IO[PrecogUnit] = allVersions.find(_ == entry) map { _ =>
     IO(PrecogUnit)
   } getOrElse {
+    logger.debug("Adding version entry: " + entry)
     IOUtils.writeToFile(entry.serialize.renderCompact + "\n", logFile, true) map { _ =>
       allVersions = allVersions :+ entry
       PrecogUnit
@@ -152,6 +153,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   def completeVersion(version: UUID): IO[PrecogUnit] = {
     if (allVersions.exists(_.id == version)) {
       !isCompleted(version) whenM {
+        logger.debug("Completing version " + version)
         IOUtils.writeToFile(version.serialize.renderCompact + "\n", completedFile)
       } map { _ => PrecogUnit }
     } else {
@@ -162,6 +164,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   def setHead(newHead: UUID): IO[PrecogUnit] = {
     currentVersion.exists(_.id == newHead) unlessM {
       allVersions.find(_.id == newHead) traverse { entry =>
+        logger.debug("Setting HEAD to " + newHead)
         IOUtils.writeToFile(entry.serialize.renderCompact + "\n", headFile) map { _ =>
           currentVersion = Some(entry);
         }

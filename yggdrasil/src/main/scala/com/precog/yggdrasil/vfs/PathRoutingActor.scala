@@ -62,6 +62,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
       val pathDir = VFSPathUtils.pathDir(baseDir, path)
 
       IOUtils.makeDirectory(pathDir) flatMap { _ =>
+        logger.debug("Created new path dir for %s : %s".format(path, pathDir))
         VersionLog.open(pathDir) map {
           _ map { versionLog =>
             logger.debug("Creating new PathManagerActor for " + path)
@@ -98,25 +99,25 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
       val requestor = sender
       val groupedAndPermissioned = messages.groupBy({ case (_, event) => event.path }).toStream traverse {
         case (path, pathMessages) =>
-          pathMessages.map(_._2.apiKey).distinct.toStream traverse { apiKey =>
-            permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { perms =>
-              apiKey -> perms.toSet[Permission]
-            }
-          } map { allPerms =>
-            targetActor(path) map { pathActor =>
-              val (totalArchives, totalEvents) = pathMessages.foldLeft((0, 0)) {
-                case ((archived, events), (_, IngestMessage(_, _, _, data, _, _, _))) => (archived, events + data.size)
-                case ((archived, events), (_, am: ArchiveMessage)) => (archived + 1, events)
-                case (tally, _) => tally
+          targetActor(path) map { pathActor =>
+            pathMessages.map(_._2.apiKey).distinct.toStream traverse { apiKey =>
+              permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { perms =>
+                apiKey -> perms.toSet[Permission]
               }
-              logger.debug("Sending %d archives and %d events to %s".format(totalArchives, totalEvents, path))
+            } map { allPerms =>
+              val (totalArchives, totalEvents, totalStoreFiles) = pathMessages.foldLeft((0, 0, 0)) {
+                case ((archived, events, storeFiles), (_, IngestMessage(_, _, _, data, _, _, _))) => (archived, events + data.size, storeFiles)
+                case ((archived, events, storeFiles), (_, am: ArchiveMessage)) => (archived + 1, events, storeFiles)
+                case ((archived, events, storeFiles), (_, sf: StoreFileMessage)) => (archived, events, storeFiles + 1)
+              }
+              logger.debug("Sending %d archives, %d storeFiles, and %d events to %s".format(totalArchives, totalStoreFiles, totalEvents, path))
               pathActor.tell(IngestBundle(pathMessages, allPerms.toMap), requestor)
-            } except {
-              case t: Throwable => IO(logger.error("Failure during version log open on " + path, t))
             }
+          } except {
+            case t: Throwable => IO(logger.error("Failure during version log open on " + path, t))
           }
       }
 
-      groupedAndPermissioned.foreach(_.sequence.unsafePerformIO)
+      groupedAndPermissioned.unsafePerformIO
   }
 }
