@@ -279,8 +279,9 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
         def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
-
-        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, sigmoid _)) }
+        t2.transform(spec).reduce(reducer) map { models =>
+          (t1.transform(spec), morph1Apply(models, sigmoid _))
+        }
       }
     }
   }

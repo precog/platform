@@ -44,7 +44,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             val result: Set[Map[ColumnRef, Column]] = {
               val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
-                val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
+                val scannerPrelims = Model.makePrelims(model, cols, range, trans)
                 val resultArray = scannerPrelims.resultArray
                 val definedModel = scannerPrelims.definedModel
 
@@ -56,7 +56,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
 
                 case class Intervals(confidence: Array[Double], prediction: Array[Double])
 
-                val res = ModelLike.filteredRange(scannerPrelims.includedModel, range).foldLeft(Intervals(new Array[Double](range.end), new Array[Double](range.end))) { case (Intervals(arrConf, arrPred), i) =>
+                val res = Model.filteredRange(scannerPrelims.includedModel, range).foldLeft(Intervals(new Array[Double](range.end), new Array[Double](range.end))) { case (Intervals(arrConf, arrPred), i) =>
                   val includedDoubles = 1.0 +: (scannerPrelims.cpaths map { scannerPrelims.includedCols(_).apply(i) })
                   val includedMatrix = new Matrix(Array(includedDoubles.toArray))
 
@@ -101,8 +101,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
                   ColumnRef(pathPredictionLower, CDouble) -> ArrayDoubleColumn(definedModel, predictionLower))
               }
 
-              val identitiesResult = ModelLike.idRes(cols, modelSet)
-
+              val identitiesResult = Model.idRes(cols, modelSet)
               modelsResult ++ Set(identitiesResult)
             }
 
@@ -136,7 +135,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             val result: Set[Map[ColumnRef, Column]] = {
               val modelsResult: Set[Map[ColumnRef, Column]] = modelSet.models map { case model =>
-                val scannerPrelims = ModelLike.makePrelims(model, cols, range, trans)
+                val scannerPrelims = Model.makePrelims(model, cols, range, trans)
 
                 // the correct model name gets added to the CPath here
                 val pathFit = CPath(TableModule.paths.Value, CPathField(model.name), CPathField(fitStr))
@@ -144,7 +143,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
                 Map(ColumnRef(pathFit, CDouble) -> ArrayDoubleColumn(scannerPrelims.definedModel, scannerPrelims.resultArray))
               }
               
-              val identitiesResult = ModelLike.idRes(cols, modelSet)
+              val identitiesResult = Model.idRes(cols, modelSet)
 
               modelsResult ++ Set(identitiesResult)
             }
