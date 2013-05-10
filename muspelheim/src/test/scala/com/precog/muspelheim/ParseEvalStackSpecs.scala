@@ -42,6 +42,7 @@ import akka.dispatch.ExecutionContext
 
 object ParseEvalStackSpecs {
   val testAPIKey = "dummyAPIKey"
+  val testAccount = "dummyAccount"
 }
 
 trait ParseEvalStackSpecs[M[+_]] extends Specification
