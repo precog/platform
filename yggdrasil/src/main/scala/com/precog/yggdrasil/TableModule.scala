@@ -238,7 +238,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
     def schemas: M[Set[JType]]
 
-    def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer]
+    def renderJson(prefix: String = "", delimiter: String = "\n", suffix: String = ""): StreamT[M, CharBuffer] 
 
     def renderCsv(): StreamT[M, CharBuffer]
     

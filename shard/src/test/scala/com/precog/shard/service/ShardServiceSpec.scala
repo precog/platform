@@ -277,9 +277,7 @@ class ShardServiceSpec extends TestShardService {
         JField("data", JArray(JNum(2) :: Nil)) ::
         Nil)
 
-      res.copoint must beLike {
-        case `expected` => ok
-      }
+      res.copoint must_== expected
     }
     "handle relative query from accessible non-root path" in {
       query(relativeQuery, path = "/test").copoint must beLike {
@@ -365,8 +363,11 @@ class ShardServiceSpec extends TestShardService {
     }
     "return error response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
-        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(JArray(JString(err) :: Nil))), _) =>
-          err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
+        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(response)), _) =>
+          (response \ "errors") must beLike {
+            case JArray(JString(err) :: Nil) =>
+              err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
+          }
       }
     }
   }

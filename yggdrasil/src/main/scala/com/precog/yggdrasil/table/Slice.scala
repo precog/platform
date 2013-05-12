@@ -889,11 +889,10 @@ trait Slice { source =>
     }
   }
 
-  def renderJson[M[+_]](delimiter: Char)(implicit M: Monad[M]): (StreamT[M, CharBuffer], Boolean) = {
+  def renderJson[M[+_]](delimiter: String)(implicit M: Monad[M]): (StreamT[M, CharBuffer], Boolean) = {
     if (columns.isEmpty) {
       (StreamT.empty, false)
     } else {
-      val delimiterStr = delimiter.toString
       val BufferSize = 1024 * 10    // 10 KB
 
       val optSchema = {
@@ -1496,7 +1495,7 @@ trait Slice { source =>
         def render(row: Int, delimit: Boolean): Boolean = {
           if (row < size) {
             if (delimit) {
-              pushIn(delimiterStr, false)
+              pushIn(delimiter, false)
             }
 
             val rowRendered = traverseSchema(row, schema)
