@@ -73,6 +73,7 @@ trait ColumnarTableModuleConfig {
 }
 
 object ColumnarTableModule {
+  /*
   def renderJson[M[+_]](slices: StreamT[M, Slice], delimiter: Char = '\n')(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
     def delimiterBuffer = {
       val back = CharBuffer.allocate(1)
@@ -103,6 +104,35 @@ object ColumnarTableModule {
     }
 
     foldFlatMap(slices, false)
+  }
+  */
+
+  def renderJson[M[+_]](slices: StreamT[M, Slice], prefix: String, delimiter: String, suffix: String)(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
+    import scalaz.\/._
+    def wrap(stream: StreamT[M, CharBuffer]) = {
+      if (prefix == "" && suffix == "") stream
+      else if (suffix == "") CharBuffer.wrap(prefix) :: stream
+      else if (prefix == "") stream ++ (CharBuffer.wrap(suffix) :: StreamT.empty[M, CharBuffer])
+      else CharBuffer.wrap(prefix) :: (stream ++ (CharBuffer.wrap(suffix) :: StreamT.empty[M, CharBuffer]))
+    }
+
+    def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
+      StreamT[M, CharBuffer](slices.step map {
+        case StreamT.Yield(slice, tail) => 
+          val (stream, rendered2) = slice.renderJson[M](delimiter)
+          val stream2 = if (rendered && rendered2) CharBuffer.wrap(delimiter) :: stream else stream
+
+          StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
+
+        case StreamT.Skip(tail) => 
+          StreamT.Skip(foldFlatMap(tail(), rendered))
+
+        case StreamT.Done => 
+          StreamT.Done
+      })
+    }
+
+    wrap(foldFlatMap(slices, false))
   }
 
   /**
@@ -1582,8 +1612,8 @@ trait ColumnarTableModule[M[+_]]
       collectSchemas(Set.empty, slices)
     }
 
-    def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] =
-      ColumnarTableModule.renderJson(slices, delimiter)
+    def renderJson(prefix: String = "", delimiter: String = "\n", suffix: String = ""): StreamT[M, CharBuffer] =
+      ColumnarTableModule.renderJson(slices, prefix, delimiter, suffix)
 
     def renderCsv(): StreamT[M, CharBuffer] =
       ColumnarTableModule.renderCsv(slices)

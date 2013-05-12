@@ -73,7 +73,8 @@ object QueryResultConvert {
   def toCharBuffers[N[+_]: Monad](output: QueryOutput, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
     output match {
       case JSONOutput =>
-          (CharBuffer.wrap("[") :: (ColumnarTableModule.renderJson(slices, ','))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer])
+          //(CharBuffer.wrap("[") :: (ColumnarTableModule.renderJson(slices, ','))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer])
+          ColumnarTableModule.renderJson(slices, "[", ",", "]")
 
       case CSVOutput => ColumnarTableModule.renderCsv(slices)
     }
