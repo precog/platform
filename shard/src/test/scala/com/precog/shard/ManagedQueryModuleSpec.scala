@@ -283,6 +283,8 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
     def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
+    def currentVersion(apiKey: APIKey, path: Path) = sys.error("wtf?")
+    def currentAuthorities(apiKey: APIKey, path: Path) = sys.error("That this is necessary is absurd.")
   }
 
   def startup = Applicative[TestFuture].point { true }

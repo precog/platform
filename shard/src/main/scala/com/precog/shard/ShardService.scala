@@ -224,7 +224,7 @@ trait ShardService extends
     dataPath("/analysis/fs") {
       get {
         shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-          new AnalysisServiceHandler(state.platform)
+          new AnalysisServiceHandler(state.platform, state.clock)
         }
       }
     }

@@ -220,6 +220,8 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
+    def currentVersion(apiKey: APIKey, path: Path) = M.point(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = M.point(None)
   }
 
   def startup = Future { true }

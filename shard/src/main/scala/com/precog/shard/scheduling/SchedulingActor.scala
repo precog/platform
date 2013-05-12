@@ -21,7 +21,7 @@ package com.precog.shard
 package scheduling
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable}
-import akka.dispatch.{Await, Future}
+import akka.dispatch.{Await, Future, Promise}
 import akka.pattern.{ask, pipe}
 import akka.util.{Duration, Timeout}
 
@@ -50,6 +50,7 @@ import scala.collection.mutable.{ArrayBuffer, PriorityQueue}
 
 import scalaz.{Ordering => _, idInstance => _, _}
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.option._
 import scalaz.effect.IO
 
 sealed trait SchedulingMessage
@@ -67,7 +68,16 @@ case class TaskComplete(id: UUID, endedAt: DateTime, total: Long) extends Schedu
 case class TaskFailed(id: UUID, error: String) extends SchedulingMessage
 
 
-class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[Future], projectionsActor: ActorRef, platform: Platform[Future, StreamT[Future, Slice]], apiKeyFinder: APIKeyFinder[Future], accountFinder: AccountFinder[Future], clock: Clock, storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging {
+class SchedulingActor(
+    jobManager: JobManager[Future], 
+    permissionsFinder: PermissionsFinder[Future], 
+    vfs: VFS[Future],
+    storage: ScheduleStorage[Future], 
+    platform: Platform[Future, StreamT[Future, Slice]], 
+    clock: Clock, 
+    storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), 
+    resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging { 
+    
   private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
   private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -130,6 +140,13 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
   }
 
   def executeTask(task: ScheduledTask): Future[PrecogUnit] = {
+    def consumeStream(totalSize: Long, stream: StreamT[Future, Slice]): Future[Long] = {
+      stream.uncons flatMap {
+        case Some((x, xs)) => consumeStream(totalSize + x.size, xs)
+        case None => M.point(totalSize)
+      }
+    }
+
     val ourself = self
     val startedAt = new DateTime
 
@@ -141,44 +158,21 @@ class SchedulingActor(jobManager: JobManager[Future], storage: ScheduleStorage[F
     (for {
       job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
       executorV <- platform.executorFor(task.apiKey)
-      scriptV <- {
-        (projectionsActor ? Read(task.source, None, Some(task.apiKey))).mapTo[ReadResult] map {
-          case ReadSuccess(_, Some(blob: Blob)) =>
-            blob.asString map(Success(_)) except {
-              case t: Throwable =>
-                IO(Failure("Execution failed reading source script: " + Option(t.getMessage).getOrElse(t.getClass.toString)))
-            } unsafePerformIO
-
-          case ReadSuccess(_, Some(_)) =>
-            Failure("Execution failed on non-script source")
-
-          case ReadSuccess(_, None) =>
-            Failure("Execution failed on non-existent source script")
-
-          case ReadFailure(_, errors) =>
-            Failure("Execution failed retrieving source script:\n  " + errors.list.mkString("\n  "))
-        }
-      }
+      scriptV <- vfs.readQuery(task.source, Version.Current)
       execution <- (for {
-        script <- scriptV
+        script <- scriptV.toSuccess("Could not find quirrel script at path %s".format(task.source.path))
         executor <- executorV
       } yield {
         import task._
-
-        val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, clock.instant)
 
         permissionsFinder.writePermissions(apiKey, fqSink, clock.instant()) flatMap { perms =>
           val allPerms = Map(apiKey -> perms.toSet[Permission])
 
           executor.execute(apiKey, script, prefix, QueryOptions(timeout = task.timeout)).flatMap {
-            _.traverse { stream =>
-              QueryResultConvert.toIngest(stream, fqSink, apiKey, authorities, Some(job.id), clock).foldLeft((0, 0L)) {
-                case ((offset, total), (len, msg)) =>
-                  projectionsActor ! IngestBundle(Seq((offset, msg)), allPerms)
-                  (offset + 1, total + len)
-              } map { case (_, total) =>
-                ourself ! TaskComplete(task.id, new DateTime, total)
-                total
+            _ traverse { stream =>
+              consumeStream(0, vfs.persistingStream(apiKey, fqSink, sys.error("where is the authorities value???"), perms.toSet[Permission], Some(job.id), stream)) map { totalSize =>
+                ourself ! TaskComplete(task.id, new DateTime, totalSize)
+                totalSize
               }
             }
           }

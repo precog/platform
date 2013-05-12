@@ -97,45 +97,6 @@ object QueryResultConvert {
       case CSVOutput => ColumnarTableModule.renderCsv(slices)
     }
   }
-
-  def toIngest[N[+_]](slices: StreamT[N, Slice], dest: Path, apiKey: APIKey, authorities: Authorities, jobId: Option[JobId], clock: Clock)(implicit N: Monad[N]): StreamT[N, (Long, EventMessage)] = {
-      val streamId = java.util.UUID.randomUUID
-
-      def jvaluesFromSlice(slice: Slice): Seq[JValue] = {
-        val len = slice.size
-        val jvalues = new Array[JValue](len)
-        var i = 0
-        var j = 0
-        while (i < len) {
-          val jv = slice.toJValue(i)
-          if (jv != JUndefined) {
-            jvalues(j) = jv
-            j += 1
-          }
-          i += 1
-        }
-        jvalues
-      }
-
-      def writeAll(n: Long, stream: StreamT[N, Slice]): StreamT[N, (Long, EventMessage)] = {
-        StreamT.unfoldM[N, (Long, EventMessage), (Long, StreamT[N, Slice])]((1L, stream)) {
-          case (n, _) if n < 0L =>
-            N.point(None)
-          case (n, stream) => stream.uncons.map {
-            case Some((slice, tail)) =>
-              val jvalues = jvaluesFromSlice(slice)
-              // FIXME: Probably not the safest way to get an EventId, but we don't even use them right nowx
-              val ingest = IngestMessage(apiKey, dest, authorities, jvalues map (IngestRecord(EventId.fromLong(n), _)), jobId, clock.instant, StreamRef.Create(streamId, false))
-              Some(((slice.size, ingest), (n + 1, tail)))
-            case None =>
-              val ingest = IngestMessage(apiKey, dest, authorities, Seq.empty, jobId, clock.instant, StreamRef.Create(streamId, true))
-              Some(((0L, ingest), (-1L, StreamT.empty[N, Slice])))
-          }
-        }
-      }
-
-    (0L, IngestMessage(apiKey, dest, authorities, Seq.empty, jobId, clock.instant, StreamRef.Create(streamId, false))) :: writeAll(1L, slices)
-  }
 }
 
 trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]] with */ ParseEvalStack[M] {

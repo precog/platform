@@ -445,6 +445,9 @@ trait TestPlatform extends ManagedPlatform { self =>
         )
       )
     }
+    
+    def currentVersion(apiKey: APIKey, path: Path) = Future(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
   }
 
   def status() = Future(Success(JArray(List(JString("status")))))

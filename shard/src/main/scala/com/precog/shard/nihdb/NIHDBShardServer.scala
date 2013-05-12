@@ -26,6 +26,7 @@ import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.client._
 import com.precog.shard.scheduling._
+import com.precog.yggdrasil.vfs._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
@@ -40,6 +41,7 @@ import akka.util.Timeout
 
 import java.util.concurrent.TimeUnit
 
+import org.joda.time.Instant
 import org.streum.configrity.Configuration
 
 import scalaz._
@@ -80,10 +82,13 @@ object NIHDBShardServer extends BlueEyesServer
     val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config.detach("scheduling"))
 
     val schedulingTimeout = new Timeout(config[Int]("scheduling.timeout_ms", 10000))
+    val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, timestampRequiredAfter)
 
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val vfs = new ActorVFS(platform.projectionsActor, clock, akka.util.Timeout.never, akka.util.Timeout.never) //FIXME: good timeout???
 
-    val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, scheduleStorage, platform.projectionsActor, platform, apiKeyFinder, accountFinder, clock)))
+    val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, vfs, scheduleStorage, platform, clock)))
     val scheduleActorStoppable = Stoppable.fromFuture(gracefulStop(scheduleActor, schedulingTimeout.duration)(actorSystem))
 
     val stoppable = scheduleActorStoppable.append(Stoppable.fromFuture(platform.shutdown)).append(scheduleStorageStoppable)

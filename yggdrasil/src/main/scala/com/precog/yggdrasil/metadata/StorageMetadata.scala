@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package metadata
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.yggdrasil.vfs._
 
 import scalaz._
@@ -51,6 +52,8 @@ trait StorageMetadata[M[+_]] { self =>
   def findSelectors(path: Path): M[Set[CPath]]
   def findSize(path: Path): M[Long]
   def findStructure(path: Path, selector: CPath): M[PathStructure]
+
+  def currentAuthorities(path: Path): M[Option[Authorities]]
   def currentVersion(path: Path): M[Option[VersionEntry]]
 //  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
 //  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
@@ -78,6 +81,7 @@ trait StorageMetadata[M[+_]] { self =>
     def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
     def findSelectors(path: Path) = self.findSelectors(path).liftM[T]
     def findSize(path: Path) = self.findSize(path).liftM[T]
+    def currentAuthorities(path: Path)  = self.currentAuthorities(path).liftM[T]
     def currentVersion(path: Path) = self.currentVersion(path).liftM[T]
     def findStructure(path: Path, selector: CPath) = self.findStructure(path, selector).liftM[T]
 

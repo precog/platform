@@ -17,26 +17,21 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.muspelheim
+package com.precog.util
 
-import com.precog.common._
+import scalaz._
+import scalaz.StreamT._
 
-import com.precog.common.security._
-import com.precog.daze.QueryExecutor
-import com.precog.yggdrasil.vfs.VersionEntry
-import blueeyes.json._
-import scalaz.Validation
+package object scalaz_extensions {
+  /*
+  def mapM[M[_], A, B](stream: StreamT[M, A])(f: A => M[B])(implicit m: Monad[M]): StreamT[M, B] = stepBind(stream) {
+    _( yieldd = (a, s) => m.map(f(a)) { Yield(_, mapM(s)(f)) }
+     , skip = s => m.point(Skip(mapM(s)(f)))
+     , done = m.point(Done)
+     )
+  }
 
-trait MetadataClient[M[+_]] {
-  def size(userUID: String, path: Path): M[Validation[String, JNum]]
-  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
-  def structure(apiKey: APIKey, path: Path, property: CPath): M[Validation[String, JObject]]
-  def currentVersion(apiKey: APIKey, path: Path): M[Option[VersionEntry]]
-  def currentAuthorities(apiKey: APIKey, path: Path): M[Option[Authorities]]
+  private def stepBind[M[_], A, B](stream: StreamT[M, A])(f: Step[A, StreamT[M, A]] => M[Step[B, StreamT[M, B]]])(implicit M: Monad[M]): StreamT[M, B] = 
+    StreamT(M.bind(stream.step)(f))
+    */
 }
-
-trait Platform[M[+_], +A] {
-  def metadataClient: MetadataClient[M]
-  def executorFor(apiKey: APIKey): M[Validation[String, QueryExecutor[M, A]]]
-}
-

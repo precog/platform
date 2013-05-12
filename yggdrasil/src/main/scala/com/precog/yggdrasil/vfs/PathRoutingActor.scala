@@ -87,13 +87,13 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
 
     case op: PathOp =>
       val requestor = sender
-      targetActor(op.path) map { pathActor =>
-        pathActor.tell(op, requestor)
-      } except {
+      val io = targetActor(op.path) map { _.tell(op, requestor) } except {
         case t: Throwable =>
           logger.error("Error obtaining path actor for " + op.path, t)
           IO { requestor ! PathFailure(op.path, NonEmptyList(ResourceError.GeneralError("Error opening resources at " + op.path))) }
-      } unsafePerformIO
+      } 
+      
+      io.unsafePerformIO
 
     case IngestData(messages) =>
       val requestor = sender

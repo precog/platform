@@ -179,6 +179,7 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
     )
 
     def currentVersion(apiKey: APIKey, path: Path) = Promise.successful(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Promise.successful(None)
   }
 }
 

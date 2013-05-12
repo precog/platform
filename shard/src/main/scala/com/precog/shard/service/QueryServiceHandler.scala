@@ -27,6 +27,8 @@ import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
+import com.precog.util.InstantOrdering
 
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -44,11 +46,17 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.CharBuffer
 import java.io.{ StringWriter, PrintWriter }
 
+import scala.math.Ordered._
 import scalaz._
+import scalaz.NonEmptyList.nels
 import scalaz.Validation.{ success, failure }
 import scalaz.std.stream._
+import scalaz.syntax.apply._
+import scalaz.syntax.applicative._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.option._
+
 
 abstract class QueryServiceHandler[A](implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
@@ -99,11 +107,14 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]])(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
+  import blueeyes.core.http.HttpHeaders._
+  import blueeyes.core.http.CacheDirectives.`max-age`
   val service = (request: HttpRequest[ByteChunk]) => {
     success { (apiKey: APIKey, path: Path) => 
       val queryOptions = ShardServiceCombinators.queryOpts(request)
+      val maxAge = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives) collectFirst { case `max-age`(Some(n)) => n.number }
       sys.error("todo")
     }
   }

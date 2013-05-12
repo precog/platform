@@ -71,4 +71,6 @@ class StorageMetadataClient[M[+_]: Monad](metadata: StorageMetadataSource[M]) ex
   }
 
   def currentVersion(apiKey: APIKey, path: Path) = metadata.userMetadataView(apiKey).currentVersion(path)
+
+  def currentAuthorities(apiKey: APIKey, path: Path) = metadata.userMetadataView(apiKey).currentAuthorities(path)
 }

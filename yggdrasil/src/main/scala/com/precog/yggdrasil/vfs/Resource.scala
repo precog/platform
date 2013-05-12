@@ -92,6 +92,8 @@ object ResourceError {
   def fromExtractorErrorNel(msg: String): Extractor.Error => NEL[ResourceError] = { error =>
     NEL(fromExtractorError(msg)(error))
   }
+
+  implicit val show = Show.showFromToString[ResourceError]
 }
 
 case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource {

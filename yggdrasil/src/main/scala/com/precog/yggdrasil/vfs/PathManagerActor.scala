@@ -93,6 +93,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   private def versionDir(version: UUID) = new File(baseDir, version.toString)
 
+  //FIXME: this is the wrong level to be doing these permissions checks. This needs to have been done way higher up in the stack.
   private def checkReadPermissions[A](value: A, writtenBy: Authorities, apiKey: Option[APIKey], permsFor: AccountId => Set[Permission]): Future[Option[A]] = {
     apiKey.map { key =>
       writtenBy.accountIds.toList.traverse { id =>

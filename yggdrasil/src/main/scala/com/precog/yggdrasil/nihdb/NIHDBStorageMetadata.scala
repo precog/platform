@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package nihdb
 
 import com.precog.common._
-import com.precog.common.security.APIKey
+import com.precog.common.security._
 import com.precog.yggdrasil.metadata.{PathStructure, StorageMetadata}
 import com.precog.yggdrasil.vfs._
 
@@ -66,6 +66,10 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
         PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
       }
     } getOrElse PathStructure.Empty
+  }
+
+  def currentAuthorities(path: Path): Future[Option[Authorities]] = {
+    findProjection(path) map { _ map { _.authorities } }
   }
 
   def currentVersion(path: Path) = {
