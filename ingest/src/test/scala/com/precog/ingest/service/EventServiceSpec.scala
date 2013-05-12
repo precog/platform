@@ -132,21 +132,22 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
     //   }
     // }
 
-    "track synchronous batch event with bad row" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
-        chunk("178234#!!@#$\n", """{ "testing": 321 }""")
-      }
-
-      result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
-          msg \ "total" mustEqual JNum(3)
-          msg \ "ingested" mustEqual JNum(2)
-          msg \ "failed" mustEqual JNum(1)
-          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
-
-          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
-      }
-    }
+// We no longer have "ingest all possible" semantics.
+//    "track synchronous batch event with bad row" in {
+//      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
+//        chunk("178234#!!@#$\n", """{ "testing": 321 }""")
+//      }
+//
+//      result.copoint must beLike {
+//        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
+//          msg \ "total" mustEqual JNum(3)
+//          msg \ "ingested" mustEqual JNum(2)
+//          msg \ "failed" mustEqual JNum(1)
+//          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
+//
+//          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
+//      }
+//    }
 
     "track CSV batch ingest with valid API key" in {
       val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
