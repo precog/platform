@@ -21,6 +21,9 @@ import org.specs2.mutable.{After, Specification}
 import org.specs2.specification.{Fragments, Step}
 import org.specs2.ScalaCheck
 
+import scalaz.std.stream._
+import scalaz.syntax.traverse._
+import scalaz.syntax.monad._
 import scalaz.effect.IO
 
 import java.io.File
@@ -118,20 +121,14 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L), JNum(3L), JNum(4L))
 
-      nihdb.insert((0L to 2L).toSeq.map { i =>
-        NIHDB.Batch(i, Seq(JNum(i)))
-      })
-
-      // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
-      nihdb.insert((0L to 2L).toSeq.map { i =>
-        NIHDB.Batch(i, Seq(JNum(i)))
-      })
-
-      nihdb.insert((0L to 4L).toSeq.map { i =>
-        NIHDB.Batch(i, Seq(JNum(i)))
-      })
+      val io = 
+        nihdb.insert((0L to 2L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) }) >>
+        // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
+        nihdb.insert((0L to 2L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) }) >>
+        nihdb.insert((0L to 4L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) })
 
       val result = for {
+        _ <- Future(io.unsafePerformIO)(actorSystem.dispatcher)
         _ <- nihdb.close(actorSystem)
         _ <- Future(nihdb = newNihdb(workDir))(actorSystem.dispatcher)
         status <- nihdb.status
@@ -157,8 +154,8 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
-      (0L to 1950L).map(JNum(_)).grouped(400).zipWithIndex.foreach { 
-        case (values, id) => nihdb.insert(Seq(NIHDB.Batch(id.toLong, values))) 
+      (0L to 1950L).map(JNum(_)).grouped(400).zipWithIndex foreach { 
+        case (values, id) => nihdb.insert(Seq(NIHDB.Batch(id.toLong, values))).unsafePerformIO 
       }
 
       var waits = 10
