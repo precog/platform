@@ -145,7 +145,7 @@ trait TestShardService extends
       )
     }
 
-    ShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, clock, Stoppable.Noop)
+    ShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), NoopScheduler, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
