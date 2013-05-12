@@ -137,6 +137,7 @@ class MongoQueryExecutor(val yggConfig: MongoQueryExecutorConfig, val jobManager
     )
 
     def currentVersion(apiKey: APIKey, path: Path) = Promise.successful(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Promise.successful(None)
   }
 }
 

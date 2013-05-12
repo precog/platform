@@ -62,6 +62,7 @@ import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.std.stream._
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.id._
 import scalaz.syntax.traverse._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.boolean._
@@ -252,7 +253,7 @@ object KafkaTools extends Command {
 
         val timestamp = lastTimestamp match {
           case ts @ ExactTime(_, `index`) => ts
-          case _ => Interpolated(index).tap { temp =>
+          case _ => Interpolated(index).unsafeTap { temp =>
             //println("Adding %s to pending timestamps".format(temp))
             pendingTimes ::= temp
           }
@@ -360,7 +361,7 @@ object KafkaTools extends Command {
 
                   if (path.length > 0) {
                     //println("Deleting from path " + path)
-                    ReportState(index + 1, currentPathSize + (path -> 0L)).tap { newState =>
+                    ReportState(index + 1, currentPathSize + (path -> 0L)).unsafeTap { newState =>
                       trackState(newState)
                     }
                   } else {

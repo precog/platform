@@ -6,6 +6,8 @@ import scalaz.Monoid
 import java.util.Comparator
 import java.nio.ByteBuffer
 
+import org.joda.time.Instant
+
 import scala.collection.mutable
 
 package object util {
@@ -52,17 +54,6 @@ package object util {
     def append(v1: BigDecimal, v2: => BigDecimal): BigDecimal = v1 + v2
   }
 
-
-  sealed trait Kestrel[A] {
-    protected def a: A
-    def tap(f: A => Unit): A = { f(a); a }
-  }
-
-  implicit def any2Kestrel[A](a0: => A): Kestrel[A] = new Kestrel[A] {
-    lazy val a = a0
-  }
-
-
   final class LazyMap[A, B, C](source: Map[A, B], f: B => C) extends Map[A, C] {
     import scala.collection.JavaConverters._
 
@@ -107,6 +98,7 @@ package object util {
     result
   }
 
+  implicit val InstantOrdering: Ordering[Instant] = Ordering.Long.on[Instant](_.getMillis)
 }
 
 // vim: set ts=4 sw=4 et:

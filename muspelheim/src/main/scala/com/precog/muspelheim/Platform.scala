@@ -13,6 +13,7 @@ trait MetadataClient[M[+_]] {
   def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]]
   def structure(apiKey: APIKey, path: Path, property: CPath): M[Validation[String, JObject]]
   def currentVersion(apiKey: APIKey, path: Path): M[Option[VersionEntry]]
+  def currentAuthorities(apiKey: APIKey, path: Path): M[Option[Authorities]]
 }
 
 trait Platform[M[+_], +A] {

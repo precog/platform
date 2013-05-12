@@ -47,6 +47,7 @@ import scalaz.Ordering._
 import scalaz.std.set._
 import scalaz.std.list._
 import scalaz.std.stream._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
@@ -212,7 +213,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
           case null =>
             acc.getOrElseUpdate((rprefix, CNull), {
               MutableNullColumn.empty()
-            }).asInstanceOf[MutableNullColumn].tap(_.update(row, true))
+            }).asInstanceOf[MutableNullColumn].unsafeTap(_.update(row, true))
 
           case objId: ObjectId =>
             // TODO: We should ensure this matches up w/ BlueEyes exactly.
@@ -277,7 +278,7 @@ trait MongoColumnarTableModule extends BlockStoreColumnarTableModule[Future] {
             if (keys.isEmpty) {
               acc.getOrElseUpdate((rprefix, CEmptyObject), {
                 MutableEmptyObjectColumn.empty()
-              }).asInstanceOf[MutableEmptyObjectColumn].tap(_.update(row, true))
+              }).asInstanceOf[MutableEmptyObjectColumn].unsafeTap(_.update(row, true))
             } else {
               val keys = dbObj.keySet().iterator()
               while (keys.hasNext) {
