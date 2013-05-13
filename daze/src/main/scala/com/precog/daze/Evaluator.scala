@@ -373,13 +373,13 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             val rightSort = adjustTableOrder(pendingTableRight.sort)(idMatch.mapRightIndex)
 
             val joinSpec = buildWrappedJoinSpec(idMatch)(spec)
-            val resultM = (isSorted(leftSort), isSorted(rightSort)) match {
+            val resultM = Timing.timeM("joining") { (isSorted(leftSort), isSorted(rightSort)) match {
               case (true, true) =>
                 M point (KeyOrder -> simpleJoin(leftResult, rightResult)(leftKeySpec, rightKeySpec, joinSpec))
               case (lSorted, rSorted) =>
                 val hint = Some(if (lSorted) LeftOrder else if (rSorted) RightOrder else KeyOrder)
                 Table.join(leftResult, rightResult, hint)(leftKeySpec, rightKeySpec, joinSpec)
-            }
+            } }
 
             resultM map { case (joinOrder, result) =>
               val sort = (joinKey, joinOrder) match {
@@ -756,7 +756,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               }
             }
          
-          case Memoize(parent, priority) => 
+          case Memoize(parent, _) => 
             for {
               pending <- prepareEval(parent, splits)
               table = pending.table.transform(liftToValues(pending.trans))

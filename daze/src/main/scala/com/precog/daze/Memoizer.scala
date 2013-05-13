@@ -14,9 +14,6 @@ trait Memoizer extends DAG {
   
   def memoize(graph: DepGraph): DepGraph = {
     val refs = findForcingRefs(graph, OpSide.Center(graph))
-    
-    def numRefs(node: DepGraph) = refs get node map { _.size } getOrElse 0
-    
     applyMemoizations(graph, refs)
   }
   
@@ -151,7 +148,8 @@ trait Memoizer extends DAG {
             dag.Filter(joinSort, memoized(left), memoized(right))(node.loc)
         }
 
-        case dag.AddSortKey(parent, sortField, valueField, id) => dag.AddSortKey(memoized(parent), sortField, valueField, id)
+        case dag.AddSortKey(parent, sortField, valueField, id) =>
+          dag.AddSortKey(memoized(parent), sortField, valueField, id)
 
         case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
       }
@@ -299,36 +297,33 @@ trait Memoizer extends DAG {
       updateMap(merged, graph, force)
     }
     
-    case Join(_, Cross(_), left, right) if !left.isInstanceOf[Root] && !right.isInstanceOf[Root] => {
+    case Join(_, Cross(_), left, right) if left.isInstanceOf[Root] || right.isInstanceOf[Root] =>
+      findForcingRefs(left, OpSide.Left(graph)) |+| findForcingRefs(right, OpSide.Right(graph))
+    
+    // an approximation of table heritage that *should* be accurate
+    case Join(_, _, left, right) /*if left.identities != right.identities*/ => {
       val merged = findForcingRefs(left, OpSide.Left(graph)) |+| findForcingRefs(right, OpSide.Right(graph))
       updateMap(merged, graph, force)
     }
     
-    // an approximation of table heritage that *should* be accurate
-    case Join(_, IdentitySort | ValueSort(_), left, right) if left.identities != right.identities => {
-      val merged = findForcingRefs(left, OpSide.Left(graph)) |+| findForcingRefs(right, OpSide.Right(graph))
-      updateMap(merged, graph, force)
+    //case Join(_, _, left, right) =>
+    //  findForcingRefs(left, force) |+| findForcingRefs(right, force)
+    
+    case Filter(Cross(_), target, boolean) if target.isInstanceOf[Root] || boolean.isInstanceOf[Root] => {
+      findForcingRefs(target, OpSide.Left(graph)) |+| findForcingRefs(boolean, OpSide.Right(graph))
     }
     
-    case Join(_, _, left, right) =>
-      findForcingRefs(left, force) |+| findForcingRefs(right, force)
-    
-    case Filter(Cross(_), target, boolean) if !target.isInstanceOf[Root] && !boolean.isInstanceOf[Root] => {
+    // an approximation of table heritage that *should* be accurate
+    case Filter(_, target, boolean) /*if target.identities != boolean.identities*/ => {
       val merged = findForcingRefs(target, OpSide.Left(graph)) |+| findForcingRefs(boolean, OpSide.Right(graph))
       updateMap(merged, graph, force)
     }
     
-    // an approximation of table heritage that *should* be accurate
-    case Filter(IdentitySort | ValueSort(_), target, boolean) if target.identities != boolean.identities => {
-      val merged = findForcingRefs(target, OpSide.Left(graph)) |+| findForcingRefs(boolean, OpSide.Right(graph))
-      updateMap(merged, graph, force)
-    }
-    
-    case Filter(_, target, boolean) =>
-      findForcingRefs(target, force) |+| findForcingRefs(boolean, force)
+    //case Filter(_, target, boolean) =>
+    //  findForcingRefs(target, force) |+| findForcingRefs(boolean, force)
     
     case AddSortKey(parent, _, _, _) =>
-      findForcingRefs(parent, OpSide.Center(graph))      // sort is a forcing point, but not a memo candidate
+      findForcingRefs(parent, OpSide.Center(graph))
     
     case Memoize(parent, _) =>
       findForcingRefs(parent, OpSide.Center(graph))      // memoize is a forcing point, but not a memo candidate
