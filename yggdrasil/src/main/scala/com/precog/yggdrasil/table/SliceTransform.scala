@@ -63,6 +63,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
     // No transform defined herein may reduce the size of a slice. Be it known!
     def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
+      //todo missing case WrapObjectDynamic
       val result = spec match {
         case Leaf(source) if source == Source || source == SourceLeft =>
           SliceTransform.left(())
@@ -95,7 +96,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                 } yield result
                   
                 resultColumns.groupBy(_.tpe) map { 
-                  case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                  case (tpe, cols) =>
+                    val col = cols reduceLeft { (c1, c2) =>
+                      Column.unionRightSemigroup.append(c1, c2)
+                    }
+                    (ColumnRef(CPath.Identity, tpe), col)
                 }
               }
             }
@@ -660,6 +665,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
   protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
     def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
+
+    def advance(s1: Slice, s2: Slice): (SliceTransform2[A], Slice) = {
+      val (a0, s0) = f(initial, s1, s2)
+      (this.copy(initial = a0), s0)
+    }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
       SliceTransform2(

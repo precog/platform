@@ -59,7 +59,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
 
   def eval(query: String): M[Result] = try {
     val forest = Timing.time("Compiling query")(compile(query))
-    val valid = forest filter { _.errors.isEmpty }
+    val valid = forest filter { _.errors forall isWarning }
 
     if (valid.isEmpty) {
       sys.error("Error parsing query:\n" + (forest flatMap { _.errors } map { _.toString } mkString "\n"))
@@ -78,7 +78,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
       case Right(dag) =>
         for {
           table <- Evaluator(M).eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
-          size <- Timing.timeM("Counting stream")(countStream(table.renderJson(',')))
+          size <- countStream(table.renderJson(','))
         } yield size
     }
   } catch {

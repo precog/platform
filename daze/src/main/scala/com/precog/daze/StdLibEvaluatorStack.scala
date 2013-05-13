@@ -10,9 +10,16 @@ trait StdLibEvaluatorStack[M[+_]]
     with StdLibOpFinderModule[M] 
     with StdLibStaticInlinerModule[M] 
     with ReductionFinderModule[M]
+    with JoinOptimizerModule[M]
     with PredicatePullupsModule[M] {
 
-  trait Lib extends StdLib with StdLibOpFinder with StdLibStaticInliner with ReductionFinder with PredicatePullups
+  trait Lib extends StdLib
+      with StdLibOpFinder
+      with StdLibStaticInliner
+      with ReductionFinder
+      with JoinOptimizer
+      with PredicatePullups
+
   object library extends Lib
 
   abstract class Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
@@ -26,5 +33,3 @@ trait StdLibEvaluatorStack[M[+_]]
     def coerceToDouble(ctx: EvaluationContext) = cf.util.CoerceToDouble
   }
 }
-
-// vim: set ts=4 sw=4 et:

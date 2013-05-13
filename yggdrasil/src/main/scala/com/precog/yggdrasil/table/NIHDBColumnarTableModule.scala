@@ -53,7 +53,9 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
 
         Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
           // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
-          val constraints = proj.structure.map { struct => Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet) }
+          val constraints = proj.structure.map { struct =>
+            Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet)
+          }
           acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) })
         }, ExactSize(lengths.sum))
       }
