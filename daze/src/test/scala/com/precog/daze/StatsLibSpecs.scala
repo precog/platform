@@ -245,7 +245,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       ).reduceLeft(joiner)
 
       // sort a tuple by its first (Long) field
-      val ordering = scala.math.Ordering.by[(JValue, _), JValue](_._1)
+      val ordering = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
       // this is ugly, but so is the structure coming out of testEval :/
       val result: List[Map[String, SValue]] = testEval(input).toList.map {
@@ -295,7 +295,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       ).reduceLeft(joiner)
 
       // sort a tuple by its first (Long) field
-      val ordering = scala.math.Ordering.by[(JValue, _), JValue](_._1)
+      val ordering = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
       // this is ugly, but so is the structure coming out of testEval :/
       val result: List[Map[String, SValue]] = testEval(input).toList.map {

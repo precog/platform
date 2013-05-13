@@ -814,7 +814,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
-     Regression test for #39652091
+    // Regression test for #39652091
     "call union on two dispatches of the same function" in {
       val input = """
         | medals := //summer_games/london_medals

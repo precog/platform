@@ -885,9 +885,9 @@ trait StringLibSpecs[M[+_]] extends Specification
 
   "split" should {
 
-    val o = scala.math.Ordering.by[(JValue, _), JValue](_._1)
+    val o = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
-    def mogrify(result: Set[(Vector[JValue], SValue)]): List[Vector[String]] =
+    def mogrify(result: Set[(Vector[SValue], SValue)]): List[Vector[String]] =
       result.toList.map {
         case (Vector(n), SArray(elems)) => (n, elems)
       }.sorted(o).map(_._2.map { case SString(s) => s })
