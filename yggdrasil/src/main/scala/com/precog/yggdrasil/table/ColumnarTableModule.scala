@@ -355,8 +355,7 @@ trait ColumnarTableModule[M[+_]]
       for {
         left0 <- left.sort(leftKeySpec)
         right0 <- right.sort(rightKeySpec)
-        cogrouped <- Timing.timeM("cogroup")(left0.cogroup(leftKeySpec, rightKeySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec)).force)
-        //cogrouped = left0.cogroup(leftKeySpec, rightKeySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
+        cogrouped = left0.cogroup(leftKeySpec, rightKeySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
       } yield {
         JoinOrder.KeyOrder -> cogrouped.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
       }
