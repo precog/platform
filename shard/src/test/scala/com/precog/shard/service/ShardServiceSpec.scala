@@ -106,7 +106,7 @@ trait TestShardService extends
   } copoint
 
   def configureShardState(config: Configuration) = Future {
-    val queryExecutorFactory = new TestPlatform {
+    val platform = new TestPlatform {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
@@ -126,7 +126,13 @@ trait TestShardService extends
       )
     }
 
-    ShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), NoopScheduler, jobManager, clock, Stoppable.Noop)
+    val storedQueries = new StoredQueries[Future] {
+      def executeStoredQuery(apiKey: APIKey, path: Path, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): Future[Validation[EvaluationError, StreamT[Future, Slice]]] = {
+        sys.error("This is currently untested.")
+      }
+    }
+
+    ShardState(platform, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), storedQueries, NoopScheduler, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -398,10 +404,10 @@ trait TestPlatform extends ManagedPlatform { self =>
           } 
 
           shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
-            mu map { _ => success(toSlice(JArray(List(JNum(2))))) }
+            mu map { _ => success(toSlice(JNum(2))) }
           }
         } else {
-          shardQueryMonad.point(success(toSlice(JArray(List(JNum(2))))))
+          shardQueryMonad.point(success(toSlice(JNum(2))))
         }
       }
     }

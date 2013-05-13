@@ -73,8 +73,9 @@ object NIHDBShardServer extends BlueEyesServer
     val scheduleActorStoppable = Stoppable.fromFuture(gracefulStop(scheduleActor, schedulingTimeout.duration)(actorSystem))
 
     val stoppable = scheduleActorStoppable.append(Stoppable.fromFuture(platform.shutdown)).append(scheduleStorageStoppable)
+    val storedQueries = new VFSStoredQueries(platform, vfs, jobManager, permissionsFinder, clock)
 
-    ShardState(platform, apiKeyFinder, accountFinder, new ActorScheduler(scheduleActor)(schedulingTimeout), jobManager, clock, stoppable, asyncQueries)
+    ShardState(platform, apiKeyFinder, accountFinder, storedQueries, new ActorScheduler(scheduleActor)(schedulingTimeout), jobManager, clock, stoppable, asyncQueries)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")
