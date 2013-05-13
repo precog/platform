@@ -138,7 +138,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
               System.out.println(">>> " + ex)
               System.err.println(">>> " + ex)
               throw ex
-          }
+          } 
         }
 
         complete(result, opts.output)
@@ -179,7 +179,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
       M.jobId map { jobId =>
         resultVF map (_ map { result =>
           // TODO: encoding a char stream here feels like we're bleeding a bit of impl requirement into ManagedPlatform
-          jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(QueryResultConvert.toCharBuffers(outputType, result)), Utf8)) map {
+          val convertedStream: StreamT[JobQueryTF, CharBuffer] = QueryResultConvert.toCharBuffers(outputType, result)
+          jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>
               jobManager.abort(jobId, "Error occured while storing job results: " + error, yggConfig.clock.now())
             case Right(_) =>

@@ -77,6 +77,7 @@ case class ShardState(
     platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
+    storedQueries: StoredQueries[Future],
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
@@ -225,7 +226,7 @@ trait ShardService extends
     dataPath("/analysis/fs") {
       get {
         shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-          new AnalysisServiceHandler(state.platform, state.clock)
+          new AnalysisServiceHandler(state.storedQueries, state.clock)
         }
       }
     }
