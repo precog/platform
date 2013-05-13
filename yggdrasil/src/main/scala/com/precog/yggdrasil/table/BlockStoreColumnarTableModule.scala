@@ -886,11 +886,18 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
 
         val (_, indexKey) = composeSliceTransform(indexKeySpec).advance(index)
         val hashed = HashedSlice(indexKey)
-        Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize).point[M]
+        val joined = Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize)
+        joined.point[M]
       }
 
+      // TODO: Let ColumnarTableModule do this for super.join and have toInternalTable
+      // take a transpec to compact by.
+
+      val left1 = left0.compact(leftKeySpec)
+      val right1 = right0.compact(rightKeySpec)
+
       if (yggConfig.hashJoins) {
-        (left0.toInternalTable().toEither |@| right0.toInternalTable().toEither).tupled flatMap {
+        (left1.toInternalTable().toEither |@| right1.toInternalTable().toEither).tupled flatMap {
           case (Right(left), Right(right)) =>
             orderHint match {
               case Some(JoinOrder.LeftOrder) =>
@@ -913,7 +920,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends
             super.join(left, right, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
         }
       } else {
-        super.join(left0, right0, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
+        super.join(left1, right1, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
       }
     }
 
