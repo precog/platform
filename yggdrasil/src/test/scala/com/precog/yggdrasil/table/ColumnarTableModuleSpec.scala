@@ -171,23 +171,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     csv must_== expected
   }
 
-  def renderLotsToJson(lots: Int, maxSliceSize: Option[Int] = None) {
-    def testRenderJson(json: String, maxSliceSize: Option[Int] = None): String = {
-      val t0 = System.currentTimeMillis()
-      val es = JParser.parseManyFromString(json).valueOr(throw _)
-      val table = fromJson(es.toStream, maxSliceSize)
-      val output = streamToString(table.renderJson("", ",", ""))
-      val t = System.currentTimeMillis() - t0
-      // uncomment for timing info
-      //println("rendered json (len=%d) in %d ms" format (output.length, t))
-      output
-    }
-
-    val event = "{\"x\":123,\"y\":\"foobar\",\"z\":{\"xx\":1.0,\"yy\":2.0}}"
-    val events = event * lots
-    testRenderJson(events, maxSliceSize)
-  }
-
   "a table dataset" should {
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
@@ -619,11 +602,6 @@ trait ColumnarTableModuleSpec[M[+_]] extends TestColumnarTableModule[M]
     }
 
     "test rendering uniform tables of varying sizes" in {
-      // renderLotsToJson(100)
-      // renderLotsToJson(1000)
-      // renderLotsToJson(10000)
-      // renderLotsToJson(100000) // this is really slow, takes ~100s to run
-
       renderLotsToCsv(100)
       renderLotsToCsv(1000)
       renderLotsToCsv(10000)

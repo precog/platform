@@ -51,9 +51,12 @@ import scalaz._
 import scalaz.NonEmptyList.nels
 import scalaz.Validation.{ success, failure }
 import scalaz.std.stream._
+import scalaz.std.option._
+import scalaz.std.anyVal._
 import scalaz.syntax.apply._
 import scalaz.syntax.applicative._
 import scalaz.syntax.monad._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
@@ -107,16 +110,28 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]], clock: Clock)(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
-  import blueeyes.core.http.CacheDirectives.`max-age`
+  import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
+
   val service = (request: HttpRequest[ByteChunk]) => {
-    success { (apiKey: APIKey, path: Path) => 
-      val queryOptions = ShardServiceCombinators.queryOpts(request)
-      val maxAge = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives) collectFirst { case `max-age`(Some(n)) => n.number }
-      sys.error("todo")
-    }
+    ShardServiceCombinators.queryOpts(request) map { queryOptions => 
+      { (apiKey: APIKey, path: Path) => 
+        val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
+        val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number }
+        val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number }
+        val cacheable = cacheDirectives exists { _ == `no-cache`}
+        val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
+        storedQueries.executeStoredQuery(apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
+          case Success(stream) => 
+            HttpResponse(OK, content = Some(Right(QueryResultConvert.toCharBuffers(queryOptions.output, stream))))
+          case Failure(evaluationError) => 
+            logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
+            HttpResponse(InternalServerError)
+        }
+      }
+    } 
   }
 
   def metadata = DescriptionMetadata("""Returns the result of executing a stored query.""")
