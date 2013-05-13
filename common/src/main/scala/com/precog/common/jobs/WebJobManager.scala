@@ -217,26 +217,26 @@ trait WebJobManager extends JobManager[Response] with JobStateManager[Response] 
       eitherT(mimeType.foldLeft(client0)(_ contentType _)
                .put[ByteChunk]("/jobs/" + jobId + "/result") {
         val t = ResponseStreamAsFutureStream
-        Right(t(data) map (ByteBuffer.wrap(_)))
+        Right(t(data))
       } map {
         case HttpResponse(HttpStatus(OK, _), _, _, _) => right(Right(()))
         case HttpResponse(HttpStatus(NotFound, _), _, _, _) => right(Left("Cannot find job with id: " + jobId))
         case res => left(unexpected(res))
-          })
-      }
+      })
     }
+  }
 
   def getResult(jobId: JobId): Response[Either[String, (Option[MimeType], StreamT[Response, Array[Byte]])]] = {
     def contentType(headers: HttpHeaders): Option[MimeType] = headers.header[`Content-Type`] flatMap (_.mimeTypes.headOption)
 
     withRawClient { client =>
       eitherT(client.get[ByteChunk]("/jobs/" + jobId + "/result") map {
-        case HttpResponse(HttpStatus(OK, _), headers, Some(Left(buffer)), _) =>
-          right(Right((contentType(headers), flipBytes(buffer) :: StreamT.empty[Response, Array[Byte]])))
+        case HttpResponse(HttpStatus(OK, _), headers, Some(Left(bytes)), _) =>
+          right(Right((contentType(headers), bytes :: StreamT.empty[Response, Array[Byte]])))
 
         case HttpResponse(HttpStatus(OK, _), headers, Some(Right(chunks)), _) =>
           val t = FutureStreamAsResponseStream
-          right(Right((contentType(headers), t(chunks map (flipBytes(_))))))
+          right(Right((contentType(headers), t(chunks))))
 
         case HttpResponse(HttpStatus(NoContent, _), _, _, _) =>
           right(Left("No result has been set yet."))

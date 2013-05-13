@@ -42,7 +42,7 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
 
     def writeChunkStream(chan: WritableByteChannel, chunk: ByteChunk): Future[Long] = {
       chunk match {
-        case Left(bb) => writeChannel(chan, bb :: StreamT.empty[Future, ByteBuffer], 0L)
+        case Left(bytes) => writeChannel(chan, bytes :: StreamT.empty[Future, Array[Byte]], 0L)
         case Right(stream) => writeChannel(chan, stream, 0L)
       }
     }
@@ -53,18 +53,11 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
       for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
     }
 
-    final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {
+    final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, Array[Byte]], written: Long): Future[Long] = {
       stream.uncons flatMap {
-        case Some((buf, tail)) =>
-          // This is safe since the stream is coming directly from BE
-          val safeBuf = buf.duplicate.rewind.asInstanceOf[ByteBuffer]
-          //logger.trace("Writing buffer %s, remain: %d: %s".format(safeBuf.hashCode, safeBuf.remaining, safeBuf))
-          try {
-            val written0 = chan.write(safeBuf)
-            writeChannel(chan, tail, written + written0)
-          } catch {
-            case t => logger.error("Failure on ByteBuffer read of %s (%d remaining)".format(safeBuf, safeBuf.remaining)); throw t
-          }
+        case Some((bytes, tail)) =>
+          val written0 = chan.write(ByteBuffer.wrap(bytes))
+          writeChannel(chan, tail, written + written0)
 
         case None =>
           M.point { chan.close(); written }

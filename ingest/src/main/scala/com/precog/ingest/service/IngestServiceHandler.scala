@@ -78,24 +78,15 @@ class IngestServiceHandler(
   private[this] val processingSelectors = new DefaultIngestProcessingSelectors(maxFields, batchSize, ingestStore)
 
   def chooseProcessing(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk]): Future[Option[IngestProcessing]] = {
-    def array(unsafeBuffer: ByteBuffer): Array[Byte] = {
-      // This ByteBuffer is coming straight from BE, so it's OK to dup/rewind
-      val buffer = unsafeBuffer.duplicate.rewind.asInstanceOf[ByteBuffer]
-      val target = new Array[Byte](buffer.remaining)
-      buffer.get(target)
-      buffer.flip()
-      target
-    }
-
     val selectors = processingSelectors.selectors(apiKey, path, authorities)
 
     request.content traverse {
-      case Left(buf) =>
-        Promise successful IngestProcessing.select(selectors, array(buf), request)
+      case Left(bytes) =>
+        Promise successful IngestProcessing.select(selectors, bytes, request)
 
       case Right(stream) =>
         stream.headOption map {
-          _ flatMap { buf => IngestProcessing.select(selectors, array(buf), request) }
+          _ flatMap { bytes => IngestProcessing.select(selectors, bytes, request) }
         }
     } map {
       _.join

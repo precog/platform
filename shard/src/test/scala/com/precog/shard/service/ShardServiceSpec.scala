@@ -129,11 +129,18 @@ trait TestShardService extends
     ShardState(queryExecutorFactory, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), NoopScheduler, jobManager, clock, Stoppable.Noop)
   }
 
+  def charBufferToBytes(cb: CharBuffer): Array[Byte] = {
+    val bb = utf8.encode(cb)
+    val arr = new Array[Byte](bb.remaining)
+    bb.get(arr)
+    arr
+  }
+
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
       req map {
-        case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
-        case Right(stream) => Right(stream.map(utf8.encode))
+        case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
+        case Right(stream) => Right(stream.map(charBufferToBytes))
       }
 
     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
@@ -142,15 +149,15 @@ trait TestShardService extends
         response.status.code match {
           case OK | Accepted => //assume application/json
             response map {
-              case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _)) 
-              case Right(stream) => Right(stream.map(utf8.decode))
+              case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _)) 
+              case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
             }
 
           case error =>
             if (contentType.exists(_ == MimeTypes.application/json)) {
               response map {
-                case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
-                case Right(stream) => Right(stream.map(utf8.decode))
+                case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _))
+                case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
               }
             } else {
               response map { 
