@@ -139,7 +139,6 @@ class SyncQueryServiceHandler(
   import JobManager._
 
   def ensureTermination(data0: StreamT[Future, CharBuffer]) =
-
     TerminateJson.ensure(silenceShardQueryExceptions(data0))
 
   def extractResponse(request: HttpRequest[_], result: (Option[JobId], StreamT[Future, Slice]), outputType: QueryOutput): Future[HttpResponse[QueryResult]] = {
