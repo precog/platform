@@ -28,6 +28,8 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
   import Function.const
   
   "mirror evaluator" should {
+    implicit val fs = FS("/nums" -> Vector(JNum(1), JNum(2), JNum(3)))
+    
     "evaluate simple arithmetic expressions" >> {
       "add" >> {
         "6 + 7" must evalTo(JNum(13))
@@ -116,17 +118,32 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
         "!false" must evalTo(JTrue)
       }
     }
+    
+    "map constant addition over a set of numbers" in {
+      "//nums + 5" must evalTo(JNum(6), JNum(7), JNum(8))
+    }
+    
+    "self-join through the addition operator" in {
+      "//nums + //nums" must evalTo(JNum(2), JNum(4), JNum(6))
+    }
+    
+    "self-join a chain of operators" in {
+      "//nums + //nums + //nums" must evalTo(JNum(3), JNum(6), JNum(9))
+    }
   }
   
-  private def evalTo(expect: JValue*): Matcher[String] = {
+  private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
     def doEval(q: String) =
-      eval(compileSingle(q))(const(Seq.empty))
+      eval(compileSingle(q))(fs.map)
     
-    def inner(q: String): Boolean =
-      expect == doEval(q)
+    def inner(q: String): Boolean = {
+      val actual = doEval(q)
+      
+      expect.length == actual.length && (expect zip actual forall { case (a, b) => a == b })
+    }
     
     def message(q: String): String = {
-      val actual = eval(compileSingle(q))(const(Seq.empty))
+      val actual = doEval(q)
       
       "evaluates to [%s], not [%s]".format(
         actual map { _.renderCompact } mkString ",",
@@ -140,5 +157,13 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
     val forest = compile(str) filter { _.errors.isEmpty }
     forest must haveSize(1)
     forest.head
+  }
+  
+  private case class FS(files: (String, Seq[JValue])*) {
+    val map = Map(files: _*)
+  }
+  
+  private object FS {
+    implicit val Empty: FS = FS()
   }
 }
