@@ -236,6 +236,18 @@ trait EvaluatorModule extends ProvenanceChecker
           case Op2Binding(op2) =>
             handleBinary(actualSets(0), actuals(0).provenance, actualSets(1), actuals(1).provenance)(op2.pf)
           
+          case ReductionBinding(red) => {
+            val values = actualSets.head map {
+              case (_, v) => v
+            }
+            
+            val result = values collect red.prepare reduceOption red orElse red.zero
+            
+            result.toSeq map { v =>
+              (Vector(), v)
+            }
+          }
+          
           case _ => sys.error("todo")
         }
       }
