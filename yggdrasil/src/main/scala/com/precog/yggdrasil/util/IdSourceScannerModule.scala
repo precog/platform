@@ -28,12 +28,16 @@ import com.precog.yggdrasil.table._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import scalaz._
+
 trait IdSourceConfig {
   def idSource: IdSource
 }
 
-trait IdSourceScannerModule extends YggConfigComponent {
+trait IdSourceScannerModule[M[+_]] extends YggConfigComponent {
   type YggConfig <: IdSourceConfig
+  
+  implicit def M: Monad[M]
   
   // FIXME: This is less than ideal. Basically, we reserve IDs in blocks. The freshIdScanner
   // is mutable and remembers these reserved blocks. This let's freshIdScanners be restartable,
@@ -47,7 +51,7 @@ trait IdSourceScannerModule extends YggConfigComponent {
   // that assume an ID columns have a specific shape (eg. exactly N columns). However, there
   // is a proposal to fix this. Once we have more flexible ID columns, we should revisit this.
 
-  def freshIdScanner = new CScanner {
+  def freshIdScanner = new CScanner[M] {
     private val blockSize: Int = 10000
     
     @volatile
@@ -91,7 +95,7 @@ trait IdSourceScannerModule extends YggConfigComponent {
 
     type A = Long
     def init = 0
-    def scan(pos: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+    def scan(pos: Long, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
       val rawCols = cols.values.toArray
       val defined = BitSetUtil.filteredRange(range.start, range.end) {
         i => Column.isDefinedAt(rawCols, i)
@@ -99,7 +103,7 @@ trait IdSourceScannerModule extends YggConfigComponent {
       val values = new Array[Long](range.size)
       fillArrayWithIds(values, 0, pos)
 
-      (pos + values.size, Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
+      M point (pos + values.size, Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
     }
   }
 }

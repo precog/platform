@@ -180,11 +180,12 @@ trait NIHDBQueryExecutorComponent  {
           def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
         }
 
-        new ShardQueryExecutor[ShardQuery](shardQueryMonad) with IdSourceScannerModule {
+        new ShardQueryExecutor[ShardQuery](shardQueryMonad) {
           val M = shardQueryMonad.M
           type YggConfig = NIHDBQueryExecutorConfig
           val yggConfig = platform.yggConfig
           val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
+          def freshIdScanner = platform.freshIdScanner
         } map { case (faults, result) =>
           result
         }

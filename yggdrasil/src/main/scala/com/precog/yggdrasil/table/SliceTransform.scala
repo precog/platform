@@ -60,7 +60,7 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 
 trait SliceTransforms[M[+_]] extends TableModule[M]
-    with ColumnarTableTypes 
+    with ColumnarTableTypes[M] 
     with ObjectConcatHelpers 
     with ArrayConcatHelpers
     with MapUtils {
@@ -70,11 +70,12 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
   import trans.constants._
 
   protected object SliceTransform {
-    def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => (a, s))
-    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
-    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
+    def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => M.point((a, s)))
+    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => M.point((a, sl)))
+    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => M.point((a, sr)))
 
-    def lift(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
+    def lift(f: Slice => M[Slice]): SliceTransform1[Unit] =
+      SliceTransform1[Unit]((), { (_, s) => f(s) map { ((), _) } })
  
     def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
       composeSliceTransform2(spec).parallel
@@ -82,6 +83,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
     // No transform defined herein may reduce the size of a slice. Be it known!
     def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
+      //todo missing case WrapObjectDynamic
       val result = spec match {
         case Leaf(source) if source == Source || source == SourceLeft =>
           SliceTransform.left(())
@@ -114,7 +116,11 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
                 } yield result
                   
                 resultColumns.groupBy(_.tpe) map { 
-                  case (tpe, cols) => (ColumnRef(CPath.Identity, tpe), cols.reduceLeft((c1, c2) => Column.unionRightSemigroup.append(c1, c2)))
+                  case (tpe, cols) =>
+                    val col = cols reduceLeft { (c1, c2) =>
+                      Column.unionRightSemigroup.append(c1, c2)
+                    }
+                    (ColumnRef(CPath.Identity, tpe), col)
                 }
               }
             }
@@ -504,14 +510,17 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
           composeSliceTransform2(source) andThen {
             SliceTransform1[scanner.A](
               scanner.init,
-              (state: scanner.A, slice: Slice) => {
-                val (newState, newCols) = scanner.scan(state, slice.columns, 0 until slice.size)
-                val newSlice = new Slice {
-                  val size = slice.size
-                  val columns = newCols
+              { (state: scanner.A, slice: Slice) =>
+                scanner.scan(state, slice.columns, 0 until slice.size) map {
+                  case (newState, newCols) => {
+                    val newSlice = new Slice {
+                      val size = slice.size
+                      val columns = newCols
+                    }
+    
+                    (newState, newSlice)
+                  }
                 }
-
-                (newState, newSlice)
               }
             )
           }
@@ -621,108 +630,156 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
     }  
   }
 
-  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
+  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => M[(A, Slice)]) {
     def apply(s: Slice) = f(initial, s)
 
-    def advance(s: Slice): (SliceTransform1[A], Slice)  = {
-      val (a0, s0) = f(initial, s)
-      (this.copy(initial = a0), s0)
+    def advance(s: Slice): M[(SliceTransform1[A], Slice)]  = {
+      f(initial, s) map {
+        case (a0, s0) =>
+          (this.copy(initial = a0), s0)
+      }
     }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
       SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) => 
-            val (a0, sa) = f(a, s) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
+        (initial, t.initial), {
+          case ((a, b), s) => {
+            for {
+              pairA <- f(a, s)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, sa)
+              (b0, sb) = pairB
+            } yield ((a0, b0), sb)
+          }
         }
       )
     }
 
     def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
       SliceTransform1(
-        (initial, t.initial),
-        { case ((a, b), s) =>
-            val (a0, sa) = f(a, s)
-            val (b0, sb) = t.f(b, s)
-            assert(sa.size == sb.size)
-            ((a0, b0), combine(sa, sb))
+        (initial, t.initial), {
+          case ((a, b), s) => {
+            for {
+              pairA <- f(a, s)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, s)
+              (b0, sb) = pairB
+              
+              _ = assert(sa.size == sb.size) 
+            } yield ((a0, b0), combine(sa, sb))
+          }
         }
       )
     }
 
     def zip2[B, C](t: SliceTransform1[B], t2: SliceTransform1[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform1[(A, B, C)] = {
       SliceTransform1(
-        (initial, t.initial, t2.initial),
-        { case ((a, b, c), s) =>
-            val (a0, sa) = f(a, s)
-            val (b0, sb) = t.f(b, s)
-            val (c0, sc) = t2.f(c, s)
-            assert(sa.size == sb.size)
-            assert(sb.size == sc.size)
-            ((a0, b0, c0), combine(sa, sb, sc))
+        (initial, t.initial, t2.initial), {
+          case ((a, b, c), s) => {
+            for {
+              pairA <- f(a, s)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, s)
+              (b0, sb) = pairB
+              
+              pairC <- t2.f(c, s)
+              (c0, sc) = pairC
+              
+              _ = assert(sa.size == sb.size)
+              _ = assert(sb.size == sc.size)
+            } yield ((a0, b0, c0), combine(sa, sb, sc))
+          }
         }
       )
     }
 
     def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
       SliceTransform1(
-        initial,
-        { case (a, s) =>
-            val (a0, sa) = f(a, s)
-            (a0, mapFunc(sa))
+        initial, {
+          case (a, s) => {
+            f(a, s) map {
+              case (a0, sa) => (a0, mapFunc(sa))
+            }
+          }
         }
       )
     }
   }
 
-  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
+  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => M[(A, Slice)], source: Option[TransSpec[SourceType]] = None) {
     def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
+
+    def advance(s1: Slice, s2: Slice): M[(SliceTransform2[A], Slice)] = {
+      f(initial, s1, s2) map { case (a0, s0) =>
+        (this.copy(initial = a0), s0)
+      }
+    }
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
       SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) => 
-            val (a0, sa) = f(a, sl, sr) 
-            val (b0, sb) = t.f(b, sa)
-            ((a0, b0), sb)
+        (initial, t.initial), {
+          case ((a, b), sl, sr) => {
+            for {
+              pairA <- f(a, sl, sr)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, sa)
+              (b0, sb) = pairB
+            } yield ((a0, b0), sb)
+          } 
         }
       )
     }
 
     def zip[B](t: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
       SliceTransform2(
-        (initial, t.initial),
-        { case ((a, b), sl, sr) =>
-            val (a0, sa) = f(a, sl, sr)
-            val (b0, sb) = t.f(b, sl, sr)
-            assert(sa.size == sb.size) 
-            ((a0, b0), combine(sa, sb))
+        (initial, t.initial), {
+          case ((a, b), sl, sr) => {
+            for {
+              pairA <- f(a, sl, sr)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, sl, sr)
+              (b0, sb) = pairB
+            } yield ((a0, b0), combine(sa, sb))
+          }
         }
       )
     }
 
     def zip2[B, C](t: SliceTransform2[B], t2: SliceTransform2[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform2[(A, B, C)] = {
       SliceTransform2(
-        (initial, t.initial, t2.initial),
-        { case ((a, b, c), sl, sr) =>
-            val (a0, sa) = f(a, sl, sr)
-            val (b0, sb) = t.f(b, sl, sr)
-            val (c0, sc) = t2.f(c, sl, sr)
-            assert(sa.size == sb.size)
-            assert(sb.size == sc.size)
-            ((a0, b0, c0), combine(sa, sb, sc))
+        (initial, t.initial, t2.initial), {
+          case ((a, b, c), sl, sr) => {
+            for {
+              pairA <- f(a, sl, sr)
+              (a0, sa) = pairA
+              
+              pairB <- t.f(b, sl, sr)
+              (b0, sb) = pairB
+              
+              pairC <- t2.f(c, sl, sr)
+              (c0, sc) = pairC
+              
+              _ = assert(sa.size == sb.size)
+              _ = assert(sb.size == sc.size)
+            } yield ((a0, b0, c0), combine(sa, sb, sc))
+          }
         }
       )
     }
 
     def map(mapFunc: Slice => Slice): SliceTransform2[A] = {
       SliceTransform2(
-        initial,
-        { case (a, sl, sr) =>
-            val (a0, s0) = f(a, sl, sr)
-            (a0, mapFunc(s0))
+        initial, {
+          case (a, sl, sr) => {
+            f(a, sl, sr) map {
+              case (a0, s0) => (a0, mapFunc(s0))
+            } 
+          }
         }
       )
     }
