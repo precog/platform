@@ -34,17 +34,30 @@ object Version {
  */
 trait VFS[M[+_]] {
   def readQuery(path: Path, version: Version): M[Option[String]]  
+  def readCache(path: Path, version: Version): M[Option[StreamT[M, Slice]]]
   def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
 }
 
-class ActorVFS(projectionsActor: ActorRef, clock: Clock, queryReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
+class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
   def readQuery(path: Path, version: Version): Future[Option[String]] = {
-    implicit val t = queryReadTimeout
-    (projectionsActor ? Read(path, None, None)).mapTo[ReadResult] map {
+    implicit val t = projectionReadTimeout
+    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult] map {
       case ReadSuccess(_, Some(blob: Blob)) =>
         blob.asString map(Some(_)) except { case t: Throwable => IO { logger.error("Query read error", t); None } } unsafePerformIO
 
-      case _ => None
+      case failure => 
+        logger.warn("Unable to read query at path %s with version %s: %s".format(path.path, version, failure))
+        None
+    }
+  }
+
+  def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = {
+    implicit val t = projectionReadTimeout
+    (projectionsActor ? ReadProjection(path, version, None)).mapTo[ReadProjectionResult] map {
+      case ReadProjectionSuccess(_, Some(projection)) => Some(projection.getBlockStream(None))
+      case failure => 
+        logger.warn("Unable to read projection at path %s with version %s: %s".format(path.path, version, failure))
+        None
     }
   }
 

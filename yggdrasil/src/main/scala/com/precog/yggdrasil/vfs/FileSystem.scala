@@ -55,8 +55,8 @@ sealed trait PathOp {
   def path: Path
 }
 
-case class Read(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp 
-case class ReadProjection(path: Path, streamId: Option[UUID], auth: Option[APIKey]) extends PathOp 
+case class Read(path: Path, version: Version, auth: Option[APIKey]) extends PathOp 
+case class ReadProjection(path: Path, version: Version, auth: Option[APIKey]) extends PathOp 
 case class Execute(path: Path, auth: Option[APIKey]) extends PathOp 
 case class Stat(path: Path, auth: Option[APIKey]) extends PathOp 
 case class FindChildren(path: Path, auth: APIKey) extends PathOp

@@ -12,10 +12,11 @@ import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{DateTimeDecomposer => _, _}
+import blueeyes.json.serialization.Versioned._
 import blueeyes.util.Clock
 
 import com.precog.common.Path
-import com.precog.common.accounts.AccountFinder
+import com.precog.common.accounts._
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
@@ -32,64 +33,72 @@ import org.joda.time.DateTime
 import org.quartz.CronExpression
 
 import scalaz._
+import scalaz.NonEmptyList._
 import scalaz.std.option._
 import scalaz.std.string._
 import scalaz.syntax.apply._
 import scalaz.syntax.plus._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
+import scalaz.syntax.std.option._
 import scalaz.syntax.traverse._
 
+import shapeless._
+
+case class AddScheduledQueryRequest(schedule: CronExpression, owners: Set[AccountId], basePath: Path, source: Path, sink: Path, timeout: Option[Long])
+
+object AddScheduledQueryRequest {
+  import CronExpressionSerialization._
+
+  implicit val iso = Iso.hlist(AddScheduledQueryRequest.apply _, AddScheduledQueryRequest.unapply _)
+
+  val schemaV1 = "schedule" :: "owners" :: "basePath" :: "source" :: "sink" :: "timeout" :: HNil
+
+  implicit val decomposer: Decomposer[AddScheduledQueryRequest] = decomposerV(schemaV1, Some("1.0".v))
+  implicit val extractor:  Extractor[AddScheduledQueryRequest]  = extractorV(schemaV1, Some("1.0".v))
+}
+
 class AddScheduledQueryServiceHandler(scheduler: Scheduler[Future], apiKeyFinder: APIKeyFinder[Future], accountFinder: AccountFinder[Future], clock: Clock)(implicit M: Monad[Future], executor: ExecutionContext, addTimeout: Timeout) extends CustomHttpService[Future[JValue], APIKey => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => Success({ apiKey : APIKey =>
+  val service: HttpRequest[Future[JValue]] => Validation[NotServed, APIKey => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => Success({ apiKey : APIKey =>
     val permissionsFinder = new PermissionsFinder[Future](apiKeyFinder, accountFinder, clock.instant)
-    request.content map { futureContent =>
+    request.content map { contentFuture =>
       for {
-        body <- futureContent
-        taskId = UUID.randomUUID
-        taskV <-{
-          (
-            (body \ "schedule").validated[CronExpression] |@|
-            (body \ "ownerAccountIds").validated[List[String]].flatMap { accounts =>
-              accounts.toNel.map {
-                nea => Success(Authorities(nea))
-              } getOrElse Failure(Extractor.Error.invalid("No owner account IDs specified for result storage"))
-            } |@|
-            (body \ "basePath").validated[Path] |@|
-            (body \ "source").validated[Path] |@|
-            (body \ "sink").validated[Path] |@|
-            (body \ "timeout").validated[Option[Long]]
-          ) { ScheduledTask(taskId, _, apiKey, _, _, _, _, _) } map { task =>
+        content <- contentFuture
+        sreqV = content.validated[AddScheduledQueryRequest] leftMap { error => 
+          badRequest("Request body %s is not a valid scheduling query request: %s".format(content.renderCompact, error.message))
+        }
+        taskVV <- sreqV traverse { schedulingRequest =>
+          Authorities.ifPresent(schedulingRequest.owners) map { authorities =>
             for {
-              okToRead  <- permissionsFinder.apiKeyFinder.hasCapability(apiKey, Set(ExecutePermission(task.fqSource)), None)
-              okToWrite <- permissionsFinder.checkWriteAuthorities(task.authorities, apiKey, task.fqSink, clock.instant)
+              okToRead  <- permissionsFinder.apiKeyFinder.hasCapability(apiKey, Set(ExecutePermission(schedulingRequest.source)), None)
+              okToWrite <- permissionsFinder.checkWriteAuthorities(authorities, apiKey, schedulingRequest.sink, clock.instant)
             } yield {
-              List(
-                (!okToRead) option ("The provided API Key does not have permission to execute " + task.fqSource),
-                (!okToWrite) option ("The provided API Key does not have permission to write to %s as %s".format(task.fqSink, task.authorities.render))
-              ).flatten match {
-                case Nil => Success(task)
-                case errors => Failure(forbidden(errors.mkString(", ")))
+              val readError = (!okToRead).option(nels("The API Key does not have permission to execute %s".format(schedulingRequest.source.path))) 
+              val writeError = (!okToWrite).option(nels("The API Key does not have permission to write to %s as %s".format(schedulingRequest.sink.path, authorities.render)))
+              (readError |+| writeError) map {
+                errors => forbidden(errors.list.mkString(", "))
+              } toFailure {
+                (schedulingRequest, authorities)
               }
             }
-          } valueOr { errors =>
-            Promise successful Failure(badRequest(errors.message))
+          } getOrElse {
+            Promise successful Failure(badRequest("You must provide at least one owner account for the task results!"))
           }
-        }
-        addResultV <- taskV match {
-          case Success(task) =>
-            scheduler.addTask(task) map {
+        } 
+        taskV: Validation[HttpResponse[JValue], (AddScheduledQueryRequest, Authorities)] = taskVV.flatMap (x => x) 
+        addResultVV <- taskV traverse {
+          case (request, authorities) =>
+            scheduler.addTask(Some(request.schedule), apiKey, authorities, request.basePath, request.source, request.sink, request.timeout) map {
               _ leftMap { error =>
                 logger.error("Failure adding scheduled execution: " + error)
                 HttpResponse(status = HttpStatus(InternalServerError), content = Some("An error occurred scheduling your query".serialize))
               }
             }
-
-          case f @ Failure(_) =>
-            Promise successful f
         }
       } yield {
-        addResultV map { _ =>
+        val addResultV: Validation[HttpResponse[JValue], UUID] = addResultVV.flatMap(a => a) 
+        addResultV map { taskId: UUID =>
           HttpResponse(content = Some(taskId.serialize))
         } valueOr {
           errResponse => errResponse
@@ -132,9 +141,13 @@ class ScheduledQueryStatusServiceHandler[A](scheduler: Scheduler[Future])(implic
           scheduler.statusForTask(id, limit) map {
             _ map {
               case Some((task, reports)) =>
+                val nextTime: Option[DateTime] = task.repeat.flatMap { 
+                  sched: CronExpression => Option(sched.getNextValidTimeAfter(new java.util.Date))
+                } map { d => new DateTime(d) }
+
                 val body: JValue = JObject(
                   "task" -> task.serialize,
-                  "nextRun" -> (Option(task.schedule.getNextValidTimeAfter(new java.util.Date)) map { d => new DateTime(d).serialize } getOrElse { JString("never") }),
+                  "nextRun" -> (nextTime.map (_.serialize) getOrElse { JString("never") }),
                   "history" -> reports.toList.serialize
                 )
 
@@ -161,3 +174,5 @@ class ScheduledQueryStatusServiceHandler[A](scheduler: Scheduler[Future])(implic
 
   val metadata = DescriptionMetadata("Query the status of a scheduled entry")
 }
+
+//type ScheduleServiceHandlers

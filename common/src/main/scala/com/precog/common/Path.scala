@@ -38,6 +38,8 @@ class Path private (val elements: String*) {
 
   def urlEncode: Path = new Path(elements.map(java.net.URLEncoder.encode(_, "UTF-8")): _*)
 
+  def prefix: Option[Path] = elements.nonEmpty.option(Path(components.init))
+
   override def equals(that: Any) = that match {
     case Path(`path`) => true
     case _ => false

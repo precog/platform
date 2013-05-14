@@ -15,7 +15,7 @@ class InMemoryScheduleStorage(implicit executor: ExecutionContext) extends Sched
 
   def addTask(task: ScheduledTask) = Promise successful {
     tasks += (task.id -> task)
-    Success(PrecogUnit)
+    Success(task)
   }
 
   def deleteTask(id: UUID) = Promise successful {

@@ -11,7 +11,7 @@ import com.precog.yggdrasil.vfs.NIHDBResource
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz.{NonEmptyList => NEL, Monad}
+import scalaz.{NonEmptyList => NEL, Monad, StreamT}
 
 final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authorities, projectionId: Int) extends ProjectionLike[Future, Long, Slice] with Logging {
   private[this] val readers = snapshot.readers
