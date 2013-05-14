@@ -27,7 +27,7 @@ import util.IdGen
 
 import blueeyes.json._
 
-import scalaz.Ordering
+import scalaz.{Order, Ordering}
 import scalaz.syntax.semigroup._
 
 import scala.collection.mutable
@@ -42,7 +42,21 @@ trait EvaluatorModule extends ProvenanceChecker
   import ast._
   
   private type Identities = Vector[Int]
-  private type Dataset = Seq[(Identities, JValue)]
+  private type SEvent = (Identities, JValue)
+  private type Dataset = Seq[SEvent]
+  
+  private implicit val SEOrder: Order[SEvent] = new Order[SEvent] {
+    def order(left: SEvent, right: SEvent): Ordering = {
+      val (leftIds, leftValue) = left
+      val (rightIds, rightValue) = right
+      
+      val idOrder = leftIds zip rightIds map {
+        case (li, ri) => Ordering.fromInt(li - ri)
+      } reduceOption { _ |+| _ } getOrElse Ordering.EQ
+      
+      idOrder |+| JValue.order.order(leftValue, rightValue)
+    }
+  }
   
   // TODO more specific sequence types
   def eval(expr: Expr)(fs: String => Seq[JValue]): Seq[JValue] = {
@@ -50,7 +64,7 @@ trait EvaluatorModule extends ProvenanceChecker
     val news = mutable.Map[New, Int]()
     val IdGen = new IdGen
     
-    def mappedFS(path: String): Seq[(Identities, JValue)] = {
+    def mappedFS(path: String): Dataset = {
       val raw = fs(path)
       
       val init = inits get path getOrElse {
@@ -251,9 +265,28 @@ trait EvaluatorModule extends ProvenanceChecker
         }
       }
       
-      case Union(_, _, _) => sys.error("todo")
-      case Intersect(_, _, _) => sys.error("todo")
-      case Difference(_, _, _) => sys.error("todo")
+      case Union(_, left, right) => {
+        val leftSorted = loop(env)(left).sorted(SEOrder.toScalaOrdering)
+        val rightSorted = loop(env)(right).sorted(SEOrder.toScalaOrdering)
+        
+        mergeAlign(leftSorted, rightSorted)(SEOrder.order)
+      }
+      
+      case Intersect(_, left, right) => {
+        val leftSorted = loop(env)(left).sorted(SEOrder.toScalaOrdering)
+        val rightSorted = loop(env)(right).sorted(SEOrder.toScalaOrdering)
+        
+        zipAlign(leftSorted, rightSorted)(SEOrder.order) map {
+          case (se, _) => se
+        }
+      }
+      
+      case Difference(_, left, right) => {
+        val leftSorted = loop(env)(left).sorted(SEOrder.toScalaOrdering)
+        val rightSorted = loop(env)(right).sorted(SEOrder.toScalaOrdering)
+        
+        biasLeftAlign(leftSorted, rightSorted)(SEOrder.order)
+      }
       
       case Add(_, left, right) => {
         handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
@@ -428,4 +461,40 @@ trait EvaluatorModule extends ProvenanceChecker
       }
     }
   }
+  
+  /**
+   * Poor-man's cogroup specialized on the left/right cases
+   */
+  private def mergeAlign[A](left: Seq[A], right: Seq[A])(f: (A, A) => Ordering): Seq[A] = {
+    if (left.isEmpty) {
+      right
+    } else if (right.isEmpty) {
+      left
+    } else {
+      f(left.head, right.head) match {
+        case Ordering.EQ => left.head +: mergeAlign(left.tail, right.tail)(f)
+        case Ordering.LT => left.head +: mergeAlign(left.tail, right)(f)
+        case Ordering.GT => right.head +: mergeAlign(left, right.tail)(f)
+      }
+    }
+  }
+  
+  /**
+   * Poor-man's cogroup specialized on the left case
+   */
+  private def biasLeftAlign[A](left: Seq[A], right: Seq[A])(f: (A, A) => Ordering): Seq[A] = {
+    if (left.isEmpty) {
+      left
+    } else if (right.isEmpty) {
+      left
+    } else {
+      f(left.head, right.head) match {
+        case Ordering.EQ => biasLeftAlign(left.tail, right.tail)(f)
+        case Ordering.LT => left.head +: biasLeftAlign(left.tail, right)(f)
+        case Ordering.GT => biasLeftAlign(left, right.tail)(f)
+      }
+    }
+  }
+  
+  // no need for biasRightAlign, since difference biases to the left
 }

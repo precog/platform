@@ -198,6 +198,18 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
     "evaluate a trivial conditional expression" in {
       "if true then 42 else 12" must evalTo(JNum(42))
     }
+    
+    "evaluate a simple union" in {
+      "1 union 2" must evalTo(JNum(1), JNum(2))
+    }
+    
+    "evaluate a simple intersect" in {
+      "1 union 2 intersect 1" must evalTo(JNum(1))
+    }
+    
+    "evaluate a simple difference" in {
+      "1 union 2 difference 1" must evalTo(JNum(2))
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
