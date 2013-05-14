@@ -84,9 +84,9 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, routingActor: ActorRef, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]): Option[ActorRef]
 
-  def initShardActors(permissionsFinder: PermissionsFinder[Future], projectionsActor: ActorRef): Option[IngestSystem] = {
+  def initShardActors(permissionsFinder: PermissionsFinder[Future], routingActor: ActorRef): Option[IngestSystem] = {
     val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
     def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
@@ -102,7 +102,7 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
     val initialCheckpoint = loadCheckpoint()
 
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, checkpointCoordination, permissionsFinder)) yield init
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, routingActor, checkpoint, checkpointCoordination, permissionsFinder)) yield init
 
     val stoppable = Stoppable.fromFuture({
       import IngestSystem.actorStop

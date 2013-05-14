@@ -197,7 +197,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   }
 
   def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
-    logger.debug("About to persist %d messages".format(msgs.size))
+    logger.debug("About to persist %d messages; replying to %s".format(msgs.size, requestor.toString))
 
     def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
       def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
@@ -304,6 +304,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   def receive = {
     case IngestBundle(messages, permissions) =>
+      logger.debug("Received ingest request for %d messages.".format(messages.size))
       processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
 
     case msg @ Read(_, id, auth) =>

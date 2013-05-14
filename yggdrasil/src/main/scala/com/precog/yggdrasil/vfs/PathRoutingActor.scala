@@ -96,6 +96,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
       io.unsafePerformIO
 
     case IngestData(messages) =>
+      logger.debug("Received %d messages for ingest".format(messages.size))
       val requestor = sender
       val groupedAndPermissioned = messages.groupBy({ case (_, event) => event.path }).toStream traverse {
         case (path, pathMessages) =>
