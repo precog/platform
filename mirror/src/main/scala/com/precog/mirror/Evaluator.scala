@@ -105,14 +105,19 @@ trait EvaluatorModule extends ProvenanceChecker
       case ArrayDef(loc, props) => sys.error("todo")
       
       case Descent(loc, child, property) => {
-        loop(env)(child) map {
-          case (ids, value) => (ids, value \ property)
+        loop(env)(child) collect {
+          case (ids, value: JObject) => (ids, value \ property)
         }
       }
       
       case MetaDescent(_, _, _) => sys.error("todo")
       
-      case Deref(_, _, _) => sys.error("todo")
+      case Deref(_, left, right) => {
+        handleBinary(env)(left, right) {
+          case (JArray(values), JNum(index)) =>
+            values(index.toInt)
+        }
+      }
       
       case expr @ Dispatch(loc, Identifier(ns, id), actuals) => {
         val actualSets = actuals map loop(env)
@@ -136,12 +141,21 @@ trait EvaluatorModule extends ProvenanceChecker
           case _ => sys.error("todo")
         }
       }
-          
-      case Cond(_, _, _, _) => sys.error("todo")
       
-      case Where(_, _, _) => sys.error("todo")
+      case Cond(_, pred, left, right) => sys.error("todo")
       
-      case With(_, _, _) => sys.error("todo")
+      case Where(_, left, right) => {
+        handleBinary(env)(left, right) {
+          case (value, JTrue) => value
+        }
+      }
+      
+      case With(_, left, right) => {
+        handleBinary(env)(left, right) {
+          case (JObject(leftFields), JObject(rightFields)) =>
+            JObject(leftFields ++ rightFields)
+        }
+      }
       
       case Union(_, _, _) => sys.error("todo")
       case Intersect(_, _, _) => sys.error("todo")

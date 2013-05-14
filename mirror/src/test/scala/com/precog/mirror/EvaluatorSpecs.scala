@@ -100,6 +100,18 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
       }
     }
     
+    "evaluate a simple object concatenation" in {
+      "{a:1} with {b:2}" must evalTo(JObject(Map("a" -> JNum(1), "b" -> JNum(2))))
+    }.pendingUntilFixed
+    
+    "evaluate a simple object deref" in {
+      "{a:1}.a" must evalTo(JNum(1))
+    }.pendingUntilFixed
+    
+    "evaluate a simple array deref" in {
+      "([42])[0]" must evalTo(JNum(42))
+    }.pendingUntilFixed
+    
     "map constant addition over a set of numbers" in {
       "//nums + 5" must evalTo(JNum(6), JNum(7), JNum(8))
     }
@@ -110,6 +122,15 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
     
     "self-join a chain of operators" in {
       "//nums + //nums + //nums" must evalTo(JNum(3), JNum(6), JNum(9))
+    }
+    
+    "filter a dataset" in {
+      val input = """
+        | nums := //nums
+        | nums where nums < 2
+        | """.stripMargin
+        
+      input must evalTo(JNum(1))
     }
   }
   
