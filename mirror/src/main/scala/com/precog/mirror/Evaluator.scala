@@ -218,6 +218,16 @@ trait EvaluatorModule extends ProvenanceChecker
           
           case ExpandGlobBinding => actualSets.head       // TODO
           
+          case Op1Binding(op1) => {
+            actualSets.head collect {
+              case (ids, value) if op1.pf.isDefinedAt(value) =>
+                (ids, op1.pf(value))
+            }
+          }
+          
+          case Op2Binding(op2) =>
+            handleBinary(actualSets(0), actuals(0).provenance, actualSets(1), actuals(1).provenance)(op2.pf)
+          
           case _ => sys.error("todo")
         }
       }

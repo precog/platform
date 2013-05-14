@@ -191,6 +191,14 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
     "evaluate a simple difference" in {
       "1 union 2 difference 1" must evalTo(JNum(2))
     }
+    
+    "evaluate a sin function" in {
+      "std::math::sin(42)" must evalTo(JNum(-0.9165215479156338))
+    }
+    
+    "evaluate a roundTo function" in {
+      "std::math::roundTo(3.14, 1)" must evalTo(JNum(3.1))
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
