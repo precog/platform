@@ -194,6 +194,10 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
         "assert false 42" must evalAndThrow[RuntimeException]
       }
     }
+    
+    "evaluate a trivial conditional expression" in {
+      "if true then 42 else 12" must evalTo(JNum(42))
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
@@ -223,7 +227,7 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
   }
   
   private def compileSingle(str: String): Expr = {
-    val forest = compile(str) filter { _.errors.isEmpty }
+    val forest = compile(str) filter { _.errors must beEmpty }
     forest must haveSize(1)
     forest.head
   }

@@ -227,7 +227,16 @@ trait EvaluatorModule extends ProvenanceChecker
         }
       }
       
-      case Cond(_, pred, left, right) => sys.error("todo")
+      case Cond(_, pred, left, right) => {
+        val packed = handleBinary(loop(env)(pred), pred.provenance, loop(env)(left), left.provenance) {
+          case (b: JBool, right) => JArray(b :: right :: Nil)
+        }
+        
+        handleBinary(packed, unifyProvenance(expr.relations)(pred.provenance, left.provenance).get, loop(env)(right), right.provenance) {
+          case (JArray(JBool(pred) :: left :: Nil), right) =>
+            if (pred) left else right
+        }
+      }
       
       case Where(_, left, right) => {
         handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
