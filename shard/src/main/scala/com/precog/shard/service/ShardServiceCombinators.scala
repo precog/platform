@@ -28,23 +28,17 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.Validation._
+import scalaz.std.string._
 import scalaz.std.option._
+import scalaz.syntax.apply._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.traverse._
-import scalaz.syntax.bifunctor._
+import scalaz.syntax.validation._
 import scalaz.syntax.std.boolean._
 
 import java.util.concurrent.TimeUnit
 
-trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
-  type Query = String
-
-  import DefaultBijections._
-
-  import scalaz.syntax.apply._
-  import scalaz.syntax.validation._
-  import scalaz.std.string._
-
+object ShardServiceCombinators extends Logging {
   trait NonNegativeLong {
     val BigIntPattern = """(0|[1-9][0-9]*)""".r
 
@@ -145,22 +139,33 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     }
   }
 
+  def queryOpts(request: HttpRequest[_]) = {
+    val offsetAndLimit = getOffsetAndLimit(request)
+    val sortOn = getSortOn(request).toValidationNel
+    val sortOrder = getSortOrder(request).toValidationNel
+    val timeout = getTimeout(request).toValidationNel
+    val output = getOutputType(request)
+
+    (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
+      QueryOptions(offsetAndLimit, sortOn, sortOrder, timeout.map(Duration(_, TimeUnit.MILLISECONDS)), output)
+    } leftMap { errors =>
+      DispatchError(BadRequest, "Errors were encountered decoding query configuration parameters.", Some(errors.list mkString "\n")) : NotServed
+    } 
+  }
+
+}
+
+trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
+  import ShardServiceCombinators._
+  type Query = String
+
+  import DefaultBijections._
   def query[B](next: HttpService[ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]]] = {
     new DelegatingService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]], ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]] {
       val delegate = next
       val metadata = NoMetadata
       val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[B]]]  = (request: HttpRequest[ByteChunk]) => {
-        val offsetAndLimit = getOffsetAndLimit(request)
-        val sortOn = getSortOn(request).toValidationNel
-        val sortOrder = getSortOrder(request).toValidationNel
-        val timeout = getTimeout(request).toValidationNel
-        val output = getOutputType(request)
-
-        (offsetAndLimit |@| sortOn |@| sortOrder |@| timeout) { (offsetAndLimit, sortOn, sortOrder, timeout) =>
-          QueryOptions(offsetAndLimit, sortOn, sortOrder, timeout.map(Duration(_, TimeUnit.MILLISECONDS)), output)
-        } leftMap { errors =>
-          DispatchError(BadRequest, "Errors were encountered decoding query configuration parameters.", Some(errors.list mkString "\n")) : NotServed
-        } flatMap { opts =>
+         queryOpts(request) flatMap { opts =>
           def quirrelContent(request: HttpRequest[ByteChunk]): Option[ByteChunk] = for {
             header <- request.headers.header[`Content-Type`] if header.mimeTypes exists { t =>
                         t == text/plain || (t.maintype == "text" && t.subtype == "x-quirrel-script")
@@ -201,6 +206,7 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     }
   }
 
+/*
   import java.nio.ByteBuffer
 
   implicit def bbToString(bb: ByteBuffer): String = {
@@ -210,4 +216,5 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
   }
 
   implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
+  */
 }

@@ -432,9 +432,10 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 sed -e "s/port = 30060/port = $INGEST_PORT/; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#; 
+	s#rootKey = .*#rootKey = \"$TOKENID\"#;
 	s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#port = 30066#port = $JOBS_PORT#; \
+	s#port = 30070#port = $SHARD_PORT#; \
 	s#port = 9082#port = $KAFKA_LOCAL_PORT#; \
 	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
 	s#connect = localhost:2181#connect = localhost:$ZOOKEEPER_PORT#" < \
@@ -468,15 +469,15 @@ if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
     touch "$WORKDIR"/initial_checkpoint.json
 fi
 
-echo "Starting auth service"
+echo "Starting auth service on $AUTH_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/auth-v1.logging.xml -jar "$AUTH_ASSEMBLY" --configFile "$WORKDIR"/configs/auth-v1.conf &> $WORKDIR/logs/auth-v1.stdout &
 AUTHPID=$!
 
-echo "Starting accounts service"
+echo "Starting accounts service on $ACCOUNTS_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/accounts-v1.logging.xml -jar "$ACCOUNTS_ASSEMBLY" --configFile "$WORKDIR"/configs/accounts-v1.conf &> $WORKDIR/logs/accounts-v1.stdout &
 ACCOUNTSPID=$!
 
-echo "Starting jobs service"
+echo "Starting jobs service on $JOBS_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/jobs-v1.logging.xml -jar "$JOBS_ASSEMBLY" --configFile "$WORKDIR"/configs/jobs-v1.conf &> $WORKDIR/logs/jobs-v1.stdout &
 JOBSPID=$!
 
@@ -505,11 +506,11 @@ else
     ACCOUNTTOKEN=$(cat "$WORKDIR"/account_token.txt)
 fi
 
-echo "Starting ingest service"
+echo "Starting ingest service on $INGEST_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v2.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v2.conf &> $WORKDIR/logs/ingest-v2.stdout &
 INGESTPID=$!
 
-echo "Starting shard service"
+echo "Starting shard service on $SHARD_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
 SHARDPID=$!
 

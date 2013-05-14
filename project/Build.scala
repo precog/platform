@@ -38,7 +38,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  val blueeyesVersion = "1.0.0-M8.10"
+  val blueeyesVersion = "1.0.0-M9.1"
   val scalazVersion = "7.0.0"
 
   val commonSettings = Seq(
@@ -47,13 +47,15 @@ object PlatformBuild extends Build {
     addCompilerPlugin("org.scala-tools.sxr" % "sxr_2.9.0" % "0.2.7"),
     scalacOptions <+= scalaSource in Compile map { "-P:sxr:base-directory:" + _.getAbsolutePath },
     scalacOptions ++= {
-      Seq("-deprecation", "-unchecked", "-g:none") ++
+      //Seq("-Ywarn-value-discard", "-unchecked", "-g:none") ++
+      Seq("-unchecked", "-g:none") ++
       Option(System.getProperty("com.precog.build.optimize")).map { _ => Seq("-optimize") }.getOrElse(Seq())
     },
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
 
-    defaultJarName in assembly <<= (name) { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
+    jarName in assembly <<= (name) map { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
+    target in assembly <<= target,
 
     EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
     EclipseKeys.withSource := true,

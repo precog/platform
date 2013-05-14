@@ -151,7 +151,7 @@ final class KafkaRelayAgent(
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Authorized]] map { messageFutures =>
       Future.sequence(messageFutures) map { messages: List[Authorized] =>
         val identified: List[Message] = messages.flatMap {
-          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp), offset, Some(authorities)) =>
+          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp, storeMode), offset, Some(authorities)) =>
             def encodeIngestMessages(ev: List[IngestMessage]): List[Message] = {
               val messages = ev.map(centralCodec.toMessage)
 
@@ -169,7 +169,7 @@ final class KafkaRelayAgent(
             }
 
             val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)))
+            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp, storeMode)))
 
           case Authorized(event: Ingest, _, None) =>
             // cannot relay event without a resolved owner account ID; fail loudly.
@@ -196,8 +196,9 @@ final class KafkaRelayAgent(
   }
 
   private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
-    case Ingest(apiKey, path, writeAs, _, _, timestamp) =>
-      writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp)))
+    case Ingest(apiKey, path, writeAs, _, _, timestamp, _) =>
+      if (writeAs.isDefined) Promise.successful(writeAs)
+      else permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))
 
     case _ => Promise.successful(None)
   }
