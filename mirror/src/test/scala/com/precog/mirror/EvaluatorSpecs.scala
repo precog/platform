@@ -260,6 +260,13 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
         
       input must evalTo(JNum(2), JNum(3), JNum(4))
     }
+    
+    "evaluate reductions" >> {
+      "count" >> {
+        "count(//nums)" must evalTo(JNum(3))
+        "count(undefined)" must evalTo(JNum(0))
+      }
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {

@@ -47,13 +47,19 @@ trait LibraryModule extends Binder {
       def pf: PartialFunction[(JValue, JValue), JValue]
     }
     
-    type Reduction = ReductionLike with Morphism1
+    abstract class Reduction(val namespace: Vector[String], val name: String) extends ReductionLike with Morphism1 with ((JValue, JValue) => JValue) {
+      val opcode = 0x0001       // we really don't care
+      val tpe = UnaryOperationType(JUniverseT, JUniverseT)
+      val zero: Option[JValue]
+      def prepare: PartialFunction[JValue, JValue]
+      def apply(left: JValue, right: JValue): JValue
+    }
 
     def libMorphism1 = Set()
     def libMorphism2 = Set()
     def lib1 = Set(math.sin)
     def lib2 = Set(math.roundTo)
-    def libReduction = Set()
+    def libReduction = Set(reductions.count)
     
     lazy val expandGlob = new Morphism1Like {
       val namespace = Vector("std", "fs")
@@ -81,6 +87,23 @@ trait LibraryModule extends Binder {
             val rounded = if (scala.math.abs(n) >= 4503599627370496.0) adjusted else scala.math.round(adjusted)
             JNum(rounded * scala.math.pow(10, -digits))
           }
+        }
+      }
+    }
+    
+    object reductions {
+      val Namespace = Vector()
+      
+      object count extends Reduction(Namespace, "count") {
+        val zero = Some(JNum(0))
+        
+        override def prepare = {
+          case v => JNum(1)
+        }
+        
+        override def apply(left: JValue, right: JValue) = (left, right) match {
+          case (JNum(l), JNum(r)) => JNum(l + r)
+          case _ => JNum(0)
         }
       }
     }
