@@ -47,4 +47,6 @@ trait LibraryModule extends Binder {
       val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
     }
   }
+  
+  object library extends Lib
 }
