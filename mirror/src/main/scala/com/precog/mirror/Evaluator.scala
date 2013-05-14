@@ -101,8 +101,74 @@ trait EvaluatorModule extends ProvenanceChecker
       
       case NullLit(_) => (Vector(), JNull) :: Nil
       
-      case ObjectDef(loc, props) => sys.error("todo")
-      case ArrayDef(loc, props) => sys.error("todo")
+      case ObjectDef(loc, props) => {
+        val propResults = props map {
+          case (name, expr) =>
+            (name, loop(env)(expr), expr.provenance)
+        }
+        
+        val wrappedResults = propResults map {
+          case (name, data, prov) => {
+            val mapped = data map {
+              case (ids, v) => (ids, JObject(Map(name -> v)): JValue)
+            }
+            
+            (mapped, prov)
+          }
+        }
+        
+        val resultOpt = wrappedResults.reduceLeftOption[(Dataset, Provenance)]({
+          case ((left, leftProv), (right, rightProv)) => {
+            val back = handleBinary(left, leftProv, right, rightProv) {
+              case (JObject(leftFields), JObject(rightFields)) =>
+                JObject(leftFields ++ rightFields)
+            }
+            
+            // would have failed to type check otherwise
+            val prov = unifyProvenance(expr.relations)(leftProv, rightProv).get
+            
+            (back, prov)
+          }
+        })
+        
+        resultOpt map { case (data, _) => data } getOrElse {
+          (Vector(), JArray(Nil)) :: Nil
+        }
+      }
+      
+      case ArrayDef(loc, values) => {
+        val valueResults = values map { expr =>
+          (loop(env)(expr), expr.provenance)
+        }
+        
+        val wrappedValues = valueResults map {
+          case (data, prov) => {
+            val mapped = data map {
+              case (ids, v) => (ids, JArray(v :: Nil): JValue)
+            }
+            
+            (mapped, prov)
+          }
+        }
+        
+        val resultOpt = wrappedValues.reduceLeftOption[(Dataset, Provenance)]({
+          case ((left, leftProv), (right, rightProv)) => {
+            val back = handleBinary(left, leftProv, right, rightProv) {
+              case (JArray(leftValues), JArray(rightValues)) =>
+                JArray(leftValues ++ rightValues)
+            }
+            
+            // would have failed to type check otherwise
+            val prov = unifyProvenance(expr.relations)(leftProv, rightProv).get
+            
+            (back, prov)
+          }
+        })
+        
+        resultOpt map { case (data, _) => data } getOrElse {
+          (Vector(), JArray(Nil)) :: Nil
+        }
+      }
       
       case Descent(loc, child, property) => {
         loop(env)(child) collect {
@@ -113,7 +179,7 @@ trait EvaluatorModule extends ProvenanceChecker
       case MetaDescent(_, _, _) => sys.error("todo")
       
       case Deref(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JArray(values), JNum(index)) =>
             values(index.toInt)
         }
@@ -145,13 +211,13 @@ trait EvaluatorModule extends ProvenanceChecker
       case Cond(_, pred, left, right) => sys.error("todo")
       
       case Where(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (value, JTrue) => value
         }
       }
       
       case With(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JObject(leftFields), JObject(rightFields)) =>
             JObject(leftFields ++ rightFields)
         }
@@ -162,85 +228,85 @@ trait EvaluatorModule extends ProvenanceChecker
       case Difference(_, _, _) => sys.error("todo")
       
       case Add(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN + rightN)
         }
       }
       
       case Sub(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN - rightN)
         }
       }
       
       case Mul(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN * rightN)
         }
       }
       
       case Div(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN / rightN)
         }
       }
       
       case Mod(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN % rightN)
         }
       }
       
       case Pow(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN pow rightN.toInt)
         }
       }
       
       case Lt(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN < rightN)
         }
       }
       
       case LtEq(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN <= rightN)
         }
       }
       
       case Gt(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN > rightN)
         }
       }
       
       case GtEq(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN >= rightN)
         }
       }
       
       case Eq(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (leftV, rightV) => JBool(leftV == rightV)
         }
       }
       
       case NotEq(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (leftV, rightV) => JBool(leftV != rightV)
         }
       }
       
       case And(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JBool(leftB), JBool(rightB)) => JBool(leftB && rightB)
         }
       }
       
       case Or(_, left, right) => {
-        handleBinary(env)(left, right) {
+        handleBinary(loop(env)(left), left.provenance, loop(env)(right), right.provenance) {
           case (JBool(leftB), JBool(rightB)) => JBool(leftB || rightB)
         }
       }
@@ -260,22 +326,19 @@ trait EvaluatorModule extends ProvenanceChecker
       case Paren(_, child) => loop(env)(child)
     }
     
-    def handleBinary(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
-      val intersected = left.provenance.possibilities intersect right.provenance.possibilities filter { p => p != ValueProvenance && p != NullProvenance }
+    def handleBinary(left: Dataset, leftProv: Provenance, right: Dataset, rightProv: Provenance)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
+      val intersected = leftProv.possibilities intersect rightProv.possibilities filter { p => p != ValueProvenance && p != NullProvenance }
       
       if (intersected.isEmpty) {
         // perform a cartesian
-        cross(env)(left, right)(pf)
+        cross(left, right)(pf)
       } else {
         // perform a join
-        join(env)(left, right)(pf)
+        join(left, leftProv, right, rightProv)(pf)
       }
     }
     
-    def join(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
-      val leftRes = loop(env)(left)
-      val rightRes = loop(env)(right)
-      
+    def join(left: Dataset, leftProv: Provenance, right: Dataset, rightProv: Provenance)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
       // TODO compute join keys
       val indicesLeft = List(0)
       val indicesRight = List(0)
@@ -283,7 +346,7 @@ trait EvaluatorModule extends ProvenanceChecker
       // TODO compute merge key
       val mergeKey: List[Either[Int, Int]] = List(Left(0))
       
-      val joined = zipAlign(leftRes, rightRes) {
+      val joined = zipAlign(left, right) {
         case ((idsLeft, _), (idsRight, _)) => {
           val zipped = (indicesLeft map idsLeft) zip (indicesRight map idsRight)
           
@@ -305,13 +368,10 @@ trait EvaluatorModule extends ProvenanceChecker
       }
     }
     
-    def cross(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
-      val leftRes = loop(env)(left)
-      val rightRes = loop(env)(right)
-      
+    def cross(left: Dataset, right: Dataset)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
       for {
-        (idsLeft, leftV) <- loop(env)(left)
-        (idsRight, rightV) <- loop(env)(right)
+        (idsLeft, leftV) <- left
+        (idsRight, rightV) <- right
         
         if pf.isDefinedAt((leftV, rightV))
       } yield (idsLeft ++ idsRight, pf((leftV, rightV)))

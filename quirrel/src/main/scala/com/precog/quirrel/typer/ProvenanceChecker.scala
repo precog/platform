@@ -729,7 +729,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
     errors ++ lastErrors
   }
   
-  private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+  def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (p1, p2) if p1 == p2 => Some(p1)
     
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
