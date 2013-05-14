@@ -219,7 +219,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         case Some(Success(resource)) =>
           for {
             _ <- resource.db.insert(batch(msg))
-            _ <- terminal.whenM(versionLog.completeVersion(streamId) flatMap { _ => versionLog.setHead(streamId) })
+            _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
           } yield {
             logger.trace("Sent insert message for " + msg + " to nihdb")
             // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
@@ -240,11 +240,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       if (createIfAbsent) {
         for {
           response <- performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal)
-          _ <- if (terminal) {
-            versionLog.setHead(streamId)
-          } else {
-            IO(())
-          }
+          _ <- terminal.whenM(versionLog.setHead(streamId))
         } yield {
           maybeCompleteJob(msg, terminal, response) pipeTo requestor
           PrecogUnit
