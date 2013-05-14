@@ -184,6 +184,16 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
         
       input must evalTo(JNum(1))
     }
+    
+    "evaluate a trivial assertion" >> {
+      "success" >> {
+        "assert true 42" must evalTo(JNum(42))
+      }
+      
+      "failure" >> {
+        "assert false 42" must evalAndThrow[RuntimeException]
+      }
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
@@ -205,6 +215,11 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
     }
     
     (inner _, message _)
+  }
+  
+  private def evalAndThrow[E <: Throwable](implicit fs: FS, evidence: ClassManifest[E]): Matcher[String] = {
+    def inner(q: String): Boolean = eval(compileSingle(q))(fs.map) must throwA[E]
+    (inner _, "unused error message")
   }
   
   private def compileSingle(str: String): Expr = {
