@@ -343,9 +343,9 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
           case JUndefined =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString("No 'state given."))))
 
-          case _ =>
+          case other =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString(
-              "Invalid 'state given: not a string."
+              "Invalid 'state given: %s is not a string.".format(other.renderCompact)
             ))))
         }
       }
