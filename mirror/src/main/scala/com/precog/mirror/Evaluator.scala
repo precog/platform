@@ -13,6 +13,7 @@ import scalaz.syntax.semigroup._
 
 import scala.collection.mutable
 
+// TODO soup up all provenance sites with resolution of ParametricProvenance
 trait EvaluatorModule extends ProvenanceChecker
     with Binder
     with GroupSolver
@@ -381,24 +382,50 @@ trait EvaluatorModule extends ProvenanceChecker
     def handleBinary(left: Dataset, leftProv: Provenance, right: Dataset, rightProv: Provenance)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
       val intersected = leftProv.possibilities intersect rightProv.possibilities filter { p => p != ValueProvenance && p != NullProvenance }
       
-      if (intersected.isEmpty) {
-        // perform a cartesian
+      if (intersected.isEmpty)
         cross(left, right)(pf)
-      } else {
-        // perform a join
+      else
         join(left, leftProv, right, rightProv)(pf)
-      }
     }
     
     def join(left: Dataset, leftProv: Provenance, right: Dataset, rightProv: Provenance)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
-      // TODO compute join keys
-      val indicesLeft = List(0)
-      val indicesRight = List(0)
+      val linearLeft = linearProvPossibilities(leftProv)
+      val posLeft = leftProv.possibilities
       
-      // TODO compute merge key
-      val mergeKey: List[Either[Int, Int]] = List(Left(0))
+      val linearRight = linearProvPossibilities(rightProv)
+      val posRight = rightProv.possibilities
       
-      val joined = zipAlign(left, right) {
+      val indicesLeft = linearLeft.zipWithIndex collect {
+        case (p, i) if posRight(p) => i
+      }
+      
+      val orderLeft = orderFromIndices(indicesLeft)
+      
+      val indicesRight = linearRight.zipWithIndex collect {
+        case (p, i) if posLeft(p) => i
+      }
+      
+      val orderRight = orderFromIndices(indicesRight)
+      
+      val leftMergeKey = 0 until linearLeft.length map { Left(_) } toList
+      
+      val rightMergeKey = linearRight.zipWithIndex collect {
+        case (p, i) if !posLeft(p) => Right(i)
+      }
+      
+      val mergeKey: List[Either[Int, Int]] = leftMergeKey ++ rightMergeKey
+      
+      val leftSorted = if (indicesLeft == (0 until indicesLeft.length))
+        left
+      else
+        left sorted orderLeft.toScalaOrdering     // must be stable!
+      
+      val rightSorted = if (indicesRight == (0 until indicesRight.length))
+        right
+      else
+        right sorted orderRight.toScalaOrdering     // must be stable!
+      
+      val joined = zipAlign(leftSorted, rightSorted) {
         case ((idsLeft, _), (idsRight, _)) => {
           val zipped = (indicesLeft map idsLeft) zip (indicesRight map idsRight)
           
@@ -435,6 +462,44 @@ trait EvaluatorModule extends ProvenanceChecker
       }
     } else {
       Seq.empty
+    }
+  }
+  
+  private def linearProvPossibilities(prov: Provenance): List[Provenance] = {
+    def loop(prov: Provenance): List[Provenance] = prov match {
+      case ProductProvenance(left, right) =>
+        loop(left) ++ loop(right)
+      
+      case CoproductProvenance(left, right) => {
+        val leftRec = loop(left)
+        val rightRec = loop(right)
+        
+        val merged = leftRec zip rightRec map {
+          case (l, r) => CoproductProvenance(l, r)
+        }
+        
+        
+        merged ++ (leftRec drop merged.length) ++ (rightRec drop merged.length)
+      }
+      
+      case prov => prov :: Nil
+    }
+    
+    val (_, back) = loop(prov).foldLeft((Set[Provenance](), List[Provenance]())) {
+      case ((acc, result), prov) if acc(prov) => (acc, result)
+      case ((acc, result), prov) => (acc + prov, prov :: result)
+    }
+    
+    back.reverse
+  }
+  
+  private def orderFromIndices(indices: Seq[Int]): Order[SEvent] = {
+    new Order[SEvent] {
+      def order(left: SEvent, right: SEvent) = {
+        (indices map left._1) zip (indices map right._1) map {
+          case (l, r) => Ordering.fromInt(l - r)
+        } reduce { _ |+| _ }
+      }
     }
   }
   
