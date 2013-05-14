@@ -81,7 +81,7 @@ class MongoScheduleStorage private[MongoScheduleStorage] (mongo: Mongo, database
   database(ensureUniqueIndex("task_index").on(".id").in(settings.tasks))
   database(ensureIndex("report_index").on(".id").in(settings.reports))
 
-  def addTask(task: ScheduledTask) = insertTask(-\/(task), settings.tasks)
+  def addTask(task: ScheduledTask) = insertTask(-\/(task), settings.tasks) map { _ map { _ => task } }
 
   private def insertTask(task: ScheduledTask \/ JObject, collection: String) =
     database(insert(task.valueOr { st => st.serialize.asInstanceOf[JObject] }).into(collection)) map { _ => Success(PrecogUnit) }

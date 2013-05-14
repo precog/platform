@@ -301,6 +301,10 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
+  def versionOpt(version: Version) = version match {
+    case Version.Archived(id) => Some(id)
+    case Version.Current => versionLog.current.map(_.id)
+  }
 
   def receive = {
     case IngestBundle(messages, permissions) =>
@@ -308,7 +312,8 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
     case msg @ Read(_, id, auth) =>
       logger.debug("Received Read request " + msg)
-      val io: IO[Future[ReadResult]] = (id orElse versionLog.current.map(_.id)) map { version =>
+
+      val io: IO[Future[ReadResult]] = versionOpt(id) map { version =>
         openResource(version) map {
           case Some(resourceV) =>
             resourceV traverse { resource =>
@@ -339,7 +344,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     case msg @ ReadProjection(_, id, auth) =>
       logger.debug("Received ReadProjection request " + msg)
       val requestor = sender
-      val io = (id orElse versionLog.current.map(_.id)) map { version =>
+      val io = versionOpt(id) map { version =>
         openNIHDBProjection(version) map {
           _ flatMap {
             case Some(resourceV) =>

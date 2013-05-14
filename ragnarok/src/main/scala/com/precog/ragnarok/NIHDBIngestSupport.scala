@@ -110,7 +110,7 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
     val projection = (projectionsActor ? IngestData(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append))))).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
-      (projectionsActor ? Read(path, None, None)).mapTo[List[NIHDBResource]]
+      (projectionsActor ? Read(path, Version.Current, None)).mapTo[List[NIHDBResource]]
     }.copoint.head
 
     while (projection.db.status.copoint.pending > 0) {

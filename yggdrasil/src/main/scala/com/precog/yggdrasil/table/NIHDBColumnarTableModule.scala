@@ -58,7 +58,7 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
         projections    <- paths.toList traverse { path =>
                             logger.debug("  Loading path: " + path)
                             implicit val timeout = storageTimeout
-                            (projectionsActor ? ReadProjection(path, None, Some(apiKey))).mapTo[PathActionResponse].map {
+                            (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[PathActionResponse].map {
                               case ReadProjectionSuccess(_, projection) => projection
                               case _ => None // How to report an error here?
                             }
@@ -68,16 +68,10 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
         length = projections.map(_.length).sum
       } yield {
         logger.debug("Loading from projections: " + projections)
-        def slices(proj: NIHDBProjection, constraints: Option[Set[ColumnRef]]): StreamT[Future, Slice] = {
-          StreamT.unfoldM[Future, Slice, Option[Long]](None) { key =>
-            proj.getBlockAfter(key, constraints).map(_.map { case BlockProjectionData(_, maxKey, slice) => (slice, Some(maxKey)) })
-          }
-        }
-
         Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
           // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
           val constraints = proj.structure.map { struct => Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet) }
-          acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) })
+          acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
         }, ExactSize(length))
       }
     }

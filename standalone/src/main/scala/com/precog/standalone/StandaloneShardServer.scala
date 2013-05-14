@@ -67,7 +67,7 @@ trait StandaloneShardServer
 
   def configureShardState(config: Configuration) = M.point {
     val apiKeyFinder = apiKeyFinderFor(config)
-    val jobManager = config.get[String]("jobs.jobdir").map { jobdir =>
+    val jobManager = config.get[String]("jobs.jobdir") map { jobdir =>
       val dir = new File(jobdir)
 
       if (!dir.isDirectory) {
@@ -79,12 +79,21 @@ trait StandaloneShardServer
       }
 
       FileJobManager(dir, M)
-    }.getOrElse {
+    } getOrElse {
       new ExpiringJobManager(Duration(config[Int]("jobs.ttl", 300), TimeUnit.SECONDS))
     }
+
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
+
     // We always want a managed shard now, for better error reporting and Labcoat compatibility
-    ShardState(platform, apiKeyFinder, new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), NoopScheduler, jobManager, Clock.System, stoppable)
+    ShardState(platform, 
+               apiKeyFinder, 
+               new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), 
+               NoopStoredQueries[Future], 
+               NoopScheduler[Future], 
+               jobManager, 
+               Clock.System, 
+               stoppable)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

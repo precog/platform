@@ -54,9 +54,7 @@ object CronExpressionSerialization {
   }
 }
 
-case class ScheduledTask(id: UUID, schedule: CronExpression, apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]) {
-  def fqSource = prefix / source
-  def fqSink = prefix / sink
+case class ScheduledTask(id: UUID, repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]) {
   def taskName = "Scheduled %s -> %s".format(source, sink)
   def timeout = timeoutMillis map { to => Duration(to, TimeUnit.MILLISECONDS) }
 }
@@ -66,7 +64,7 @@ object ScheduledTask {
 
   implicit val iso = Iso.hlist(ScheduledTask.apply _, ScheduledTask.unapply _)
 
-  val schemaV1 = "id" :: "schedule" :: "apiKey" :: "authorities" :: "prefix" :: "source" :: "sink" :: "timeout" :: HNil
+  val schemaV1 = "id" :: "repeat" :: "apiKey" :: "authorities" :: "prefix" :: "source" :: "sink" :: "timeout" :: HNil
 
   implicit val decomposer: Decomposer[ScheduledTask] = decomposerV(schemaV1, Some("1.0".v))
   implicit val extractor:  Extractor[ScheduledTask]  = extractorV(schemaV1, Some("1.0".v))

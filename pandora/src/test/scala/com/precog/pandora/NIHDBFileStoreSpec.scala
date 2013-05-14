@@ -73,7 +73,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
         case UpdateSuccess(_) => ok
       }
 
-      (projectionsActor ? Read(testPath, None, Some(testAPIKey))).mapTo[ReadResult].copoint must beLike {
+      (projectionsActor ? Read(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadResult].copoint must beLike {
         case ReadSuccess(_, Some(blob : Blob)) => blob.asString.unsafePerformIO mustEqual loremIpsum
       }
     }
@@ -88,7 +88,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
       }
 
       // We haven't terminated the stream yet, so it shouldn't find anything
-      (projectionsActor ? ReadProjection(testPath, None, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
+      (projectionsActor ? ReadProjection(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
         case ReadProjectionSuccess(_, None) => ok
       }
 
@@ -96,7 +96,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
         case UpdateSuccess(_) => ok
       }
 
-      (projectionsActor ? ReadProjection(testPath, None, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
+      (projectionsActor ? ReadProjection(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
         case ReadProjectionSuccess(_, Some(proj)) => proj.length mustEqual 2
       }
     }

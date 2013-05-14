@@ -49,7 +49,7 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   }
 
   private def findProjection(path: Path): Future[Option[NIHDBProjection]] =
-    (projectionsActor ? ReadProjection(path, None, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
+    (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
 
   def findSize(path: Path): Future[Long] = findProjection(path).map { _.map(_.length).getOrElse(0L) }
 
