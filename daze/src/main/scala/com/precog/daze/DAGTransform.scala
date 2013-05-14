@@ -9,7 +9,7 @@ trait DAGTransform extends DAG {
   import dag._
   import instructions.{ DerefObject, Eq, JoinObject, Line, PushString, WrapObject }
 
-  def transformBottomUp(graph: DepGraph)(f : DepGraph => DepGraph) : DepGraph = {
+  def transformBottomUp(graph: DepGraph)(f: DepGraph => DepGraph): DepGraph = {
 
     val memotable = mutable.Map[DepGraph, DepGraph]()
 
@@ -32,7 +32,7 @@ trait DAGTransform extends DAG {
 
     def transformAux(graph: DepGraph) : DepGraph = {
       def inner(graph: DepGraph): DepGraph = graph match {
-        case r : Root => f(r)
+        case r: Root => f(r)
   
         case graph @ New(parent) => f(New(transformAux(parent))(graph.loc))
         
@@ -63,12 +63,8 @@ trait DAGTransform extends DAG {
         case graph @ Filter(cross, target, boolean) =>
           f(Filter(cross, transformAux(target), transformAux(boolean))(graph.loc))
   
-        case Sort(parent, indices) => f(Sort(transformAux(parent), indices))
-
-        case SortBy(parent, sortField, valueField, id) => f(SortBy(transformAux(parent), sortField, valueField, id))
+        case AddSortKey(parent, sortField, valueField, id) => f(AddSortKey(transformAux(parent), sortField, valueField, id))
         
-        case ReSortBy(parent, id) => f(ReSortBy(transformAux(parent), id))
-  
         case Memoize(parent, priority) => f(Memoize(transformAux(parent), priority))
   
         case graph @ Distinct(parent) => f(Distinct(transformAux(parent))(graph.loc))

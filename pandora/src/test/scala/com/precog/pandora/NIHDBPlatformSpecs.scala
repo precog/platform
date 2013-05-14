@@ -155,7 +155,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   val accountFinder = None
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
-    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+    new Evaluator[N](N0)(mn,nm) {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
@@ -164,6 +164,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
+      def freshIdScanner = self.freshIdScanner
   }
 
   override val accessControl = new UnrestrictedAccessControl[Future]

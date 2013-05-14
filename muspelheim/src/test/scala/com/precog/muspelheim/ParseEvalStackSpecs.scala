@@ -43,7 +43,7 @@ import akka.dispatch.ExecutionContext
 trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with MemoryDatasetConsumer[M]
-    with IdSourceScannerModule { self =>
+    with IdSourceScannerModule[M] { self =>
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 

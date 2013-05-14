@@ -129,12 +129,12 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           scanner)
       }
       
-      object scanner extends CScanner {
+      object scanner extends CScanner[M] {
         type A = Unit
         
         def init = ()
         
-        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
           val targetM = columns get ColumnRef(CPath.Identity \ 0, CString)
           val regexM = columns get ColumnRef(CPath.Identity \ 1, CString)
           
@@ -204,7 +204,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             }
           }
           
-          ((), columns2M getOrElse Map[ColumnRef, Column]())
+          M point ((), columns2M getOrElse Map[ColumnRef, Column]())
         }
       }
     }
