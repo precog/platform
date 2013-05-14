@@ -175,6 +175,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      consumer: SimpleConsumer,
                                      topic: String,
                                      permissionsFinder: PermissionsFinder[Future],
+                                     routingActor: ActorRef,
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
                                      idleDelay: Duration = 1 seconds,
@@ -199,7 +200,7 @@ abstract class KafkaShardIngestActor(shardId: String,
     logger.info("Starting KafkaShardIngestActor")
     context.system.scheduler.schedule(idleDelay, idleDelay) {
       initiated += 1
-      self ! GetMessages(self)
+      self ! GetMessages(routingActor)
     }
     logger.info("Recurring ingest request scheduled")
   }
