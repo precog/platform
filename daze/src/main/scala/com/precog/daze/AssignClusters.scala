@@ -108,11 +108,11 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       protected def morph1Apply(models: Models): Morph1Apply = new Morph1Apply {
-        def scanner(modelSet: ModelSet): CScanner = new CScanner {
+        def scanner(modelSet: ModelSet): CScanner[M] = new CScanner[M] {
           type A = Unit
           def init: A = ()
 
-          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
             def included(model: Model): Map[ColumnRef, Column] = {
               val featurePaths = (model.clusters).flatMap { _.featureValues.keys }.toSet
 
@@ -266,7 +266,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
 
             val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
-            ((), reduced)
+            M point ((), reduced)
           }
         }
 

@@ -16,6 +16,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
   import instructions._
   import dag._
   import library._
+  import TableModule.CrossOrder._
 
   val ctx = defaultEvaluationContext
 
@@ -60,25 +61,25 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
 
-      val notEq = Join(NotEq, CrossLeftSort,
-        Join(DerefObject, CrossLeftSort,
+      val notEq = Join(NotEq, Cross(None),
+        Join(DerefObject, Cross(None),
           clicks,
           Const(CString("foo"))(line))(line), 
         Const(CNum(5))(line))(line)
 
-      val obj = Join(WrapObject, CrossLeftSort,
+      val obj = Join(WrapObject, Cross(None),
         Const(CString("bar"))(line),
         clicks)(line)
 
       val op = Operate(Neg, 
-        Join(DerefArray, CrossLeftSort,
+        Join(DerefArray, Cross(None),
           clicks,
           Const(CNum(1))(line))(line))(line)
 
       val filter = Filter(IdentitySort, 
         clicks,
-        Join(Eq, CrossLeftSort,
-          Join(DerefObject, CrossLeftSort,
+        Join(Eq, Cross(None),
+          Join(DerefObject, Cross(None),
             clicks,
             Const(CString("baz"))(line))(line), 
           Const(CNum(12))(line))(line))(line)
@@ -93,23 +94,23 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val reductions: List[(trans.TransSpec1, List[Reduction])] = List((filterTrans, List(StdDev)), (opTrans, List(Max)), (objTrans, List(Max, Sum)), (nonEqTrans, List(Min))).reverse
       val megaR = MegaReduce(reductions, clicks)
 
-      val input = Join(Sub, CrossLeftSort,
+      val input = Join(Sub, Cross(None),
         dag.Reduce(Min, notEq)(line),
-        Join(Sub, CrossLeftSort,
+        Join(Sub, Cross(None),
           dag.Reduce(Max, obj)(line),
-          Join(Sub, CrossLeftSort,
+          Join(Sub, Cross(None),
             dag.Reduce(Max, op)(line),
-            Join(Sub, CrossLeftSort,
+            Join(Sub, Cross(None),
               dag.Reduce(StdDev, filter)(line),
               dag.Reduce(Sum, obj)(line))(line))(line))(line))(line)
 
-      val expected = Join(Sub, CrossLeftSort,
+      val expected = Join(Sub, Cross(None),
         joinDeref(megaR, 3, 0, line),
-        Join(Sub, CrossLeftSort,
+        Join(Sub, Cross(None),
           joinDeref(megaR, 2, 1, line),
-          Join(Sub, CrossLeftSort,
+          Join(Sub, Cross(None),
             joinDeref(megaR, 1, 0, line),
-            Join(Sub, CrossLeftSort,
+            Join(Sub, Cross(None),
               joinDeref(megaR, 0, 0, line),
               joinDeref(megaR, 2, 0, line))(line))(line))(line))(line)
 
@@ -125,12 +126,12 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val left = dag.Reduce(red1, parent)(line)
       val right = dag.Reduce(red2, parent)(line)
 
-      val input = Join(Add, CrossLeftSort, left, right)(line)
+      val input = Join(Add, Cross(None), left, right)(line)
 
       val reductions = List((trans.Leaf(trans.Source), List(red1, red2)))
       val megaR = dag.MegaReduce(reductions, parent)
 
-      val expected = Join(Add, CrossLeftSort,
+      val expected = Join(Add, Cross(None),
         joinDeref(megaR, 0, 1, line),
         joinDeref(megaR, 0, 0, line))(line)
 
@@ -158,16 +159,16 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val megaR = dag.MegaReduce(List((spec, List(reduction))), load)
 
       "right" in {
-        val input = Join(Add, CrossLeftSort, dag.Operate(Neg, load)(line), r)(line)
-        val expected = Join(Add, CrossLeftSort,
+        val input = Join(Add, Cross(None), dag.Operate(Neg, load)(line), r)(line)
+        val expected = Join(Add, Cross(None),
           dag.Operate(Neg, load)(line),
           joinDeref(megaR, 0, 0, line))(line)
 
         megaReduce(input, findReductions(input, ctx)) mustEqual expected
       }
       "left" in {
-        val input = Join(Add, CrossLeftSort, r, dag.Operate(Neg, load)(line))(line)
-        val expected = Join(Add, CrossLeftSort,
+        val input = Join(Add, Cross(None), r, dag.Operate(Neg, load)(line))(line)
+        val expected = Join(Add, Cross(None),
           joinDeref(megaR, 0, 0, line),
           dag.Operate(Neg, load)(line))(line)
 
@@ -186,13 +187,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val r1 = dag.Reduce(red, load1)(line)
       val r2 = dag.Reduce(red, load2)(line)
 
-      val input = Join(Add, CrossRightSort, r1, r2)(line)
+      val input = Join(Add, Cross(Some(CrossRight)), r1, r2)(line)
       val spec = trans.Leaf(trans.Source)
 
       val megaR1 = dag.MegaReduce(List((spec, List(red))), load1)
       val megaR2 = dag.MegaReduce(List((spec, List(red))), load2)
 
-      val expected = Join(Add, CrossRightSort,
+      val expected = Join(Add, Cross(Some(CrossRight)),
         joinDeref(megaR1, 0, 0, line),
         joinDeref(megaR2, 0, 0, line))(line)
 
@@ -211,13 +212,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val r4 = dag.Reduce(Max, load2)(line)
       val r5 = dag.Reduce(Min, load2)(line)
 
-      val input = Join(Add, CrossRightSort, 
+      val input = Join(Add, Cross(Some(CrossRight)), 
         r1, 
-        Join(Add, CrossRightSort, 
+        Join(Add, Cross(Some(CrossRight)), 
           r2,
-          Join(Add, CrossRightSort,
+          Join(Add, Cross(Some(CrossRight)),
             r3,
-            Join(Add, CrossRightSort,
+            Join(Add, Cross(Some(CrossRight)),
               r4,
               r5)(line))(line))(line))(line)
             
@@ -226,13 +227,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val megaR1 = dag.MegaReduce(List((spec, List(Sum, Max))), load1)
       val megaR2 = dag.MegaReduce(List((spec, List(Count, Max, Min))), load2)
 
-      val expected = Join(Add, CrossRightSort,
+      val expected = Join(Add, Cross(Some(CrossRight)),
         joinDeref(megaR1, 0, 1, line),
-        Join(Add, CrossRightSort,
+        Join(Add, Cross(Some(CrossRight)),
           joinDeref(megaR1, 0, 0, line),
-          Join(Add, CrossRightSort,
+          Join(Add, Cross(Some(CrossRight)),
             joinDeref(megaR2, 0, 2, line),
-            Join(Add, CrossRightSort,
+            Join(Add, Cross(Some(CrossRight)),
               joinDeref(megaR2, 0, 1, line),
               joinDeref(megaR2, 0, 0, line))(line))(line))(line))(line)
 
@@ -249,14 +250,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val red3 = StdDev
       val r3 = dag.Reduce(red3, load)(line)
       
-      val input = Join(Add, CrossRightSort, r1, Join(Sub, CrossRightSort, r1, r3)(line))(line)
+      val input = Join(Add, Cross(Some(CrossRight)), r1, Join(Sub, Cross(Some(CrossRight)), r1, r3)(line))(line)
     
       val leaf = trans.Leaf(trans.Source)
       val megaR = MegaReduce(List((leaf, List(red1, red3))), load)
     
-      val expected = Join(Add, CrossRightSort,
+      val expected = Join(Add, Cross(Some(CrossRight)),
         joinDeref(megaR, 0, 1, line),
-        Join(Sub, CrossRightSort,
+        Join(Sub, Cross(Some(CrossRight)),
           joinDeref(megaR, 0, 1, line), 
           joinDeref(megaR, 0, 0, line))(line))(line) 
 
@@ -274,15 +275,15 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val max = Max
       val mean = Mean
 
-      val id = Join(DerefObject, CrossLeftSort, load, Const(CString("userId"))(line))(line)
-      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
+      val id = Join(DerefObject, Cross(None), load, Const(CString("userId"))(line))(line)
+      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(min, id)(line)
       val r2 = dag.Reduce(max, height)(line)
       val r3 = dag.Reduce(mean, weight)(line)
 
-      val input = Join(Add, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
+      val input = Join(Add, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
 
       val mega = dag.MegaReduce(
         List(
@@ -293,9 +294,9 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         load
       )
 
-      val expected = Join(Add, CrossLeftSort,
+      val expected = Join(Add, Cross(None),
         joinDeref(mega, 2, 0, line),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line))(line))(line)
 
@@ -313,14 +314,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val max = Max
       val mean = Mean
 
-      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
+      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(min, height)(line)
       val r2 = dag.Reduce(max, height)(line)
       val r3 = dag.Reduce(mean, weight)(line)
 
-      val input = Join(Add, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
+      val input = Join(Add, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
 
       val mega = dag.MegaReduce(
         List(
@@ -330,9 +331,9 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         load
       )
 
-      val expected = Join(Add, CrossLeftSort,
+      val expected = Join(Add, Cross(None),
         joinDeref(mega, 1, 1, line),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line))(line))(line)
 
@@ -350,13 +351,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val max = Max
       val mean = Mean
 
-      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
+      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(min, weight)(line)
       val r2 = dag.Reduce(max, weight)(line)
       val r3 = dag.Reduce(mean, weight)(line)
 
-      val input = Join(Add, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
+      val input = Join(Add, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
 
       val mega = dag.MegaReduce(
         List(
@@ -365,9 +366,9 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         load
       )
 
-      val expected = Join(Add, CrossLeftSort,
+      val expected = Join(Add, Cross(None),
         joinDeref(mega, 0, 2, line),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           joinDeref(mega, 0, 1, line),
           joinDeref(mega, 0, 0, line))(line))(line)
 
@@ -383,15 +384,15 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val mean = Mean
 
-      val id = Join(DerefObject, CrossLeftSort, load, Const(CString("userId"))(line))(line)
-      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
+      val id = Join(DerefObject, Cross(None), load, Const(CString("userId"))(line))(line)
+      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(mean, id)(line)
       val r2 = dag.Reduce(mean, height)(line)
       val r3 = dag.Reduce(mean, weight)(line)
 
-      val input = Join(Add, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
+      val input = Join(Add, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
 
       val mega = dag.MegaReduce(
         List(
@@ -402,9 +403,9 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
         load
       )
 
-      val expected = Join(Add, CrossLeftSort,
+      val expected = Join(Add, Cross(None),
         joinDeref(mega, 2, 0, line),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           joinDeref(mega, 1, 0, line),
           joinDeref(mega, 0, 0, line))(line))(line)
 
@@ -429,18 +430,18 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val input = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           SplitGroup(1, nums.identities, id)(line),
           dag.Reduce(reduction, 
             Filter(IdentitySort,
               nums,
-              Join(Lt, CrossLeftSort,
+              Join(Lt, Cross(None),
                 nums,
                 SplitParam(0, id)(line))(line))(line))(line))(line), id)(line)
 
       val parent = Filter(IdentitySort,
         nums,
-        Join(Lt, CrossLeftSort,
+        Join(Lt, Cross(None),
           nums,
           SplitParam(0, id)(line))(line))(line)  //TODO need a window function
 
@@ -448,7 +449,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val expected = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
-        Join(Add, CrossLeftSort,
+        Join(Add, Cross(None),
           SplitGroup(1, nums.identities, id)(line),
           joinDeref(megaR, 0, 0, line))(line), id)(line)
 
@@ -472,21 +473,21 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
        
       val input = dag.Split(
         dag.Group(1,
-          Join(DerefObject, CrossLeftSort, clicks, Const(CString("foo"))(line))(line),
+          Join(DerefObject, Cross(None), clicks, Const(CString("foo"))(line))(line),
           UnfixedSolution(0,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               clicks,
               Const(CString("user"))(line))(line))),
-        Join(JoinObject, CrossLeftSort,
-          Join(WrapObject, CrossLeftSort,
+        Join(JoinObject, Cross(None),
+          Join(WrapObject, Cross(None),
             Const(CString("user"))(line),
             SplitParam(0, id)(line))(line),
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               Const(CString("min"))(line),
               dag.Reduce(Min,
                 SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("max"))(line),
               dag.Reduce(Max,
                 SplitGroup(1, Identities.Specs(Vector(LoadIds("/clicks"))), id)(line))(line))(line))(line))(line), id)(line)
@@ -498,20 +499,20 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       val expected = dag.Split(
         dag.Group(1,
-          Join(DerefObject, CrossLeftSort, clicks, Const(CString("foo"))(line))(line),
+          Join(DerefObject, Cross(None), clicks, Const(CString("foo"))(line))(line),
           UnfixedSolution(0,
-            Join(DerefObject, CrossLeftSort,
+            Join(DerefObject, Cross(None),
               clicks,
               Const(CString("user"))(line))(line))),
-        Join(JoinObject, CrossLeftSort,
-          Join(WrapObject, CrossLeftSort,
+        Join(JoinObject, Cross(None),
+          Join(WrapObject, Cross(None),
             Const(CString("user"))(line),
             SplitParam(0, id)(line))(line),
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort,
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None),
               Const(CString("min"))(line),
               joinDeref(megaR, 0, 1, line))(line),
-            Join(WrapObject, CrossLeftSort,
+            Join(WrapObject, Cross(None),
               Const(CString("max"))(line),
               joinDeref(megaR, 0, 0, line))(line))(line))(line), id)(line)
 
@@ -558,7 +559,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val r1 = dag.Reduce(Count, load)(line)
       val r2 = dag.Reduce(StdDev, load)(line)
 
-      val input = Join(Add, CrossLeftSort, r1, r2)(line)
+      val input = Join(Add, Cross(None), r1, r2)(line)
 
       val expected = MegaReduceState(
         Map(r1 -> load, r2 -> load),
@@ -593,7 +594,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val foo = dag.LoadLocal(Const(CString("/foo"))(line))(line)
       val mean = dag.Reduce(Mean, foo)(line)
       val stdDev = dag.Reduce(StdDev, foo)(line)
-      val parentCount = dag.Join(Add, CrossLeftSort, mean, stdDev)(line)
+      val parentCount = dag.Join(Add, Cross(None), mean, stdDev)(line)
 
       val input = dag.Reduce(Count, parentCount)(line)
 
@@ -653,7 +654,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       "right" in {
         val r = dag.Reduce(StdDev, load)(line)
-        val input = Join(Add, CrossLeftSort, dag.Operate(Neg, load)(line), r)(line)
+        val input = Join(Add, Cross(None), dag.Operate(Neg, load)(line), r)(line)
 
         val expected = MegaReduceState(
           Map(r -> load),
@@ -666,7 +667,7 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       }
       "left" in {
         val r = dag.Reduce(Count, load)(line)
-        val input = Join(Add, CrossRightSort, r, dag.Operate(Neg, load)(line))(line)
+        val input = Join(Add, Cross(Some(CrossRight)), r, dag.Operate(Neg, load)(line))(line)
 
         val expected = MegaReduceState(
           Map(r -> load),
@@ -692,14 +693,14 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       
       val id = new Identifier
 
-      lazy val j = Join(Lt, CrossLeftSort, nums, SplitParam(0, id)(line))(line)
+      lazy val j = Join(Lt, Cross(None), nums, SplitParam(0, id)(line))(line)
       lazy val parent = Filter(IdentitySort, nums, j)(line)
 
       lazy val splitGroup = SplitGroup(1, nums.identities, id)(line)
       lazy val r = dag.Reduce(Max, parent)(line)
 
       lazy val group = dag.Group(1, nums, UnfixedSolution(0, nums))
-      lazy val join = Join(Add, CrossLeftSort, splitGroup, r)(line)
+      lazy val join = Join(Add, Cross(None), splitGroup, r)(line)
       lazy val input = dag.Split(group, join, id)(line)
 
       lazy val expected = MegaReduceState(
@@ -732,8 +733,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       val minRoot = Const(CString("min"))(line)
       val maxRoot = Const(CString("max"))(line)
 
-      val clicksFoo = Join(DerefObject, CrossLeftSort, clicks, fooRoot)(line)
-      val clicksUser = Join(DerefObject, CrossLeftSort, clicks, userRoot)(line)
+      val clicksFoo = Join(DerefObject, Cross(None), clicks, fooRoot)(line)
+      val clicksUser = Join(DerefObject, Cross(None), clicks, userRoot)(line)
       val group1 = dag.Group(1, clicksFoo, UnfixedSolution(0, clicksUser))
       
       val id = new Identifier
@@ -744,13 +745,13 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
 
       lazy val input: dag.Split = dag.Split(
         group1,
-        Join(JoinObject, CrossLeftSort,
-          Join(WrapObject, CrossLeftSort,
+        Join(JoinObject, Cross(None),
+          Join(WrapObject, Cross(None),
             userRoot,
             SplitParam(0, id)(line))(line),
-          Join(JoinObject, CrossLeftSort,
-            Join(WrapObject, CrossLeftSort, minRoot, r1)(line),
-            Join(WrapObject, CrossLeftSort, maxRoot, r2)(line))(line))(line), id)(line)
+          Join(JoinObject, Cross(None),
+            Join(WrapObject, Cross(None), minRoot, r1)(line),
+            Join(WrapObject, Cross(None), maxRoot, r2)(line))(line))(line), id)(line)
 
       val expected = MegaReduceState(
         Map(r1 -> parent, r2 -> parent),
@@ -764,8 +765,8 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
-    Join(DerefArray, CrossLeftSort,
-      Join(DerefArray, CrossLeftSort,
+    Join(DerefArray, Cross(Some(CrossLeft)),
+      Join(DerefArray, Cross(Some(CrossLeft)),
         left,
         Const(CLong(first))(line))(line),
       Const(CLong(second))(line))(line)

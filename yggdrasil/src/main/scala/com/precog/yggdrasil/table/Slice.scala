@@ -1567,6 +1567,8 @@ trait Slice { source =>
 }
 
 object Slice {
+  def empty: Slice = Slice(Map.empty, 0)
+
   def apply(columns0: Map[ColumnRef, Column], dataSize: Int) = {
     new Slice {
       val size = dataSize

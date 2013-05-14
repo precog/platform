@@ -17,6 +17,7 @@ check file ingest-v2-b.server.log with path /var/log/precog/ingest-v2-b.server.l
   group ingest-v2-b
 
 check file ingest-v2-b.stdout.log with path /var/log/precog/ingest-v2-b.stdout.log
+  if match "Promise already completed" for 5 cycles then alert
   if match "Exception" for 1 cycles then alert
   if match "Error" for 1 cycles then alert
   if match "Too many open files" for 1 cycles

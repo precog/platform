@@ -70,11 +70,12 @@ trait StandaloneQueryExecutor
   override def defaultTimeout = yggConfig.maxEvalDuration
 
   implicit val nt = NaturalTransformation.refl[Future]
-  def executor = new ShardQueryExecutor[Future](M) with IdSourceScannerModule {
+  def executor = new ShardQueryExecutor[Future](M) {
     val M = platform.M
     type YggConfig = platform.YggConfig
     val yggConfig = platform.yggConfig
     val queryReport = LoggingQueryLogger[Future](M)
+    def freshIdScanner = platform.freshIdScanner
   }
 
   protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
@@ -82,11 +83,12 @@ trait StandaloneQueryExecutor
       def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
     }
 
-    new ShardQueryExecutor[JobQueryTF](shardQueryMonad) with IdSourceScannerModule {
+    new ShardQueryExecutor[JobQueryTF](shardQueryMonad) {
       val M = platform.M
       type YggConfig = platform.YggConfig
       val yggConfig = platform.yggConfig
       val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly[Decomposer[Option[FaultPosition]]])
+      def freshIdScanner = platform.freshIdScanner
     } map { case (faults, result) =>
       result
     }

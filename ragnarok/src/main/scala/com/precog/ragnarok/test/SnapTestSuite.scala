@@ -24,11 +24,11 @@ results := solve 'agent
 
   agents'' := agents' with { rank: order }
   newagents := new agents''
-  newagents' := newagents with { rank: newagents.rank - 1 }
+  newagents' := newagents with { rank: newagents.rank - 2 }
 
   result := newagents' ~ agents'' { first: agents'', second: newagents' } where newagents'.rank = agents''.rank
 
- {start: std::math::max(result.first.timestamp, lowerBound),
+ {start: std::math::maxOf(result.first.timestamp, lowerBound),
   end: result.second.timestamp,
   agentId: result.first.agentId,
   status: result.first.status,
