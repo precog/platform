@@ -75,10 +75,8 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
   val JSON_STREAM = MimeType("application", "x-json-stream")
   val CSV = MimeTypes.text/MimeTypes.csv
 
-  def bb(s: String) = ByteBuffer.wrap(s.getBytes("UTF-8"))
-
   def chunk(strs: String*): ByteChunk =
-    Right(strs.map(bb).foldRight(StreamT.empty[Future, ByteBuffer])(_ :: _))
+    Right(strs.map(_.getBytes("UTF-8")).foldRight(StreamT.empty[Future, Array[Byte]])(_ :: _))
 
   "Ingest service" should {
     "track event with valid API key" in {

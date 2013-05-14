@@ -56,6 +56,7 @@ import blueeyes.json.JValue
 
 import DefaultBijections._
 
+import java.util.Arrays
 import java.nio.{ CharBuffer, ByteBuffer }
 import java.nio.charset.{ Charset, CoderResult }
 
@@ -115,35 +116,35 @@ trait ShardService extends
   private def bufferOutput(stream0: StreamT[Future, CharBuffer]) = {
     val encoder = utf8.newEncoder()
 
-    def loop(stream: StreamT[Future, CharBuffer], buf: ByteBuffer): StreamT[Future, ByteBuffer] = {
+    def loop(stream: StreamT[Future, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[Future, Array[Byte]] = {
       StreamT(stream.uncons map {
         case Some((cbuf, tail)) =>
           val result = encoder.encode(cbuf, buf, false)
           if (result == CoderResult.OVERFLOW) {
-            buf.flip()
-            StreamT.Yield(buf, loop(cbuf :: tail, ByteBuffer.allocate(BufferSize)))
+            val arr2 = new Array[Byte](BufferSize)
+            StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
           } else {
-            StreamT.Skip(loop(tail, buf))
+            StreamT.Skip(loop(tail, buf, arr))
           }
 
         case None =>
           val result = encoder.encode(CharBuffer.wrap(""), buf, true)
-          buf.flip()
-
           if (result == CoderResult.OVERFLOW) {
-            StreamT.Yield(buf, loop(stream, ByteBuffer.allocate(BufferSize)))
+            val arr2 = new Array[Byte](BufferSize)
+            StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
           } else {
-            StreamT.Yield(buf, StreamT.empty)
+            StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
           }
       })
     }
 
-    loop(stream0, ByteBuffer.allocate(BufferSize))
+    val arr = new Array[Byte](BufferSize)
+    loop(stream0, ByteBuffer.wrap(arr), arr)
   }
 
   private def queryResultToByteChunk: QueryResult => ByteChunk = {
     (qr: QueryResult) => qr match {
-      case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
+      case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
       case Right(stream) => Right(bufferOutput(stream))
     }
   }

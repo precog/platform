@@ -42,8 +42,8 @@ object JsonUtil {
   def parseSingleFromByteChunk(bc: ByteChunk)(implicit M: Monad[Future]): Future[Validation[Seq[Throwable], JValue]] =
     parseSingleFromStream[Future](bc.fold(_ :: StreamT.empty, identity))
 
-  def parseSingleFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): M[Validation[Seq[Throwable], JValue]] = {
-    def rec(stream: StreamT[M, ByteBuffer], parser: AsyncParser): M[Validation[Seq[Throwable], JValue]] = {
+  def parseSingleFromStream[M[+_]: Monad](stream: StreamT[M, Array[Byte]]): M[Validation[Seq[Throwable], JValue]] = {
+    def rec(stream: StreamT[M, Array[Byte]], parser: AsyncParser): M[Validation[Seq[Throwable], JValue]] = {
       def handle(ap: AsyncParse, next: => M[Validation[Seq[Throwable], JValue]]): M[Validation[Seq[Throwable], JValue]] = ap match {
         case AsyncParse(errors, _) if errors.nonEmpty =>
           Failure(errors).point[M]
@@ -54,8 +54,8 @@ object JsonUtil {
       }
 
       stream.uncons flatMap {
-        case Some((bb, tail)) =>
-          val (ap, p2) = parser(More(bb))
+        case Some((bytes, tail)) =>
+          val (ap, p2) = parser(More(ByteBuffer.wrap(bytes)))
           handle(ap, rec(tail, p2))
         case None =>
           val (ap, p2) = parser(Done)
@@ -70,14 +70,14 @@ object JsonUtil {
   def parseManyFromByteChunk(bc: ByteChunk)(implicit M: Monad[Future]): StreamT[Future, AsyncParse] =
     parseManyFromStream[Future](bc.fold(_ :: StreamT.empty, identity))
 
-  def parseManyFromStream[M[+_]: Monad](stream: StreamT[M, ByteBuffer]): StreamT[M, AsyncParse] = {
+  def parseManyFromStream[M[+_]: Monad](stream: StreamT[M, Array[Byte]]): StreamT[M, AsyncParse] = {
     // create a new stream, using the current stream and parser
     StreamT.unfoldM((stream, AsyncParser.stream())) {
       case (stream, parser) => stream.uncons map {
-        case Some((bb, tail)) =>
+        case Some((bytes, tail)) =>
           // parse the current byte buffer, keeping track of the
           // new parser instance we were given back
-          val (r, parser2) = parser(More(bb))
+          val (r, parser2) = parser(More(ByteBuffer.wrap(bytes)))
           Some((r, (tail, parser2)))
         case None =>
           // once we're out of byte buffers, send None to signal EOF
