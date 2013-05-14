@@ -11,6 +11,39 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
   "mirror evaluator" should {
     implicit val fs = FS("/nums" -> Vector(JNum(1), JNum(2), JNum(3)))
     
+    "evaluate basic literals" >> {
+      "strings" >> {
+        "\"foo\"" must evalTo(JString("foo"))
+      }
+      
+      "numerics" >> {
+        "42" must evalTo(JNum(42))
+      }
+      
+      "booleans" >> {
+        "true" must evalTo(JTrue)
+        "false" must evalTo(JFalse)
+      }
+      
+      "undefined" >> {
+        "undefined" must evalTo()
+      }
+      
+      "null" >> {
+        "null" must evalTo(JNull)
+      }
+    }
+    
+    "evaluate compound literals" >> {
+      "objects" >> {
+        "{a:1, b:2}" must evalTo(JObject(Map("a" -> JNum(1), "b" -> JNum(2))))
+      }.pendingUntilFixed
+      
+      "arrays" >> {
+        "[1, 2]" must evalTo(JArray(JNum(1) :: JNum(2) :: Nil))
+      }.pendingUntilFixed
+    }
+    
     "evaluate simple arithmetic expressions" >> {
       "add" >> {
         "6 + 7" must evalTo(JNum(13))
