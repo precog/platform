@@ -246,6 +246,20 @@ object EvaluatorSpecs extends Specification with EvaluatorModule {
         
       input must evalTo(JNum(4), JNum(9), JNum(16), JNum(9), JNum(16), JNum(25), JNum(16), JNum(25), JNum(36))
     }
+    
+    "restrict cartesians by filtered relation" in {
+      val input = """
+        | n := //nums
+        | n2 := //nums2
+        |
+        | n' := n where n < 2
+        |
+        | n' ~ n2
+        |   n + n2       -- no one uses this feature, hilariously
+        | """.stripMargin
+        
+      input must evalTo(JNum(2), JNum(3), JNum(4))
+    }
   }
   
   private def evalTo(expect: JValue*)(implicit fs: FS): Matcher[String] = {
