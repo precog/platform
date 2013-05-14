@@ -49,12 +49,12 @@ class AsyncQueryResultServiceHandler(jobManager: JobManager[Future])(implicit ex
                       HttpResponse[ByteChunk](HttpStatus(InternalServerError, "Incompatible mime-type of query results."))
                     } else {
                       val headers = HttpHeaders.Empty + `Content-Type`(mimeType)
-                      val data = data0 map (ByteBuffer.wrap(_))
-                      val prefix = Utf8.encode("""{ "errors": %s, "warnings": %s, "data": """ format (
+                      val data = data0
+                      val prefix = ("""{ "errors": %s, "warnings": %s, "data": """ format (
                         JArray(errors.toList map (_.value)).renderCompact,
                         JArray(warnings.toList map (_.value)).renderCompact
-                      ))
-                      val suffix = Utf8.encode(" }") :: StreamT.empty[Future, ByteBuffer]
+                      )).getBytes(Utf8)
+                      val suffix = " }".getBytes(Utf8) :: StreamT.empty[Future, Array[Byte]]
 
                       val chunks = Right(prefix :: (data ++ suffix))
                       HttpResponse[ByteChunk](OK, headers, Some(chunks))

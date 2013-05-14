@@ -48,7 +48,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
   }
 
   final class IngestProcessor extends IngestProcessorLike {
-    def ingestJSONChunk(errorHandling: ErrorHandling, storeMode: StoreMode, jobId: Option[JobId], stream: StreamT[Future, ByteBuffer]): Future[IngestReport] = {
+    def ingestJSONChunk(errorHandling: ErrorHandling, storeMode: StoreMode, jobId: Option[JobId], stream: StreamT[Future, Array[Byte]]): Future[IngestReport] = {
       val overLargeMsg = "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields)
 
       @inline def expandArraysAtRoot(values: Seq[JValue]) = recordStyle match {
@@ -62,12 +62,11 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
           values
       }
 
-      def ingestAllOrNothing(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[IngestReport] = {
-        def accumulate(state: JSONParseState, records: Vector[JValue], stream: StreamT[Future, ByteBuffer]): Future[IngestReport] = {
+      def ingestAllOrNothing(state: JSONParseState, stream: StreamT[Future, Array[Byte]], streamRef: StreamRef): Future[IngestReport] = {
+        def accumulate(state: JSONParseState, records: Vector[JValue], stream: StreamT[Future, Array[Byte]]): Future[IngestReport] = {
           stream.uncons.flatMap {
-            case Some((head, rest)) =>
-              val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
-              val (parsed, updatedParser) = state.parser(More(toParse))
+            case Some((bytes, rest)) =>
+              val (parsed, updatedParser) = state.parser(More(ByteBuffer.wrap(bytes)))
               val ingestSize = parsed.values.size
 
               val overLargeIdx = parsed.values.indexWhere(_.flattenWithPath.size > maxFields)
@@ -104,12 +103,11 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
         accumulate(state, Vector.empty[JValue], stream)
       }
 
-      def ingestUnbuffered(state: JSONParseState, stream: StreamT[Future, ByteBuffer], streamRef: StreamRef): Future[JSONParseState] = {
+      def ingestUnbuffered(state: JSONParseState, stream: StreamT[Future, Array[Byte]], streamRef: StreamRef): Future[JSONParseState] = {
         stream.uncons.flatMap {
-          case Some((head, rest)) =>
+          case Some((bytes, rest)) =>
             // Dup and rewind to ensure we have something to parse
-            val toParse = head.duplicate.rewind.asInstanceOf[ByteBuffer]
-            val (parsed, updatedParser) = state.parser(More(toParse))
+            val (parsed, updatedParser) = state.parser(More(ByteBuffer.wrap(bytes)))
 
             rest.isEmpty flatMap {
               case false => ingestBlock(parsed, updatedParser, state, streamRef) { ingestUnbuffered(_, rest, streamRef) }
@@ -192,10 +190,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
     }
 
     def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult] = {
-      val dataStream = data match {
-        case Left(buffer) => buffer :: StreamT.empty[Future, ByteBuffer]
-        case Right(stream) => stream
-      }
+      val dataStream = data.fold(_ :: StreamT.empty[Future, Array[Byte]], identity)
 
       durability match {
         case LocalDurability =>
