@@ -164,6 +164,8 @@ trait MiscStackSpecs extends EvalStackSpecs {
           ids must haveSize(2)
 
           elems.keys mustEqual(Set("weight", "increasedWeight"))
+
+        case _ => ko
       }
 
       val weights = result collect { case (_, SObject(elems)) => elems("weight") }
@@ -840,6 +842,29 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       val canada = maps filter { _.values forall { _ == SString("Canada") } }
       canada.size mustEqual(570)
+    }
+
+    "return result for nested filters" in {
+      val input = """
+        | medals := //summer_games/london_medals
+        |
+        | medals' := medals where medals.Country = "India"
+        | medals'' := new medals'
+        |
+        | medals'' ~ medals'
+        |   {a: medals'.Country, b: medals''.Country} where medals'.Total = medals''.Total
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(16)
+
+      val maps = results.toSeq collect {
+        case (ids, SObject(obj)) => obj
+      }
+
+      val india = maps filter { _.values forall { _ == SString("India") } }
+      india.size mustEqual(16)
     }
 
     "accept a solve involving formals of formals" in {
@@ -2300,17 +2325,65 @@ trait MiscStackSpecs extends EvalStackSpecs {
       results must contain(SBoolean(true))
       results must not(contain(SBoolean(false)))
     }
-    
-    "produce a non-empty set for a ternary join-optimized cartesian" in {
+
+    "produce a non-empty set for a dereferenced join-optimized cartesian" in {
+      val size = """
+        | clicks := //clicks
+        | counts := solve 'pageId 
+        |   count(clicks where clicks.pageId = 'pageId)
+        | sum(std::math::pow(counts, 2))
+      """.stripMargin
+
       val input = """
         | clicks := //clicks
-        | 
         | clicks' := new clicks
+        |
+        | clicks ~ clicks'
+        |   { a: clicks, b: clicks' }.a where [clicks'.pageId] = [clicks.pageId]
+        | """.stripMargin
+
+      val totalResult = evalE(size)
+
+      totalResult must haveSize(1)
+
+      val total = totalResult.collectFirst { 
+        case (_, SDecimal(d)) => d 
+      }.get
+
+      val result = evalE(input)
+      
+      result must not(beEmpty)
+      result must haveSize(total.toInt)
+    }
+
+    "produce a non-empty set for a ternary join-optimized cartesian" in {
+      val size = """
+        | clicks := //clicks
+        | counts := solve 'pageId 
+        |   count(clicks where clicks.pageId = 'pageId)
+        | sum(std::math::pow(counts, 2))
+      """.stripMargin
+
+      val input = """
+        | clicks := //clicks
+        | clicks' := new clicks
+        |
         | clicks ~ clicks'
         |   { a: clicks, b: clicks', c: clicks } where clicks'.pageId = clicks.pageId
         | """.stripMargin
         
-      evalE(input) must not(beEmpty)
+      val totalResult = evalE(size)
+
+      totalResult must haveSize(1)
+
+      val total = totalResult.collectFirst { 
+        case (_, SDecimal(d)) => d 
+      }.get
+
+      val result = evalE(input)
+      
+      result must not(beEmpty)
+      result must haveSize(total.toInt)
     }
 
     "not produce out-of-order identities for simple cartesian and join with a reduction" in {
@@ -2494,7 +2567,6 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       eval(input) must not(beEmpty)
     }
-    
 
     "successfully complete a query with a lot of unions" in {
       val input = """
@@ -2590,72 +2662,72 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must not(throwA[Throwable])
     }
     
-    "not explode weirdly" in {
-      val input = """
-        | import std::stats::*
-        | import std::time::*
-        | 
-        | --locations := //devicelocations/2012/07/01
-        | locations := //test
-        | deviceTimes := [ locations.deviceId, locations.captureTimestamp ]
-        | 
-        | order := denseRank(deviceTimes)
-        | 
-        | locations' := locations with { rank : order }
-        | --locations'
-        | newLocations := new locations'
-        | newLocations' := newLocations with { rank : newLocations.rank - 1 }
-        | 
-        | joined := newLocations' ~ locations'
-        |   { first : locations', second : newLocations' } where locations'.rank
-        | = newLocations'.rank
-        | 
-        | r := joined where joined.first.deviceId = joined.second.deviceId
-        | 
-        | r' := 
-        |   {
-        |   data: r.first,
-        |   nextLocation: r.second.currentZone,
-        |   dwellTime: getMillis(r.second.captureTimestamp) - getMillis(r.first.captureTimestamp)
-        |   }
-        | 
-        | markov := solve 'location, 'nextLocation
-        |   r'' := r' where r'.data.currentZone = 'location & r'.nextLocation = 'nextLocation
-        |   total := count(r'.data.currentZone where r'.data.currentZone = 'location)
-        |   {
-        |   matrix: ['location, 'nextLocation],
-        |   prob: count(r''.nextLocation)/total
-        |   }
-        | 
-        | --markov
-        | 
-        | --function for creating cumulative probability distribution and formatting intervals
-        | createModel(data) :=  
-        |   predictedDistribution := data with {rank : indexedRank(data.prob) }
-        | 
-        |   cumProb := solve 'rank = predictedDistribution.rank
-        |     {
-        |     location: predictedDistribution.matrix where  predictedDistribution.rank = 'rank,
-        |     prob: sum(predictedDistribution.prob where predictedDistribution.rank <= 'rank),
-        |     rank: 'rank
-        |     }
-        | 
-        |   buckets := solve 'rank = cumProb.rank
-        |     minimum:= cumProb.prob where cumProb.rank = 'rank
-        |     maximum:= min(cumProb.prob where cumProb.rank > 'rank)
-        |     {
-        |      range: [minimum, maximum],
-        |      name: cumProb.matrix where cumProb.rank = 'rank
-        |     }
-        | buckets
-        | --end createModel Function
-        | 
-        | markov' := createModel(markov)
-        | markov'
-        | """.stripMargin
-        
-      eval(input) must not(throwA[Throwable])
-    }
+    //"not explode weirdly" in {
+    //  val input = """
+    //    | import std::stats::*
+    //    | import std::time::*
+    //    | 
+    //    | --locations := //devicelocations/2012/07/01
+    //    | locations := //test
+    //    | deviceTimes := [ locations.deviceId, locations.captureTimestamp ]
+    //    | 
+    //    | order := denseRank(deviceTimes)
+    //    | 
+    //    | locations' := locations with { rank : order }
+    //    | --locations'
+    //    | newLocations := new locations'
+    //    | newLocations' := newLocations with { rank : newLocations.rank - 1 }
+    //    | 
+    //    | joined := newLocations' ~ locations'
+    //    |   { first : locations', second : newLocations' } where locations'.rank
+    //    | = newLocations'.rank
+    //    | 
+    //    | r := joined where joined.first.deviceId = joined.second.deviceId
+    //    | 
+    //    | r' := 
+    //    |   {
+    //    |   data: r.first,
+    //    |   nextLocation: r.second.currentZone,
+    //    |   dwellTime: getMillis(r.second.captureTimestamp) - getMillis(r.first.captureTimestamp)
+    //    |   }
+    //    | 
+    //    | markov := solve 'location, 'nextLocation
+    //    |   r'' := r' where r'.data.currentZone = 'location & r'.nextLocation = 'nextLocation
+    //    |   total := count(r'.data.currentZone where r'.data.currentZone = 'location)
+    //    |   {
+    //    |   matrix: ['location, 'nextLocation],
+    //    |   prob: count(r''.nextLocation)/total
+    //    |   }
+    //    | 
+    //    | --markov
+    //    | 
+    //    | --function for creating cumulative probability distribution and formatting intervals
+    //    | createModel(data) :=  
+    //    |   predictedDistribution := data with {rank : indexedRank(data.prob) }
+    //    | 
+    //    |   cumProb := solve 'rank = predictedDistribution.rank
+    //    |     {
+    //    |     location: predictedDistribution.matrix where  predictedDistribution.rank = 'rank,
+    //    |     prob: sum(predictedDistribution.prob where predictedDistribution.rank <= 'rank),
+    //    |     rank: 'rank
+    //    |     }
+    //    | 
+    //    |   buckets := solve 'rank = cumProb.rank
+    //    |     minimum:= cumProb.prob where cumProb.rank = 'rank
+    //    |     maximum:= min(cumProb.prob where cumProb.rank > 'rank)
+    //    |     {
+    //    |      range: [minimum, maximum],
+    //    |      name: cumProb.matrix where cumProb.rank = 'rank
+    //    |     }
+    //    | buckets
+    //    | --end createModel Function
+    //    | 
+    //    | markov' := createModel(markov)
+    //    | markov'
+    //    | """.stripMargin
+    //    
+    //  eval(input) must not(throwA[Throwable])
+    //}
     
     "produce something other than the empty set for join of conditional results" in {
       val input = """
@@ -2709,6 +2781,14 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       evalE(input) must haveSize(1)
+    }
+
+    "compute edit distance of strings" in {
+      val input = """
+        | std::string::editDistance("gruesome", "awesome")
+        | """.stripMargin
+        
+      eval(input) must_== Set(SDecimal(3))
     }
   }
 }

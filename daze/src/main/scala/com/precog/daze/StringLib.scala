@@ -58,7 +58,8 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt,
       startsWith, lastIndexOf, concat, endsWith, codePointBefore,
       takeLeft, takeRight, dropLeft, dropRight,
-      matches, regexMatch, compareTo, compareToIgnoreCase, compare, compareIgnoreCase, equals, indexOf, split, splitRegex)
+      matches, regexMatch, compareTo, compareToIgnoreCase, compare, compareIgnoreCase,
+      equals, indexOf, split, splitRegex, editDistance)
 
     private def isValidInt(num: BigDecimal): Boolean = {
       try { 
@@ -147,12 +148,12 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           scanner)
       }
       
-      object scanner extends CScanner {
+      object scanner extends CScanner[M] {
         type A = Unit
         
         def init = ()
         
-        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
           val targetM = columns get ColumnRef(CPath.Identity \ 0, CString)
           val regexM = columns get ColumnRef(CPath.Identity \ 1, CString)
           
@@ -222,7 +223,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             }
           }
           
-          ((), columns2M getOrElse Map[ColumnRef, Column]())
+          M point ((), columns2M getOrElse Map[ColumnRef, Column]())
         }
       }
     }
@@ -412,6 +413,23 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::split") {
+        case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
+        case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
+        case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
+        case (c1: DateColumn, c2: DateColumn) => build(dateToStrCol(c1), dateToStrCol(c2))
+      }
+    }
+
+    object editDistance extends Op2F2(StringNamespace, "editDistance") {
+      //@deprecated, see the DEPRECATED comment in StringLib
+      val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JNumberT)
+
+      private def build(c1: StrColumn, c2: StrColumn) =
+        new Map2Column(c1, c2) with LongColumn {
+          def apply(row: Int): Long = Levenshtein.distance(c1(row), c2(row))
+        }
+
+      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::parseNum") {
         case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
         case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
         case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
