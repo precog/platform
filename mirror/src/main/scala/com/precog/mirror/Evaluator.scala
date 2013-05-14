@@ -148,85 +148,85 @@ trait EvaluatorModule extends ProvenanceChecker
       case Difference(_, _, _) => sys.error("todo")
       
       case Add(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN + rightN)
         }
       }
       
       case Sub(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN - rightN)
         }
       }
       
       case Mul(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN * rightN)
         }
       }
       
       case Div(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN / rightN)
         }
       }
       
       case Mod(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JNum(leftN % rightN)
         }
       }
       
       case Pow(_, left, right) => {
-        join(env)(left, right) {
-          case (JNum(leftN), JNumLong(rightN)) => JNum(leftN pow rightN.toInt)
+        handleBinary(env)(left, right) {
+          case (JNum(leftN), JNum(rightN)) => JNum(leftN pow rightN.toInt)
         }
       }
       
       case Lt(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN < rightN)
         }
       }
       
       case LtEq(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN <= rightN)
         }
       }
       
       case Gt(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN > rightN)
         }
       }
       
       case GtEq(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JNum(leftN), JNum(rightN)) => JBool(leftN >= rightN)
         }
       }
       
       case Eq(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (leftV, rightV) => JBool(leftV == rightV)
         }
       }
       
       case NotEq(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (leftV, rightV) => JBool(leftV != rightV)
         }
       }
       
       case And(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JBool(leftB), JBool(rightB)) => JBool(leftB && rightB)
         }
       }
       
       case Or(_, left, right) => {
-        join(env)(left, right) {
+        handleBinary(env)(left, right) {
           case (JBool(leftB), JBool(rightB)) => JBool(leftB || rightB)
         }
       }
@@ -244,6 +244,18 @@ trait EvaluatorModule extends ProvenanceChecker
       }
       
       case Paren(_, child) => loop(env)(child)
+    }
+    
+    def handleBinary(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
+      val intersected = left.provenance.possibilities intersect right.provenance.possibilities filter { p => p != ValueProvenance && p != NullProvenance }
+      
+      if (intersected.isEmpty) {
+        // perform a cartesian
+        cross(env)(left, right)(pf)
+      } else {
+        // perform a join
+        join(env)(left, right)(pf)
+      }
     }
     
     def join(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
@@ -277,6 +289,18 @@ trait EvaluatorModule extends ProvenanceChecker
           (Vector(idsMerged: _*), pf(leftV, rightV))
         }
       }
+    }
+    
+    def cross(env: Map[(Let, String), Dataset])(left: Expr, right: Expr)(pf: PartialFunction[(JValue, JValue), JValue]): Dataset = {
+      val leftRes = loop(env)(left)
+      val rightRes = loop(env)(right)
+      
+      for {
+        (idsLeft, leftV) <- loop(env)(left)
+        (idsRight, rightV) <- loop(env)(right)
+        
+        if pf.isDefinedAt((leftV, rightV))
+      } yield (idsLeft ++ idsRight, pf((leftV, rightV)))
     }
     
     if (expr.errors.isEmpty) {
