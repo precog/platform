@@ -9,62 +9,102 @@ import blueeyes.core.http.{MimeType, MimeTypes}
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
-import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
 import blueeyes.json.serialization.Versioned._
 
 import com.precog.common.security.Authorities
+import com.precog.common.ingest.FileContent
 import com.precog.niflheim.NIHDB
+import com.precog.yggdrasil.nihdb.NIHDBProjection
+import com.precog.yggdrasil.table.Slice
 import com.precog.util.{IOUtils, PrecogUnit}
 
 import java.io.{File, FileInputStream, FileOutputStream}
+import java.nio.CharBuffer
+import java.nio.ByteBuffer
+import java.nio.charset.{Charset, CoderResult}
+import java.util.Arrays
+
+import com.weiglewilczek.slf4s.Logging
 
 import org.joda.time.DateTime
+
 
 import scala.annotation.tailrec
 
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect.IO
+import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
 
-import shapeless._
-
-object Resource {
+object Resource extends Logging {
   val QuirrelData = MimeType("application", "x-quirrel-data")
+
+  def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
+    import com.precog.yggdrasil.table.ColumnarTableModule
+    import FileContent._
+    output match {
+      case ApplicationJson =>
+        ColumnarTableModule.renderJson(slices, "[", ",", "]")
+
+      case XJsonStream =>
+        ColumnarTableModule.renderJson(slices, "", "\n", "")
+
+      case TextCSV => 
+        ColumnarTableModule.renderCsv(slices)
+
+      case other => 
+        logger.warn("Unrecognized output type requested for conversion of slice stream to char buffers: %s".format(output))
+        StreamT.empty[N, CharBuffer]
+    }
+  }
+
+  def bufferOutput(stream0: StreamT[Future, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {
+    val encoder = charset.newEncoder()
+
+    def loop(stream: StreamT[Future, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[Future, Array[Byte]] = {
+      StreamT(stream.uncons map {
+        case Some((cbuf, tail)) =>
+          val result = encoder.encode(cbuf, buf, false)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Skip(loop(tail, buf, arr))
+          }
+
+        case None =>
+          val result = encoder.encode(CharBuffer.wrap(""), buf, true)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
+          }
+      })
+    }
+
+    val arr = new Array[Byte](bufferSize)
+    loop(stream0, ByteBuffer.wrap(arr), arr)
+  }
 }
 
 sealed trait Resource {
   def mimeType: MimeType
   def authorities: Authorities
-  def close: Future[PrecogUnit]
   def append(data: PathData): IO[PrecogUnit]
+  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]]
 }
 
-sealed trait ResourceError {
-  def message: String
-  def exception: Throwable
-}
+sealed trait ResourceError
 
 object ResourceError {
-  case class CorruptData(message: String) extends ResourceError {
-    val exception = new Exception(message)
-  }
+  case class CorruptData(message: String) extends ResourceError 
+  case class MissingData(message: String) extends ResourceError
+  case class IOError(exception: Throwable) extends ResourceError
 
-  case class MissingData(message: String) extends ResourceError {
-    val exception = new Exception(message)
-  }
-
-  case class IOError(exception: Throwable) extends ResourceError {
-    val message = Option(exception.getMessage) getOrElse exception.getClass.toString
-  }
-
-  case class GeneralError(message: String) extends ResourceError {
-    val exception = new Exception(message)
-  }
-
-  case class PermissionsError(message: String) extends ResourceError {
-    val exception = new Exception(message)
-  }
+  case class IllegalWriteRequestError(message: String) extends ResourceError
+  case class PermissionsError(message: String) extends ResourceError
 
   def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
     CorruptData("%s:\n%s" format (msg, error.message))
@@ -77,21 +117,38 @@ object ResourceError {
   implicit val show = Show.showFromToString[ResourceError]
 }
 
-case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource {
+case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource with Logging {
   val mimeType: MimeType = Resource.QuirrelData
-  def close: Future[PrecogUnit] = db.close(as)
   def append(data: PathData): IO[PrecogUnit] = data match {
     case NIHDBData(batch) =>
       db.insert(batch)
 
-    case _ => 
-      IO.throwIO(new IllegalArgumentException("Attempt to insert non-event data to NIHDB"))
+    case BlobData(_, mimeType) => 
+      IO.throwIO(new IllegalArgumentException("Attempt to insert non-event blob data of type %s to NIHDB".format(mimeType.value)))
+  }
+
+  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]] = {
+    import Resource.{ bufferOutput, toCharBuffers }
+    import FileContent._
+    NIHDBProjection.wrap(this) map { p =>
+      val sliceStream = p.getBlockStream(None)
+      mimeType match {
+        case Some(ApplicationJson) | None => Some(bufferOutput(toCharBuffers(ApplicationJson, sliceStream)))
+        case Some(XJsonStream) => Some(bufferOutput(toCharBuffers(XJsonStream, sliceStream)))
+        case Some(TextCSV) => Some(bufferOutput(toCharBuffers(TextCSV, sliceStream)))
+        case Some(other) => 
+          logger.warn("NIHDB resource cannot be rendered to a byte stream of type %s".format(other.value))
+          None
+      }
+    }
   }
 }
 
 case class BlobMetadata(mimeType: MimeType, size: Long, created: DateTime, authorities: Authorities)
 
 object BlobMetadata {
+  import shapeless.{ Iso, HNil }
+  import blueeyes.json.serialization.IsoSerialization._
   implicit val iso = Iso.hlist(BlobMetadata.apply _, BlobMetadata.unapply _)
 
   implicit val mimeTypeDecomposer: Decomposer[MimeType] = new Decomposer[MimeType] {
@@ -104,7 +161,6 @@ object BlobMetadata {
     }
   }
 
-  import IsoSerialization._
   val schema = "mimeType" :: "size" :: "created" :: "authorities" :: HNil
   implicit val decomposer = decomposerV[BlobMetadata](schema, Some("1.0".v))
   implicit val extractor = extractorV[BlobMetadata](schema, Some("1.0".v))
@@ -113,7 +169,7 @@ object BlobMetadata {
 /**
  * A blob of data that has been persisted to disk.
  */
-final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: ExecutionContext) extends Resource {
+final case class Blob(dataFile: File, metadata: BlobMetadata) extends Resource {
   val authorities: Authorities = metadata.authorities
   val mimeType: MimeType = metadata.mimeType
 
@@ -121,8 +177,7 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
   def asString: IO[String] = IOUtils.readFileToString(dataFile)
 
   /** Stream the file off disk. */
-  def stream: StreamT[IO, Array[Byte]] = {
-
+  def ioStream: StreamT[IO, Array[Byte]] = {
     @tailrec
     def readChunk(fin: FileInputStream, skip: Long): Option[Array[Byte]] = {
       val remaining = skip - fin.skip(skip)
@@ -147,6 +202,14 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
     }
   }
 
+  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]] = {
+    val IOF: IO ~> Future = new NaturalTransformation[IO, Future] {
+      def apply[A](io: IO[A]) = M.point(io.unsafePerformIO)
+    }
+
+    M point { (mimeType.forall(_ == metadata.mimeType)).option(ioStream.trans(IOF)) }
+  }
+
   def append(data: PathData): IO[PrecogUnit] = data match {
     case _ => IO.throwIO(new IllegalArgumentException("Blob append not yet supported"))
 
@@ -164,8 +227,6 @@ final case class Blob(dataFile: File, metadata: BlobMetadata)(implicit ec: Execu
 //
 //    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-blob data to blob"))
   }
-
-  def close = Promise.successful(PrecogUnit)
 }
 
 object Blob {

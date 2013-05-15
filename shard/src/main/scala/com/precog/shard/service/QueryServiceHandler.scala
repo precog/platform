@@ -3,6 +3,7 @@ package service
 
 import com.precog.daze._
 import com.precog.common._
+import com.precog.common.ingest.FileContent
 
 import com.precog.common.security._
 import com.precog.common.jobs._
@@ -46,7 +47,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
-  def extractResponse(request: HttpRequest[_], a: A, outputType: QueryOutput): Future[HttpResponse[QueryResult]]
+  def extractResponse(request: HttpRequest[_], a: A, outputType: MimeType): Future[HttpResponse[QueryResult]]
 
   private val Command = """:(\w+)\s+(.+)""".r
 
@@ -65,7 +66,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     import blueeyes.core.http.MimeTypes._
 
     opts.output match {
-      case CSVOutput => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
+      case FileContent.TextCSV => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
       case _ => response.copy(headers = response.headers + `Content-Type`(application/json))
     }
   }
@@ -106,7 +107,7 @@ class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)
         val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
         storedQueries.executeStoredQuery(apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
           case Success(stream) => 
-            HttpResponse(OK, content = Some(Right(QueryResultConvert.toCharBuffers(queryOptions.output, stream))))
+            HttpResponse(OK, content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
           case Failure(evaluationError) => 
             logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
             HttpResponse(InternalServerError)
@@ -137,11 +138,11 @@ class SyncQueryServiceHandler(
   def ensureTermination(data0: StreamT[Future, CharBuffer]) =
     TerminateJson.ensure(silenceShardQueryExceptions(data0))
 
-  def extractResponse(request: HttpRequest[_], result: (Option[JobId], StreamT[Future, Slice]), outputType: QueryOutput): Future[HttpResponse[QueryResult]] = {
+  def extractResponse(request: HttpRequest[_], result: (Option[JobId], StreamT[Future, Slice]), outputType: MimeType): Future[HttpResponse[QueryResult]] = {
     import SyncResultFormat._
 
     val (jobId, slices) = result
-    val charBuffers = QueryResultConvert.toCharBuffers(outputType, slices)
+    val charBuffers = Resource.toCharBuffers(outputType, slices)
 
     val format = request.parameters get 'format map {
       case "simple" => Right(Simple)
@@ -233,7 +234,7 @@ class SyncQueryServiceHandler(
 }
 
 class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
-  def extractResponse(request: HttpRequest[_], jobId: JobId, outputType: QueryOutput): Future[HttpResponse[QueryResult]] = {
+  def extractResponse(request: HttpRequest[_], jobId: JobId, outputType: MimeType): Future[HttpResponse[QueryResult]] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result))).point[Future]
   }

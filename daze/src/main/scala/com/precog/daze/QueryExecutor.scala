@@ -7,10 +7,10 @@ import com.precog.common._
 import com.precog.common.security._
 
 import blueeyes.json._
+import blueeyes.core.http.MimeType
+import blueeyes.core.http.MimeTypes
 
 import akka.util.Duration
-
-import java.nio.CharBuffer
 
 import scalaz.{ Validation, StreamT, Id, Applicative, NonEmptyList, Semigroup }
 import NonEmptyList.nels
@@ -36,16 +36,12 @@ object EvaluationError {
   }
 }
 
-sealed trait QueryOutput
-case object JSONOutput extends QueryOutput
-case object CSVOutput extends QueryOutput
-
 case class QueryOptions(
   page: Option[(Long, Long)] = None,
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
   timeout: Option[Duration] = None,
-  output: QueryOutput = JSONOutput
+  output: MimeType = MimeTypes.application/MimeTypes.json
 )
 
 trait QueryExecutor[M[+_], +A] { self =>

@@ -71,7 +71,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
       val io = targetActor(op.path) map { _.tell(op, requestor) } except {
         case t: Throwable =>
           logger.error("Error obtaining path actor for " + op.path, t)
-          IO { requestor ! PathFailure(op.path, NonEmptyList(ResourceError.GeneralError("Error opening resources at " + op.path))) }
+          IO { requestor ! PathFailure(op.path, NonEmptyList(ResourceError.IOError(t))) }
       } 
       
       io.unsafePerformIO
