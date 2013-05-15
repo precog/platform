@@ -109,6 +109,10 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       trans.WrapObject(source, paths.Value.name)
     }
     
+    def buildKeyWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+      trans.WrapObject(source, paths.Key.name)
+    }
+    
     def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
       val components = for (i <- 0 until sharedLength)
         yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1

@@ -70,12 +70,22 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
 
       def makeReduction(jtpe: JType): Reduction = {
         val jtypes: List[Option[JType]] = {
-          val flattened = Schema.flatten(jtpe, List.empty[ColumnRef]).distinct.sortBy(_._1)
-          flattened map { case (cpath, ctype) => Schema.mkType(Seq(cpath -> ctype)) }
+          val grouped = Schema.flatten(jtpe, List.empty[ColumnRef]).groupBy(_._1)
+          val numerics = grouped filter { case (cpath, pairs) =>
+            pairs.map(_._2).exists(_.isNumeric)
+          }
+
+          // handles case when we have multiple numeric columns at same path
+          val singleNumerics = numerics.toList.map { case (path, _) => (path, CNum) }
+          val sortedNumerics = singleNumerics.sortBy(_._1).reverse
+
+          sortedNumerics map { case (cpath, ctype) =>
+            Schema.mkType(Seq(cpath -> ctype))
+          }
         }
 
         val functions: List[Option[JType => JType]] =
-          jtypes map ( _ map { Schema.replaceLeaf } )
+          jtypes.distinct map ( _ map { Schema.replaceLeaf } )
 
         coalesce(functions map { SingleSummary -> _ })
       }
