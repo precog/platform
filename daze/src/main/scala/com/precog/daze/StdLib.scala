@@ -230,6 +230,7 @@ trait StdLibModule[M[+_]]
     with TypeLibModule[M]
     with StringLibModule[M]
     with StatsLibModule[M]
+    with NormalizationLibModule[M]
     with ClusteringLibModule[M] 
     with RandomForestLibModule[M] 
     with LogisticRegressionLibModule[M]
@@ -248,6 +249,7 @@ trait StdLibModule[M[+_]]
       with TypeLib
       with StringLib
       with StatsLib
+      with NormalizationLib
       with ClusteringLib
       with RandomForestLib
       with LogisticRegressionLib
