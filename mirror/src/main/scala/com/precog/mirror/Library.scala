@@ -19,18 +19,21 @@ trait LibraryModule extends Binder {
     abstract class Op1(val namespace: Vector[String], val name: String) extends Op1Like with Morphism1 {
       val opcode = 0x0001       // we really don't care
       val tpe = UnaryOperationType(JUniverseT, JUniverseT)
+      val rowLevel = true
       def pf: PartialFunction[JValue, JValue]
     }
     
     abstract class Op2(val namespace: Vector[String], val name: String) extends Op2Like {
       val opcode = 0x0001       // we really don't care
       val tpe = BinaryOperationType(JUniverseT, JUniverseT, JUniverseT)
+      val rowLevel = true
       def pf: PartialFunction[(JValue, JValue), JValue]
     }
     
     abstract class Reduction(val namespace: Vector[String], val name: String) extends ReductionLike with Morphism1 with ((JValue, JValue) => JValue) {
       val opcode = 0x0001       // we really don't care
       val tpe = UnaryOperationType(JUniverseT, JUniverseT)
+      val rowLevel = true
       val zero: Option[JValue]
       def prepare: PartialFunction[JValue, JValue]
       def apply(left: JValue, right: JValue): JValue
@@ -46,6 +49,7 @@ trait LibraryModule extends Binder {
       val namespace = Vector("std", "fs")
       val name = "expandGlob"
       val opcode = 0x0001
+      val rowLevel = true
       val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
     }
     
