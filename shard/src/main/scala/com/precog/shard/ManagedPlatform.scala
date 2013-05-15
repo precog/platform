@@ -27,6 +27,7 @@ import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs.Resource
 
 import akka.dispatch.{ Future, ExecutionContext }
 
@@ -39,6 +40,7 @@ import java.io.{ File, FileOutputStream }
 
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+import blueeyes.core.http.MimeType
 import blueeyes.core.http.MimeTypes
 
 import scalaz._
@@ -121,7 +123,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     implicit def executionContext: ExecutionContext
     implicit def futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
 
-    def complete(results: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: QueryOutput)(implicit
+    def complete(results: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
         M: JobQueryTFMonad): Future[Validation[EvaluationError, A]]
 
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
@@ -147,7 +149,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
   }
 
   trait SyncQueryExecutor extends ManagedQueryExecutor[(Option[JobId], StreamT[Future, Slice])] {
-    def complete(result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: QueryOutput)(implicit
+    def complete(result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
         M: JobQueryTFMonad): Future[Validation[EvaluationError, (Option[JobId], StreamT[Future, Slice])]] = {
       result map {
         _ map { stream =>
@@ -174,12 +176,12 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
       }
     }
 
-    def complete(resultVF: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: QueryOutput)(implicit
+    def complete(resultVF: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
         M: JobQueryTFMonad): Future[Validation[EvaluationError, JobId]] = {
       M.jobId map { jobId =>
         resultVF map (_ map { result =>
           // TODO: encoding a char stream here feels like we're bleeding a bit of impl requirement into ManagedPlatform
-          val convertedStream: StreamT[JobQueryTF, CharBuffer] = QueryResultConvert.toCharBuffers(outputType, result)
+          val convertedStream: StreamT[JobQueryTF, CharBuffer] = Resource.toCharBuffers(outputType, result)
           jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>
               jobManager.abort(jobId, "Error occured while storing job results: " + error, yggConfig.clock.now())

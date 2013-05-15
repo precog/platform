@@ -71,6 +71,7 @@ object FileContent {
   val XQuirrelScript = MimeType("text", "x-quirrel-script")
   val ApplicationJson = application/json
   val XJsonStream = MimeType("application", "x-json-stream")
+  val TextCSV = text/csv
 
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
     def decompose(v: FileContent) = JObject(

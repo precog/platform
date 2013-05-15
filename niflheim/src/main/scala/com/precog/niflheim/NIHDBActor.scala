@@ -107,7 +107,7 @@ trait NIHDB {
 
   def status: Future[Status]
 
-  def structure: Future[Set[(CPath, CType)]]
+  def structure: Future[Set[ColumnRef]]
 
   /**
    * Returns the total number of defined objects for a given `CPath` *mask*.
@@ -149,7 +149,7 @@ private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: T
   def status: Future[Status] =
     (actor ? GetStatus).mapTo[Status]
 
-  def structure: Future[Set[(CPath, CType)]] =
+  def structure: Future[Set[ColumnRef]] =
     getSnapshot().map(_.structure)
 
   def count(paths0: Option[Set[CPath]]): Future[Long] =
