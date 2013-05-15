@@ -204,10 +204,12 @@ trait ShardService extends
   }
 
   private def analysisHandler[A](state: ShardState) = {
-    dataPath("/analysis/fs") {
-      get {
-        shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-          new AnalysisServiceHandler(state.storedQueries, state.clock)
+    jsonAPIKey(state.apiKeyFinder) {
+      dataPath("/analysis/fs") {
+        get {
+          shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
+            new AnalysisServiceHandler(state.storedQueries, state.clock)
+          }
         }
       }
     }
@@ -223,12 +225,10 @@ trait ShardService extends
         request { state =>
           import CORSHeaderHandler.allowOrigin
           allowOrigin("*", executionContext) {
-            // TODO: unhack this
-              if (state.scheduler.enabled) {
-                analysisHandler(state) ~ asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state)
-              } else {
-                analysisHandler(state) ~ asyncHandler(state) ~ syncHandler(state)
-              }
+            asyncHandler(state) ~ syncHandler(state) ~ analysisHandler(state) ~
+            ifRequest { _: HttpRequest[ByteChunk] => state.scheduler.enabled } {
+              scheduledHandler(state)
+            }
           }
         } ->
         stop { state: ShardState =>
