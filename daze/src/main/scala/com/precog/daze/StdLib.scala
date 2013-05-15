@@ -253,7 +253,8 @@ trait StdLibModule[M[+_]]
     with LogisticRegressionLibModule[M]
     with LinearRegressionLibModule[M]
     with FSLibModule[M]
-    with RandomLibModule[M] {
+    with RandomLibModule[M]
+    with PrecogModule[M] {
   type Lib <: StdLib
 
   trait StdLib
@@ -272,6 +273,7 @@ trait StdLibModule[M[+_]]
       with LinearRegressionLib
       with FSLib
       with RandomLib
+      with PrecogLib
 }
 
 object StdLib {
