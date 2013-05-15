@@ -977,6 +977,9 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
     private def chain[A, B](st0: SliceTransform2[A], st1: SliceTransform1[B]): SliceTransform2[(A, B)] = {
       (st0, st1) match {
+        case (sta, MappedState1(stb, f, g)) =>
+          chain(sta, stb).mapState( _ :-> f, _ :-> g)
+
         case (sta: SliceTransform2S[_], stb: SliceTransform1S[_]) =>
           chainS(sta, stb)
 
@@ -1004,9 +1007,6 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
         case (MappedState2(sta, f, g), stb) =>
           chain(sta, stb).mapState(f <-: _, g <-: _)
-
-        case (sta, MappedState1(stb, f, g)) =>
-          chain(sta, stb).mapState( _ :-> f, _ :-> g)
       }
     }
 
