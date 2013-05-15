@@ -829,7 +829,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
      *
      * This provides scaffolding that is useful in all cases.
      */
-    trait BaseRankScanner extends CScanner[M] {
+    trait BaseRankScanner extends CScanner {
       import scala.collection.mutable
 
       // collapses number columns into one decimal column.
@@ -972,7 +972,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
 
         val m = decimalize(_m, range)
 
@@ -1009,7 +1009,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           (ctxt2, data)
         }
         
-        M point back
+        back
       }
     }
 
@@ -1109,7 +1109,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
         val m = decimalize(_m, range)
 
         val start = range.start
@@ -1148,7 +1148,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           (ctxt2, data)
         }
         
-        M point back
+        back
       }
     }
 
@@ -1198,11 +1198,11 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
     }
 
-    final class DummyScanner(length: Long) extends CScanner[M] {
+    final class DummyScanner(length: Long) extends CScanner {
       type A = Long
       def init: A = 0L
 
-      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         val defined = cols.values.foldLeft(BitSetUtil.create()) { (bitset, col) =>
           bitset.or(col.definedAt(range.start, range.end))
           bitset
@@ -1230,7 +1230,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           ColumnRef(CPath(CPathIndex(idx)), CLong) -> makeColumn(idx)
         })(collection.breakOut)
 
-        M point (n, cols0)
+        (n, cols0)
       }
     }
 
@@ -1238,7 +1238,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       val tpe = UnaryOperationType(JType.JUniverseT, retType)
       override val idPolicy = IdentityPolicy.Retain.Merge
       
-      def rankScanner(size: Long): CScanner[M]
+      def rankScanner(size: Long): CScanner
       
       private val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       private val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)

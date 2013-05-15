@@ -58,6 +58,7 @@ import scalaz.syntax.arrow._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
+import scalaz.syntax.bifunctor._
 
 trait SliceTransforms[M[+_]] extends TableModule[M]
     with ColumnarTableTypes[M] 
@@ -70,9 +71,12 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
   import trans.constants._
 
   protected object SliceTransform {
-    def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => M.point((a, s)))
-    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => M.point((a, sl)))
-    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => M.point((a, sr)))
+    def identity[A](initial: A) = SliceTransform1.liftM[A](initial, (a: A, s: Slice) => (a, s))
+    def left[A](initial: A)  = SliceTransform2.liftM[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
+    def right[A](initial: A) = SliceTransform2.liftM[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
+
+    def liftM(f: Slice => Slice): SliceTransform1[Unit] =
+      SliceTransform1.liftM[Unit]((), { (u, s) => (u, f(s)) })
 
     def lift(f: Slice => M[Slice]): SliceTransform1[Unit] =
       SliceTransform1[Unit]((), { (_, s) => f(s) map { ((), _) } })
@@ -92,7 +96,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
-            _ mapRoot f 
+            _ mapRoot f
           }
 
         case DeepMap1(source, f) => 
@@ -503,7 +507,7 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
 
         case Scan(source, scanner) => 
           composeSliceTransform2(source) andThen {
-            SliceTransform1[scanner.A](
+            SliceTransform1.liftM[scanner.A](
               scanner.init,
               { (state: scanner.A, slice: Slice) =>
                 val (newState, newCols) = scanner.scan(state, slice.columns, 0 until slice.size)
@@ -619,296 +623,442 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
         }
       }
       
-      result.withSource(spec)
-    }  
+      result
+    }
   }
 
-  protected case class SliceTransform1[A](initial: A, f: Either[(A, Slice) => (A, Slice), (A, Slice) => M[(A, Slice)]]) {
-    def apply(s: Slice) = {
-      f.fold(
-        left = { f => f(initial, s) },
-        right = { f =>
-          val (a, s2) = f(initial, s)
-          M point (a, s2)
-        })
-    }
+  protected sealed trait SliceTransform1[A] {
+    import SliceTransform1._
 
-    def advance(s: Slice): M[(SliceTransform1[A], Slice)] = {
-      this(s) map {
-        case (a, s2) =>
-          (this.copy(initial = a), s2)
+    def initial: A
+    def f: (A, Slice) => M[(A, Slice)]
+    def advance(slice: Slice): M[(SliceTransform1[A], Slice)]
+
+    def unlift: Option[(A, Slice) => (A, Slice)] = None
+
+    def apply(slice: Slice): M[(A, Slice)] = f(initial, slice)
+
+    def mapState[B](f: A => B, g: B => A): SliceTransform1[B] =
+      MappedState1[A, B](this, f, g)
+
+    def zip[B](that: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
+      (this, that) match {
+        case (sta: SliceTransform1S[_], stb: SliceTransform1S[_]) =>
+          SliceTransform1S[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), s0) =>
+            val (a, sa) = sta.f0(a0, s0)
+            val (b, sb) = stb.f0(b0, s0)
+            assert(sa.size == sb.size)
+            ((a, b), combine(sa, sb))
+          })
+
+        case (sta: SliceTransform1S[_], stb) =>
+          SliceTransform1M[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), s0) =>
+            val (a, sa) = sta.f0(a0, s0)
+            stb.f(b0, s0) map { case (b, sb) =>
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
+
+        case (sta, stb: SliceTransform1S[_]) =>
+          SliceTransform1M[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), s0) =>
+            sta.f(a0, s0) map { case (a, sa) =>
+              val (b, sb) = stb.f0(b0, s0)
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
+
+        case (sta, stb) =>
+          SliceTransform1[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), s0) =>
+            for (ares <- sta.f(a0, s0); bres <- stb.f(b0, s0)) yield {
+              val (a, sa) = ares
+              val (b, sb) = bres
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
       }
     }
 
-    def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial), {
-          val leftLeft = for {
-            leftF <- this.f.left.toOption
-            rightF <- t.f.left.toOption
-          } yield {
-            Left({ (pair: (A, B), s: Slice) =>
-              val (a0, sa) = leftF(a, s)
-              val (b0, sb) = rightF(b, sa)
-              ((a0, b0), sb)
-            })
-          }
-          
-          val leftRight = for {
-            leftF <- this.f.left.toOption
-            rightF <- that.f.right.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              val (a0, sa) = leftF(a, s)
-              rightF(b, sa) map {
-                case (b0, sb) =>
-                  ((a0, b0), sb)
-              }
-            })
-          }
-          
-          val rightLeft = for {
-            leftF <- this.f.right.toOption
-            rightF <- that.f.left.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              leftF(a, s) map {
-                case (a0, sa) => {
-                  val (b0, sb) = rightF(b, sa)
-                  ((a0, b0), sb)
-                }
-              }
-            })
-          }
-          
-          val rightRight = for {
-            leftF <- this.f.right.toOption
-            rightF <- that.f.right.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              for {
-                pairLeft <- leftF(a, s)
-                (a0, sa) = pairLeft
-                
-                pairRight <- rightF(b, sa)
-                (b0, sb) = pairRight
-              } yield ((a0, b0), sb)
-            })
-          }
-          
-          leftLeft orElse leftRight orElse rightLeft orElse rightRight get
-        }
-      )
-    }
-
-    def zip[B](t: SliceTransform1[B])(combine: (Slice, Slice) => Slice): SliceTransform1[(A, B)] = {
-      SliceTransform1(
-        (initial, t.initial), {
-          val leftLeft = for {
-            leftF <- this.f.left.toOption
-            rightF <- t.f.left.toOption
-          } yield {
-            Left({ (pair: (A, B), s: Slice) =>
-              val (a0, sa) = leftF(a, s)
-              val (b0, sb) = rightF(b, s)
-              ((a0, b0), combine(sa, sb))
-            })
-          }
-          
-          val leftRight = for {
-            leftF <- this.f.left.toOption
-            rightF <- that.f.right.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              val (a0, sa) = leftF(a, s)
-              rightF(b, s) map {
-                case (b0, sb) =>
-                  ((a0, b0), combine(sa, sb))
-              }
-            })
-          }
-          
-          val rightLeft = for {
-            leftF <- this.f.right.toOption
-            rightF <- that.f.left.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              leftF(a, s) map {
-                case (a0, sa) => {
-                  val (b0, sb) = rightF(b, s)
-                  ((a0, b0), combine(sa, sb))
-                }
-              }
-            })
-          }
-          
-          val rightRight = for {
-            leftF <- this.f.right.toOption
-            rightF <- that.f.right.toOption
-          } yield {
-            Right({ (pair: (A, B), s: Slice) =>
-              M.apply2(leftF(a, s), rightF(b, s)) {
-                case ((a0, sa), (b0, sb)) =>
-                  ((a0, b0), combine(sa, sb))
-              }
-            })
-          }
-          
-          leftLeft orElse leftRight orElse rightLeft orElse rightRight get
-        }
-      )
-    }
-
     def zip2[B, C](t: SliceTransform1[B], t2: SliceTransform1[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform1[(A, B, C)] = {
-      SliceTransform1(
-        (initial, t.initial, t2.initial), {
-          case ((a, b, c), s) => {
-            import SliceHelpers._
-            
-            val tp = t.zip(t2)(pair)
-            
-            val leftLeft = for {
-              leftF <- tp.f.left.toOption
-              rightF <- t.f.left.toOption
+
+      // We can do this in 4 cases efficiently simply be re-ordering the 3 sts.
+      // Since they're done in parallel, we just need to make sure combine works.
+
+      (this, t, t2) match {
+        case (sta: SliceTransform1S[_], stb: SliceTransform1S[_], stc: SliceTransform1S[_]) =>
+          SliceTransform1S((sta.initial, stb.initial, stc.initial), { case ((a0, b0, c0), s0) =>
+            val (a, sa) = sta.f0(a0, s0)
+            val (b, sb) = stb.f0(b0, s0)
+            val (c, sc) = stc.f0(c0, s0)
+            ((a, b, c), combine(sa, sb, sc))
+          })
+
+        case (sta, stb, stc) =>
+          SliceTransform1M((sta.initial, stb.initial, stc.initial), { case ((a0, b0, c0), s0) =>
+            for {
+              resa <- sta.f(a0, s0)
+              resb <- stb.f(b0, s0)
+              resc <- stc.f(c0, s0)
             } yield {
-              Left({ (pair: (A, B), s: Slice) =>
-                val ((a0, b0), sp) = leftF((a, b), s)
-                val (c0, sc) = rightF(c, s)
-                val (sa, sb) = unpair(sp)
-                ((a0, b0, c0), combine(sa, sb, sc))
-              })
+              val (a, sa) = resa
+              val (b, sb) = resb
+              val (c, sc) = resc
+              ((a, b, c), combine(sa, sb, sc))
             }
-            
-            val leftRight = for {
-              leftF <- tp.f.left.toOption
-              rightF <- that.f.right.toOption
-            } yield {
-              Right({ (pair: (A, B), s: Slice) =>
-                val (a0, sa) = leftF(a, s)
-                rightF(b, s) map {
-                  case (b0, sb) =>
-                    ((a0, b0), combine(sa, sb))
-                }
-              })
-            }
-            
-            val rightLeft = for {
-              leftF <- tp.f.right.toOption
-              rightF <- that.f.left.toOption
-            } yield {
-              Right({ (pair: (A, B), s: Slice) =>
-                leftF(a, s) map {
-                  case (a0, sa) => {
-                    val (b0, sb) = rightF(b, s)
-                    ((a0, b0), combine(sa, sb))
-                  }
-                }
-              })
-            }
-            
-            val rightRight = for {
-              leftF <- tp.f.right.toOption
-              rightF <- that.f.right.toOption
-            } yield {
-              Right({ (pair: (A, B), s: Slice) =>
-                M.apply2(leftF(a, s), rightF(b, s)) {
-                  case ((a0, sa), (b0, sb)) =>
-                    ((a0, b0), combine(sa, sb))
-                }
-              })
-            }
-            
-            leftLeft orElse leftRight orElse rightLeft orElse rightRight get
-          }
-        }
-      )
+          })
+      }
     }
 
-    def map(mapFunc: Slice => Slice): SliceTransform1[A] = {
-      SliceTransform1(
-        initial, {
-          case (a, s) => {
-            f(a, s) map {
-              case (a0, sa) => (a0, mapFunc(sa))
-            }
-          }
+    def map(mapFunc: Slice => Slice): SliceTransform1[A] = SliceTransform1.map(this)(mapFunc)
+
+    def andThen[B](that: SliceTransform1[B]): SliceTransform1[(A, B)] = SliceTransform1.chain(this, that)
+  }
+
+  object SliceTransform1 {
+
+    def liftM[A](init: A, f: (A, Slice) => (A, Slice)): SliceTransform1[A] =
+      SliceTransform1S(init, f)
+
+    def apply[A](init: A, f: (A, Slice) => M[(A, Slice)]): SliceTransform1[A] =
+      SliceTransform1M(init, f)
+
+    private[table] val Identity: SliceTransform1S[Unit] = SliceTransform1S[Unit]((), { (u, s) => (u, s) })
+
+    private[table] def mapS[A](st: SliceTransform1S[A])(f: Slice => Slice): SliceTransform1S[A] =
+      SliceTransform1S(st.initial, { case (a, s) => st.f0(a, s) :-> f })
+
+    private def map[A](st: SliceTransform1[A])(f: Slice => Slice): SliceTransform1[A] = st match {
+      case (st: SliceTransform1S[_]) => mapS(st)(f)
+      case SliceTransform1M(i, g) => SliceTransform1M(i, { case (a, s) => g(a, s) map (_ :-> f) })
+      case SliceTransform1SMS(sta, stb, stc) => SliceTransform1SMS(sta, stb, mapS(stc)(f))
+      case MappedState1(sta, to, from) => MappedState1(map(sta)(f), to, from)
+    }
+
+    private def chainS[A, B](sta: SliceTransform1S[A], stb: SliceTransform1S[B]): SliceTransform1S[(A, B)] = {
+      (sta, stb) match {
+        case (Identity, stb) =>
+          SliceTransform1S((sta.initial, stb.initial), { case ((_, b0), s0) =>
+            { (b: B) => (sta.initial, b) } <-: stb.f0(b0, s0)
+          })
+        case (sta, Identity) =>
+          SliceTransform1S((sta.initial, stb.initial), { case ((a0, _), s0) =>
+            { (a: A) => (a, stb.initial) } <-: sta.f0(a0, s0)
+          })
+        case (SliceTransform1S(i1, f1), SliceTransform1S(i2, f2)) =>
+          SliceTransform1S((i1, i2), { case ((a0, b0), s0) =>
+            val (a, s1) = f1(a0, s0)
+            val (b, s) = f2(b0, s1)
+            ((a, b), s)
+          })
+      }
+    }
+
+    // Note: This is here, rather than in SliceTransform1 trait, because Scala's
+    // type unification doesn't deal well with `this`.
+    private def chain[A, B](st0: SliceTransform1[A], st1: SliceTransform1[B]): SliceTransform1[(A, B)] = {
+      (st0, st1) match {
+        case (sta: SliceTransform1S[_], stb: SliceTransform1S[_]) =>
+          chainS(sta, stb)
+
+        case (SliceTransform1M(i0, f0), SliceTransform1M(i1, f1)) =>
+          SliceTransform1M((i0, i1), { case ((a0, b0), s0) =>
+            for (r0 <- f0(i0, s0); r1 <- f1(i1, r0._2)) yield ((r0._1, r1._1), r1._2)
+          })
+
+        case (sta: SliceTransform1S[_], stb: SliceTransform1M[_]) =>
+          val st = SliceTransform1SMS(sta, stb, Identity)
+          st.mapState({ case (a, b, _) => (a, b) }, { case (a, b) => (a, b, ()) })
+
+        case (sta: SliceTransform1M[_], stb: SliceTransform1S[_]) =>
+          val st = SliceTransform1SMS(Identity, sta, stb)
+          st.mapState({ case (_, a, b) => (a, b) }, { case (a, b) => ((), a, b) })
+
+        case (sta: SliceTransform1S[_], SliceTransform1SMS(stb, stc, std)) =>
+          val st = SliceTransform1SMS(chainS(sta, stb), stc, std)
+          st.mapState({ case ((a, b), c, d) => (a, (b, c, d)) },
+                      { case (a, (b, c, d)) => ((a, b), c, d) })
+
+        case (SliceTransform1SMS(sta, stb, stc), std: SliceTransform1S[_]) =>
+          val st = SliceTransform1SMS(sta, stb, chainS(stc, std))
+          st.mapState({ case (a, b, (c, d)) => ((a, b, c), d) },
+                      { case ((a, b, c), d) => (a, b, (c, d)) })
+
+        case (sta: SliceTransform1M[_], SliceTransform1SMS(stb, stc, std)) =>
+          val st = SliceTransform1SMS(Identity, sta andThen stb andThen stc, std)
+          st.mapState({ case (_, ((a, b), c), d) => (a, (b, c, d)) },
+                      { case (a, (b, c, d)) => ((), ((a, b), c), d) })
+
+        case (SliceTransform1SMS(sta, stb, stc), std: SliceTransform1M[_]) =>
+          val st = SliceTransform1SMS(sta, stb andThen stc andThen std, Identity)
+          st.mapState({ case (a, ((b, c), d), _) => ((a, b, c), d) },
+                      { case ((a, b, c), d) => (a, ((b, c), d), ()) })
+
+        case (SliceTransform1SMS(sta, stb, stc), SliceTransform1SMS(std, ste, stf)) =>
+          val st = SliceTransform1SMS(sta, stb andThen stc andThen std andThen ste, stf)
+          st.mapState({ case (a, (((b, c), d), e), f) => ((a, b, c), (d, e, f)) },
+                      { case ((a, b, c), (d, e, f)) => (a, (((b, c), d), e), f) })
+
+        case (MappedState1(sta, f, g), stb) =>
+          (sta andThen stb).mapState(f <-: _, g <-: _)
+
+        case (sta, MappedState1(stb, f, g)) =>
+          (sta andThen stb).mapState(_ :-> f, _ :-> g)
+      }
+    }
+
+    private[table] case class SliceTransform1S[A](initial: A, f0: (A, Slice) => (A, Slice)) extends SliceTransform1[A] {
+      override def unlift = Some(f0)
+      val f: (A, Slice) => M[(A, Slice)] = { case (a, s) => M point f0(a, s) }
+      def advance(s: Slice): M[(SliceTransform1[A], Slice)] =
+        M point ({ (a: A) => SliceTransform1S[A](a, f0) } <-: f0(initial, s))
+    }
+
+    private[table] case class SliceTransform1M[A](initial: A, f: (A, Slice) => M[(A, Slice)]) extends SliceTransform1[A] {
+      def advance(s: Slice): M[(SliceTransform1[A], Slice)] = apply(s) map { case (next, slice) =>
+        (SliceTransform1M[A](next, f), slice)
+      }
+    }
+
+    private[table] case class SliceTransform1SMS[A,B,C](before: SliceTransform1S[A], transM: SliceTransform1[B], after: SliceTransform1S[C]) extends SliceTransform1[(A, B, C)] {
+      def initial: (A, B, C) = (before.initial, transM.initial, after.initial)
+
+      val f: ((A, B, C), Slice) => M[((A, B, C), Slice)] = { case ((a0, b0, c0), s) =>
+        val (a, slice0) = before.f0(a0, s)
+        transM.f(b0, slice0) map { case (b, slice1) =>
+          val (c, slice) = after.f0(c0, slice1)
+          ((a, b, c), slice)
         }
-      )
+      }
+
+      def advance(s: Slice): M[(SliceTransform1[(A, B, C)], Slice)] = apply(s) map { case ((a, b, c), slice) =>
+        val transM0 = SliceTransform1M(b, transM.f)
+        (SliceTransform1SMS[A, B, C](before.copy(initial = a), transM0, after.copy(initial = c)), slice)
+      }
+    }
+
+    private[table] case class MappedState1[A, B](st: SliceTransform1[A], to: A => B, from: B => A) extends SliceTransform1[B] {
+      def initial: B = to(st.initial)
+      def f: (B, Slice) => M[(B, Slice)] = { (b, s) => st.f(from(b), s) map (to <-: _) }
+      def advance(s: Slice): M[(SliceTransform1[B], Slice)] =
+        st.advance(s) map { case (st0, s0) => (MappedState1[A, B](st0, to, from), s0) }
     }
   }
 
-  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => M[(A, Slice)], source: Option[TransSpec[SourceType]] = None) {
-    def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
+  protected sealed trait SliceTransform2[A] {
+    import SliceTransform2._
 
-    def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial), {
-          case ((a, b), sl, sr) => {
-            for {
-              pairA <- f(a, sl, sr)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, sa)
-              (b0, sb) = pairB
-            } yield ((a0, b0), sb)
-          } 
-        }
-      )
-    }
+    def initial: A
+    def f: (A, Slice, Slice) => M[(A, Slice)]
+    def advance(sl: Slice, sr: Slice): M[(SliceTransform2[A], Slice)]
 
-    def zip[B](t: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
-      SliceTransform2(
-        (initial, t.initial), {
-          case ((a, b), sl, sr) => {
-            for {
-              pairA <- f(a, sl, sr)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, sl, sr)
-              (b0, sb) = pairB
-            } yield ((a0, b0), combine(sa, sb))
-          }
-        }
-      )
+    def unlift: Option[(A, Slice, Slice) => (A, Slice)] = None
+
+    def apply(sl: Slice, sr: Slice): M[(A, Slice)] = f(initial, sl, sr)
+
+    def mapState[B](f: A => B, g: B => A): SliceTransform2[B] =
+      MappedState2[A, B](this, f, g)
+
+    def zip[B](that: SliceTransform2[B])(combine: (Slice, Slice) => Slice): SliceTransform2[(A, B)] = {
+      (this, that) match {
+        case (sta: SliceTransform2S[_], stb: SliceTransform2S[_]) =>
+          SliceTransform2S[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), sl0, sr0) =>
+            val (a, sa) = sta.f0(a0, sl0, sr0)
+            val (b, sb) = stb.f0(b0, sl0, sr0)
+            assert(sa.size == sb.size)
+            ((a, b), combine(sa, sb))
+          })
+
+        case (sta: SliceTransform2S[_], stb) =>
+          SliceTransform2M[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), sl0, sr0) =>
+            val (a, sa) = sta.f0(a0, sl0, sr0)
+            stb.f(b0, sl0, sr0) map { case (b, sb) =>
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
+
+        case (sta, stb: SliceTransform2S[_]) =>
+          SliceTransform2M[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), sl0, sr0) =>
+            sta.f(a0, sl0, sr0) map { case (a, sa) =>
+              val (b, sb) = stb.f0(b0, sl0, sr0)
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
+
+        case (sta, stb) =>
+          SliceTransform2[(A, B)]((sta.initial, stb.initial), { case ((a0, b0), sl0, sr0) =>
+            for (ares <- sta.f(a0, sl0, sr0); bres <- stb.f(b0, sl0, sr0)) yield {
+              val (a, sa) = ares
+              val (b, sb) = bres
+              assert(sa.size == sb.size)
+              ((a, b), combine(sa, sb))
+            }
+          })
+      }
     }
 
     def zip2[B, C](t: SliceTransform2[B], t2: SliceTransform2[C])(combine: (Slice, Slice, Slice) => Slice): SliceTransform2[(A, B, C)] = {
-      SliceTransform2(
-        (initial, t.initial, t2.initial), {
-          case ((a, b, c), sl, sr) => {
+
+      // We can do this in 4 cases efficiently simply be re-ordering the 3 sts.
+      // Since they're done in parallel, we just need to make sure combine works.
+
+      (this, t, t2) match {
+        case (sta: SliceTransform2S[_], stb: SliceTransform2S[_], stc: SliceTransform2S[_]) =>
+          SliceTransform2S((sta.initial, stb.initial, stc.initial), { case ((a0, b0, c0), sl0, sr0) =>
+            val (a, sa) = sta.f0(a0, sl0, sr0)
+            val (b, sb) = stb.f0(b0, sl0, sr0)
+            val (c, sc) = stc.f0(c0, sl0, sr0)
+            ((a, b, c), combine(sa, sb, sc))
+          })
+
+        case (sta, stb, stc) =>
+          SliceTransform2M((sta.initial, stb.initial, stc.initial), { case ((a0, b0, c0), sl0, sr0) =>
             for {
-              pairA <- f(a, sl, sr)
-              (a0, sa) = pairA
-              
-              pairB <- t.f(b, sl, sr)
-              (b0, sb) = pairB
-              
-              pairC <- t2.f(c, sl, sr)
-              (c0, sc) = pairC
-              
-              _ = assert(sa.size == sb.size)
-              _ = assert(sb.size == sc.size)
-            } yield ((a0, b0, c0), combine(sa, sb, sc))
-          }
-        }
-      )
+              resa <- sta.f(a0, sl0, sr0)
+              resb <- stb.f(b0, sl0, sr0)
+              resc <- stc.f(c0, sl0, sr0)
+            } yield {
+              val (a, sa) = resa
+              val (b, sb) = resb
+              val (c, sc) = resc
+              ((a, b, c), combine(sa, sb, sc))
+            }
+          })
+      }
     }
 
-    def map(mapFunc: Slice => Slice): SliceTransform2[A] = {
-      SliceTransform2(
-        initial, {
-          case (a, sl, sr) => {
-            f(a, sl, sr) map {
-              case (a0, s0) => (a0, mapFunc(s0))
-            } 
-          }
-        }
-      )
+    def map(mapFunc: Slice => Slice): SliceTransform2[A] = SliceTransform2.map(this)(mapFunc)
+
+    def andThen[B](that: SliceTransform1[B]): SliceTransform2[(A, B)] = SliceTransform2.chain(this, that)
+
+    def parallel: SliceTransform1[A] = this match {
+      case (st: SliceTransform2S[_]) => SliceTransform1.liftM[A](initial, { (a, s) => st.f0(a, s, s) })
+      case _ => SliceTransform1[A](initial, { (a, s) => f(a, s, s) })
+    }
+  }
+
+  object SliceTransform2 {
+    import SliceTransform1.{ SliceTransform1S, SliceTransform1M, SliceTransform1SMS, MappedState1 }
+
+    def liftM[A](init: A, f: (A, Slice, Slice) => (A, Slice)): SliceTransform2[A] =
+      SliceTransform2S(init, f)
+
+    def apply[A](init: A, f: (A, Slice, Slice) => M[(A, Slice)]): SliceTransform2[A] =
+      SliceTransform2M(init, f)
+
+    private def mapS[A](st: SliceTransform2S[A])(f: Slice => Slice): SliceTransform2S[A] =
+      SliceTransform2S(st.initial, { case (a, sl, sr) => st.f0(a, sl, sr) :-> f })
+
+    private def map[A](st: SliceTransform2[A])(f: Slice => Slice): SliceTransform2[A] = st match {
+      case (st: SliceTransform2S[_]) => mapS(st)(f)
+      case SliceTransform2M(i, g) => SliceTransform2M(i, { case (a, sl, sr) => g(a, sl, sr) map (_ :-> f) })
+      case SliceTransform2SM(sta, stb) => SliceTransform2SM(sta, stb map f)
+      case SliceTransform2MS(sta, stb) => SliceTransform2MS(sta, SliceTransform1.mapS(stb)(f))
+      case MappedState2(sta, to, from) => MappedState2(map(sta)(f), to, from)
     }
 
-    def parallel: SliceTransform1[A] = SliceTransform1[A](initial, (a: A, s: Slice) => f(a,s,s))
+    private def chainS[A, B](sta: SliceTransform2S[A], stb: SliceTransform1S[B]): SliceTransform2S[(A, B)] = {
+      (sta, stb) match {
+        case (sta, SliceTransform1.Identity) =>
+          SliceTransform2S((sta.initial, stb.initial), { case ((a0, _), sl0, sr0) =>
+            { (a: A) => (a, stb.initial) } <-: sta.f0(a0, sl0, sr0)
+          })
+        case (SliceTransform2S(i1, f1), SliceTransform1S(i2, f2)) =>
+          SliceTransform2S((i1, i2), { case ((a0, b0), sl0, sr0) =>
+            val (a, s1) = f1(a0, sl0, sr0)
+            val (b, s) = f2(b0, s1)
+            ((a, b), s)
+          })
+      }
+    }
 
-    def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
+    private def chain[A, B](st0: SliceTransform2[A], st1: SliceTransform1[B]): SliceTransform2[(A, B)] = {
+      (st0, st1) match {
+        case (sta: SliceTransform2S[_], stb: SliceTransform1S[_]) =>
+          chainS(sta, stb)
+
+        case (sta: SliceTransform2S[_], stb: SliceTransform1[_]) =>
+          SliceTransform2SM(sta, stb)
+
+        case (sta: SliceTransform2M[_], stb: SliceTransform1S[_]) =>
+          SliceTransform2MS(sta, stb)
+
+        case (sta: SliceTransform2M[_], stb: SliceTransform1[_]) =>
+          SliceTransform2M((sta.initial, stb.initial), { case ((a0, b0), sl0, sr0) =>
+            sta.f(a0, sl0, sr0) flatMap { case (a, s0) =>
+              stb.f(b0, s0) map { case (b, s) => ((a, b), s) }
+            }
+          })
+
+        case (SliceTransform2SM(sta, stb), stc) =>
+          val st = SliceTransform2SM(sta, stb andThen stc)
+          st.mapState({ case (a, (b, c)) => ((a, b), c) }, { case ((a, b), c) => (a, (b, c)) })
+
+        case (SliceTransform2MS(sta, stb), stc) =>
+          val st = chain(sta, stb andThen stc)
+          st.mapState({ case (a, (b, c)) => ((a, b), c) },
+                      { case ((a, b), c) => (a, (b, c)) })
+
+        case (MappedState2(sta, f, g), stb) =>
+          chain(sta, stb).mapState(f <-: _, g <-: _)
+
+        case (sta, MappedState1(stb, f, g)) =>
+          chain(sta, stb).mapState( _ :-> f, _ :-> g)
+      }
+    }
+
+    private case class SliceTransform2S[A](initial: A, f0: (A, Slice, Slice) => (A, Slice)) extends SliceTransform2[A] {
+      override def unlift = Some(f0)
+      val f: (A, Slice, Slice) => M[(A, Slice)] = { case (a, sl, sr) => M point f0(a, sl, sr) }
+      def advance(sl: Slice, sr: Slice): M[(SliceTransform2[A], Slice)] =
+        M point ({ (a: A) => SliceTransform2S[A](a, f0) } <-: f0(initial, sl, sr))
+    }
+
+    private case class SliceTransform2M[A](initial: A, f: (A, Slice, Slice) => M[(A, Slice)]) extends SliceTransform2[A] {
+      def advance(sl: Slice, sr: Slice): M[(SliceTransform2[A], Slice)] = apply(sl, sr) map { case (next, slice) =>
+        (SliceTransform2M[A](next, f), slice)
+      }
+    }
+
+    private case class SliceTransform2SM[A,B](before: SliceTransform2S[A], after: SliceTransform1[B]) extends SliceTransform2[(A, B)] {
+      def initial: (A, B) = (before.initial, after.initial)
+
+      val f: ((A, B), Slice, Slice) => M[((A, B), Slice)] = { case ((a0, b0), sl0, sr0) =>
+        val (a, s0) = before.f0(a0, sl0, sr0)
+        after.f(b0, s0) map { case (b, s) => ((a, b), s) }
+      }
+
+      def advance(sl: Slice, sr: Slice): M[(SliceTransform2[(A, B)], Slice)] = apply(sl, sr) map { case ((a, b), slice) =>
+        val after0 = SliceTransform1M(b, after.f)
+        (SliceTransform2SM[A, B](before.copy(initial = a), after0), slice)
+      }
+    }
+
+    private case class SliceTransform2MS[A,B](before: SliceTransform2[A], after: SliceTransform1S[B]) extends SliceTransform2[(A, B)] {
+      def initial: (A, B) = (before.initial, after.initial)
+
+      val f: ((A, B), Slice, Slice) => M[((A, B), Slice)] = { case ((a0, b0), sl0, sr0) =>
+        before.f(a0, sl0, sr0) map { case (a, s0) =>
+          val (b, s) = after.f0(b0, s0)
+          ((a, b), s)
+        }
+      }
+
+      def advance(sl: Slice, sr: Slice): M[(SliceTransform2[(A, B)], Slice)] = apply(sl, sr) map { case ((a, b), slice) =>
+        val before0 = SliceTransform2M(a, before.f)
+        (SliceTransform2MS[A, B](before0, after.copy(initial = b)), slice)
+      }
+    }
+
+    private case class MappedState2[A, B](st: SliceTransform2[A], to: A => B, from: B => A) extends SliceTransform2[B] {
+      def initial: B = to(st.initial)
+      def f: (B, Slice, Slice) => M[(B, Slice)] = { (b, sl, sr) => st.f(from(b), sl, sr) map (to <-: _) }
+      def advance(sl: Slice, sr: Slice): M[(SliceTransform2[B], Slice)] =
+        st.advance(sl, sr) map { case (st0, s0) => (MappedState2[A, B](st0, to, from), s0) }
+    }
   }
 }
 
@@ -1023,57 +1173,5 @@ trait ObjectConcatHelpers extends ConcatHelpers {
     }
 
     leftOuter ++ rightOuter ++ mergedPairs
-  }
-}
-
-object SliceHelpers {
-  
-  /**
-   * Merges two slices preserving information such that unpair can restore the
-   * original slices.  Only defined where left.size == right.size.
-   */
-  def pair(left: Slice, right: Slice): Slice = new Slice {
-    val size = left.size
-    
-    val columns = {
-      val left2 = left.columns map {
-        case (ColumnRef(CPath(components @ _*), tpe), col) =>
-          ColumnRef(CPath(CPathField("left") :: components), tpe) -> col
-      }
-      
-      val right2 = right.columns map {
-        case (ColumnRef(CPath(components @ _*), tpe), col) =>
-          ColumnRef(CPath(CPathField("right") :: components), tpe) -> col
-      }
-      
-      left2 ++ right2
-    }
-  }
-  
-  /**
-   * Unmerges two slices that have been merged using pair.  Assumes left.size == right.size.
-   */
-  def unpair(slice: Slice): (Slice, Slice) = {
-    val left = slice.columns collect {
-      case (ColumnRef(CPath(CPathField("left"), components @ _*), tpe), col) =>
-        ColumnRef(CPath(components), tpe) -> col
-    }
-    
-    val right = slice.columns collect {
-      case (ColumnRef(CPath(CPathField("right"), components @ _*), tpe), col) =>
-        ColumnRef(CPath(components), tpe) -> col
-    }
-    
-    val leftSlice = new Slice {
-      val size = slice.size
-      val columns = left
-    }
-    
-    val rightSlice = new Slice {
-      val size = slice.size
-      val columns = right
-    }
-    
-    (leftSlice, rightSlice)
   }
 }
