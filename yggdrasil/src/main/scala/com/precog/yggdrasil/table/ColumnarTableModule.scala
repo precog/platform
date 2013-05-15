@@ -54,7 +54,7 @@ import java.nio.CharBuffer
 trait ColumnarTableTypes[M[+_]] {
   type F1 = CF1
   type F2 = CF2
-  type Scanner = CScanner[M]
+  type Scanner = CScanner
   type Reducer[α] = CReducer[α]
   type RowId = Int
 }

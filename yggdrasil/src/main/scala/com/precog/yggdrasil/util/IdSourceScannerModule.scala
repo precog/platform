@@ -32,7 +32,7 @@ trait IdSourceScannerModule[M[+_]] extends YggConfigComponent {
   // that assume an ID columns have a specific shape (eg. exactly N columns). However, there
   // is a proposal to fix this. Once we have more flexible ID columns, we should revisit this.
 
-  def freshIdScanner = new CScanner[M] {
+  def freshIdScanner = new CScanner {
     private val blockSize: Int = 10000
     
     @volatile
@@ -76,7 +76,7 @@ trait IdSourceScannerModule[M[+_]] extends YggConfigComponent {
 
     type A = Long
     def init = 0
-    def scan(pos: Long, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+    def scan(pos: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
       val rawCols = cols.values.toArray
       val defined = BitSetUtil.filteredRange(range.start, range.end) {
         i => Column.isDefinedAt(rawCols, i)
@@ -84,7 +84,7 @@ trait IdSourceScannerModule[M[+_]] extends YggConfigComponent {
       val values = new Array[Long](range.size)
       fillArrayWithIds(values, 0, pos)
 
-      M point (pos + values.size, Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
+      (pos + values.size, Map(ColumnRef(CPath.Identity, CLong) -> ArrayLongColumn(defined, values)))
     }
   }
 }

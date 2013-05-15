@@ -282,12 +282,12 @@ trait BlockStoreColumnarTableModule[M[+_]]
 
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    object addGlobalIdScanner extends CScanner[M] {
+    object addGlobalIdScanner extends CScanner {
       type A = Long
       val init = 0l
-      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-        M point (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
+        (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
       }
     }
     
