@@ -244,9 +244,9 @@ trait ShardService extends
           allowOrigin("*", executionContext) {
             // TODO: unhack this
               if (state.scheduler.enabled) {
-                asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state) 
+                analysisHandler(state) ~ asyncHandler(state) ~ syncHandler(state) ~ scheduledHandler(state)
               } else {
-                asyncHandler(state) ~ syncHandler(state)
+                analysisHandler(state) ~ asyncHandler(state) ~ syncHandler(state)
               }
           }
         } ->
