@@ -330,7 +330,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         case Nil =>
           (batch, checkpoint)
 
-        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _, _)) :: tail =>
+        case (offset, event @ IngestMessage(_, _, _, records, _, _, _)) :: tail =>
           val newCheckpoint = if (records.isEmpty) {
             checkpoint.skipTo(offset)
           } else {
@@ -342,6 +342,10 @@ abstract class KafkaShardIngestActor(shardId: String,
           }
 
           buildBatch(tail, batch :+ (offset, event), newCheckpoint)
+
+        case (offset, store : StoreFileMessage) :: tail =>
+          val EventId(pid, sid) = store.eventId
+          buildBatch(tail, batch :+ (offset, store), checkpoint.update(offset, pid, sid))
 
         case (offset, ArchiveMessage(_, _, _, eventId, _)) :: tail if batch.nonEmpty =>
           logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, eventId.uid))

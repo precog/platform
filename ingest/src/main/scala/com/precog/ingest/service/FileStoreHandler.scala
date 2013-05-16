@@ -78,11 +78,17 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
         val fullPath = pathf(path)
 
         request.content map { content =>
+          val requestAuthorities = for {
+            paramIds <- request.parameters.get('ownerAccountId)
+            ids = paramIds.split("""\s*,\*""")
+            auths <- Authorities.ifPresent(ids.toSet) if ids.nonEmpty
+          } yield auths
+
         // TODO: check ingest permissions
           (for {
             jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
             bytes <- right(ByteChunk.forceByteArray(content))
-            storeFile = StoreFile(apiKey, fullPath, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, storeMode.createStreamRef(true))
+            storeFile = StoreFile(apiKey, fullPath, requestAuthorities, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, storeMode.createStreamRef(true))
             _ <- right(eventStore.save(storeFile, ingestTimeout))
           } yield {
             val resultsPath = (baseURI.path |+| Some("/data/fs/" + fullPath.path)).map(_.replaceAll("//", "/"))

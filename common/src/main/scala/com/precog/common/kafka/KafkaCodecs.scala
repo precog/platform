@@ -90,6 +90,7 @@ object EventEncoding extends EncodingFlags with Logging {
                   case `jsonArchiveFlag` => jv.validated[Archive]
                   case `jsonIngestMessageFlag`  => jv.validated[Ingest]("ingest")
                   case `jsonArchiveMessageFlag` => jv.validated[Archive]("archive")
+                  case `storeFileFlag` => jv.validated[StoreFile]
                 }
     } yield event
   }
