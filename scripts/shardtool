@@ -61,6 +61,15 @@ class Service(object):
         call(args)
         print ""
 
+    def storedQuery(self, qpath):
+        assert(not qpath.startswith('/'))
+        url = "http://localhost:%s/analytics/v2/analysis/fs/%s/%s" % (self.shardport, self.account, qpath)
+        args = ['curl', '-s', '-G',
+                '--data-urlencode', "format=detailed",
+                '--data-urlencode', 'apiKey=' + self.apikey, url]
+        call(args)
+        print ""
+
     def metadata(self, qpath):
         url = "http://localhost:%s/analytics/v2/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
         args = ['curl', '-s', '-G',
@@ -74,6 +83,7 @@ def usage():
     print "       %s -q FSPATH QPATH   # store script file" % prog
     print "       %s -a FSPATH QPATH   # async ingest data" % prog
     print "       %s -e QUERY          # run query" % prog
+    print "       %s -c QPATH          # run cached query" % prog
     print "       %s -m QPATH          # fetch metadata for path" % prog
     print "       %s -e                # run query from stdin" % prog
     print "       %s -s [ARG1 ...]     # run subshell from tmpdir" % prog
@@ -88,6 +98,8 @@ if __name__ == "__main__":
         service.ingest(args[1], args[2], "sync")
     elif args[0] == '-q':
         service.storeScript(args[1], args[2])
+    elif args[0] == '-c':
+        service.storedQuery(args[1])
     elif args[0] == '-s':
         os.chdir(service.basedir)
         if args[1:]:
