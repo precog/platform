@@ -74,6 +74,7 @@ trait ColumnarTableTypes[M[+_]] {
   type F1 = CF1
   type F2 = CF2
   type Scanner = CScanner
+  type Mapper = CMapper[M]
   type Reducer[α] = CReducer[α]
   type RowId = Int
 }
