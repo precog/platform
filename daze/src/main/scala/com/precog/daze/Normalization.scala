@@ -117,7 +117,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
         }
       }
 
-      def applyScanner(summary: Result, scanner: Summary => CScanner, table: Table, ctx: EvaluationContext): M[Table] = {
+      def applyScanner(summary: Result, scanner: Summary => CScanner[M], table: Table, ctx: EvaluationContext): M[Table] = {
         val resultTables = summary map { case singleSummary =>
           val spec = liftToValues(trans.Scan(trans.TransSpec1.Id, scanner(singleSummary)))
           table.transform(spec)
@@ -128,14 +128,14 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
         M.point(result)
       }
 
-      def normScanner(f: RowValueWithStats => BigDecimal)(singleSummary: Summary) = new CScanner {
+      def normScanner(f: RowValueWithStats => BigDecimal)(singleSummary: Summary) = new CScanner[M] {
         type A = Unit
         def init = ()
 
         def findSuffices(cpath: CPath): Set[CPath] =
           singleSummary.keySet.filter(cpath.hasSuffix)
 
-        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
+        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
           val numericCols = cols filter { case (ColumnRef(cpath, ctype), _) =>
             ctype.isNumeric
           }
@@ -143,7 +143,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
           val groupedCols: Map[CPath, Map[ColumnRef, Column]] =
             numericCols.groupBy { case (ColumnRef(selector, _), _) => selector }
 
-          def continue: (A, Map[ColumnRef, Column]) = {
+          def continue: M[(A, Map[ColumnRef, Column])] = {
             val unifiedCols: Map[ColumnRef, Column] = {
               groupedCols map { case (cpath, refs) =>
                 (ColumnRef(cpath, CNum), unifyNumColumns(refs.values))
@@ -181,7 +181,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
               (ref, intersectColumn(col))
             }
 
-            ((), result)
+            M.point(((), result))
           }
 
           val subsumes = singleSummary forall { case (cpath, _) =>
@@ -191,11 +191,11 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
           if (subsumes)
             continue
           else
-            (init, Map.empty[ColumnRef, Column])
+            M.point((init, Map.empty[ColumnRef, Column]))
         }
       }
     
-      lazy val alignment = MorphismAlignment.Custom(alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityPolicy.Retain.Cross, alignCustom _)
 
       def morph1Apply(summary: Result): Morph1Apply
     
@@ -213,7 +213,7 @@ trait NormalizationLibModule[M[+_]] extends NormalizationHelperModule[M] {
     override def _libMorphism2 = super._libMorphism2 ++ Set(Normalization, Denormalization)
 
     object Normalization extends Morphism2(Vector("std", "stats"), "normalize") with NormalizationHelper {
-      override val retainIds = true
+      override val idPolicy: IdentityPolicy = IdentityPolicy.Retain.Left
 
       def morph1Apply(summary: Result) = new Morph1Apply {
 
@@ -227,7 +227,7 @@ trait NormalizationLibModule[M[+_]] extends NormalizationHelperModule[M] {
     }
 
     object Denormalization extends Morphism2(Vector("std", "stats"), "denormalize") with NormalizationHelper {
-      override val retainIds = true
+      override val idPolicy: IdentityPolicy = IdentityPolicy.Retain.Left
 
       def morph1Apply(summary: Result) = new Morph1Apply {
 
