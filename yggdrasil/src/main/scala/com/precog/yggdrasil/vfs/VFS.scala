@@ -34,6 +34,7 @@ object Version {
  */
 trait VFS[M[+_]] {
   def readQuery(path: Path, version: Version): M[Option[String]]  
+  def readResource(path: Path, version: Version): M[ReadResult]  
   def readCache(path: Path, version: Version): M[Option[StreamT[M, Slice]]]
   def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
 }
@@ -49,6 +50,11 @@ class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: 
         logger.warn("Unable to read query at path %s with version %s: %s".format(path.path, version, failure))
         None
     }
+  }
+
+  def readResource(path: Path, version: Version): Future[ReadResult] = {
+    implicit val t = projectionReadTimeout
+    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult]  
   }
 
   def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = {

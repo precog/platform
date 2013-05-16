@@ -57,7 +57,7 @@ object VersionLog {
     val completedFile = new File(baseDir, completedLogName)
   }
 
-  def open(baseDir: File) = IO {
+  def open(baseDir: File): IO[Validation[Error, VersionLog]] = IO {
     if (!baseDir.isDirectory) {
       if (!baseDir.mkdirs) throw new IllegalStateException(baseDir + " cannot be created as a directory.")
     } 

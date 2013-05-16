@@ -13,6 +13,7 @@ import com.precog.daze._
 import com.precog.shard.scheduling._
 import com.precog.shard.service._
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
 
 import akka.actor.ActorRef
 import akka.dispatch.{Future, ExecutionContext, Promise}
@@ -58,6 +59,7 @@ case class ShardState(
     platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
+    vfs: VFS[Future], 
     storedQueries: StoredQueries[Future],
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
@@ -89,44 +91,13 @@ trait ShardService extends
    */
   def configureShardState(config: Configuration): Future[ShardState]
 
-  val utf8 = Charset.forName("UTF-8")
-  val BufferSize = 64 * 1024
-
   def optionsResponse = CORSHeaders.apply[ByteChunk, Future](M)
 
-  private def bufferOutput(stream0: StreamT[Future, CharBuffer]) = {
-    val encoder = utf8.newEncoder()
-
-    def loop(stream: StreamT[Future, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[Future, Array[Byte]] = {
-      StreamT(stream.uncons map {
-        case Some((cbuf, tail)) =>
-          val result = encoder.encode(cbuf, buf, false)
-          if (result == CoderResult.OVERFLOW) {
-            val arr2 = new Array[Byte](BufferSize)
-            StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
-          } else {
-            StreamT.Skip(loop(tail, buf, arr))
-          }
-
-        case None =>
-          val result = encoder.encode(CharBuffer.wrap(""), buf, true)
-          if (result == CoderResult.OVERFLOW) {
-            val arr2 = new Array[Byte](BufferSize)
-            StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
-          } else {
-            StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
-          }
-      })
-    }
-
-    val arr = new Array[Byte](BufferSize)
-    loop(stream0, ByteBuffer.wrap(arr), arr)
-  }
-
   private def queryResultToByteChunk: QueryResult => ByteChunk = {
+    val utf8 = Charset.forName("UTF-8")
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
-      case Right(stream) => Right(bufferOutput(stream))
+      case Right(stream) => Right(Resource.bufferOutput(stream))
     }
   }
 
@@ -180,7 +151,7 @@ trait ShardService extends
           options {
             (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
-        }
+        } ~ dataHandler(state)
       }
     }
   }
@@ -211,6 +182,14 @@ trait ShardService extends
             new AnalysisServiceHandler(state.storedQueries, state.clock)
           }
         }
+      }
+    }
+  }
+
+  private def dataHandler[A](state: ShardState) = {
+    dataPath("/data/fs") {
+      get {
+        new DataServiceHandler[A](state.vfs)
       }
     }
   }

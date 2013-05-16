@@ -12,6 +12,7 @@ import com.precog.common.jobs._
 import com.precog.muspelheim._
 import com.precog.shard.scheduling.NoopScheduler
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
@@ -53,6 +54,7 @@ import scalaz._
 import scalaz.syntax.comonad._
 
 import java.nio.CharBuffer
+import java.nio.charset.Charset
 
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
@@ -126,14 +128,21 @@ trait TestShardService extends
       )
     }
 
-    val storedQueries = new StoredQueries[Future] {
-      def executeStoredQuery(apiKey: APIKey, path: Path, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): Future[Validation[EvaluationError, StreamT[Future, Slice]]] = {
-        sys.error("This is currently untested.")
-      }
+    val vfs = new VFS[Future] {
+      def readQuery(path: Path, version: Version): Future[Option[String]] = sys.error("stub VFS")
+      def readResource(path: Path, version: Version): Future[ReadResult] = sys.error("stub VFS")
+      def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = sys.error("stub VFS")
+      def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice]  = sys.error("stub VFS")
     }
 
-    ShardState(platform, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), storedQueries, NoopScheduler[Future], jobManager, clock, Stoppable.Noop)
+    val scheduler = NoopScheduler[Future]
+
+    val storedQueries = new VFSStoredQueries(platform, vfs, scheduler, jobManager, null /** FIXME **/, clock)
+
+    ShardState(platform, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), vfs, storedQueries, scheduler, jobManager, clock, Stoppable.Noop)
   }
+
+  val utf8 = Charset.forName("UTF-8")
 
   def charBufferToBytes(cb: CharBuffer): Array[Byte] = {
     val bb = utf8.encode(cb)

@@ -158,9 +158,8 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
             post { state.ingestHandler } ~
             put { state.ingestHandler } ~
             patch { state.ingestHandler }
-          }
-          accept(XQuirrelScript) {
-            post { state.fileCreateHandler }
+          } ~ {
+            post { state.fileCreateHandler } ~
             put { state.fileCreateHandler }
           }
         } 

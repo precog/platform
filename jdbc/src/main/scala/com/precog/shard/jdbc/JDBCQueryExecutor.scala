@@ -34,7 +34,6 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
-import java.nio.CharBuffer
 import java.sql.DriverManager
 
 import scalaz._

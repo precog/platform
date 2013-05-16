@@ -67,7 +67,12 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
   private[this] var versions = Map[UUID, Resource]()
 
   override def postStop = {
-    Await.result(versions.values.toStream.traverse(_.close), shutdownTimeout)
+    val closeAll = versions.values.toStream traverse {
+      case NIHDBResource(db, _) => db.close(context.system)
+      case _ => Promise successful PrecogUnit
+    }
+    
+    Await.result(closeAll, shutdownTimeout)
     versionLog.close
     logger.info("Shutdown of path actor %s complete".format(path))
   }
@@ -133,7 +138,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           Some(Success(nr))
         }
       case uhoh =>
-        IO(Some(Failure(nels(GeneralError("Located resource on %s is a BLOB, not a projection" format path)))))
+        IO(Some(Failure(nels(IllegalWriteRequestError("Located resource on %s is a BLOB, not a projection" format path)))))
     } getOrElse {
       versionLog.find(version) traverse { versionEntry =>
         logger.info("Opening new resource at path " + path + " version " + version)
@@ -194,7 +199,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
           } else {
             //TODO: update job
             logger.warn("Cannot overwrite existing database for " + streamId)
-            IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
+            IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
           }
 
         case Some(Success(resource)) =>
@@ -228,7 +233,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         }
       } else {
         //TODO: update job
-        IO(requestor ! UpdateFailure(path, nels(GeneralError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
+        IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
       }
     }
 
@@ -268,7 +273,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             persistFile(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
-            IO(requestor ! UpdateFailure(path, nels(GeneralError("Append is not yet supported for binary files."))))
+            IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Append is not yet supported for binary files."))))
         }
 
       case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
