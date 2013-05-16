@@ -68,6 +68,8 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
     object Summary extends Morphism1(Vector(), "summary") {
       val tpe = UnaryOperationType(JType.JUniverseT, JObjectUnfixedT)
 
+      override val idPolicy: IdentityPolicy = IdentityPolicy.Strip
+
       def makeReduction(jtpe: JType): Reduction = {
         val jtypes: List[Option[JType]] = {
           val grouped = Schema.flatten(jtpe, List.empty[ColumnRef]).groupBy(_._1)
