@@ -76,7 +76,7 @@ object ShardServiceCombinators extends Logging {
   private object Offset extends NonNegativeLong
   private object Millis extends NonNegativeLong
 
-  private def getOutputType(request: HttpRequest[_]): QueryOutput = {
+  private def getOutputType(request: HttpRequest[_]): MimeType = {
     import MimeTypes._
     import HttpHeaders.Accept
 
@@ -92,12 +92,7 @@ object ShardServiceCombinators extends Logging {
       mimeType <- accept.mimeTypes.headOption
     } yield mimeType
 
-    (request.headers.header[Accept].toSeq.flatMap(_.mimeTypes) ++ requestParamType).collectFirst {
-      case JSON => JSONOutput
-      case CSV => CSVOutput
-    } getOrElse {
-      JSONOutput
-    }
+    (request.headers.header[Accept].toSeq.flatMap(_.mimeTypes) ++ requestParamType).headOption.getOrElse(JSON)
   }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {

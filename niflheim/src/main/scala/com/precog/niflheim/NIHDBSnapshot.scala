@@ -82,12 +82,11 @@ trait NIHDBSnapshot {
       None
     }
 
-  def structure: Set[(CPath, CType)] =
-    readers.map(_.structure.toSet).toSet.flatten
+  def structure: Set[ColumnRef] = readers.flatMap(_.structure)(collection.breakOut)
 
-  def getConstraints(columns: Iterable[(CPath, CType)], cpaths: Set[CPath]) = {
+  def getConstraints(columns: Iterable[ColumnRef], cpaths: Set[CPath]) = {
     columns.collect {
-      case (cpath, _) if cpaths.exists(cpath.hasPrefix(_)) => cpath
+      case ColumnRef(cpath, _) if cpaths.exists(cpath.hasPrefix(_)) => cpath
     }
   }
 

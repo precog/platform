@@ -88,18 +88,6 @@ object Fault {
   case class Error(pos: Option[FaultPosition], message: String) extends Fault
 }
 
-object QueryResultConvert {
-  def toCharBuffers[N[+_]: Monad](output: QueryOutput, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
-    output match {
-      case JSONOutput =>
-        ColumnarTableModule.renderJson(slices, "[", ",", "]")
-
-      case CSVOutput => 
-        ColumnarTableModule.renderCsv(slices)
-    }
-  }
-}
-
 trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]] with */ ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 

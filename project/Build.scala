@@ -146,7 +146,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, accounts, pandora, util, common, ragnarok , heimdall, ratatoskr, mongo, jdbc, desktop)
+    aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, accounts, pandora, util, common, ragnarok , heimdall, ratatoskr) //, mongo, jdbc, desktop)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")

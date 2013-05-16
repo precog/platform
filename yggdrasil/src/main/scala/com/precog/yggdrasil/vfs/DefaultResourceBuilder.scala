@@ -116,7 +116,7 @@ class DefaultResourceBuilder(
     //val metadata = metadataStore.json.validated[BlobMetadata]
     val metadataV = JParser.parseFromFile(new File(versionDir, blobMetadataFilename)).leftMap(Error.thrown).flatMap(_.validated[BlobMetadata])
     val resource = metadataV map { metadata =>
-      Blob(new File(versionDir, "data"), metadata)(actorSystem.dispatcher)
+      Blob(new File(versionDir, "data"), metadata) //(actorSystem.dispatcher)
     }
     fromExtractorErrorNel("Error reading metadata") <-: resource
   }
@@ -158,7 +158,7 @@ class DefaultResourceBuilder(
           //val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
           //metadataStore.json = metadata.serialize
           IOUtils.writeToFile(metadata.serialize.renderCompact, new File(versionDir, blobMetadataFilename)) map { _ =>
-            Success(Blob(file, metadata)(actorSystem.dispatcher))
+            Success(Blob(file, metadata))//(actorSystem.dispatcher))
           } except {
             case t: Throwable =>
               IO(Failure(IOError(t)))
