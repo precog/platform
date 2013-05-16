@@ -58,12 +58,13 @@ import scalaz.syntax.std.option._
 
 object Resource extends Logging {
   val QuirrelData = MimeType("application", "x-quirrel-data")
+  val AnyMimeType = MimeType("*", "*")
 
   def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
     import com.precog.yggdrasil.table.ColumnarTableModule
     import FileContent._
     output match {
-      case ApplicationJson =>
+      case ApplicationJson | AnyMimeType =>
         ColumnarTableModule.renderJson(slices, "[", ",", "]")
 
       case XJsonStream =>
