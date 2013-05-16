@@ -503,6 +503,22 @@ trait SliceTransforms[M[+_]] extends TableModule[M]
             )
           }
 
+        case MapWith(source, mapper0) => 
+          composeSliceTransform2(source) andThen {
+            mapper0.fold({ mapper =>
+              SliceTransform1.liftM[Unit]((), { (_: Unit, slice: Slice) =>
+                val cols = mapper.map(slice.columns, 0 until slice.size)
+                ((), Slice(cols, slice.size))
+              })
+            }, { mapper =>
+              SliceTransform1[Unit]((), { (_: Unit, slice: Slice) =>
+                mapper.map(slice.columns, 0 until slice.size) map { cols =>
+                  ((), Slice(cols, slice.size))
+                }
+              })
+            })
+          }
+
         case DerefMetadataStatic(source, field) =>
           composeSliceTransform2(source) map {
             _ deref field

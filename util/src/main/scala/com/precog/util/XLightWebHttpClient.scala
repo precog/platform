@@ -1,53 +1,56 @@
 package com.precog.util
 
-import org.xlightweb._
-import org.xlightweb.client.{HttpClient => XHttpClient, _}
+import java.net.URL
 import java.util.concurrent.Future
 
+import org.xlightweb._
+import org.xlightweb.client.{HttpClient => XHttpClient, _}
+
+import scalaz._
 import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
+import scalaz.syntax.bifunctor._
 
 trait XLightWebHttpClientModule[M[+_]] extends HttpClientModule[M] {
   
-  def liftJUCFuture[A](f: Future[A]): M[A]
+  private def liftJUCFuture[A](f: Future[A]): M[A] = M point f.get // Ugh.
   
-  def HttpClient(host: String): M[HttpClient] =
-    M point (new HttpClient(host))
+  def HttpClient(baseUrl: String): HttpClient = new HttpClient(baseUrl)
   
-  class HttpClient(host: String) extends HttpClientLike {
+  class HttpClient(baseUrl: String) extends HttpClientLike {
     private val client = new XHttpClient
-    
-    def get(path: String, params: (String, String)*): M[Option[String]] = {
-      val get = new GetRequest(buildUrl(path))
-      
-      params foreach {
-        case (key, value) => get.setParameter(key, value)
-      }
-      
-      postProcessResp(client.send(get))
+
+    private def fromTryCatch[A](req: Option[IHttpRequest])(f: => A): HttpClientError \/ A =
+      { (t: Throwable) => HttpClientError.ConnectionError(req map (_.getRequestURI), t) } <-: \/.fromTryCatch(f)
+
+    private def buildUrl(path: String): HttpClientError \/ URL = fromTryCatch(None) {
+      val url0 = new URL(baseUrl)
+      new URL(url0.getProtocol, url0.getHost, url0.getPort, url0.getPath + path)
     }
-    
-    def post(path: String, contentType: String, body: String, params: (String, String)*): M[Option[String]] = {
-      val post = new PostRequest(buildUrl(path), contentType, body)
-      
-      params foreach {
-        case (key, value) => post.setParameter(key, value)
+
+    private def buildRequest(request: Request[String]): HttpClientError \/ IHttpRequest = {
+      buildUrl(request.path) map { url =>
+        val req = request.method match {
+          case HttpMethod.GET => new GetRequest(url.toString)
+          case HttpMethod.POST =>
+            request.body map { case Request.Body(contenType, body) =>
+              new PostRequest(url.toString, contenType, body)
+            } getOrElse new PostRequest(url.toString)
+        }
+        request.params foreach (req.setParameter(_: String, _: String)).tupled
+        req
       }
-      
-      postProcessResp(client.send(post))
     }
-    
-    private[this] def buildUrl(path: String) =
-      "http://%s/%s".format(host, path)
-    
-    private[this] def postProcessResp(respF: Future[IHttpResponse]): M[Option[String]] = {
-      val respM = liftJUCFuture(respF)
-      
-      for (resp <- respM) yield {
-        if (resp.getStatus >= 200 && resp.getStatus < 300)      // better way to do this
-          Option(resp.getBody.readString)
-        else
-          None
-      }
+
+    private def execute0(request: IHttpRequest): EitherT[M, HttpClientError, IHttpResponse] =
+      EitherT(fromTryCatch(Some(request))(liftJUCFuture(client.send(request))).sequence[M, IHttpResponse])
+
+    def execute(request: Request[String]): EitherT[M, HttpClientError, Response[String]] = for {
+      httpRequest <- EitherT(M point buildRequest(request))
+      response <- execute0(httpRequest)
+      body <- EitherT(M point fromTryCatch(Some(httpRequest))(Option(response.getBody) map (_.readString("UTF-8"))))
+    } yield {
+      Response(response.getStatus, response.getReason, body)
     }
   }
 }
