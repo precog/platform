@@ -221,7 +221,7 @@ object StreamRef {
   }
 }
 
-case class StoreFile(apiKey: APIKey, path: Path, jobId: JobId, content: FileContent, timestamp: Instant, stream: StreamRef) extends Event {
+case class StoreFile(apiKey: APIKey, path: Path, writeAs: Option[Authorities], jobId: JobId, content: FileContent, timestamp: Instant, stream: StreamRef) extends Event {
   def fold[A](ingest: Ingest => A, archive: Archive => A, storeFile: StoreFile => A): A = storeFile(this)
   def split(n: Int) = {
     val splitSize = content.data.length / n
@@ -236,7 +236,7 @@ object StoreFile {
 
   implicit val iso = Iso.hlist(StoreFile.apply _, StoreFile.unapply _)
 
-  val schemaV1 = "apiKey" :: "path" :: "jobId" :: "content" :: "timestamp" :: "streamRef" :: HNil
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "jobId" :: "content" :: "timestamp" :: "streamRef" :: HNil
 
   implicit val decomposer: Decomposer[StoreFile] = decomposerV[StoreFile](schemaV1, Some("1.0".v))
   implicit val extractor: Extractor[StoreFile] = extractorV[StoreFile](schemaV1, Some("1.0".v))
