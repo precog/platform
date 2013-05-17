@@ -39,8 +39,8 @@ import com.precog.common.accounts._
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
-import com.precog.shard.scheduling._
-import com.precog.shard.scheduling.CronExpressionSerialization._
+import com.precog.muspelheim.scheduling._
+import com.precog.muspelheim.scheduling.CronExpressionSerialization._
 import com.precog.util.PrecogUnit
 
 import com.weiglewilczek.slf4s.Logging

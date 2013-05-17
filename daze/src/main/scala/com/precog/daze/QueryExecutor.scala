@@ -60,8 +60,16 @@ case class QueryOptions(
   sortOn: List[CPath] = Nil,
   sortOrder: TableModule.DesiredSortOrder = TableModule.SortAscending,
   timeout: Option[Duration] = None,
-  output: MimeType = MimeTypes.application/MimeTypes.json
+  output: MimeType = MimeTypes.application/MimeTypes.json,
+  cacheControl: CacheControl = CacheControl.NoCache
 )
+
+case class CacheControl(maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean)
+
+object CacheControl {
+  val NoCache = CacheControl(None, None, false, false)
+}
+
 
 trait QueryExecutor[M[+_], +A] { self =>
   /**

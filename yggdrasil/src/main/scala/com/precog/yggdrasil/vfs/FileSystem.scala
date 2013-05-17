@@ -41,6 +41,7 @@ import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil.nihdb._
 import com.precog.util.PrecogUnit
 import com.precog.util.cache.Cache
+import Resource._
 
 import java.util.UUID
 
@@ -74,35 +75,20 @@ sealed trait PathOp {
   def path: Path
 }
 
-case class Read(path: Path, version: Version, auth: Option[APIKey]) extends PathOp 
-case class ReadProjection(path: Path, version: Version, auth: Option[APIKey]) extends PathOp 
-case class Execute(path: Path, auth: Option[APIKey]) extends PathOp 
-case class Stat(path: Path, auth: Option[APIKey]) extends PathOp 
-case class FindChildren(path: Path, auth: APIKey) extends PathOp
-case class CurrentVersion(path: Path, auth: APIKey) extends PathOp 
+case class Read(path: Path, version: Version) extends PathOp 
+case class FindChildren(path: Path) extends PathOp
+case class CurrentVersion(path: Path) extends PathOp 
+
 
 sealed trait PathActionResponse
 
-case class PathFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
+case class PathFailure(path: Path, error: ResourceError) extends PathActionResponse
 case class UpdateSuccess(path: Path) extends PathActionResponse
-case class UpdateFailure(path: Path, errors: NEL[ResourceError]) extends PathActionResponse
+case class UpdateFailure(path: Path, error: ResourceError) extends PathActionResponse
 
-sealed trait ReadResult extends PathActionResponse {
-  def resource: Option[Resource]
-}
+sealed trait ReadResult extends PathActionResponse
 
-case class ReadSuccess(path: Path, resource: Option[Resource]) extends ReadResult
-case class ReadFailure(path: Path, errors: NEL[ResourceError]) extends ReadResult {
-  val resource = None
-}
-
-sealed trait ReadProjectionResult extends PathActionResponse {
-  def projection: Option[NIHDBProjection]
-}
-
-case class ReadProjectionSuccess(path: Path, projection: Option[NIHDBProjection]) extends ReadProjectionResult
-case class ReadProjectionFailure(path: Path, messages: NEL[ResourceError]) extends ReadProjectionResult {
-  val projection = None
-}
+case class ReadSuccess(path: Path, resource: Resource) extends ReadResult
+case class ReadFailure(path: Path, error: ResourceError) extends ReadResult
 
 /* class FileSystem */

@@ -48,8 +48,10 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 
 import scalaz._
 import scalaz.NonEmptyList._
+import scalaz.\/._
 import scalaz.effect.IO
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.list._
 
@@ -67,39 +69,42 @@ class DefaultResourceBuilder(
   permissionsFinder: PermissionsFinder[Future],
   txLogSchedulerSize: Int = 20) extends Logging { // default for now, should come from config in the future
 
-  import ResourceError._
+  import Resource._
 
   private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize,
     new ThreadFactoryBuilder().setNameFormat("HOWL-sched-%03d").build())
 
   private implicit val futureMonad = new FutureMonad(actorSystem.dispatcher)
 
-  def ensureDescriptorDir(versionDir: File, authorities: Authorities): IO[File] = IO {
-    if (!versionDir.isDirectory && !versionDir.mkdirs) {
-      throw new Exception("Failed to create directory for projection: " + versionDir)
-    }
-    versionDir
+  private def ensureDescriptorDir(versionDir: File): IO[File] = IO {
+    if (versionDir.isDirectory || versionDir.mkdirs) versionDir
+    else throw new IOException("Failed to create directory for projection: %s".format(versionDir))
   }
 
   // Resource creation/open and discovery
-  def createNIHDB(versionDir: File, authorities: Authorities): IO[Validation[ResourceError, NIHDBResource]] = {
-    ensureDescriptorDir(versionDir, authorities) flatMap { nihDir =>
-      NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-    } map { dbV =>
-      fromExtractorError("Failed to create NIHDB") <-: (dbV map (NIHDBResource(_, authorities)(actorSystem)))
+  def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDBResource] = {
+    for {
+      nihDir <- ensureDescriptorDir(versionDir) 
+      nihdbV <- NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
+    } yield { 
+      nihdbV.disjunction map {
+        NIHDBResource(_, authorities)(actorSystem)
+      } leftMap {
+        ResourceError.fromExtractorError("Failed to create NIHDB in %s as %s".format(versionDir.toString, authorities)) 
+      }
     }
   }
 
-  def openNIHDB(descriptorDir: File): IO[ValidationNel[ResourceError, NIHDBResource]] = {
+  def openNIHDB(descriptorDir: File): IO[ResourceError \/ NIHDBResource] = {
     NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem) map {
-      _ map { dbV =>
-        dbV map {
+      _ map { 
+        _.disjunction map {
           case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
         } leftMap {
-          fromExtractorErrorNel("Failed to open NIHDB") 
+          ResourceError.fromExtractorError("Failed to open NIHDB from %s".format(descriptorDir.toString)) 
         }
       } getOrElse {
-        Failure(nels(MissingData("No NIHDB projection found in " + descriptorDir)))
+        left(NotFound("No NIHDB projection found in %s".format(descriptorDir)))
       }
     }
   }
@@ -111,65 +116,54 @@ class DefaultResourceBuilder(
   /**
    * Open the blob for reading in `baseDir`.
    */
-  def openBlob(versionDir: File): IO[ValidationNel[ResourceError, Blob]] = IO {
+  def openBlob(versionDir: File): IO[ResourceError \/ BlobResource] = IO {
     //val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
     //val metadata = metadataStore.json.validated[BlobMetadata]
-    val metadataV = JParser.parseFromFile(new File(versionDir, blobMetadataFilename)).leftMap(Error.thrown).flatMap(_.validated[BlobMetadata])
-    val resource = metadataV map { metadata =>
-      Blob(new File(versionDir, "data"), metadata) //(actorSystem.dispatcher)
+    JParser.parseFromFile(new File(versionDir, blobMetadataFilename)).leftMap(Error.thrown).
+    flatMap(_.validated[BlobMetadata]).
+    disjunction.map { metadata =>
+      BlobResource(new File(versionDir, "data"), metadata) //(actorSystem.dispatcher)
+    } leftMap {
+      ResourceError.fromExtractorError("Error reading metadata from versionDir %s".format(versionDir.toString))
     }
-    fromExtractorErrorNel("Error reading metadata") <-: resource
   }
 
   /**
    * Creates a blob from a data stream.
    */
-  def createBlob[M[+_]: Monad](versionDir: File, mimeType: MimeType, authorities: Authorities,
-      data: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Blob]] = {
+  def createBlob[M[+_]](versionDir: File, mimeType: MimeType, authorities: Authorities, data: StreamT[M, Array[Byte]])(implicit M: Monad[M], IOT: IO ~> M): M[ResourceError \/ BlobResource] = {
+    def write(out: FileOutputStream, size: Long, stream: StreamT[M, Array[Byte]]): M[ResourceError \/ Long] = {
+      stream.uncons.flatMap {
+        case Some((bytes, tail)) =>
+          try {
+            out.write(bytes)
+            write(out, size + bytes.length, tail)
+          } catch { case (ioe: IOException) =>
+              out.close()
+              left(IOError(ioe)).point[M]
+          }
 
-    val file = new File(versionDir, "data")
-
-    logger.debug("Creating new blob at " + file)
-
-    IOUtils.makeDirectory(versionDir) map { _ =>
-      logger.debug("Writing blob data")
-      val out = new FileOutputStream(file)
-      def write(size: Long, stream: StreamT[M, Array[Byte]]): M[Validation[ResourceError, Long]] = {
-        stream.uncons.flatMap {
-          case Some((bytes, tail)) =>
-            try {
-              out.write(bytes)
-              write(size + bytes.length, tail)
-            } catch { case (ioe: IOException) =>
-                out.close()
-                Failure(IOError(ioe)).point[M]
-            }
-
-          case None =>
-            out.close()
-            Success(size).point[M]
-        }
+        case None =>
+          out.close()
+          right(size).point[M]
       }
+    }
 
-      write(0L, data) map (_ flatMap { size =>
-        try {
+    for {
+      _ <- IOT { IOUtils.makeDirectory(versionDir) }
+      file = new File(versionDir, "data") unsafeTap { s => logger.debug("Creating new blob at " + s) }
+      writeResult <- write(new FileOutputStream(file), 0L, data)
+      blobResult <- IOT { 
+        writeResult traverse { size =>
           logger.debug("Write complete on " + file)
           val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
           //val metadataStore = PersistentJValue(versionDir, blobMetadataFilename)
           //metadataStore.json = metadata.serialize
           IOUtils.writeToFile(metadata.serialize.renderCompact, new File(versionDir, blobMetadataFilename)) map { _ =>
-            Success(Blob(file, metadata))//(actorSystem.dispatcher))
-          } except {
-            case t: Throwable =>
-              IO(Failure(IOError(t)))
-          } unsafePerformIO
-        } catch { case (ioe: IOException) =>
-            Failure(IOError(ioe))
-        }
-      })
-    } except {
-      case t: Throwable =>
-        IO(Failure(IOError(t)).point[M])
-    } unsafePerformIO
+            BlobResource(file, metadata)
+          } 
+        } 
+      }
+    } yield blobResult
   }
 }

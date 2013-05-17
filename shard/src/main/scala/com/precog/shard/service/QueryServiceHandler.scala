@@ -111,7 +111,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]], storedQueries: SecureVFS[Future], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
   import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
@@ -124,7 +124,7 @@ class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)
         val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number }
         val cacheable = cacheDirectives exists { _ == `no-cache`}
         val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
-        storedQueries.executeStoredQuery(apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
+        storedQueries.executeStoredQuery(platform, apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
           case Success(stream) => 
             HttpResponse(OK, content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
           case Failure(evaluationError) => 
