@@ -35,6 +35,7 @@ import org.specs2.mutable._
 import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with EchoHttpClientModule[M]
     with BaseBlockStoreTestModule[M]
     with IdSourceScannerModule[M]{ outer =>
       
