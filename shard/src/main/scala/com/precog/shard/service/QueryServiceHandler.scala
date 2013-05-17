@@ -43,7 +43,7 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
 
-abstract class QueryServiceHandler[A](implicit M: Monad[Future]) 
+abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
@@ -92,28 +92,33 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future])
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
   import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
 
   val service = (request: HttpRequest[ByteChunk]) => {
-    ShardServiceCombinators.queryOpts(request) map { queryOptions => 
-      { (apiKey: APIKey, path: Path) => 
+    ShardServiceCombinators.queryOpts(request) map { queryOptions =>
+      { (apiKey: APIKey, path: Path) =>
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
-        val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number }
-        val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number }
-        val cacheable = cacheDirectives exists { _ == `no-cache`}
+        logger.debug("Received analysis request with cache directives: " + cacheDirectives)
+        // Internally maxAge/maxStale are compared against ms times
+        val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number * 1000 }
+        val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number * 1000 }
+        val cacheable = cacheDirectives exists { _ != `no-cache`}
         val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
         storedQueries.executeStoredQuery(apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
-          case Success(stream) => 
-            HttpResponse(OK, content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
-          case Failure(evaluationError) => 
+          case Success(StoredQueryResult(stream, cachedAt)) =>
+            val headers = cachedAt map { lastTime =>
+              HttpHeaders(`Last-Modified`(HttpDateTimes.StandardDateTime(lastTime.toDateTime)))
+            } getOrElse HttpHeaders()
+            HttpResponse(OK, headers = headers, content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
+          case Failure(evaluationError) =>
             logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
             HttpResponse(InternalServerError)
         }
       }
-    } 
+    }
   }
 
   def metadata = DescriptionMetadata("""Returns the result of executing a stored query.""")
