@@ -1,5 +1,4 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package vfs
 
 import akka.actor.ActorSystem
@@ -37,14 +36,24 @@ import scalaz.effect.IO
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
 
+sealed trait Resource {
+  def mimeType: MimeType
+  def authorities: Authorities
+  def append(data: PathData): IO[PrecogUnit]
+  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]]
+}
+
 object Resource extends Logging {
   val QuirrelData = MimeType("application", "x-quirrel-data")
 
   def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
     import com.precog.yggdrasil.table.ColumnarTableModule
     import FileContent._
+    import MimeTypes._
+    val AnyMimeType = anymaintype/anysubtype
+
     output match {
-      case ApplicationJson =>
+      case ApplicationJson | AnyMimeType =>
         ColumnarTableModule.renderJson(slices, "[", ",", "]")
 
       case XJsonStream =>
@@ -87,34 +96,33 @@ object Resource extends Logging {
     val arr = new Array[Byte](bufferSize)
     loop(stream0, ByteBuffer.wrap(arr), arr)
   }
-}
 
-sealed trait Resource {
-  def mimeType: MimeType
-  def authorities: Authorities
-  def append(data: PathData): IO[PrecogUnit]
-  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]]
-}
-
-sealed trait ResourceError
-
-object ResourceError {
-  case class CorruptData(message: String) extends ResourceError 
-  case class MissingData(message: String) extends ResourceError
-  case class IOError(exception: Throwable) extends ResourceError
-
-  case class IllegalWriteRequestError(message: String) extends ResourceError
-  case class PermissionsError(message: String) extends ResourceError
-
-  def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
-    CorruptData("%s:\n%s" format (msg, error.message))
+  sealed trait ResourceError {
+    def fold[A](fatalError: FatalError => A, userError: UserError => A): A
+  }
+  
+  sealed trait FatalError { self: ResourceError =>
+    def fold[A](fatalError: FatalError => A, userError: UserError => A) = fatalError(self)
   }
 
-  def fromExtractorErrorNel(msg: String): Extractor.Error => NEL[ResourceError] = { error =>
-    NEL(fromExtractorError(msg)(error))
+  sealed trait UserError { self: ResourceError =>
+    def fold[A](fatalError: FatalError => A, userError: UserError => A) = userError(self)
   }
 
-  implicit val show = Show.showFromToString[ResourceError]
+  object ResourceError {
+    def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
+      Corrupt("%s:\n%s" format (msg, error.message))
+    }
+
+    implicit val show = Show.showFromToString[ResourceError]
+  }
+
+  case class Corrupt(message: String) extends ResourceError with FatalError
+  case class IOError(exception: Throwable) extends ResourceError with FatalError
+
+  case class IllegalWriteRequestError(message: String) extends ResourceError with UserError
+  case class PermissionsError(message: String) extends ResourceError with UserError
+  case class NotFound(message: String) extends ResourceError with UserError
 }
 
 case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource with Logging {
@@ -126,6 +134,8 @@ case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: Actor
     case BlobData(_, mimeType) => 
       IO.throwIO(new IllegalArgumentException("Attempt to insert non-event blob data of type %s to NIHDB".format(mimeType.value)))
   }
+
+  def projection = NIHDBProjection.wrap(this)
 
   def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]] = {
     import Resource.{ bufferOutput, toCharBuffers }
@@ -169,7 +179,7 @@ object BlobMetadata {
 /**
  * A blob of data that has been persisted to disk.
  */
-final case class Blob(dataFile: File, metadata: BlobMetadata) extends Resource {
+final case class BlobResource(dataFile: File, metadata: BlobMetadata) extends Resource {
   val authorities: Authorities = metadata.authorities
   val mimeType: MimeType = metadata.mimeType
 
@@ -182,7 +192,7 @@ final case class Blob(dataFile: File, metadata: BlobMetadata) extends Resource {
     def readChunk(fin: FileInputStream, skip: Long): Option[Array[Byte]] = {
       val remaining = skip - fin.skip(skip)
       if (remaining == 0) {
-        val bytes = new Array[Byte](Blob.ChunkSize)
+        val bytes = new Array[Byte](BlobResource.ChunkSize)
         val read = fin.read(bytes)
 
         if (read < 0) None
@@ -229,6 +239,6 @@ final case class Blob(dataFile: File, metadata: BlobMetadata) extends Resource {
   }
 }
 
-object Blob {
+object BlobResource {
   val ChunkSize = 100 * 1024
 }

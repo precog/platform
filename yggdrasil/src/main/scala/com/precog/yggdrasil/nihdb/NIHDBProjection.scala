@@ -60,10 +60,10 @@ final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authoritie
 }
 
 object NIHDBProjection {
-  def wrap(nihdb: NIHDB, authorities: Authorities)(implicit M: Monad[Future]): Future[NIHDBProjection] = nihdb.getSnapshot map { snap =>
+  def wrap(nihdb: NIHDB, authorities: Authorities): Future[NIHDBProjection] = nihdb.getSnapshot map { snap =>
     new NIHDBProjection(snap, authorities, nihdb.projectionId)
   }
 
-  def wrap(resource: NIHDBResource)(implicit M: Monad[Future]): Future[NIHDBProjection] =
+  def wrap(resource: NIHDBResource): Future[NIHDBProjection] =
     wrap(resource.db, resource.authorities)
 }

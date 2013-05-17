@@ -36,6 +36,7 @@ import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.NonEmptyList._
+import scalaz.EitherT._
 import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.std.option._
@@ -56,7 +57,7 @@ case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[
   * subdir for the path.
   */
 final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, resources: DefaultResourceBuilder, permissionsFinder: PermissionsFinder[Future], shutdownTimeout: Duration, jobsManager: JobManager[Future], clock: Clock) extends Actor with Logging {
-  import ResourceError._
+  import Resource._
 
   private[this] implicit def executor: ExecutionContext = context.dispatcher
 
@@ -92,10 +93,6 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
-  private def openNIHDBProjection(version: UUID): IO[Future[Option[ValidationNel[ResourceError, NIHDBProjection]]]] = {
-    openNIHDB(version) map { _ traverse { _ traverse { NIHDBProjection.wrap _ } } }
-  }
-
   private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
     logger.trace("Checking write permission for " + path + " as " + authorities + " among " + permissions)
     PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
@@ -110,48 +107,42 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     }
   }
 
-  private def openResource(version: UUID): IO[Option[ValidationNel[ResourceError, Resource]]] = {
+  private def openResource(version: UUID): EitherT[IO, ResourceError, Resource] = {
     versions.get(version) map { r =>
       logger.debug("Located existing resource for " + version)
-      IO(Some(Success(r)))
+      right(IO(r))
     } getOrElse {
       logger.debug("Opening new resource for " + version)
-      versionLog.find(version) traverse { versionEntry =>
-        val dir = versionDir(version)
-        val openf = if (NIHDB.hasProjection(dir)) { resources.openNIHDB _ }
-                    else { resources.openBlob _ }
+      versionLog.find(version) map {
+        case VersionEntry(v, _, _) =>
+          val dir = versionDir(v)
+          val openf = if (NIHDB.hasProjection(dir)) { resources.openNIHDB _ }
+                      else { resources.openBlob _ }
 
-        openf(dir) flatMap {
-          _ tap { resourceV =>
-            IO(resourceV foreach { r => versions += (version -> r) })
-          }
-        }
+          for {
+            resource <- EitherT {
+              openf(dir) flatMap {
+                _ tap { resourceV =>
+                  IO(resourceV foreach { r => versions += (version -> r) })
+                }
+              }
+            }
+          } yield resource 
+      } getOrElse {
+        left(IO(NotFound("No version found to exist for resource %s.".format(path.path))))
       }
     }
   }
 
-  private def openNIHDB(version: UUID): IO[Option[ValidationNel[ResourceError, NIHDBResource]]] = {
-    versions.get(version) map {
-      case nr: NIHDBResource =>
-        IO {
-          logger.debug("Returning cached resource for version " + version)
-          Some(Success(nr))
-        }
-      case uhoh =>
-        IO(Some(Failure(nels(IllegalWriteRequestError("Located resource on %s is a BLOB, not a projection" format path)))))
-    } getOrElse {
-      versionLog.find(version) traverse { versionEntry =>
-        logger.info("Opening new resource at path " + path + " version " + version)
-        resources.openNIHDB(versionDir(version)) flatMap {
-          _ tap { resourceV =>
-            IO(resourceV foreach { r => versions += (version -> r) })
-          }
-        }
-      }
+  private def openNIHDB(version: UUID): EitherT[IO, ResourceError, NIHDBResource] = {
+    openResource(version) flatMap {
+      case nr: NIHDBResource => right(IO(nr))
+      case other => left(IO(NotFound("Located resource on %s is a BLOB, not a projection" format path.path)))
     }
   }
 
   private def performCreate(apiKey: APIKey, data: PathData, version: UUID, writeAs: Authorities, complete: Boolean): IO[PathActionResponse] = {
+    implicit val ioId = NaturalTransformation.refl[IO]
     for {
       _ <- versionLog.addVersion(VersionEntry(version, data.typeName, clock.instant()))
       created <- data match {
@@ -171,7 +162,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       }
     } yield {
       created.fold(
-        error => UpdateFailure(path, nels(error)),
+        error => UpdateFailure(path, error),
         _ => UpdateSuccess(path)
       )
     }
@@ -188,34 +179,34 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
     def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
       def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value)) :: Nil
 
-      openNIHDB(streamId) flatMap {
-        case None =>
-          if (createIfAbsent) {
-            logger.trace("Creating new nihdb database for streamId " + streamId)
-            performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
-              maybeCompleteJob(msg, terminal, response) pipeTo requestor
-              PrecogUnit
+      openNIHDB(streamId).fold[IO[PrecogUnit]](
+        {
+          case NotFound(_) =>
+            if (createIfAbsent) {
+              logger.trace("Creating new nihdb database for streamId " + streamId)
+              performCreate(msg.apiKey, NIHDBData(batch(msg)), streamId, msg.writeAs, terminal) map { response =>
+                maybeCompleteJob(msg, terminal, response) pipeTo requestor
+                PrecogUnit
+              }
+            } else {
+              //TODO: update job
+              logger.warn("Cannot overwrite existing database for " + streamId)
+              IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
             }
-          } else {
-            //TODO: update job
-            logger.warn("Cannot overwrite existing database for " + streamId)
-            IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
-          }
 
-        case Some(Success(resource)) =>
-          for {
-            _ <- resource.db.insert(batch(msg))
-            _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
-          } yield {
-            logger.trace("Sent insert message for " + msg + " to nihdb")
-            // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
-            maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) pipeTo requestor
-            PrecogUnit
-          }
-
-        case Some(Failure(errors)) =>
-          IO(requestor ! UpdateFailure(msg.path, errors))
-      }
+          case other =>
+            IO(requestor ! UpdateFailure(path, other))
+        },
+        resource => for {
+          _ <- resource.db.insert(batch(msg))
+          _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
+        } yield {
+          logger.trace("Sent insert message for " + msg + " to nihdb")
+          // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
+          maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) pipeTo requestor
+          PrecogUnit
+        }
+      ).join
     }
 
     def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
@@ -233,7 +224,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         }
       } else {
         //TODO: update job
-        IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString)))))
+        IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
       }
     }
 
@@ -273,7 +264,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             persistFile(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
-            IO(requestor ! UpdateFailure(path, nels(IllegalWriteRequestError("Append is not yet supported for binary files."))))
+            IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Append is not yet supported for binary files.")))
         }
 
       case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
@@ -293,80 +284,22 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       logger.debug("Received ingest request for %d messages.".format(messages.size))
       processEventMessages(messages.toStream, permissions, sender).unsafePerformIO
 
-    case msg @ Read(_, id, auth) =>
+    case msg @ Read(_, version) =>
       logger.debug("Received Read request " + msg)
 
-      val io: IO[Future[ReadResult]] = versionOpt(id) map { version =>
-        openResource(version) map {
-          case Some(resourceV) =>
-            resourceV traverse { resource =>
-              logger.debug("Located resource for read: " + resource)
-              checkReadPermissions(resource, resource.authorities, auth, id => Set(ReadPermission(path, WrittenByAccount(id)))) map { resOpt =>
-                ReadSuccess(path, resOpt)
-              }
-            } map {
-              _ valueOr { ReadFailure(path, _) }
-            }
-
-          case None =>
-            Promise successful ReadFailure(path, nels(MissingData("Unable to find version %s".format(version))))
-        }
-      } getOrElse {
-        IO(Promise successful ReadSuccess(path, None))
-      } map { resVF =>
-        resVF recover {
-          case t: Throwable =>
-            val msg = "Error during read on " + id
-            logger.error(msg, t)
-            ReadFailure(path, nels(IOError(t)))
-        } pipeTo sender
-      }
-
-      io.unsafePerformIO
-
-    case msg @ ReadProjection(_, id, auth) =>
-      logger.debug("Received ReadProjection request " + msg)
       val requestor = sender
-      val io = versionOpt(id) map { version =>
-        openNIHDBProjection(version) map {
-          _ flatMap {
-            case Some(resourceV) =>
-              val resourceVF: Future[ValidationNel[ResourceError, ReadProjectionResult]] = resourceV traverse { projection =>
-                logger.debug("Found " + projection + " for NIHDB projection version " + version)
-                checkReadPermissions(projection, projection.authorities, auth, accountId => Set(ReducePermission(path, WrittenByAccount(accountId)))) map { projOpt =>
-                  logger.debug("Permission check succeeded for projection " + version + " results in " + projOpt)
-                  ReadProjectionSuccess(path, projOpt)
-                }
-              }
-
-              resourceVF map {
-                _ valueOr { ReadProjectionFailure(path, _) }
-              }
-
-            case None =>
-              logger.warn("Version log contained version " + version + " but it could not be opened as a NIHDB projection.")
-              Promise successful ReadProjectionFailure(path, nels(MissingData("Unable to find version %s".format(version))))
-          } recover {
-            case t: Throwable =>
-              val msg = "Error during read projection on " + id
-              logger.error(msg, t)
-              ReadProjectionFailure(path, nels(IOError(t)))
-          } pipeTo requestor
-        }
+      val io: IO[ReadResult] = versionOpt(version) map { version =>
+        openResource(version).fold(
+          error => ReadFailure(path, error),
+          resource => ReadSuccess(path, resource) 
+        )
       } getOrElse {
-        logger.warn("Projection version " + id + " not found in version log. (None == current)")
-        IO(sender ! ReadProjectionSuccess(path, None))
-      }
+        IO(ReadFailure(path, Corrupt("Unable to determine any resource version for path %s".format(path.path))))
+      } 
+      
+      io.map(requestor ! _).unsafePerformIO
 
-      io.unsafePerformIO
-
-    case CurrentVersion(_, auth) =>
+    case CurrentVersion(_) =>
       sender ! versionLog.current
-
-    case Execute(_, auth) =>
-      // Return projection snapshot if possible.
-
-    case Stat(_, _) =>
-      // Owners, a bit of history, mime type, etc.
   }
 }

@@ -40,9 +40,9 @@ case class WritePermission(path: Path, writeAs: WriteAs) extends Permission {
   }
 }
 
-case class ExecutePermission(path: Path) extends Permission {
+case class ExecutePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
-    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
+    case p @ ExecutePermission(path0, w0) => path.isEqualOrParentOf(path0) && WrittenBy.implies(this, p)
     case _ => false
   }
 }
@@ -51,7 +51,7 @@ case class ReadPermission(path: Path, writtenBy: WrittenBy) extends Permission w
   def implies(other: Permission): Boolean = other match {
     case p : ReadPermission => WrittenBy.implies(this, p)
     case p : ReducePermission => WrittenBy.implies(this, p)
-    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
+    case p @ ExecutePermission(path0, w0) => path.isEqualOrParentOf(path0) && WrittenBy.implies(this, p)
     case _ => false
   }
 }
@@ -62,7 +62,6 @@ case class ReducePermission(path: Path, writtenBy: WrittenBy) extends Permission
     case _ => false
   }
 }
-
 
 case class DeletePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {

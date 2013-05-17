@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package vfs
 
+import Resource._
 import table.Slice
 
 import com.precog.common._
@@ -19,6 +20,7 @@ import java.util.UUID
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
+import scalaz.EitherT._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
 import scalaz.effect.IO
@@ -32,38 +34,43 @@ object Version {
 /** 
  * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
  */
-trait VFS[M[+_]] {
-  def readQuery(path: Path, version: Version): M[Option[String]]  
-  def readResource(path: Path, version: Version): M[ReadResult]  
-  def readCache(path: Path, version: Version): M[Option[StreamT[M, Slice]]]
+abstract class VFS[M[+_]](implicit M: Monad[M]) {
+  protected def IOT: IO ~> M
+
+  def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
+
+  def readQuery(path: Path, version: Version): EitherT[M, ResourceError, String] = {
+    readResource(path, version) flatMap {
+      case blob: BlobResource => right(IOT { blob.asString })
+      case _ => left(NotFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version)).point[M])
+    }
+  }
+
+  def readProjection(path: Path, version: Version): EitherT[M, ResourceError, StreamT[M, Slice]]
+
   def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
 }
 
 class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
-  def readQuery(path: Path, version: Version): Future[Option[String]] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult] map {
-      case ReadSuccess(_, Some(blob: Blob)) =>
-        blob.asString map(Some(_)) except { case t: Throwable => IO { logger.error("Query read error", t); None } } unsafePerformIO
 
-      case failure => 
-        logger.warn("Unable to read query at path %s with version %s: %s".format(path.path, version, failure))
-        None
+  val IOT = new (IO ~> Future) {
+    def apply[A](io: IO[A]) = M.point(io.unsafePerformIO)
+  }
+  
+  def readResource(path: Path, version: Version): EitherT[Future, ResourceError,Resource] = {
+    implicit val t = projectionReadTimeout
+    EitherT {
+      (projectionsActor ? Read(path, version)).mapTo[ReadResult] map {
+        case ReadSuccess(_, resource) => \/.right(resource)
+        case ReadFailure(_, error) => \/.left(error)
+      }
     }
   }
 
-  def readResource(path: Path, version: Version): Future[ReadResult] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult]  
-  }
-
-  def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? ReadProjection(path, version, None)).mapTo[ReadProjectionResult] map {
-      case ReadProjectionSuccess(_, Some(projection)) => Some(projection.getBlockStream(None))
-      case failure => 
-        logger.warn("Unable to read projection at path %s with version %s: %s".format(path.path, version, failure))
-        None
+  def readProjection(path: Path, version: Version): EitherT[Future, ResourceError, StreamT[Future, Slice]] = {
+    readResource(path, version) flatMap {
+      case nihdb: NIHDBResource => right(nihdb.projection.map(_.getBlockStream(None)))
+      case _ => left(NotFound("Requested resource at %s version %s cannot be interpreted as a Quirrel dataset.".format(path.path, version)).point[Future])
     }
   }
 

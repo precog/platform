@@ -1,4 +1,4 @@
-package com.precog.shard
+package com.precog.muspelheim
 package scheduling
 
 import akka.util.Duration

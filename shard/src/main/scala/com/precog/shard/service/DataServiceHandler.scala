@@ -24,7 +24,7 @@ import scalaz._
 import scalaz.syntax.show._
 import scalaz.effect.IO
 
-class DataServiceHandler[A](vfs: VFS[Future])(implicit M: Monad[Future])
+class DataServiceHandler[A](vfs: SecureVFS[Future])(implicit M: Monad[Future])
     extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[ByteChunk]]] with Logging {
 
   val service = (request: HttpRequest[A]) => Success {

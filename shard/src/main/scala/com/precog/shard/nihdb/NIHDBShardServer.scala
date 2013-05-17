@@ -6,7 +6,7 @@ import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.client._
-import com.precog.shard.scheduling._
+import com.precog.muspelheim.scheduling._
 import com.precog.yggdrasil.vfs._
 
 import blueeyes.BlueEyesServer
@@ -74,9 +74,9 @@ object NIHDBShardServer extends BlueEyesServer
     val scheduler = new ActorScheduler(scheduleActor, schedulingTimeout)
 
     val stoppable = scheduleActorStoppable.append(Stoppable.fromFuture(platform.shutdown)).append(scheduleStorageStoppable)
-    val storedQueries = new VFSStoredQueries(platform, vfs, scheduler, jobManager, permissionsFinder, clock)
+    val secureVFS = new SecureVFS(vfs, permissionsFinder, jobManager, scheduler, clock)
 
-    ShardState(platform, apiKeyFinder, accountFinder, vfs, storedQueries, scheduler, jobManager, clock, stoppable, asyncQueries)
+    ShardState(platform, apiKeyFinder, accountFinder, secureVFS, scheduler, jobManager, clock, stoppable, asyncQueries)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")

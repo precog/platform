@@ -338,6 +338,10 @@ class ShardServiceSpec extends TestShardService {
     }
   }
 
+  "Data service" should {
+    "reject read in the absence of read permissions" in todo
+  }
+
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }

@@ -10,7 +10,7 @@ import com.precog.common.jobs.JobManager
 import com.precog.common.security._
 import com.precog.common.services._
 import com.precog.daze._
-import com.precog.shard.scheduling._
+import com.precog.muspelheim.scheduling._
 import com.precog.shard.service._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
@@ -59,8 +59,7 @@ case class ShardState(
     platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
-    vfs: VFS[Future], 
-    storedQueries: StoredQueries[Future],
+    vfs: SecureVFS[Future], 
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
@@ -179,7 +178,7 @@ trait ShardService extends
       dataPath("/analysis/fs") {
         get {
           shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-            new AnalysisServiceHandler(state.storedQueries, state.clock)
+            new AnalysisServiceHandler(state.platform, state.secureVFS, state.clock)
           }
         }
       }
