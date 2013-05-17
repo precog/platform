@@ -51,6 +51,9 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   private def findProjection(path: Path): Future[Option[NIHDBProjection]] =
     (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
 
+  private def findResource(path: Path): Future[Option[Resource]] =
+    (projectionsActor ? Read(path, Version.Current, Some(apiKey))).mapTo[ReadResult].map(_.resource)
+
   def findSize(path: Path): Future[Long] = findProjection(path).map { _.map(_.length).getOrElse(0L) }
 
   def findSelectors(path: Path): Future[Set[CPath]] = findProjection(path).flatMap {
@@ -69,7 +72,7 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   }
 
   def currentAuthorities(path: Path): Future[Option[Authorities]] = {
-    findProjection(path) map { _ map { _.authorities } }
+    findResource(path) map { _ map { _.authorities } }
   }
 
   def currentVersion(path: Path) = {
