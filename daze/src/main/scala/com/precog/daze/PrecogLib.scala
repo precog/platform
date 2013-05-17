@@ -27,6 +27,8 @@ import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
 
+import java.nio.CharBuffer
+
 import blueeyes.json._
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
@@ -68,7 +70,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
             trans.WrapArray(right)),
           new EnrichmentMapper(ctx))
       }
-      
+
       class EnrichmentMapper(ctx: EvaluationContext) extends CMapperM[M] {
         import Extractor.Error
 
@@ -89,6 +91,17 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
 
             case _ :: tail => addOrCreate(row, tail, order)
           }
+        }
+
+        private def concatenate(stream0: StreamT[M, CharBuffer]): M[String] = {
+          val sb = new StringBuffer
+          def build(stream: StreamT[M, CharBuffer]): M[String] = stream.uncons flatMap {
+            case Some((head, tail)) =>
+              sb.append(head.toString)
+              build(tail)
+            case None => M point sb.toString
+          }
+          build(stream0)
         }
 
         def map(columns: Map[ColumnRef, Column], range: Range): M[Map[ColumnRef, Column]] = {
@@ -124,38 +137,41 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
 
           val resultsM: M[List[Result[Slice]]] = chunks traverse { case ((url, opts), members) =>
             val chunkValues = values.redefineWith(members)
-            val data = "[" + chunkValues.renderJson[M](',') + "]"
-            val fields = opts.mapValues(_.renderCompact) + ("data" -> data)
-            val requestBody = fields map { case (field, value) =>
-              JString(field).renderCompact + ":" + value
-            } mkString ("{", ",", "}")
+            val (stream, _) = chunkValues.renderJson[M](',')
 
-            def populate(data: List[JValue]): Validation[Error, Slice] = {
-              if (data != members.cardinality) {
-                Failure(Error.invalid("Number of items returned does not match number sent."))
-              } else {
-                def sparseStream(row: Int, xs: List[RValue]): Stream[RValue] = if (row < slice.size) {
-                  if (members(row)) Stream.cons(xs.head, sparseStream(row + 1, xs.tail))
-                  else Stream.cons(CUndefined, sparseStream(row + 1, xs))
-                } else Stream.empty
+            concatenate(stream) map ("[" + _ + "]") flatMap { data =>
+              val fields = opts.mapValues(_.renderCompact) + ("data" -> data)
+              val requestBody = fields map { case (field, value) =>
+                JString(field).renderCompact + ":" + value
+              } mkString ("{", ",", "}")
 
-                val sparseData = sparseStream(0, data map (RValue.fromJValue(_)))
-                Success(Slice.fromRValues(sparseData))
+              def populate(data: List[JValue]): Validation[Error, Slice] = {
+                if (data.size != members.cardinality) {
+                  Failure(Error.invalid("Number of items returned does not match number sent."))
+                } else {
+                  def sparseStream(row: Int, xs: List[RValue]): Stream[RValue] = if (row < slice.size) {
+                    if (members(row)) Stream.cons(xs.head, sparseStream(row + 1, xs.tail))
+                    else Stream.cons(CUndefined, sparseStream(row + 1, xs))
+                  } else Stream.empty
+
+                  val sparseData = sparseStream(0, data map (RValue.fromJValue(_)))
+                  Success(Slice.fromRValues(sparseData))
+                }
               }
-            }
 
-            val client = HttpClient(url)
-            val request = Request(HttpMethod.POST, body = Some(Request.Body("application/json", requestBody)))
+              val client = HttpClient(url)
+              val request = Request(HttpMethod.POST, body = Some(Request.Body("application/json", requestBody)))
 
-            client.execute(request).run map { responseE =>
-              val validation = for {
-                response <- httpError <-: responseE.validation
-                body     <- httpError <-: response.ok.validation
-                json     <- jsonError <-: (Error.thrown(_)) <-: JParser.parseFromString(body)
-                data     <- jsonError <-: (json \ "data").validated[List[JValue]]
-                result   <- jsonError <-: populate(data)
-              } yield result
-              validation leftMap (NonEmptyList(_))
+              client.execute(request).run map { responseE =>
+                val validation = for {
+                  response <- httpError <-: responseE.validation
+                  body     <- httpError <-: response.ok.validation
+                  json     <- jsonError <-: (Error.thrown(_)) <-: JParser.parseFromString(body)
+                  data     <- jsonError <-: (json \ "data").validated[List[JValue]]
+                  result   <- jsonError <-: populate(data)
+                } yield result
+                validation leftMap (NonEmptyList(_))
+              }
             }
           }
           
@@ -163,7 +179,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
             case Success(slices) =>
               slices.foldLeft(Slice(Map.empty, slice.size))(_ zip _).columns
             case Failure(errors) =>
-              sys.error("!!!!!!!!!!!!!!!!!!!!!")
+              sys.error(errors.toString)
           }
         }
       }

@@ -1652,7 +1652,7 @@ object Slice {
     }
     
     new Slice {
-      val (columns, size) = buildColArrays(values.toStream, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
+      val (columns, size) = buildColArrays(values, Map.empty[ColumnRef, ArrayColumn[_]], 0) 
     }
   }
 
