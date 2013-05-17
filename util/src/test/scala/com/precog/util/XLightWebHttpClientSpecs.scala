@@ -31,35 +31,33 @@ object XLightWebHttpClientSpecs extends Specification with XLightWebHttpClientMo
   
   "xlightweb http client" should {
     "fetch precog.com" in {
-      val resultsM = for {
-        client <- HttpClient("precog.com")
-        data <- client.get("")
-      } yield data getOrElse ""
+      val client = HttpClient("http://precog.com")
+      val response = (client.execute(Request[String]()) | sys.error("...")).copoint
+      val data = response.body getOrElse ""
       
-      resultsM.copoint must contain("Precog")
+      data must contain("Precog")
     }
     
     "submit a google search" in {
-      val resultsM = for {
-        client <- HttpClient("www.google.com")
-        data <- client.get("/search", "q" -> "recursion")
-      } yield data getOrElse ""
+      val client = HttpClient("http://www.google.com")
+      val request = (Request() / "search") ? ("q" -> "recursion")
+      val data = (client.execute(request) | sys.error("...")).copoint.body getOrElse ""
       
-      resultsM.copoint must contain("Did you mean")
+      data must contain("Did you mean")
     }
     
     "submit a test post" in {
       val body = "Silly fish had a purple dish; make a wish!"
+      val client = HttpClient("http://posttestserver.com")
+      val request = (Request(HttpMethod.POST) / "post.php").withBody("text/plain", body)
+      val data = (client.execute(request) | sys.error("...")).copoint.body getOrElse ""
       
-      val resultsM = for {
-        client <- HttpClient("posttestserver.com")
-        data <- client.post("/post.php", "text/plain", body)
-      } yield data getOrElse ""
-      
-      resultsM.copoint must contain("Post body was %d chars long".format(body.length))
+      data must contain("Post body was %d chars long".format(body.length))
+    }
+
+    "bad URL results in error" in {
+      val client = HttpClient("asdf")
+      client.execute(Request()).isLeft.copoint must beTrue
     }
   }
-  
-  def liftJUCFuture[A](f: juc.Future[A]): Need[A] =
-    M point { f.get() }     // yay!
 }
