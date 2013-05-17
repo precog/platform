@@ -17,6 +17,8 @@ final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authoritie
   private[this] val readers = snapshot.readers
   val length = readers.map(_.length.toLong).sum
 
+  override def toString = "NIHDBProjection(id = %d, len = %d, authorities = %s)".format(projectionId, length, authorities)
+
   def structure(implicit M: Monad[Future]) = M.point(readers.flatMap(_.structure)(collection.breakOut): Set[ColumnRef])
 
   def getBlockAfter(id0: Option[Long], columns: Option[Set[ColumnRef]])(implicit MP: Monad[Future]): Future[Option[BlockProjectionData[Long, Slice]]] = MP.point {

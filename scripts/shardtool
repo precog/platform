@@ -34,15 +34,24 @@ class Service(object):
     def ingest(self, fspath, qpath, syncType):
         assert(os.path.exists(fspath))
         assert(not qpath.startswith('/'))
-        url = "http://localhost:%s/ingest/v2/%s/fs/%s/%s?apiKey=%s" % (self.ingestport, syncType, self.accountid, qpath, self.apikey)
+        url = "http://localhost:%s/ingest/v2/%s/fs/%s/%s?apiKey=%s" % (self.ingestport, syncType, self.account, qpath, self.apikey)
         mime = 'Content-Type: application/json'
         #args = ['curl', '-v', '-H', mime, '--data-bin', "@" + fspath, url]
         args = ['curl', '-H', mime, '--data-bin', "@" + fspath, url]
         call(args)
         print ""
 
+    def storeScript(self, fspath, qpath):
+        assert(os.path.exists(fspath))
+        assert(not qpath.startswith('/'))
+        url = "http://localhost:%s/ingest/v2/data/fs/%s/%s?apiKey=%s" % (self.ingestport, self.account, qpath, self.apikey)
+        mime = 'Content-Type: text/x-quirrel-script'
+        args = ['curl', '-X', 'PUT', '-H', mime, '--data-bin', "@" + fspath, url]
+        call(args)
+        print ""
+
     def query(self, query):
-        url = "http://localhost:%s/analytics/v2/analytics/fs/%s" % (self.shardport, self.accountid)
+        url = "http://localhost:%s/analytics/v2/analytics/fs/%s" % (self.shardport, self.account)
         #args = ['curl', '-v', '-s', '-G',
         args = ['curl', '-s', '-G',
                 #'-H', 'Accept-Encoding: gzip',
@@ -52,8 +61,17 @@ class Service(object):
         call(args)
         print ""
 
+    def storedQuery(self, qpath):
+        assert(not qpath.startswith('/'))
+        url = "http://localhost:%s/analytics/v2/analysis/fs/%s/%s" % (self.shardport, self.account, qpath)
+        args = ['curl', '-s', '-G',
+                '--data-urlencode', "format=detailed",
+                '--data-urlencode', 'apiKey=' + self.apikey, url]
+        call(args)
+        print ""
+
     def metadata(self, qpath):
-        url = "http://localhost:%s/analytics/v2/meta/fs/%s/%s" % (self.shardport, self.accountid, qpath)
+        url = "http://localhost:%s/analytics/v2/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
         args = ['curl', '-s', '-G',
                 '--data-urlencode', 'apiKey=' + self.apikey, url]
         call(args)
@@ -62,8 +80,10 @@ class Service(object):
 def usage():
     prog = sys.argv[0]
     print "usage: %s -i FSPATH QPATH   # ingest data" % prog
+    print "       %s -q FSPATH QPATH   # store script file" % prog
     print "       %s -a FSPATH QPATH   # async ingest data" % prog
     print "       %s -e QUERY          # run query" % prog
+    print "       %s -c QPATH          # run cached query" % prog
     print "       %s -m QPATH          # fetch metadata for path" % prog
     print "       %s -e                # run query from stdin" % prog
     print "       %s -s [ARG1 ...]     # run subshell from tmpdir" % prog
@@ -76,6 +96,10 @@ if __name__ == "__main__":
         usage()
     elif args[0] == '-i':
         service.ingest(args[1], args[2], "sync")
+    elif args[0] == '-q':
+        service.storeScript(args[1], args[2])
+    elif args[0] == '-c':
+        service.storedQuery(args[1])
     elif args[0] == '-s':
         os.chdir(service.basedir)
         if args[1:]:

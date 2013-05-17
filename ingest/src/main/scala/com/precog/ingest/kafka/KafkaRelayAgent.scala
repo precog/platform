@@ -178,6 +178,12 @@ final class KafkaRelayAgent(
 
           case Authorized(archive @ Archive(apiKey, path, jobId, timestamp), offset, _) =>
             List(centralCodec.toMessage(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp)))
+
+          case Authorized(StoreFile(apiKey, path, _, jobId, content, timestamp, stream), offset, Some(authorities)) =>
+            List(centralCodec.toMessage(StoreFileMessage(apiKey, path, authorities, Some(jobId), eventIdSeq.next(offset), content, timestamp, stream)))
+
+          case Authorized(s: StoreFile, _, None) =>
+            sys.error("Unable to establish owner account ID for storage of file " + s)
         }
 
         producer.send {
@@ -198,6 +204,10 @@ final class KafkaRelayAgent(
   private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
     case Ingest(apiKey, path, writeAs, _, _, timestamp, _) =>
       if (writeAs.isDefined) Promise.successful(writeAs)
+      else permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))
+
+    case StoreFile(apiKey, path, writeAs, _, _, timestamp, _) =>
+      if (writeAs.isDefined) Promise successful writeAs
       else permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))
 
     case _ => Promise.successful(None)
