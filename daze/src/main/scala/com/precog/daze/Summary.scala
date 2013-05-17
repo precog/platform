@@ -60,7 +60,7 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
 
           // handles case when we have multiple numeric columns at same path
           val singleNumerics = numerics.toList.map { case (path, _) => (path, CNum) }
-          val sortedNumerics = singleNumerics.sortBy(_._1).reverse
+          val sortedNumerics = singleNumerics.distinct.sortBy(_._1).reverse
 
           sortedNumerics map { case (cpath, ctype) =>
             Schema.mkType(Seq(cpath -> ctype))

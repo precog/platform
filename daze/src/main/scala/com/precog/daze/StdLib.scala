@@ -223,13 +223,13 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
 trait StdLibModule[M[+_]] 
     extends InfixLibModule[M]
     with UnaryLibModule[M]
-    with SummaryLibModule[M]
     with ArrayLibModule[M]
     with TimeLibModule[M]
     with MathLibModule[M]
     with TypeLibModule[M]
     with StringLibModule[M]
     with StatsLibModule[M]
+    with SummaryLibModule[M]
     with NormalizationLibModule[M]
     with ClusteringLibModule[M] 
     with RandomForestLibModule[M] 
@@ -242,13 +242,13 @@ trait StdLibModule[M[+_]]
   trait StdLib
       extends InfixLib
       with UnaryLib
-      with SummaryLib
       with ArrayLib
       with TimeLib
       with MathLib
       with TypeLib
       with StringLib
       with StatsLib
+      with SummaryLib
       with NormalizationLib
       with ClusteringLib
       with RandomForestLib
