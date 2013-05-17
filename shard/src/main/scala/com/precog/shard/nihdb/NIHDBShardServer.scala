@@ -67,7 +67,7 @@ object NIHDBShardServer extends BlueEyesServer
     val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, timestampRequiredAfter)
 
     val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
-    val vfs = new ActorVFS(platform.projectionsActor, clock, akka.util.Timeout.never, akka.util.Timeout.never) //FIXME: good timeout???
+    val vfs = new ActorVFS(platform.projectionsActor, clock, platform.yggConfig.storageTimeout, platform.yggConfig.storageTimeout) //FIXME: good timeout???
 
     val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, vfs, scheduleStorage, platform, clock)))
     val scheduleActorStoppable = Stoppable.fromFuture(gracefulStop(scheduleActor, schedulingTimeout.duration)(actorSystem))
