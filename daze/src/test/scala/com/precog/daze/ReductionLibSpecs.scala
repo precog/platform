@@ -81,6 +81,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       determineResult(input, 5)
     }
     
+    "count het numbers" >> {
+      val input = dag.Reduce(Count,
+        dag.LoadLocal(Const(CString("/hom/numbersHet"))(line))(line))(line)
+
+      determineResult(input, 13)
+    }
+    
     "geometricMean" >> {
       val input = dag.Reduce(GeometricMean,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -94,6 +101,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
         
       determineResult(input, 29)
     }
+
+    "mean het numbers" >> {
+      val input = dag.Reduce(Mean,
+        dag.LoadLocal(Const(CString("/hom/numbersHet"))(line))(line))(line)
+
+      determineResult(input, -37940.51855769231)
+    }
     
     "max" >> {
       val input = dag.Reduce(Max,
@@ -102,11 +116,25 @@ trait ReductionLibSpecs[M[+_]] extends Specification
       determineResult(input, 77)
     }
 
+    "max het numbers" >> {
+      val input = dag.Reduce(Max,
+        dag.LoadLocal(Const(CString("/hom/numbersHet"))(line))(line))(line)
+
+      determineResult(input, 9999)
+    }
+    
     "min" >> {
       val input = dag.Reduce(Min,
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
 
       determineResult(input, 1)
+    }
+
+    "min het numbers" >> {
+      val input = dag.Reduce(Min,
+        dag.LoadLocal(Const(CString("/hom/numbersHet"))(line))(line))(line)
+
+      determineResult(input, -500000)
     }
 
     "maxTime" >> {
@@ -144,6 +172,13 @@ trait ReductionLibSpecs[M[+_]] extends Specification
         dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
         
       determineResult(input, 27.575351312358652)
+    }
+
+    "stdDev het numbers" >> {
+      val input = dag.Reduce(StdDev,
+        dag.LoadLocal(Const(CString("/hom/numbersHet"))(line))(line))(line)
+
+      determineResult(input, 133416.18997644997)
     }
     
     "sum a singleton" >> {

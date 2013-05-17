@@ -406,7 +406,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def perform(res: Result) = res map {
+      def perform(res: Result): Option[BigDecimal] = res map {
         case (sum, count) => sum / count
       }
 
