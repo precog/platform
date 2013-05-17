@@ -90,7 +90,7 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
       val io = targetActor(op.path) map { _.tell(op, requestor) } except {
         case t: Throwable =>
           logger.error("Error obtaining path actor for " + op.path, t)
-          IO { requestor ! PathFailure(op.path, NonEmptyList(Resource.IOError(t))) }
+          IO { requestor ! PathFailure(op.path, Resource.IOError(t)) }
       } 
       
       io.unsafePerformIO

@@ -176,7 +176,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       _ <- created traverse { resource =>
         for {
           _ <- IO { versions += (version -> resource) }
-          _ <- complete.whenM(versionLog.completeVersion(version))
+          _ <- complete.whenM(versionLog.completeVersion(version) >> versionLog.setHead(version))
         } yield PrecogUnit
       }
     } yield {
@@ -218,6 +218,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         },
         resource => for {
           _ <- resource.db.insert(batch(msg))
+          // FIXME: completeVersion and setHead should be one op
           _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
         } yield {
           logger.trace("Sent insert message for " + msg + " to nihdb")
@@ -234,10 +235,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       // quite right. If we're in a replay we don't want to return
       // errors if we're already complete
       if (createIfAbsent) {
-        for {
-          response <- performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal)
-          _ <- terminal.whenM(versionLog.setHead(streamId))
-        } yield {
+        performCreate(msg.apiKey, BlobData(msg.content.data, msg.content.mimeType), streamId, msg.writeAs, terminal) map { response =>
           maybeCompleteJob(msg, terminal, response) pipeTo requestor
           PrecogUnit
         }
@@ -263,8 +261,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             val streamId = versionLog.current.map(_.id).getOrElse(UUID.randomUUID())
             for {
               _ <- persistNIHDB(canCreate(msg.path, permissions(apiKey), msg.writeAs), offset, msg, streamId, false)
-              _ <- versionLog.completeVersion(streamId)
-              _ <- versionLog.setHead(streamId)
+              _ <- versionLog.completeVersion(streamId) >> versionLog.setHead(streamId)
             } yield PrecogUnit
         }
 

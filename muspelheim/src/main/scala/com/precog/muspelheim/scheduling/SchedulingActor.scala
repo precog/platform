@@ -198,7 +198,7 @@ class SchedulingActor(
 
             executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout)).flatMap {
               _ traverse { stream =>
-                consumeStream(0, vfs.persistingStream(task.apiKey, task.sink, sys.error("where is the authorities value???"), perms.toSet[Permission], Some(job.id), stream)) map { totalSize =>
+                consumeStream(0, vfs.persistingStream(task.apiKey, task.sink, task.authorities, perms.toSet[Permission], Some(job.id), stream)) map { totalSize =>
                   ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
                   totalSize
                 }
@@ -221,10 +221,11 @@ class SchedulingActor(
   def receive = {
     case AddTask(repeat, apiKey, authorities, prefix, source, sink, timeout) =>
       val ourself = self
-      val newTask = ScheduledTask(UUID.randomUUID(), repeat, apiKey, authorities, prefix, source, sink, timeout)
-      (repeat match {
+      val taskId = UUID.randomUUID()
+      val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
+      val addResult: Future[Validation[String, UUID]] = (repeat match {
         case None =>
-          executeTask(newTask)
+          executeTask(newTask) map { _ => Success(taskId) }
 
         case Some(_) =>
           storage.addTask(newTask) map { addV =>
@@ -235,7 +236,9 @@ class SchedulingActor(
         case t: Throwable =>
           logger.error("Error adding task " + newTask, t)
           Failure("Internal error adding task")
-      } pipeTo sender
+      }
+
+      addResult pipeTo sender
 
     case DeleteTask(id) =>
       val ourself = self

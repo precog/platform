@@ -45,26 +45,18 @@ import scalaz.syntax.traverse._
 import TableModule._
 
 trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with AskSupport with Logging {
-  def accessControl: AccessControl[Future]
-  def actorSystem: ActorSystem
-  def projectionsActor: ActorRef
+  def secureVFS: SecureVFS[Future]
   def storageTimeout: Timeout
 
   trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       logger.debug("Starting load from " + table.toJson)
-      for {
-        paths          <- pathsM(table)
-        projections    <- paths.toList traverse { path =>
+      val tableV = for {
+        paths          <- EitherT.right(pathsM(table))
+        projections    <- paths.toList.traverse { path =>
                             logger.debug("  Loading path: " + path)
-                            implicit val timeout = storageTimeout
-                            (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[PathActionResponse].map {
-                              case ReadProjectionSuccess(_, projection) => projection
-                              case _ => None // How to report an error here?
-                            }
-                          } map {
-                            _.flatten
-                          }
+                            secureVFS.readProjection(apiKey, path, Version.Current)
+                          } 
         length = projections.map(_.length).sum
       } yield {
         logger.debug("Loading from projections: " + projections)
@@ -74,6 +66,10 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
           acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
         }, ExactSize(length))
       }
+
+      tableV.getOrElse(Table.empty)
+
+
     }
   }
 }

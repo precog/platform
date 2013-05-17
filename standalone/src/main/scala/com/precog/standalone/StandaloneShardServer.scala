@@ -48,6 +48,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.shard._
 import com.precog.shard.scheduling.NoopScheduler
+import com.precog.yggdrasil.vfs.NoopVFS
 import java.awt.Desktop
 import java.net.URI
 
@@ -86,13 +87,14 @@ trait StandaloneShardServer
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
 
     // We always want a managed shard now, for better error reporting and Labcoat compatibility
-    ShardState(platform, 
-               apiKeyFinder, 
-               new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")), 
-               NoopStoredQueries[Future], 
-               NoopScheduler[Future], 
-               jobManager, 
-               Clock.System, 
+    ShardState(platform,
+               apiKeyFinder,
+               new StaticAccountFinder[Future]("root", config[String]("security.masterAccount.apiKey")),
+               NoopVFS,
+               NoopStoredQueries[Future],
+               NoopScheduler[Future],
+               jobManager,
+               Clock.System,
                stoppable)
   }
 

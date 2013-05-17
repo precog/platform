@@ -64,6 +64,7 @@ sealed trait Resource {
 
 object Resource extends Logging {
   val QuirrelData = MimeType("application", "x-quirrel-data")
+  val AnyMimeType = MimeType("*", "*")
 
   def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
     import com.precog.yggdrasil.table.ColumnarTableModule
