@@ -29,14 +29,21 @@ object Version {
   case class Archived(uuid: UUID) extends Version
 }
 
-/** 
+/**
  * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
  */
 trait VFS[M[+_]] {
-  def readQuery(path: Path, version: Version): M[Option[String]]  
-  def readResource(path: Path, version: Version): M[ReadResult]  
+  def readQuery(path: Path, version: Version): M[Option[String]]
+  def readResource(path: Path, version: Version): M[ReadResult]
   def readCache(path: Path, version: Version): M[Option[StreamT[M, Slice]]]
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
+  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice]
+}
+
+object NoopVFS extends VFS[Future] {
+  def readQuery(path: Path, version: Version): Future[Option[String]] = sys.error("stub VFS")
+  def readResource(path: Path, version: Version): Future[ReadResult] = sys.error("stub VFS")
+  def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = sys.error("stub VFS")
+  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice]  = sys.error("stub VFS")
 }
 
 class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {

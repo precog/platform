@@ -128,12 +128,7 @@ trait TestShardService extends
       )
     }
 
-    val vfs = new VFS[Future] {
-      def readQuery(path: Path, version: Version): Future[Option[String]] = sys.error("stub VFS")
-      def readResource(path: Path, version: Version): Future[ReadResult] = sys.error("stub VFS")
-      def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = sys.error("stub VFS")
-      def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice]  = sys.error("stub VFS")
-    }
+    val vfs = NoopVFS
 
     val scheduler = NoopScheduler[Future]
 
