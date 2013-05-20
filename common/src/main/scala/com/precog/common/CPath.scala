@@ -269,7 +269,7 @@ object CPath {
     if (cpaths0.isEmpty && values.length == 1)
       RootNode(Seq(LeafNode(values.head)))
     else if (cpaths0.length == values.length)
-      makeStructuredTree(cpaths0 zip values)
+      makeStructuredTree(cpaths0.sorted zip values)
     else
       RootNode(Seq.empty[CPathTree[A]])
   }
