@@ -97,7 +97,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
       case Right(dag) =>
         for {
           table <- Evaluator(M).eval(dag, EvaluationContext(yggConfig.apiKey, Path.Root, new org.joda.time.DateTime()), yggConfig.optimize)
-          size <- Timing.timeM("Counting stream")(countStream(table.renderJson(',')))
+          size <- Timing.timeM("Counting stream")(countStream(table.renderJson("", ",", "")))
         } yield size
     }
   } catch {

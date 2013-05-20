@@ -20,7 +20,7 @@
 package com.precog.ingest
 package util
 
-import kafka._ 
+import kafka._
 import service._
 
 import scala.collection.mutable.ListBuffer
@@ -97,7 +97,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
       val totalMessages = messages * threadCount * samples.size
 
       println("Time: %.02f Messages: %d Throughput: %.01f msgs/s Errors: %d".format(seconds, totalMessages, totalMessages / seconds, totalErrors))
-    } 
+    }
     close
   }
 
@@ -108,14 +108,14 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None, new Instant())
+            val event = Ingest("bogus", Path(path), None, Vector(sample.next._1), None, new Instant(), StreamRef.Append)
 
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
                 send(event, timeout)
               } catch {
-                case ex => 
+                case ex =>
                   ex.printStackTrace
                   errors += 1
               }
@@ -128,13 +128,13 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
   }
 
   def loadConfig(args: Array[String]): Properties = {
-    if(args.length != 1) usage() 
-    
+    if(args.length != 1) usage()
+
     val config = new Properties()
     val file = new File(args(0))
-    
-    if(!file.exists) usage() 
-    
+
+    if(!file.exists) usage()
+
     config.load(new FileReader(file))
     config
   }
@@ -144,7 +144,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticEventMessage
     sys.exit(1)
   }
 
-  def usageMessage = 
+  def usageMessage =
     """
 Usage: command {properties file}
 
@@ -154,7 +154,7 @@ delay - delay between messages (<0 indicates no delay) (default: 100)
 threads - number of producer threads (default: 1)
 repeats - number of of times to repeat test (default: 1)
     """
-  
+
   def send(event: Ingest, timeout: Timeout): Unit
   def close(): Unit = ()
 }
@@ -178,7 +178,7 @@ Usage:
     val data = IOUtils.readFileToString(new File(datafile)).unsafePerformIO
     val json = JParser.parseUnsafe(data)
     json match {
-      case JArray(elements) => elements.foreach { send(url, apiKey, _ ) } 
+      case JArray(elements) => elements.foreach { send(url, apiKey, _ ) }
       case _                =>
         println("Error the input file must contain an array of elements to insert")
         System.exit(1)
@@ -186,20 +186,20 @@ Usage:
   }
 
   def send(url: String, apiKey: String, event: JValue) {
-    
+
     val f: Future[HttpResponse[JValue]] = client.path(url)
                                                 .query("apiKey", apiKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue]("")(event)
-    Await.ready(f, 10 seconds) 
+    Await.ready(f, 10 seconds)
     f.value match {
       case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
-      case Some(Right(HttpResponse(status, _, _, _)))                       => 
+      case Some(Right(HttpResponse(status, _, _, _)))                       =>
         throw new RuntimeException("Server returned error code with request")
-      case Some(Left(ex))                                              => 
+      case Some(Left(ex))                                              =>
         throw ex
-      case _                                                           => 
-        throw new RuntimeException("Error processing insert request") 
+      case _                                                           =>
+        throw new RuntimeException("Error processing insert request")
     }
   }
 
@@ -209,7 +209,7 @@ Usage:
   } else {
     run(args(0), args(1), args(2))
   }
-  
+
   AkkaDefaults.actorSystem.shutdown
 }
 
@@ -222,7 +222,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   lazy val ingestAPIKey = config.getProperty("apiKey", "dummy")
   val ingestOwnerAccountId = Authorities("dummy")
-  val client = new HttpClientXLightWeb 
+  val client = new HttpClientXLightWeb
 
   implicit val M: scalaz.Monad[Future] = new blueeyes.bkka.FutureMonad(defaultFutureDispatch)
 
@@ -232,15 +232,15 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
                                                 .query("apiKey", ingestAPIKey)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data.head)
-    Await.ready(f, 10 seconds) 
+    Await.ready(f, 10 seconds)
     f.value match {
       case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
-      case Some(Right(HttpResponse(status, _, _, _)))                       => 
+      case Some(Right(HttpResponse(status, _, _, _)))                       =>
         throw new RuntimeException("Server returned error code with request")
-      case Some(Left(ex))                                              => 
+      case Some(Left(ex))                                              =>
         throw ex
-      case _                                                           => 
-        throw new RuntimeException("Error processing insert request") 
+      case _                                                           =>
+        throw new RuntimeException("Error processing insert request")
     }
   }
 

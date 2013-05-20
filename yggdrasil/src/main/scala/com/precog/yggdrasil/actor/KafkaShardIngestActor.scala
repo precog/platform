@@ -37,6 +37,7 @@ import akka.dispatch.{Await, ExecutionContext, Future, Promise}
 import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Timeout
+import akka.util.Duration
 
 import com.weiglewilczek.slf4s._
 import org.slf4j._
@@ -76,6 +77,13 @@ import scalaz.syntax.monoid._
 //////////////
 // MESSAGES //
 //////////////
+
+case class GetMessages(sendTo: ActorRef)
+
+sealed trait ShardIngestAction
+sealed trait IngestResult extends ShardIngestAction
+case class IngestErrors(errors: Seq[String]) extends IngestResult
+case class IngestData(messages: Seq[(Long, EventMessage)]) extends IngestResult
 
 case class ProjectionUpdatesExpected(projections: Int)
 
@@ -149,7 +157,7 @@ object FilesystemIngestFailureLog {
     implicit val decomposer: Decomposer[LogRecord] = new Decomposer[LogRecord] {
       def decompose(rec: LogRecord) = JObject(
         "offset" -> rec.offset.serialize,
-        "messageType" -> rec.message.fold(_ => "ingest", _ => "archive").serialize,
+        "messageType" -> rec.message.fold(_ => "ingest", _ => "archive", _ => "storeFile").serialize,
         "message" -> rec.message.serialize,
         "lastKnownGood" -> rec.lastKnownGood.serialize
       )
@@ -186,8 +194,10 @@ abstract class KafkaShardIngestActor(shardId: String,
                                      consumer: SimpleConsumer,
                                      topic: String,
                                      permissionsFinder: PermissionsFinder[Future],
+                                     routingActor: ActorRef,
                                      ingestFailureLog: IngestFailureLog,
                                      fetchBufferSize: Int = 1024 * 1024,
+                                     idleDelay: Duration = 1 seconds,
                                      ingestTimeout: Timeout = 120 seconds,
                                      maxCacheSize: Int = 5,
                                      maxConsecutiveFailures: Int = 3) extends Actor {
@@ -201,8 +211,18 @@ abstract class KafkaShardIngestActor(shardId: String,
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[(Long, EventMessage)]]
   private val runningBatches = new AtomicInteger
   private var pendingCompletes = Vector.empty[BatchComplete]
+  private var initiated = 0
 
   implicit def M: Monad[Future]
+
+  override def preStart() = {
+    logger.info("Starting KafkaShardIngestActor")
+    context.system.scheduler.schedule(idleDelay, idleDelay) {
+      initiated += 1
+      self ! GetMessages(routingActor)
+    }
+    logger.info("Recurring ingest request scheduled")
+  }
 
   def receive = {
     case Status => sender ! status
@@ -279,6 +299,7 @@ abstract class KafkaShardIngestActor(shardId: String,
                 // create a handler for the batch, then reply to the sender with the message set
                 // using that handler reference as the sender to which the ingest system will reply
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout)))
+                batchHandler.tell(ProjectionUpdatesExpected(messages.size))
                 requestor.tell(IngestData(messages), batchHandler)
               } else {
                 logger.trace("No new data found after checkpoint: " + checkpoint)
@@ -328,7 +349,7 @@ abstract class KafkaShardIngestActor(shardId: String,
         case Nil =>
           (batch, checkpoint)
 
-        case (offset, event @ IngestMessage(apiKey, _, ownerAccountId0, records, _, _)) :: tail =>
+        case (offset, event @ IngestMessage(_, _, _, records, _, _, _)) :: tail =>
           val newCheckpoint = if (records.isEmpty) {
             checkpoint.skipTo(offset)
           } else {
@@ -340,6 +361,10 @@ abstract class KafkaShardIngestActor(shardId: String,
           }
 
           buildBatch(tail, batch :+ (offset, event), newCheckpoint)
+
+        case (offset, store : StoreFileMessage) :: tail =>
+          val EventId(pid, sid) = store.eventId
+          buildBatch(tail, batch :+ (offset, store), checkpoint.update(offset, pid, sid))
 
         case (offset, ArchiveMessage(_, _, _, eventId, _)) :: tail if batch.nonEmpty =>
           logger.debug("Batch stopping on receipt of ArchiveMessage at offset/id %d/%d".format(offset, eventId.uid))
@@ -385,7 +410,7 @@ abstract class KafkaShardIngestActor(shardId: String,
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
         eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage.EventMessageExtraction)] map { messageSet =>
           val apiKeys: List[(APIKey, Path)] = messageSet collect {
-            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _))) => (apiKey, path)
+            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _, _))) => (apiKey, path)
             case (_, -\/((apiKey, path, _))) => (apiKey, path)
           }
 

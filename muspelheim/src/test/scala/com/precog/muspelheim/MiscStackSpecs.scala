@@ -466,7 +466,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       actual mustEqual Set(2011)
     }
 
-    "return the left size of a true if/else operation" in {
+    "return the left side of a true if/else operation" in {
       val input1 = """
         | if true then //clicks else //campaigns
       """.stripMargin
@@ -482,7 +482,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       result1 mustEqual result2
     }
 
-    "return the right size of a false if/else operation" in {
+    "return the right side of a false if/else operation" in {
       val input1 = """
         | if false then //clicks else //campaigns
       """.stripMargin

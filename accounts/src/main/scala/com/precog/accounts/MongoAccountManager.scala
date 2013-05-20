@@ -95,11 +95,11 @@ abstract class MongoAccountManager(mongo: Mongo, database: Database, settings: M
 
   def newAccountId: Future[String]
 
-  def newAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId], profile: Option[JValue])(f: (AccountId, Path) => Future[APIKey]): Future[Account] = {
+  def createAccount(email: String, password: String, creationDate: DateTime, plan: AccountPlan, parent: Option[AccountId], profile: Option[JValue])(f: AccountId => Future[APIKey]): Future[Account] = {
     for {
       accountId <- newAccountId
       path = Path(accountId)
-      apiKey <- f(accountId, path)
+      apiKey <- f(accountId)
       account <- {
         val salt = randomSalt()
         val account0 = Account(

@@ -40,6 +40,9 @@ import org.specs2.mutable.{After, Specification}
 import org.specs2.specification.{Fragments, Step}
 import org.specs2.ScalaCheck
 
+import scalaz.std.stream._
+import scalaz.syntax.traverse._
+import scalaz.syntax.monad._
 import scalaz.effect.IO
 
 import java.io.File
@@ -56,12 +59,12 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
   val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
-  def newProjection(workDir: File, threshold: Int = 1000) =
-    NIHDB.create(chef, Authorities("test"), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map { db =>
-      new NIHDBActorProjection(db)(actorSystem.dispatcher)
-    }.valueOr { e => throw new Exception(e.message) }
-
   implicit val M = new FutureMonad(actorSystem.dispatcher)
+
+  val authorities = Authorities("test")
+
+  def newNihdb(workDir: File, threshold: Int = 1000): NIHDB =
+    NIHDB.create(chef, authorities, workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.valueOr { e => throw new Exception(e.message) }
 
   val maxDuration = Duration(60, "seconds")
 
@@ -80,15 +83,17 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       throw new Exception("Failed to create work directory! " + workDir)
     }
 
-    var projection = newProjection(workDir)
+    var nihdb = newNihdb(workDir)
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
+    def projection = fromFuture(NIHDBProjection.wrap(nihdb, authorities))
+
+    def close(proj: NIHDB) = fromFuture(proj.close(actorSystem))
 
     def stop = {
       (for {
-        _ <- IO { close(projection) }
+        _ <- IO { close(nihdb) }
         _ <- IOUtils.recursiveDelete(workDir)
       } yield ()).unsafePerformIO
     }
@@ -111,12 +116,12 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L))
 
       val toInsert = (0L to 2L).toSeq.map { i =>
-        (i, Seq(IngestRecord(EventId.fromLong(i), JNum(i))))
+        NIHDB.Batch(i, Seq(JNum(i)))
       }
 
       val results =
         for {
-          _ <- projection.insert(toInsert)
+          _ <- nihdb.insertVerified(toInsert)
           result <- projection.getBlockAfter(None, None)
         } yield result
 
@@ -135,23 +140,17 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = Seq(JNum(0L), JNum(1L), JNum(2L), JNum(3L), JNum(4L))
 
-      projection.insert((0L to 2L).toSeq.map { i =>
-        i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
-      })
-
-      // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
-      projection.insert((0L to 2L).toSeq.map { i =>
-        i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
-      })
-
-      projection.insert((0L to 4L).toSeq.map { i =>
-        i -> Seq(IngestRecord(EventId.fromLong(i), JNum(i)))
-      })
+      val io = 
+        nihdb.insert((0L to 2L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) }) >>
+        // Ensure we handle skips/overlap properly. First tests a complete skip, second tests partial
+        nihdb.insert((0L to 2L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) }) >>
+        nihdb.insert((0L to 4L).toSeq.map { i => NIHDB.Batch(i, Seq(JNum(i))) })
 
       val result = for {
-        _ <- projection.close(actorSystem)
-        _ <- Future(projection = newProjection(workDir))(actorSystem.dispatcher)
-        status <- projection.status
+        _ <- Future(io.unsafePerformIO)(actorSystem.dispatcher)
+        _ <- nihdb.close(actorSystem)
+        _ <- Future(nihdb = newNihdb(workDir))(actorSystem.dispatcher)
+        status <- nihdb.status
         r <- projection.getBlockAfter(None, None)
       } yield r
 
@@ -174,18 +173,18 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
       val expected: Seq[JValue] = (0L to 1950L).map(JNum(_)).toSeq
 
-      (0L to 1950L).map {
-        i => IngestRecord(EventId.fromLong(i), JNum(i))
-      }.grouped(400).zipWithIndex.foreach { case (values, id) => projection.insert(Seq(id.toLong -> values)) }
+      (0L to 1950L).map(JNum(_)).grouped(400).zipWithIndex foreach { 
+        case (values, id) => nihdb.insert(Seq(NIHDB.Batch(id.toLong, values))).unsafePerformIO 
+      }
 
       var waits = 10
 
-      while (waits > 0 && fromFuture(projection.status).pending > 0) {
+      while (waits > 0 && fromFuture(nihdb.status).pending > 0) {
         Thread.sleep(200)
         waits -= 1
       }
 
-      val status = fromFuture(projection.status)
+      val status = fromFuture(nihdb.status)
 
       status.cooked mustEqual 1
       status.pending mustEqual 0

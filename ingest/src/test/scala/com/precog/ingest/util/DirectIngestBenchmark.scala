@@ -89,7 +89,7 @@ object DirectKafkaProducer extends App {
   val topic = "direct_test_topic"
 
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
-  val msg = IngestMessage("test", Path("/test/"), Authorities("test"), Vector(IngestRecord(EventId(0, 0), sample.next._1)), None, new Instant())
+  val msg = IngestMessage("test", Path("/test/"), Authorities("test"), Vector(IngestRecord(EventId(0, 0), sample.next._1)), None, new Instant(), StreamRef.Append)
 
   val total = 1000000
   val start = System.nanoTime

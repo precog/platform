@@ -291,7 +291,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
         case badResponse => failure("Invalid response: " + badResponse)
       }.copoint
 
-      val subkey = apiKeyManager.newAPIKey(Some("subkey"), None, apiKey, Set.empty).copoint
+      val subkey = apiKeyManager.createAPIKey(Some("subkey"), None, apiKey, Set.empty).copoint
 
       getAccountByAPIKey(subkey.apiKey, rootUser, rootPass).map {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) => jvalue \ "accountId"
@@ -330,7 +330,7 @@ class AccountServiceSpec extends TestAccountService with Tags {
               logger.debug("Got reset email: " + output.toString("UTF-8"))
               message.getSubject
 
-            case _ => failure("Reset email not received")
+            case problem => failure("Reset email not received, got " + problem)
           }
         }
         resetResult <- resetPassword(accountId, resetToken, newPass)
