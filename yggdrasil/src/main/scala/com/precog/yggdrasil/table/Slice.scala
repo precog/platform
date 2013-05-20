@@ -560,8 +560,14 @@ trait Slice { source =>
             ctype.isNumeric
           }
 
+          val grouped = numCols groupBy { case (ColumnRef(cpath, _), _) => cpath }
+
           Loop.range(0, filter.size) { i =>
-            val numBool = numCols.values.toArray.exists(_.isDefinedAt(i))
+            val numBools = grouped.values map { case refs =>
+              refs.values.toArray.exists(_.isDefinedAt(i))
+            }
+
+            val numBool = numBools reduce { _ && _ }
             val otherBool = otherCols.values.toArray.forall(_.isDefinedAt(i))
 
             if (otherBool && numBool) acc.add(i)
