@@ -133,7 +133,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           }
         }
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           val scanners: Seq[TransSpec1] = models map { model => WrapArray(Scan(TransSpec1.Id, scanner(model))) }
           val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
 
@@ -176,7 +176,7 @@ trait PredictionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           }
         }
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           val scanners: Seq[TransSpec1] = models map { model => WrapArray(Scan(TransSpec1.Id, scanner(model))) }
           val spec: TransSpec1 = scanners reduceOption { (s1, s2) => InnerArrayConcat(s1, s2) } getOrElse TransSpec1.Id
 

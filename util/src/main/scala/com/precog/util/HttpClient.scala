@@ -44,11 +44,20 @@ trait HttpClientModule[M[+_]] {
     object POST extends HttpMethod
   }
 
-  sealed trait HttpClientError
+  sealed trait HttpClientError {
+    def userMessage: String
+  }
+
   object HttpClientError {
-    case class ConnectionError(url: Option[String], cause: Throwable) extends HttpClientError
-    case class NotOk(code: Int, message: String) extends HttpClientError
-    case object EmptyBody extends HttpClientError
+    case class ConnectionError(url: Option[String], cause: Throwable) extends HttpClientError {
+      def userMessage = url map ("Error connecting to " + _) getOrElse "Invalid URL"
+    }
+    case class NotOk(code: Int, message: String) extends HttpClientError {
+      def userMessage = "Bad response from upstream server: %d %s" format (code, message)
+    }
+    case object EmptyBody extends HttpClientError {
+      def userMessage = "Server returned OK, but with no data"
+    }
   }
 
   case class Request[+A](

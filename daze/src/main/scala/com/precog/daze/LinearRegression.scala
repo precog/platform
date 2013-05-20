@@ -44,15 +44,13 @@ import scalaz.syntax.traverse._
 trait LinearRegressionLibModule[M[+_]] 
     extends ColumnarTableLibModule[M]
     with ReductionLibModule[M]
-    with EvaluatorMethodsModule[M]
     with PredictionLibModule[M] {
 
   trait LinearRegressionLib 
       extends ColumnarTableLib
       with RegressionSupport
       with PredictionSupport
-      with ReductionLib
-      with EvaluatorMethods {
+      with ReductionLib {
 
     import trans._
 
@@ -440,7 +438,7 @@ trait LinearRegressionLibModule[M[+_]]
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table0: Table, ctx: EvaluationContext) = {
+        def apply(table0: Table, ctx: MorphContext) = {
           val ySpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
           val xsSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
 

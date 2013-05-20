@@ -526,8 +526,8 @@ trait KMediansCoreSetClustering {
   }
 }
 
-trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMethodsModule[M] with AssignClusterModule[M] {
-  trait ClusteringLib extends ColumnarTableLib with AssignClusterSupport with EvaluatorMethods {
+trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with AssignClusterModule[M] {
+  trait ClusteringLib extends ColumnarTableLib with AssignClusterSupport {
     import trans._
     import TransSpecModule._
 
@@ -641,7 +641,7 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
       }
 
       def morph1Apply(ks: List[Int]): Morph1Apply = new Morph1Apply {
-        def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table0: Table, ctx: MorphContext): M[Table] = {
           val table = table0.transform(DerefObjectStatic(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble), paths.Value))
 
           val defaultNumber = new java.util.concurrent.atomic.AtomicInteger(1)

@@ -66,8 +66,16 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
   }
 
+  val defaultEvaluationContext = EvaluationContext("", Path.Root, new DateTime())
+  val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
+    def info(msg: String): M[Unit] = M.point(())
+    def warn(msg: String): M[Unit] = M.point(())
+    def error(msg: String): M[Unit] = M.point(())
+    def die(): M[Unit] = M.point(sys.error("MorphContext#die()"))
+  })
+
   def runExpansion(table: Table): List[JValue] = {
-    expandGlob(table, EvaluationContext("", Path.Root, new DateTime())).map(_.transform(SourceValue.Single)).flatMap(_.toJson).copoint.toList
+    expandGlob(table, defaultMorphContext).map(_.transform(SourceValue.Single)).flatMap(_.toJson).copoint.toList
   }
 
   "path globbing" should {

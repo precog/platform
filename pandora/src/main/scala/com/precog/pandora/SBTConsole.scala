@@ -30,6 +30,7 @@ import pandora._
 import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.niflheim._
+import com.precog.util.XLightWebHttpClientModule
 
 import quirrel._
 import quirrel.emitter._
@@ -78,6 +79,7 @@ trait Platform extends muspelheim.ParseEvalStack[Future]
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with StandaloneActorProjectionSystem
+    with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
