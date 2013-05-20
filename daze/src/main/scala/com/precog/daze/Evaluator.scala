@@ -616,7 +616,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 .transform(spec)
                 .reduce(reduction.reducer(ctx))(reduction.monoid))
 
-              table = result.map(r => reduction.extract(r))
+              table = result.map(reduction.extract)
 
               keyWrapped = trans.WrapObject(
                 trans.ConstLiteral(
