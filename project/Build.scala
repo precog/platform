@@ -158,12 +158,12 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(standalone, shard)
 
   lazy val daze = Project(id = "daze", base = file("daze")).
-    settings(commonNexusSettings: _*).dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, logging % "test->test")
+    settings(commonNexusSettings: _*).dependsOn (util % "compile->compile;test->test", common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", logging % "test->test")
 
   /// Testing ///
 
   lazy val muspelheim = Project(id = "muspelheim", base = file("muspelheim")).
-    settings(commonNexusSettings: _*) dependsOn (common, quirrel, daze, yggdrasil % "compile->compile;test->test", logging % "test->test")
+    settings(commonNexusSettings: _*) dependsOn (util % "compile->compile;test->test", common, quirrel, daze, yggdrasil % "compile->compile;test->test", logging % "test->test")
 
   lazy val pandora = Project(id = "pandora", base = file("pandora")).
     settings(commonAssemblySettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")

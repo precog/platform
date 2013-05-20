@@ -32,12 +32,12 @@ import scalaz.syntax.std.boolean._
 
 import TableModule._
 
-trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] with ReductionLibModule[M] {
-  import library._
+trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] {
+  //import library._
   import trans._
   import constants._
 
-  trait StatsLib extends ColumnarTableLib with EvaluatorMethods with ReductionLib {
+  trait StatsLib extends ColumnarTableLib with ReductionLib {
     import BigDecimalOperations._
     import TableModule.paths
     
@@ -52,7 +52,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def apply(table: Table, ctx: EvaluationContext) = {  //TODO write tests for the empty table case
+      def apply(table: Table, ctx: MorphContext) = {  //TODO write tests for the empty table case
         val compactedTable = table.compact(WrapObject(Typed(DerefObjectStatic(Leaf(Source), paths.Value), JNumberT), paths.Value.name))
 
         val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
@@ -93,7 +93,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
         def append(left: Set[A], right: => Set[A]) = left ++ right
       }
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
         def reduce(schema: CSchema, range: Range): Result = {
           schema.columns(JNumberT) flatMap {
             case col: LongColumn =>
@@ -131,7 +131,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       def extract(res: Result): Table = Table.constDecimal(res)
 
-      def apply(table: Table, ctx: EvaluationContext) = {
+      def apply(table: Table, ctx: MorphContext) = {
         val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
         val sortedTable: M[Table] = table.sort(sortKey, SortAscending)
 
@@ -149,7 +149,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
           val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT)))
@@ -286,7 +286,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: MorphContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -300,7 +300,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -436,7 +436,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: MorphContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -450,7 +450,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -596,7 +596,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: MorphContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -610,7 +610,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -801,7 +801,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
+        def apply(table: Table, ctx: MorphContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -1229,7 +1229,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       // it would be better to let our consumers worry about whether the table is
       // sorted on paths.SortKey.
 
-      def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+      def apply(table: Table, ctx: MorphContext): M[Table] = {
         def count(tbl: Table): M[Long] = tbl.size match {
           case ExactSize(n) => M.point(n)
           case _ => table.reduce(Count.reducer(ctx))

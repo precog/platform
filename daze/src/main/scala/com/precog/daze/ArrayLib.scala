@@ -20,7 +20,7 @@ trait ArrayLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       
       override val idPolicy = IdentityPolicy.Synthesize
       
-      def apply(table: Table, ctx: EvaluationContext) = M point {
+      def apply(table: Table, ctx: MorphContext) = M point {
         var totalMaxLength = 0      // TODO can probably get better results from avg length
         
         val derefed = table transform trans.DerefObjectStatic(Leaf(Source), paths.Value)

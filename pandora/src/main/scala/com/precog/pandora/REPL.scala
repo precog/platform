@@ -21,6 +21,7 @@ import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 import com.precog.util.FilesystemFileOps
+import com.precog.util.XLightWebHttpClientModule
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -84,6 +85,7 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
 trait REPL extends ParseEvalStack[Future]
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
+    with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"

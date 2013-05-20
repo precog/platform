@@ -12,7 +12,7 @@ trait StdLibEvaluatorStack[M[+_]]
     with ReductionFinderModule[M]
     with PredicatePullupsModule[M] {
 
-  trait Lib extends StdLib with StdLibOpFinder with StdLibStaticInliner with ReductionFinder with PredicatePullups
+  trait Lib extends StdLib with StdLibOpFinder
   object library extends Lib
 
   abstract class Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
@@ -22,8 +22,8 @@ trait StdLibEvaluatorStack[M[+_]]
 
     val Exists = library.Exists
     val Forall = library.Forall
-    def concatString(ctx: EvaluationContext) = library.Infix.concatString.f2(ctx)
-    def coerceToDouble(ctx: EvaluationContext) = cf.util.CoerceToDouble
+    def concatString(ctx: MorphContext) = library.Infix.concatString.f2(ctx)
+    def coerceToDouble(ctx: MorphContext) = cf.util.CoerceToDouble
   }
 }
 

@@ -18,6 +18,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
 import com.precog.util.FilesystemFileOps
+import com.precog.util.XLightWebHttpClientModule
 
 import org.slf4j.{ Logger, LoggerFactory }
 
@@ -61,7 +62,9 @@ object Fault {
 }
 
 
-trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
+trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]]
+    with ParseEvalStack[M] with XLightWebHttpClientModule[M] {
+
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)

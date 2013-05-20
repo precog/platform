@@ -2,6 +2,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.util._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
@@ -56,6 +57,12 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   def newGroupId = groupId.getAndIncrement
 
   val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
+  val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
+    def info(msg: String): M[Unit] = M.point(())
+    def warn(msg: String): M[Unit] = M.point(())
+    def error(msg: String): M[Unit] = M.point(())
+    def die(): M[Unit] = M.point(sys.error("MorphContext#die()"))
+  })
 
   val projections = Map.empty[Path, Projection]
 

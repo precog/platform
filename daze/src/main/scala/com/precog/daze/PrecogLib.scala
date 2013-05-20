@@ -44,7 +44,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
           JObjectFixedT(Map("url" -> JTextT))),
         JObjectUnfixedT)
       
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
         trans.MapWith(
           trans.InnerArrayConcat(
             trans.WrapArray(left),
@@ -52,7 +52,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
           new EnrichmentMapper(ctx))
       }
 
-      class EnrichmentMapper(ctx: EvaluationContext) extends CMapperM[M] {
+      class EnrichmentMapper(ctx: MorphContext) extends CMapperM[M] {
         import Extractor.Error
 
         private type Result[+A] = Validation[NonEmptyList[HttpClientError \/ Error], A]
@@ -104,7 +104,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
           }
 
           val options = params.deref(CPathField("options"))
-          // TODO: Add these values to EvaluationContext.
+          // TODO: Add these values to MorphContext.
           // val baseOpts = Map(jfield("accountId", ctx.accountId), jfield("email", ctx.email))
           val baseOpts = Map.empty[String, JValue]
           val chunks: List[((String, Map[String, JValue]), BitSet)] = chunks0 map { case (row, members) =>
@@ -156,11 +156,21 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
             }
           }
           
-          resultsM map (_.sequence: Result[List[Slice]]) map {
+          resultsM map (_.sequence: Result[List[Slice]]) flatMap {
             case Success(slices) =>
-              slices.foldLeft(Slice(Map.empty, slice.size))(_ zip _).columns
+              val resultSlice = slices.foldLeft(Slice(Map.empty, slice.size))(_ zip _).columns
+              M point resultSlice
+
             case Failure(errors) =>
-              sys.error(errors.toString)
+              val messages = errors.toList map (_.fold({ httpError =>
+                "Error making HTTP request: " + httpError.userMessage
+              }, { jsonError =>
+                "Error parsing JSON: " + jsonError.message
+              }))
+              val units: M[List[Unit]] = messages traverse (ctx.logger.error(_))
+              units flatMap { _ =>
+                ctx.logger.die() map { _ => Map.empty }
+              }
           }
         }
       }

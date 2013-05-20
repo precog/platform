@@ -1,6 +1,4 @@
-package com.precog.daze
-
-import com.precog.util.HttpClientModule
+package com.precog.util
 
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._

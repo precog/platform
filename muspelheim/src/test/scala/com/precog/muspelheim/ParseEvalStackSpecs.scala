@@ -4,6 +4,8 @@ package muspelheim
 import common._
 import common.kafka._
 
+import com.precog.util._
+
 import daze._
 
 import quirrel._
@@ -42,6 +44,7 @@ import akka.dispatch.ExecutionContext
 
 trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
+    with EchoHttpClientModule[M]
     with MemoryDatasetConsumer[M]
     with IdSourceScannerModule[M] { self =>
 

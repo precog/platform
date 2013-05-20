@@ -346,4 +346,36 @@ trait TransSpecModule extends FNModule {
       }
     }
   }
+
+  import trans._
+
+  type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
+  type TableTransSpec1 = TableTransSpec[Source1]
+  type TableTransSpec2 = TableTransSpec[Source2]
+
+  def makeTableTrans(tableTrans: TableTransSpec1): TransSpec1 = {
+    val wrapped = for ((key @ CPathField(fieldName), value) <- tableTrans) yield {
+      val mapped = TransSpec.deepMap(value) {
+        case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
+      }
+      
+      trans.WrapObject(mapped, fieldName)
+    }
+    
+    wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
+      trans.InnerObjectConcat(acc, ts)
+    }
+  }
+
+  def liftToValues(trans: TransSpec1): TransSpec1 =
+    makeTableTrans(Map(paths.Value -> trans))
+
+  def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  
+    val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
+    trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
+  }
+
+  def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+    trans.WrapObject(source, paths.Value.name)
+  }
 }
