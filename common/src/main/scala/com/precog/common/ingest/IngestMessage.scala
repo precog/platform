@@ -121,7 +121,7 @@ object IngestMessage {
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamRef" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: ("streamRef" ||| StreamRef.Append.asInstanceOf[StreamRef]) :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
   val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.1".v))
