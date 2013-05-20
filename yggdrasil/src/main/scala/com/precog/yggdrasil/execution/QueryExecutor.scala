@@ -94,6 +94,12 @@ trait QueryExecutor[M[+_], +A] { self =>
     * Execute the provided query, returning the *values* of the result set (discarding identities)
     */
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, A]
+
+  def map[B](f: A => B)(implicit M: Functor[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
+    def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, B] = {
+      self.execute(apiKey, query, prefix, opts) map f
+    }
+  }
 }
 
 class NullQueryExecutor[M[+_]: Monad] extends QueryExecutor[M, Nothing] {

@@ -42,7 +42,7 @@ import com.precog.common.services.ServiceHandlerUtil._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.scheduling.CronExpressionSerialization._
 import com.precog.util.PrecogUnit
-import Permissions._
+import Permission._
 
 import com.weiglewilczek.slf4s.Logging
 
