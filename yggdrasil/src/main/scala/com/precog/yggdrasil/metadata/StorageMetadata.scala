@@ -36,27 +36,6 @@ trait StorageMetadata[M[+_]] { self =>
 
   def currentAuthorities(path: Path): M[Option[Authorities]]
   def currentVersion(path: Path): M[Option[VersionEntry]]
-//  def findProjections(path: Path, selector: CPath): M[Map[ProjectionDescriptor, ColumnMetadata]]
-//  def findPathMetadata(path: Path, selector: CPath): M[PathRoot]
-//
-//  def findProjections(path: Path): M[Map[ProjectionDescriptor, ColumnMetadata]] = {
-//    findSelectors(path) flatMap { selectors => 
-//      selectors.traverse(findProjections(path, _)) map { proj =>
-//        if(proj.size == 0) {
-//          Map.empty[ProjectionDescriptor, ColumnMetadata]
-//        } else {
-//          proj.reduce(_ ++ _) 
-//        }
-//      }
-//    }
-//  }
-//
-//  def findProjections(path: Path, selector: CPath, valueType: CType): M[Map[ProjectionDescriptor, ColumnMetadata]] = 
-//    findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
-//
-//  def typeFilter(path: Path, selector: CPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
-//    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
-//  }
 
   def liftM[T[_[+_], +_]](implicit T: Hoist[T], M0: Monad[M]) = new StorageMetadata[({ type λ[+α] = T[M, α] })#λ] {
     def findDirectChildren(path: Path) = self.findDirectChildren(path).liftM[T]
@@ -65,15 +44,5 @@ trait StorageMetadata[M[+_]] { self =>
     def currentAuthorities(path: Path)  = self.currentAuthorities(path).liftM[T]
     def currentVersion(path: Path) = self.currentVersion(path).liftM[T]
     def findStructure(path: Path, selector: CPath) = self.findStructure(path, selector).liftM[T]
-
-//    def findProjections(path: Path, selector: CPath) = self.findProjections(path, selector).liftM[T]
-//    def findPathMetadata(path: Path, selector: CPath) = self.findPathMetadata(path, selector).liftM
-//
-//    override def findProjections(path: Path) = self.findProjections(path).liftM
-//
-//    override def findProjections(path: Path, selector: CPath, valueType: CType) = self.findProjections(path, selector, valueType).liftM
-//
-//    override def typeFilter(path: Path, selector: CPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean =
-//      self.typeFilter(path, selector, valueType)(t)
   }
 }

@@ -63,8 +63,8 @@ class PathRoutingActor (baseDir: File, resources: DefaultResourceBuilder, permis
   }
 
   def receive = {
-    case FindChildren(path, apiKey) =>
-      VFSPathUtils.findChildren(baseDir, path, apiKey, permissionsFinder) pipeTo sender
+    case FindChildren(path) =>
+        VFSPathUtils.findChildren(baseDir, path) map { sender ! _ } unsafePerformIO
 
     case op: PathOp =>
       val requestor = sender

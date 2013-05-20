@@ -3,12 +3,15 @@ package vfs
 
 import Resource._
 import table.Slice
+import metadata.PathStructure
 
 import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.niflheim.Reductions
 import com.precog.yggdrasil.actor.IngestData
+import com.precog.yggdrasil.nihdb.NIHDBProjection
 
 import akka.dispatch.Future
 import akka.actor.ActorRef
@@ -47,10 +50,31 @@ abstract class VFS[M[+_]](implicit M: Monad[M]) {
     }
   }
 
-  def readProjection(path: Path, version: Version): EitherT[M, ResourceError, StreamT[M, Slice]]
+  def readProjection(path: Path, version: Version): EitherT[M, ResourceError, ProjectionLike[M, Long, Slice]]
+
+  /**
+   * Returns the direct children of path.
+   *
+   * The results are the basenames of the children. So for example, if
+   * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
+   * return (bar, baz).
+   */
+  def findDirectChildren(path: Path): M[Set[Path]]
+
+  def currentVersion(path: Path): M[Option[VersionEntry]]
+
+  def currentSelectors(path: Path): EitherT[M, ResourceError, Set[CPath]] = {
+    readProjection(path, Version.Current) flatMap { proj =>
+      right(proj.structure.map(_.map(_.selector)))
+    }
+  }
+
+  def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure]
 
   def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
+
 }
+
 
 class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
 
@@ -68,11 +92,33 @@ class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: 
     }
   }
 
-  def readProjection(path: Path, version: Version): EitherT[Future, ResourceError, StreamT[Future, Slice]] = {
+  // NIHDBProjection works in Future, so although this depends on 
+  def readProjection(path: Path, version: Version): EitherT[Future, ResourceError, NIHDBProjection] = {
     readResource(path, version) flatMap {
-      case nihdb: NIHDBResource => right(nihdb.projection.map(_.getBlockStream(None)))
+      case nihdb: NIHDBResource => right(nihdb.projection)
       case _ => left(NotFound("Requested resource at %s version %s cannot be interpreted as a Quirrel dataset.".format(path.path, version)).point[Future])
     }
+  }
+
+  def findDirectChildren(path: Path): Future[Set[Path]] = {
+    implicit val t = projectionReadTimeout
+    val paths = (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
+    paths map { _ flatMap { _ - path }}
+  }
+
+  def currentStructure(path: Path, selector: CPath): EitherT[Future, ResourceError, PathStructure] = {
+    readProjection(path, Version.Current) flatMap { projection => 
+      right {
+        for (children <- projection.structure) yield {
+          PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
+        }
+      }
+    }
+  }
+
+  def currentVersion(path: Path) = {
+    implicit val t = projectionReadTimeout
+    (projectionsActor ? CurrentVersion(path)).mapTo[Option[VersionEntry]]
   }
 
   def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice] = {

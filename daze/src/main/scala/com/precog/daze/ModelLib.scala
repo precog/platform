@@ -132,7 +132,7 @@ trait ModelLibModule[M[+_]] {
 
     def determineColumns(schema: CSchema, cpaths: Set[CPath]): Map[CPath, DoubleColumn] = {
       cpaths.map { cpath =>
-        val jtpe = Schema.mkType(Seq((cpath, CDouble)))
+        val jtpe = Schema.mkType(Seq(ColumnRef(cpath, CDouble)))
 
         val col = jtpe flatMap { tpe =>
           val res = schema.columns(tpe)

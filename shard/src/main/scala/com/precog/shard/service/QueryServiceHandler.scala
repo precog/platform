@@ -7,7 +7,7 @@ import com.precog.common.ingest.FileContent
 
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 import com.precog.util.InstantOrdering
@@ -73,19 +73,13 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 
   val service = (request: HttpRequest[ByteChunk]) => {
     success { (apiKey: APIKey, path: Path, query: String, opts: QueryOptions) =>
-      platform.executorFor(apiKey) flatMap {
-        case Success(executor) =>
-          executor.execute(apiKey, query, path, opts) flatMap {
-            case Success(result) =>
-              extractResponse(request, result, opts.output) map (appendHeaders(opts))
-            case Failure(error) =>
-              handleErrors(query, error).point[Future]
-          }
+      val responseEither = for {
+        executor <- platform.executorFor(apiKey) leftMap { EvaluationError.invalidState } 
+        result <- executor.execute(apiKey, query, path, opts) 
+        httpResponse <- EitherT.right(extractResponse(request, result, opts.output) map (appendHeaders(opts)))
+      } yield httpResponse
 
-        case Failure(error) =>
-          logger.error("Failure during evaluator setup: " + error)
-          HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
-      }
+      responseEither valueOr { handleErrors(query, _) }
     }
   }
 
@@ -95,22 +89,19 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]], storedQueries: SecureVFS[Future], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
-  import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
 
   val service = (request: HttpRequest[ByteChunk]) => {
     ShardServiceCombinators.queryOpts(request) map { queryOptions =>
       { (apiKey: APIKey, path: Path) =>
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
         logger.debug("Received analysis request with cache directives: " + cacheDirectives)
+
+        val cacheControl0 = CacheControl.fromCacheDirectives(cacheDirectives: _*)
         // Internally maxAge/maxStale are compared against ms times
-        val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number * 1000 }
-        val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number * 1000 }
-        val cacheable = cacheDirectives exists { _ != `no-cache`}
-        val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
-        storedQueries.executeStoredQuery(platform, apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
+        storedQueries.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map {
           case Success(StoredQueryResult(stream, cachedAt)) =>
             HttpResponse(OK, 
-              headers =  HttpHeaders(cachedAt map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
+              headers =  HttpHeaders(cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
               content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
 
           case Failure(evaluationError) =>

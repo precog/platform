@@ -1,4 +1,4 @@
-package com.precog.muspelheim
+package com.precog.yggdrasil
 package scheduling
 
 import com.precog.common.Path

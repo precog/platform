@@ -57,7 +57,7 @@ sealed trait PathOp {
 }
 
 case class Read(path: Path, version: Version) extends PathOp 
-case class FindChildren(path: Path, auth: APIKey) extends PathOp //FIXME: remove auth
+case class FindChildren(path: Path) extends PathOp //FIXME: remove auth
 case class CurrentVersion(path: Path) extends PathOp 
 
 

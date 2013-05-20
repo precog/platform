@@ -5,7 +5,7 @@ import com.precog.common.security.APIKey
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
-import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 
 import blueeyes.json._
 import blueeyes.json.serialization.DefaultSerialization._

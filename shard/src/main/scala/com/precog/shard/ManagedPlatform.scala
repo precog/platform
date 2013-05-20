@@ -6,9 +6,10 @@ import com.precog.util._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs.Resource
+import com.precog.util.FutureFunctor
 
 import akka.dispatch.{ Future, ExecutionContext }
 
@@ -32,7 +33,6 @@ import scalaz._
  * managed) queries and asynchronous queries.
  */
 trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with ManagedQueryModule { self =>
-
   /**
    * Returns an `Platform` whose execution returns a `JobId` rather
    * than a `StreamT[Future, Slice]`.
@@ -82,21 +82,20 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
 
   protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]]
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, Slice]]]] = {
+  def executorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, StreamT[Future, Slice]]] = {
     import scalaz.syntax.monad._
-    syncExecutorFor(apiKey) map { queryExecV =>
-      queryExecV map { queryExec =>
-        new QueryExecutor[Future, StreamT[Future, Slice]] {
-          def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-            queryExec.execute(apiKey, query, prefix, opts) map (_ map (_._2))
-          }
+    for (queryExec <- syncExecutorFor(apiKey)) yield {
+      new QueryExecutor[Future, StreamT[Future, Slice]] {
+        def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+          queryExec.execute(apiKey, query, prefix, opts) map { _._2 }
         }
       }
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]]
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]]
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]]
+
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]
 
   trait ManagedQueryExecutor[+A] extends QueryExecutor[Future, A] {
     import UserQuery.Serialization._
@@ -104,27 +103,15 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     implicit def executionContext: ExecutionContext
     implicit def futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
 
-    def complete(results: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, A]]
+    def complete(results: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, A]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): EitherT[Future, EvaluationError, A] = {
       val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
 
       createJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
         import JobQueryState._
 
-        val result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] = {
-          sink.apply(executor.execute(apiKey, query, prefix, opts)) recover {
-            case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
-            case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
-            case ex =>
-              System.out.println(">>> " + ex)
-              System.err.println(">>> " + ex)
-              throw ex
-          } 
-        }
-
-        complete(result, opts.output)
+        complete(executor.execute(apiKey, query, prefix, opts).hoist[Future], opts.output)
       }
     }
   }

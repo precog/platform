@@ -1,7 +1,8 @@
-package com.precog
-package daze
+package com.precog.yggdrasil
+package execution
 
 import com.precog.yggdrasil.TableModule
+import com.precog.yggdrasil.vfs.Resource._
 import com.precog.common._
 
 import com.precog.common.security._
@@ -12,17 +13,20 @@ import blueeyes.core.http.MimeTypes
 
 import akka.util.Duration
 
-import scalaz.{ Validation, StreamT, Id, Applicative, NonEmptyList, Semigroup }
-import NonEmptyList.nels
-import Validation._
+import scalaz._
+import scalaz.Validation._
+import scalaz.NonEmptyList.nels
+import scalaz.syntax.monad._
 
 sealed trait EvaluationError
 case class InvalidStateError(message: String) extends EvaluationError
+case class StorageError(error: ResourceError) extends EvaluationError
 case class SystemError(error: Throwable) extends EvaluationError
 case class AccumulatedErrors(errors: NonEmptyList[EvaluationError]) extends EvaluationError
 
 object EvaluationError {
   def invalidState(message: String): EvaluationError = InvalidStateError(message)
+  def storageError(error: ResourceError): EvaluationError = StorageError(error)
   def systemError(error: Throwable): EvaluationError = SystemError(error)
   def acc(errors: NonEmptyList[EvaluationError]): EvaluationError = AccumulatedErrors(errors)
 
@@ -48,7 +52,21 @@ case class QueryOptions(
 case class CacheControl(maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean)
 
 object CacheControl {
+  import blueeyes.core.http.CacheDirective
+  import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
+  import scalaz.syntax.semigroup._
+  import scalaz.std.option._
+  import scalaz.std.anyVal._
+
   val NoCache = CacheControl(None, None, false, false)
+
+  def fromCacheDirectives(cacheDirectives: CacheDirective*) = {
+    val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number * 1000 }
+    val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number * 1000 }
+    val cacheable = cacheDirectives exists { _ != `no-cache`}
+    val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
+    CacheControl(maxAge |+| maxStale, maxAge, cacheable, onlyIfCached)
+  }
 }
 
 
@@ -56,19 +74,12 @@ trait QueryExecutor[M[+_], +A] { self =>
   /**
     * Execute the provided query, returning the *values* of the result set (discarding identities)
     */
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
-
-  def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
-    import scalaz.syntax.monad._
-    def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
-      self.execute(apiKey, query, prefix, opts) map { _ map f }
-    }
-  }
+  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, A]
 }
 
-object NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
+class NullQueryExecutor[M[+_]: Monad] extends QueryExecutor[M, Nothing] {
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-    failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
+    EitherT.left(SystemError(new UnsupportedOperationException("Query service not avaialble")).point[M])
   }
 }
 
