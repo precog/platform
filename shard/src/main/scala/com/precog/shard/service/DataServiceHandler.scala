@@ -30,16 +30,20 @@ class DataServiceHandler[A](vfs: SecureVFS[Future])(implicit M: Monad[Future])
   val service = (request: HttpRequest[A]) => Success {
     (apiKey: APIKey, path: Path) => {
       val mimeType = request.headers.header[Accept].flatMap(_.mimeTypes.headOption)
-      vfs.readResource(path, Version.Current) flatMap {
-        case ReadSuccess(_, Some(resource)) => 
-          resource.byteStream(mimeType) map { byteStream =>
+      vfs.readResource(apiKey, path, Version.Current).run flatMap {
+        _.fold(
+          error => {
+            logger.error("Read failure: " + error.shows)
+            sys.error("fixme... return an informative HTTP repsonse.")
+          },
+          resource => resource.byteStream(mimeType) map { byteStream =>
             HttpResponse(OK, headers = HttpHeaders(mimeType.map(`Content-Type`(_)).toSeq: _*), content = byteStream.map(Right(_)))
           }
-
-        case ReadFailure(_, errors) =>
-          // FIXXE: Make this better
-          logger.error("Read failure: " + errors.shows)
-          M.point(HttpResponse(InternalServerError))
+        )
+      } recover {
+        case ex => 
+            logger.error("Exception thrown in readResource evaluation.", ex)
+            HttpResponse(InternalServerError)
       }
     }
   }

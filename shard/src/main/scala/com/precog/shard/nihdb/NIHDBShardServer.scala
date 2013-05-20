@@ -6,7 +6,7 @@ import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.client._
-import com.precog.muspelheim.scheduling._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.vfs._
 
 import blueeyes.BlueEyesServer

@@ -89,6 +89,9 @@ object Permission {
   case class WrittenByAccount(accountId: AccountId) extends WrittenBy
 
   object WrittenBy {
+    val any: WrittenBy = WrittenByAny
+    def apply(accountId: AccountId): WrittenBy = WrittenByAccount(accountId)
+
     def implies(permission: WrittenByPermission, candidate: WrittenByPermission): Boolean = {
       permission.path.isEqualOrParentOf(candidate.path) &&
       (permission.writtenBy match {

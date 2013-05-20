@@ -11,10 +11,10 @@ import com.precog.common.ingest._
 import com.precog.common.jobs._
 
 import com.precog.daze._
-import com.precog.muspelheim._
 import com.precog.niflheim._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.serialization._
@@ -136,24 +136,24 @@ trait NIHDBQueryExecutorComponent  {
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 
-      def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-        (for {
+      def asyncExecutorFor(apiKey: APIKey) = {
+        for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new AsyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
           }
-        }).validation
+        }
       }
 
-      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-        (for {
+      def syncExecutorFor(apiKey: APIKey) = {
+        for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new SyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
           }
-        }).validation
+        }
       }
 
       override def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
