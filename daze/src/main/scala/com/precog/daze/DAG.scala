@@ -964,7 +964,7 @@ trait DAG extends Instructions {
 
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
-        case IdentityPolicy.Product(left, right) => specs(left) ++ specs(right)
+        case IdentityPolicy.Product(left, right) => (specs(left) ++ specs(right)).distinct  // keeps first instance seen of the id
         case (_: IdentityPolicy.Retain) => parent.identities.fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
         case IdentityPolicy.Strip => Vector.empty
@@ -984,7 +984,7 @@ trait DAG extends Instructions {
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
 
       private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
-        case IdentityPolicy.Product(left, right) => specs(left) ++ specs(right)
+        case IdentityPolicy.Product(left, right) => (specs(left) ++ specs(right)).distinct  // keeps first instance seen of the id
         case IdentityPolicy.Retain.Left => left.identities.fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Retain.Right => right.identities.fold(Predef.identity, Vector.empty)
         case IdentityPolicy.Retain.Merge =>

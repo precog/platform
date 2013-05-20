@@ -54,7 +54,10 @@ object IdentityPolicy {
   /** All IDs are discarded. */
   case object Strip extends IdentityPolicy
 
-  /** Both identity policies are adhered to, and then concatenated. */
+  /** Both identity policies are adhered to, and then concatenated uniquely.
+    * Differs from `Retain.Cross` in that it distincts its identities, whereas
+    * cross retains all identities.
+    */
   case class Product(left: IdentityPolicy, right: IdentityPolicy) extends IdentityPolicy
 }
 
