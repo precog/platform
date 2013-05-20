@@ -22,7 +22,7 @@ check file ingest-v2.stdout.log with path /var/log/precog/ingest-v2.stdout.log
   if match "Exception" for 1 cycles then alert
   if match "\.Error" for 1 cycles then alert
   if match "Too many open files" for 1 cycles
-      then exec "/usr/bin/lsof -p $(cat /var/run/precog/ingest-v2-b.pid) > /tmp/lsof-dump-$(date '+%s').txt"
+      then exec "/usr/bin/lsof -p $(cat /var/run/precog/ingest-v2.pid) > /tmp/lsof-dump-$(date '+%s').txt"
   if match "Too many open files" for 1 cycles then alert
   depends on ingest-v2
   group ingest-v2
