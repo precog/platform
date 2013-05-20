@@ -34,6 +34,7 @@ import com.precog.muspelheim._
 import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._

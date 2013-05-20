@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.muspelheim
+package com.precog.yggdrasil
 package scheduling
 
 import akka.actor.ActorRef

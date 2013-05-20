@@ -17,6 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+/*
 package com.precog.yggdrasil
 package nihdb
 
@@ -37,54 +38,24 @@ import blueeyes.bkka.FutureMonad
 import scalaz._
 import scalaz.syntax.monad._
 
-class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSystem: ActorSystem, storageTimeout: Timeout) extends StorageMetadata[Future] {
-  implicit val asyncContext = actorSystem.dispatcher
+// FIXME: This is a bridge until everything can directly use SecureVFS
+
+// FIXME: OK, this just really needs to go away, but unsure of trying to do it
+// right now. All of the find* methods would have equivalents using VFS
+// directly (and EitherT with a sprinkling of toOption or at least matching on
+// MissingData) with not too much effort, but it's the use points of
+// StorageMetadata I'm not sure of
+class NIHDBStorageMetadata(apiKey: APIKey, vfs: SecureVFS[Future], storageTimeout: Timeout) extends StorageMetadata[Future] {
   implicit val timeout = storageTimeout
 
-  implicit def M: Monad[Future] = new FutureMonad(actorSystem.dispatcher)
-
-  def findDirectChildren(path: Path): Future[Set[Path]] = {
-    val paths = (projectionsActor ? FindChildren(path, apiKey)).mapTo[Set[Path]]
-    paths.map(_.flatMap(_ - path))
-  }
-
-  private def findProjection(path: Path): Future[Option[NIHDBProjection]] =
-    (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
-
-  private def findResource(path: Path): Future[Option[Resource]] =
-    (projectionsActor ? Read(path, Version.Current, Some(apiKey))).mapTo[ReadResult].map(_.resource)
-
-  def findSize(path: Path): Future[Long] = findProjection(path).map { _.map(_.length).getOrElse(0L) }
-
-  def findSelectors(path: Path): Future[Set[CPath]] = findProjection(path).flatMap {
-    case Some(proj) => proj.structure.map(_.map(_.selector))
-    case None => Promise.successful(Set.empty[CPath])(asyncContext)
-  }
-
-  def findStructure(path: Path, selector: CPath): Future[PathStructure] = {
-    OptionT(findProjection(path)) flatMapF { projection =>
-      for {
-        children <- projection.structure
-      } yield {
-        PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
-      }
-    } getOrElse PathStructure.Empty
-  }
-
-  def currentAuthorities(path: Path): Future[Option[Authorities]] = {
-    findResource(path) map { _ map { _.authorities } }
-  }
-
-  def currentVersion(path: Path) = {
-    (projectionsActor ? CurrentVersion(path, apiKey)).mapTo[Option[VersionEntry]]
-  }
 }
 
 trait NIHDBStorageMetadataSource extends StorageMetadataSource[Future] {
-  val projectionsActor: ActorRef
-  val actorSystem: ActorSystem
-  val storageTimeout: Timeout
+  def projectionsActor: ActorRef
+  def actorSystem: ActorSystem
+  def storageTimeout: Timeout
 
   def userMetadataView(apiKey: APIKey): StorageMetadata[Future] = 
     new NIHDBStorageMetadata(apiKey, projectionsActor, actorSystem, storageTimeout)
 }
+*/

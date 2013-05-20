@@ -34,6 +34,7 @@ import scalaz.{NonEmptyList => NEL, Monad, StreamT}
 
 final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authorities, projectionId: Int) extends ProjectionLike[Future, Long, Slice] with Logging {
   private[this] val readers = snapshot.readers
+
   val length = readers.map(_.length.toLong).sum
 
   override def toString = "NIHDBProjection(id = %d, len = %d, authorities = %s)".format(projectionId, length, authorities)

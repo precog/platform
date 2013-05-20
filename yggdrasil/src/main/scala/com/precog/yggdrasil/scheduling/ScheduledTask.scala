@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.muspelheim
+package com.precog.yggdrasil
 package scheduling
 
 import akka.util.Duration
@@ -30,7 +30,6 @@ import blueeyes.json.serialization.DefaultSerialization._
 import com.precog.common.Path
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security.{APIKey, Authorities}
-import com.precog.daze.QueryOptions
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit

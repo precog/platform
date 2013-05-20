@@ -51,25 +51,28 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
   trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       logger.debug("Starting load from " + table.toJson)
-      val tableV = for {
-        paths          <- EitherT.right(pathsM(table))
-        projections    <- paths.toList.traverse { path =>
-                            logger.debug("  Loading path: " + path)
-                            secureVFS.readProjection(apiKey, path, Version.Current)
-                          } 
-        length = projections.map(_.length).sum
-      } yield {
-        logger.debug("Loading from projections: " + projections)
-        Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
-          // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
-          val constraints = proj.structure.map { struct => Some(Schema.flatten(tpe, struct.toList).map { case (p, t) => ColumnRef(p, t) }.toSet) }
-          acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
-        }, ExactSize(length))
-      }
+      for {
+        paths <- pathsM(table)
+        tableE = paths.toList.traverse[({ type l[a] = EitherT[Future, Resource.ResourceError, a] })#l, ProjectionLike[Future, Long, Slice]] { path =>
+          logger.debug("  Loading path: " + path)
+          secureVFS.readProjection(apiKey, path, Version.Current)
+        } map { projections =>
+          val length = projections.map(_.length).sum
+          logger.debug("Loading from projections: " + projections)
+          Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
+            // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
+            val constraints = proj.structure.map { struct => 
+              Some(Schema.flatten(tpe, struct.toList)) 
+            }
 
-      tableV.getOrElse(Table.empty)
+            acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
+          }, ExactSize(length))
+        }
 
-
+        table <- tableE valueOr { errors =>
+          sys.error("Unable to load table for paths %s as %s: %s".format(paths, apiKey, errors.toString))
+        }
+      } yield table
     }
   }
 }

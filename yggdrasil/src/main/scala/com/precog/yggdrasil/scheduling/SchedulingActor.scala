@@ -17,8 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.muspelheim
+package com.precog.yggdrasil
 package scheduling
+
+import com.precog.common.Path
+import com.precog.common.accounts.AccountFinder
+import com.precog.common.jobs._
+import com.precog.common.security._
+import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable}
 import akka.dispatch.{Await, Future, Promise}
@@ -27,16 +36,6 @@ import akka.util.{Duration, Timeout}
 
 import blueeyes.bkka.FutureMonad
 import blueeyes.util.Clock
-
-import com.precog.common.Path
-import com.precog.common.accounts.AccountFinder
-import com.precog.common.jobs._
-import com.precog.common.security._
-import com.precog.daze.QueryOptions
-import com.precog.muspelheim.Platform
-import com.precog.util.PrecogUnit
-import com.precog.yggdrasil.table.Slice
-import com.precog.yggdrasil.vfs._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -52,6 +51,7 @@ import scala.collection.mutable.{ArrayBuffer, PriorityQueue}
 import scalaz.{Ordering => _, idInstance => _, _}
 import scalaz.syntax.id._
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.either._
 import scalaz.syntax.std.option._
 import scalaz.effect.IO
 
@@ -185,33 +185,43 @@ class SchedulingActor(
       // This cannot occur inside a Future, or we would be exposing Actor state outside of this thread
       running += ((task.source, task.sink) -> TaskInProgress(task, startedAt))
 
-      (for {
+      val execution = for {  
         job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
-        executorV <- platform.executorFor(task.apiKey)
-        scriptV <- vfs.readQuery(task.source, Version.Current)
-        execution <- (for {
-          script <- scriptV.toSuccess("Could not find quirrel script at path %s".format(task.source.path))
-          executor <- executorV
-        } yield {
-          permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant()) flatMap { perms =>
-            val allPerms = Map(task.apiKey -> perms.toSet[Permission])
+        executionResult = 
+          for {
+            executor <- platform.executorFor(task.apiKey) leftMap { EvaluationError.invalidState _ }
+            script <- vfs.readQuery(task.source, Version.Current) leftMap { EvaluationError.storageError }
+            perms <- EitherT.right(permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant())) 
+            permSet = perms.toSet[Permission]
+            allPerms = Map(task.apiKey -> permSet)
+            stream <- executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout))
+            persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream)
+            totalSize <- EitherT.right(consumeStream(0, persistingStream))
+          } yield totalSize
 
-            executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout)).flatMap {
-              _ traverse { stream =>
-                consumeStream(0, vfs.persistingStream(task.apiKey, task.sink, task.authorities, perms.toSet[Permission], Some(job.id), stream)) map { totalSize =>
-                  ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
-                  totalSize
-                }
-              }
+        errorHandling = executionResult.swap flatMap { error => 
+          EitherT.right {
+            jobManager.abort(job.id, error.toString) map {
+              _.disjunction.fold(
+                jobAbortFailure => SystemError(new RuntimeException(jobAbortFailure)),
+                jobAbortSuccess => error
+              )
             }
           }
-        }) valueOr { error =>
-          jobManager.abort(job.id, error) map { _ =>
-            ourself ! TaskComplete(task.id, clock.now(), 0, Some(error))
-          }
         }
-      } yield PrecogUnit) onFailure {
+
+        result <- errorHandling.swap.fold[PrecogUnit](
+          failure => {
+            logger.error("An error was encountered processing a scheduled query execution: " + failure)
+            ourself ! TaskComplete(task.id, clock.now(), 0, Some(failure.toString))   
+          },
+          totalSize => ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
+        )
+      } yield result
+      
+      execution.onFailure {
         case t: Throwable =>
+          logger.error("Scheduled query execution failed by thrown error.", t)
           ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString))
           PrecogUnit
       }

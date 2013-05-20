@@ -39,9 +39,10 @@ import com.precog.common.accounts._
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil._
-import com.precog.muspelheim.scheduling._
-import com.precog.muspelheim.scheduling.CronExpressionSerialization._
+import com.precog.yggdrasil.scheduling._
+import com.precog.yggdrasil.scheduling.CronExpressionSerialization._
 import com.precog.util.PrecogUnit
+import Permissions._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -55,6 +56,7 @@ import scalaz._
 import scalaz.NonEmptyList._
 import scalaz.std.option._
 import scalaz.std.string._
+import scalaz.std.stream._
 import scalaz.syntax.apply._
 import scalaz.syntax.plus._
 import scalaz.syntax.semigroup._
@@ -90,7 +92,10 @@ class AddScheduledQueryServiceHandler(scheduler: Scheduler[Future], apiKeyFinder
         taskVV <- sreqV traverse { schedulingRequest =>
           Authorities.ifPresent(schedulingRequest.owners) map { authorities =>
             for {
-              okToRead  <- permissionsFinder.apiKeyFinder.hasCapability(apiKey, Set(ExecutePermission(schedulingRequest.source)), None)
+              okToReads <- authorities.accountIds.toStream traverse { accountId =>
+                             permissionsFinder.apiKeyFinder.hasCapability(apiKey, Set(ExecutePermission(schedulingRequest.source, WrittenBy(accountId))), None)
+                           }
+              okToRead   = okToReads.exists(_ == true)
               okToWrite <- permissionsFinder.checkWriteAuthorities(authorities, apiKey, schedulingRequest.sink, clock.instant)
             } yield {
               val readError = (!okToRead).option(nels("The API Key does not have permission to execute %s".format(schedulingRequest.source.path))) 
