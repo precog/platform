@@ -579,13 +579,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
                   compute(paramProv, prov)
                 }
                 
-                case IdentityPolicy.Retain.Cross => {
-                  val paramProv = ProductProvenance(left.provenance, right.provenance)
-                  val prov = unified getOrElse NullProvenance
-
-                  compute(paramProv, prov)
-                }
-                
                 case IdentityPolicy.Synthesize => {
                   val paramProv = ParametricDynamicProvenance(UnifiedProvenance(left.provenance, right.provenance), currentId.getAndIncrement())
                   val prov = DynamicProvenance(currentId.getAndIncrement())
