@@ -151,7 +151,7 @@ final class KafkaRelayAgent(
     outgoing.sequence[({ type λ[α] = Validation[Error, α] })#λ, Future[Authorized]] map { messageFutures =>
       Future.sequence(messageFutures) map { messages: List[Authorized] =>
         val identified: List[Message] = messages.flatMap {
-          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp), offset, Some(authorities)) =>
+          case Authorized(Ingest(apiKey, path, _, data, jobId, timestamp, storeMode), offset, Some(authorities)) =>
             def encodeIngestMessages(ev: List[IngestMessage]): List[Message] = {
               val messages = ev.map(centralCodec.toMessage)
 
@@ -169,7 +169,7 @@ final class KafkaRelayAgent(
             }
 
             val ingestRecords = data map { IngestRecord(eventIdSeq.next(offset), _) }
-            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp)))
+            encodeIngestMessages(List(IngestMessage(apiKey, path, authorities, ingestRecords, jobId, timestamp, storeMode)))
 
           case Authorized(event: Ingest, _, None) =>
             // cannot relay event without a resolved owner account ID; fail loudly.
@@ -178,6 +178,12 @@ final class KafkaRelayAgent(
 
           case Authorized(archive @ Archive(apiKey, path, jobId, timestamp), offset, _) =>
             List(centralCodec.toMessage(ArchiveMessage(apiKey, path, jobId, eventIdSeq.next(offset), timestamp)))
+
+          case Authorized(StoreFile(apiKey, path, _, jobId, content, timestamp, stream), offset, Some(authorities)) =>
+            List(centralCodec.toMessage(StoreFileMessage(apiKey, path, authorities, Some(jobId), eventIdSeq.next(offset), content, timestamp, stream)))
+
+          case Authorized(s: StoreFile, _, None) =>
+            sys.error("Unable to establish owner account ID for storage of file " + s)
         }
 
         producer.send {
@@ -196,8 +202,13 @@ final class KafkaRelayAgent(
   }
 
   private def deriveAuthority(event: Event): Future[Option[Authorities]] = event match {
-    case Ingest(apiKey, path, writeAs, _, _, timestamp) =>
-      writeAs.map(a => Some(a).point[Future]).getOrElse(permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp)))
+    case Ingest(apiKey, path, writeAs, _, _, timestamp, _) =>
+      if (writeAs.isDefined) Promise.successful(writeAs)
+      else permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))
+
+    case StoreFile(apiKey, path, writeAs, _, _, timestamp, _) =>
+      if (writeAs.isDefined) Promise successful writeAs
+      else permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp))
 
     case _ => Promise.successful(None)
   }

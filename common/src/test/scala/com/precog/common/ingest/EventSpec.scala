@@ -20,7 +20,7 @@ class EventSpec extends Specification with ArbitraryEventMessage with ScalaCheck
   "serialization of an event" should {
     "read back the data that was written" in check { in: Ingest =>
       in.serialize.validated[Ingest] must beLike {
-        case Success(out) => in must_== out
+        case Success(out) => out must_== in
       }
     }
   }

@@ -100,6 +100,8 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
 
       PathStructure(types, structs.map(_.selector))
     }
+    def currentVersion(path: Path) = M.point(None)
+    def currentAuthorities(path: Path) = M.point(None)
   }
 }
 

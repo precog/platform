@@ -48,8 +48,8 @@ class CachingAPIKeyFinder[M[+_]](delegate: APIKeyFinder[M], settings: CachingAPI
     delegate.hasCapability(apiKey, perms, at)
 
   // TODO: Cache on creation
-  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = 
-    delegate.newAPIKey(accountId, path, keyName, keyDesc)
+  def createAPIKey(accountId: AccountId, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = 
+    delegate.createAPIKey(accountId, keyName, keyDesc)
 
   def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean] = 
     delegate.addGrant(accountKey, grantId)

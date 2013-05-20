@@ -1,19 +1,24 @@
 package com.precog.ragnarok
 
+import blueeyes.json._
+import blueeyes.util.Clock
+
 import com.precog.yggdrasil._
 import com.precog.common._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
+import com.precog.niflheim.NIHDB
 import com.precog.util.PrecogUnit
+import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.actor.IngestData
 
 import java.util.zip.{ ZipFile, ZipEntry, ZipException }
 import java.io.{ File, InputStreamReader, FileReader, BufferedReader }
 
+import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
-
-import blueeyes.json._
 
 import scalaz._
 import scalaz.effect._
@@ -74,25 +79,25 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
    * Reads in the JSON file (or several zipped JSON files) into the specified
    * DB.
    */
-  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root"): IO[PrecogUnit] = IO {
+  def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", clock: Clock = Clock.System): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
     implicit val to = storageTimeout
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
-    val records = (eventId.uid, readRows(data) map (IngestRecord(eventId, _)))
+    val records = readRows(data) map (IngestRecord(eventId, _))
 
-    val projection = (projectionsActor ? ProjectionInsert(path, Seq(records), Authorities(accountId))).flatMap { _ =>
+    val projection = (projectionsActor ? IngestData(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append))))).flatMap { _ =>
       logger.debug("Insert complete on //%s, waiting for cook".format(db))
 
-      (projectionsActor ? FindProjection(path)).mapTo[NIHDBActorProjection]
-    }.copoint
+      (projectionsActor ? Read(path, Version.Current, None)).mapTo[List[NIHDBResource]]
+    }.copoint.head
 
-    while (projection.status.copoint.pending > 0) {
+    while (projection.db.status.copoint.pending > 0) {
       Thread.sleep(100)
     }
-    projection.close(actorSystem).copoint
+    projection.db.close(actorSystem).copoint
 
     logger.debug("Ingested %s." format data)
 

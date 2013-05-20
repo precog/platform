@@ -370,11 +370,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
       chunks <- request.content
     } yield {
       val mimeType = request.mimeTypes.headOption
-      val data = chunks.fold({ buffer =>
-        flipBytes(buffer) :: StreamT.empty[Future, Array[Byte]]
-      }, { buffers =>
-        buffers map (flipBytes(_))
-      })
+      val data = chunks.fold(_ :: StreamT.empty[Future, Array[Byte]], identity)
 
       jobs.setResult(jobId, mimeType, data) map {
         case Right(_) =>
@@ -411,8 +407,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
               val headers = mimeType.foldLeft(HttpHeaders.Empty) { (headers, mimeType) =>
                 headers + `Content-Type`(mimeType)
               }
-              val chunks = Right(data map (ByteBuffer.wrap(_)))
-              HttpResponse[ByteChunk](OK, headers, Some(chunks))
+              HttpResponse[ByteChunk](OK, headers, Some(Right(data)))
           }
       }
     } getOrElse {

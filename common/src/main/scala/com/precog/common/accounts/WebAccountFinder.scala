@@ -28,7 +28,7 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
-import scalaz.{ NonEmptyList => NEL }
+import scalaz.NonEmptyList._
 import scalaz.Validation._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.monad._
@@ -42,12 +42,12 @@ object WebAccountFinder extends Logging {
       implicit val M = ResponseMonad(new FutureMonad(executor))
       success(new StaticAccountFinder[Response](accountId, serviceConfig[String]("hardcoded_rootKey", ""), serviceConfig.get[String]("hardcoded_rootPath")))
     } getOrElse {
-      (serviceConfig.get[String]("protocol").toSuccess(NEL("Configuration property service.protocol is required")) |@|
-       serviceConfig.get[String]("host").toSuccess(NEL("Configuration property service.host is required")) |@|
-       serviceConfig.get[Int]("port").toSuccess(NEL("Configuration property service.port is required")) |@|
-       serviceConfig.get[String]("path").toSuccess(NEL("Configuration property service.path is required")) |@|
-       serviceConfig.get[String]("user").toSuccess(NEL("Configuration property service.user is required")) |@|
-       serviceConfig.get[String]("password").toSuccess(NEL("Configuration property service.password is required"))) {
+      (serviceConfig.get[String]("protocol").toSuccess(nels("Configuration property service.protocol is required")) |@|
+       serviceConfig.get[String]("host").toSuccess(nels("Configuration property service.host is required")) |@|
+       serviceConfig.get[Int]("port").toSuccess(nels("Configuration property service.port is required")) |@|
+       serviceConfig.get[String]("path").toSuccess(nels("Configuration property service.path is required")) |@|
+       serviceConfig.get[String]("user").toSuccess(nels("Configuration property service.user is required")) |@|
+       serviceConfig.get[String]("password").toSuccess(nels("Configuration property service.password is required"))) {
         (protocol, host, port, path, user, password) =>
           val cacheSize = serviceConfig[Int]("cache_size", 1000)
           logger.info("Creating new WebAccountFinder with properties %s://%s:%s/%s %s:%s".format(protocol, host, port.toString, path, user, password))

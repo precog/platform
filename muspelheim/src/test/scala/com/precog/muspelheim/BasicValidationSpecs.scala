@@ -146,6 +146,5 @@ trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
     "flatten an array into a set" in {
       eval("flatten([1, 2, 3])") mustEqual Set(SDecimal(1), SDecimal(2), SDecimal(3))
     }
- 
   }
 }

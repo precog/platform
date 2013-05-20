@@ -3,10 +3,12 @@ package ingest
 
 import accounts.AccountId
 import security._
+import com.precog.common.serialization._
 import jobs.JobId
 
-import blueeyes.json.{ JValue, JParser }
-import blueeyes.json.serialization.{ Extractor, Decomposer }
+import blueeyes.core.http.MimeType
+import blueeyes.json._
+import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization._
 import blueeyes.json.serialization.IsoSerialization._
 import blueeyes.json.serialization.Extractor._
@@ -15,6 +17,8 @@ import blueeyes.json.serialization.JodaSerializationImplicits.{InstantExtractor,
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import java.util.UUID
+
 import org.joda.time.Instant
 
 import scalaz._
@@ -31,7 +35,7 @@ sealed trait EventMessage {
   def path: Path
   def jobId: Option[JobId]
   def timestamp: Instant
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A
 }
 
 object EventMessage {
@@ -42,7 +46,7 @@ object EventMessage {
 
   implicit val decomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = {
-      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _)
+      eventMessage.fold(IngestMessage.Decomposer.apply _, ArchiveMessage.Decomposer.apply _, StoreFileMessage.Decomposer.apply _)
     }
   }
 }
@@ -78,16 +82,19 @@ object IngestRecord {
  * ownerAccountId must be determined before the message is sent to the central queue; we have to
  * accept records for processing in the local queue.
  */
-case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = im(this)
-  def split: List[IngestMessage] = {
+case class IngestMessage(apiKey: APIKey, path: Path, writeAs: Authorities, data: Seq[IngestRecord], jobId: Option[JobId], timestamp: Instant, streamRef: StreamRef) extends EventMessage {
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = im(this)
+  def split: Seq[IngestMessage] = {
     if (data.size > 1) {
       val (dataA, dataB) = data.splitAt(data.size / 2)
-      List(this.copy(data = dataA), this.copy(data = dataB))
+      val Seq(refA, refB) = streamRef.split(2)
+      List(this.copy(data = dataA, streamRef = refA), this.copy(data = dataB, streamRef = refB))
     } else {
       List(this)
     }
   }
+
+  override def toString = "IngestMessage(%s, %s, %s, (%d records), %s, %s, %s)".format(apiKey, path, writeAs, data.size, jobId, timestamp, streamRef)
 }
 
 object IngestMessage {
@@ -95,12 +102,12 @@ object IngestMessage {
 
   implicit val ingestMessageIso = Iso.hlist(IngestMessage.apply _, IngestMessage.unapply _)
 
-  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: HNil
+  val schemaV1 = "apiKey"  :: "path" :: "writeAs" :: "data" :: "jobId" :: "timestamp" :: "streamRef" :: HNil
   implicit def seqExtractor[A: Extractor]: Extractor[Seq[A]] = implicitly[Extractor[List[A]]].map(_.toSeq)
 
-  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.0".v))
+  val decomposerV1: Decomposer[IngestMessage] = decomposerV[IngestMessage](schemaV1, Some("1.1".v))
   val extractorV1: Extractor[EventMessageExtraction] = new Extractor[EventMessageExtraction] {
-    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.0".v))
+    private val extractor = extractorV[IngestMessage](schemaV1, Some("1.1".v))
     override def validated(jv: JValue) = extractor.validated(jv).map(\/.right(_))
   }
 
@@ -112,11 +119,11 @@ object IngestMessage {
           val eventRecords = ingest.data map { jv => IngestRecord(EventId(producerId, sequenceId), jv) }
           ingest.writeAs map { authorities =>
             assert(ingest.data.size == 1)
-            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
+            \/.right(IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, StreamRef.Append))
           } getOrElse {
             \/.left(
               (ingest.apiKey, ingest.path, (authorities: Authorities) =>
-                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp))
+                IngestMessage(ingest.apiKey, ingest.path, authorities, eventRecords, ingest.jobId, defaultTimestamp, StreamRef.Append))
             )
           }
         }
@@ -128,7 +135,7 @@ object IngestMessage {
 }
 
 case class ArchiveMessage(apiKey: APIKey, path: Path, jobId: Option[JobId], eventId: EventId, timestamp: Instant) extends EventMessage {
-  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A): A = am(this)
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = am(this)
 }
 
 object ArchiveMessage {
@@ -152,3 +159,18 @@ object ArchiveMessage {
   implicit val Decomposer: Decomposer[ArchiveMessage] = decomposerV1
   implicit val Extractor: Extractor[ArchiveMessage] = extractorV1 <+> extractorV0
 }
+
+case class StoreFileMessage(apiKey: APIKey, path: Path, writeAs: Authorities, jobId: Option[JobId], eventId: EventId, content: FileContent, timestamp: Instant, streamRef: StreamRef) extends EventMessage {
+  def fold[A](im: IngestMessage => A, am: ArchiveMessage => A, sf: StoreFileMessage => A): A = sf(this)
+}
+
+object StoreFileMessage {
+  implicit val storeFileMessageIso = Iso.hlist(StoreFileMessage.apply _, StoreFileMessage.unapply _)
+
+  val schemaV1 = "apiKey" :: "path" :: "writeAs" :: "jobId" :: "eventId" :: "content" :: "timestamp" :: "streamRef" :: HNil
+
+  implicit val Decomposer: Decomposer[StoreFileMessage] = decomposerV[StoreFileMessage](schemaV1, Some("1.0".v))
+
+  implicit val Extractor: Extractor[StoreFileMessage] = extractorV[StoreFileMessage](schemaV1, Some("1.0".v))
+}
+

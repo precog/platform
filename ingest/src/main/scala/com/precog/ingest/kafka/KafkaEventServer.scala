@@ -8,11 +8,14 @@ import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.security.service._
 import com.precog.common.client._
+import com.precog.common.services.ServiceLocation
 import com.precog.ingest.service._
 import WebJobManager._
 
 import blueeyes.BlueEyesServer
 import blueeyes.bkka._
+import blueeyes.core.data._
+import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.util.Clock
 
 import akka.util.Timeout
@@ -22,7 +25,8 @@ import org.joda.time.Instant
 import org.streum.configrity.Configuration
 
 import scalaz._
-import scalaz.{NonEmptyList => NEL}
+import scalaz.NonEmptyList._
+import scalaz.syntax.applicative._
 import scalaz.syntax.std.option._
 
 object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaults {
@@ -30,32 +34,29 @@ object KafkaEventServer extends BlueEyesServer with EventService with AkkaDefaul
   implicit val executionContext = defaultFutureDispatch
   implicit val M: Monad[Future] = new FutureMonad(defaultFutureDispatch)
 
-  def configureEventService(config: Configuration): (EventServiceDeps[Future], Stoppable)  = {
-    val accountFinder0 = WebAccountFinder(config.detach("accounts")).map(_.withM[Future]) valueOr { errs =>
+  def configureEventService(config: Configuration): EventService.State = {
+    val accountFinder = WebAccountFinder(config.detach("accounts")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAccountFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val apiKeyFinder0 = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
+    val apiKeyFinder = WebAPIKeyFinder(config.detach("security")).map(_.withM[Future]) valueOr { errs =>
       sys.error("Unable to build new WebAPIKeyFinder: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val permissionsFinder = new PermissionsFinder(apiKeyFinder0, accountFinder0, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
+    val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L)))
 
-    val (eventStore0, stoppable) = KafkaEventStore(config.detach("eventStore"), permissionsFinder) valueOr { errs =>
+    val (eventStore, stoppable) = KafkaEventStore(config.detach("eventStore"), permissionsFinder) valueOr { errs =>
       sys.error("Unable to build new KafkaEventStore: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val jobManager0 = WebJobManager(config.detach("jobs")) valueOr { errs =>
+    val jobManager = WebJobManager(config.detach("jobs")) valueOr { errs =>
       sys.error("Unable to build new WebJobManager: " + errs.list.mkString("\n", "\n", ""))
     }
 
-    val deps = EventServiceDeps[Future]( 
-      apiKeyFinder = apiKeyFinder0,
-      accountFinder = accountFinder0,
-      eventStore = eventStore0,
-      jobManager = jobManager0
-    )
+    val serviceConfig = EventService.ServiceConfig.fromConfiguration(config) valueOr { errors =>
+      sys.error("Unable to obtain self-referential service locator for event service: %s".format(errors.list.mkString("; ")))
+    }
 
-    (deps, stoppable)
+    buildServiceState(serviceConfig, apiKeyFinder, permissionsFinder, eventStore, jobManager, stoppable)
   }
 }
