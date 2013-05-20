@@ -56,7 +56,7 @@ object VersionLog {
   final val completedLogName = "completedLog"
   final val currentVersionFilename = "HEAD"
 
-  final val unsetSentinel = "unset"
+  final val unsetSentinel = "unset".serialize.renderCompact
 
   final def hasCurrent(baseDir: File): IO[Boolean] = {
     val currentFile = new File(baseDir, currentVersionFilename)
