@@ -329,7 +329,7 @@ case class SString(value: String) extends SValue {
   def isA(stype: SType) = stype == SString
 }
 
-case object SString extends SType  {
+case object SString extends SType with (String => SString) {
   def =~(v: SValue): Boolean = v match {
     case SString(_) => true
     case _ => false
