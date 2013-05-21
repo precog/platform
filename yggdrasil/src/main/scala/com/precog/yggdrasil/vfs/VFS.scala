@@ -31,6 +31,7 @@ import com.precog.common.jobs._
 import com.precog.niflheim.Reductions
 import com.precog.yggdrasil.actor.IngestData
 import com.precog.yggdrasil.nihdb.NIHDBProjection
+import com.precog.util._
 
 import akka.dispatch.Future
 import akka.actor.ActorRef
@@ -59,6 +60,8 @@ object Version {
  */
 abstract class VFS[M[+_]](implicit M: Monad[M]) {
   protected def IOT: IO ~> M
+
+  def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
 
   def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
 
@@ -99,6 +102,10 @@ class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: 
 
   val IOT = new (IO ~> Future) {
     def apply[A](io: IO[A]) = M.point(io.unsafePerformIO)
+  }
+
+  def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
+    IO { projectionsActor ! IngestData(data) }
   }
   
   def readResource(path: Path, version: Version): EitherT[Future, ResourceError,Resource] = {

@@ -42,6 +42,7 @@ import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 import com.precog.util.FilesystemFileOps
 import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.scheduling._
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -104,7 +105,6 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
 
 trait REPL extends ParseEvalStack[Future]
     with NIHDBColumnarTableModule
-    with NIHDBStorageMetadataSource
     with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"
@@ -300,6 +300,10 @@ object Console extends App {
 
         val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
         val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"), new InMemoryJobManager[Future], yggConfig.clock)))
+
+        val jobManager = new InMemoryJobManager[Future]
+        val actorVFS = new ActorVFS(projectionsActor, Clock.System, yggConfig.storageTimeout, yggConfig.storageTimeout)
+        val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
 
         trait TableCompanion extends NIHDBColumnarTableCompanion
 

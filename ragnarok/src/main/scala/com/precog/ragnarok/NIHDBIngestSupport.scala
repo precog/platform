@@ -107,15 +107,22 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
     val eventId = EventId(pid, sid.getAndIncrement)
     val records = readRows(data) map (IngestRecord(eventId, _))
 
-    val projection = (projectionsActor ? IngestData(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append))))).flatMap { _ =>
-      logger.debug("Insert complete on //%s, waiting for cook".format(db))
-
-      (projectionsActor ? Read(path, Version.Current, None)).mapTo[List[NIHDBResource]]
-    }.copoint.head
+    val projection = {
+      for {
+        _ <- M point { 
+          vfs.writeAll(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append)))).unsafePerformIO 
+        }
+        _ = logger.debug("Insert complete on //%s, waiting for cook".format(db))
+        projection <- vfs.readProjection(apiKey, path, Version.Current).run
+      } yield {
+        (projection valueOr { err => sys.error("An error was encountered attempting to read projection at path %s: %s".format(path, err.toString)) }).asInstanceOf[NIHDBResource]
+      }
+    }.copoint
 
     while (projection.db.status.copoint.pending > 0) {
       Thread.sleep(100)
     }
+
     projection.db.close(actorSystem).copoint
 
     logger.debug("Ingested %s." format data)
