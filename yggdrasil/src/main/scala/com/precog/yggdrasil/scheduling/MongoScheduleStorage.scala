@@ -62,23 +62,26 @@ class MongoScheduleStorage private[MongoScheduleStorage] (mongo: Mongo, database
   database(ensureUniqueIndex("task_index").on(".id").in(settings.tasks))
   database(ensureIndex("report_index").on(".id").in(settings.reports))
 
-  def addTask(task: ScheduledTask) = insertTask(-\/(task), settings.tasks) map { _ map { _ => task } }
+  def addTask(task: ScheduledTask) = EitherT.right(insertTask(-\/(task), settings.tasks)) map { _ => task }
 
   private def insertTask(task: ScheduledTask \/ JObject, collection: String) =
-    database(insert(task.valueOr { st => st.serialize.asInstanceOf[JObject] }).into(collection)) map { _ => Success(PrecogUnit) }
+    database(insert(task.valueOr { st => st.serialize.asInstanceOf[JObject] }).into(collection)) 
 
-  def deleteTask(id: UUID) =
-    database(selectOne().from(settings.tasks).where(".id" === id.toString)) flatMap { ot =>
-      ot map { task =>
+  def deleteTask(id: UUID) = EitherT {
+    database(selectOne().from(settings.tasks).where(".id" === id.toString)) flatMap { 
+      case Some(taskjv) =>
         for {
-          _ <- insertTask(\/-(task), settings.deletedTasks)
+          _ <- insertTask(\/-(taskjv), settings.deletedTasks)
           _ <- database(remove.from(settings.tasks)where(".id" === id.toString))
-        } yield Success(ot.map { _.deserialize[ScheduledTask] })
-      } getOrElse {
+        } yield {
+          taskjv.validated[ScheduledTask].disjunction leftMap { _.message } map { Some(_) }
+        }
+      
+      case None =>
         logger.warn("Could not locate task %s for deletion".format(id))
-        Promise successful Success(None)
-      }
+        Promise successful \/.right(None)
     }
+  }
 
   def reportRun(report: ScheduledRunReport) =
     database(insert(report.serialize.asInstanceOf[JObject]).into(settings.reports)) map { _ => PrecogUnit }

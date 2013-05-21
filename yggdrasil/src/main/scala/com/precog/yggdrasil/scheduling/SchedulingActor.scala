@@ -214,34 +214,33 @@ class SchedulingActor(
       val ourself = self
       val taskId = UUID.randomUUID()
       val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
-      val addResult: Future[Validation[String, UUID]] = (repeat match {
+      val addResult: EitherT[Future, String, PrecogUnit] = repeat match {
         case None =>
-          executeTask(newTask) map { _ => Success(taskId) }
+          EitherT.right(executeTask(newTask))
 
         case Some(_) =>
-          storage.addTask(newTask) map { addV =>
-            addV foreach { task => ourself ! AddTasksToQueue(Seq(task)) }
-            addV map (_.id)
+          storage.addTask(newTask) map { task =>
+            ourself ! AddTasksToQueue(Seq(task)) 
           }
-      }) recover {
+      }
+      
+      addResult.run.map(_ => taskId) recover {
         case t: Throwable =>
           logger.error("Error adding task " + newTask, t)
-          Failure("Internal error adding task")
-      }
-
-      addResult pipeTo sender
+          \/.left("Internal error adding task")
+      } pipeTo sender
 
     case DeleteTask(id) =>
       val ourself = self
-      storage.deleteTask(id) map { deleteV =>
-        deleteV foreach { _ =>
-          ourself ! RemoveTaskFromQueue(id)
-        }
-        deleteV
-      } recover {
+      val deleteResult = storage.deleteTask(id) map { result =>
+        ourself ! RemoveTaskFromQueue(id)
+        result
+      } 
+      
+      deleteResult.run recover {
         case t: Throwable =>
           logger.error("Error deleting task " + id, t)
-          Failure("Internal error deleting task")
+          \/.left("Internal error deleting task")
       } pipeTo sender
 
     case StatusForTask(id, limit) =>

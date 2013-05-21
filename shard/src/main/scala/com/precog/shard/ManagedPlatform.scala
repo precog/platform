@@ -39,8 +39,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
    */
   def asynchronous: AsyncPlatform[Future] = {
     new AsyncPlatform[Future] {
+      def vfs = self.vfs
       def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
-      def metadataClient = self.metadataClient
     }
   }
 
@@ -51,8 +51,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
    */
   def synchronous: SyncPlatform[Future] = {
     new SyncPlatform[Future] {
+      def vfs = self.vfs
       def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)
-      def metadataClient = self.metadataClient
     }
   }
 
@@ -117,12 +117,9 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
   }
 
   trait SyncQueryExecutor extends ManagedQueryExecutor[(Option[JobId], StreamT[Future, Slice])] {
-    def complete(result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, (Option[JobId], StreamT[Future, Slice])]] = {
-      result map {
-        _ map { stream =>
-          M.jobId -> completeJob(stream)
-        }
+    def complete(result: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, (Option[JobId], StreamT[Future, Slice])] = {
+      result map { stream =>
+        M.jobId -> completeJob(stream)
       }
     }
   }
@@ -144,22 +141,22 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
       }
     }
 
-    def complete(resultVF: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, JobId]] = {
+    def complete(resultE: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, JobId] = {
       M.jobId map { jobId =>
-        resultVF map (_ map { result =>
-          // TODO: encoding a char stream here feels like we're bleeding a bit of impl requirement into ManagedPlatform
+        resultE map { result =>
           val convertedStream: StreamT[JobQueryTF, CharBuffer] = Resource.toCharBuffers(outputType, result)
+          //FIXME: Thread this through the EitherT
           jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>
               jobManager.abort(jobId, "Error occured while storing job results: " + error, yggConfig.clock.now())
             case Right(_) =>
               // This is "finished" by `completeJob`.
           }
+
           jobId
-        })
+        }
       } getOrElse {
-        Future(Failure(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
+        EitherT.left(Future(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
       }
     }
   }

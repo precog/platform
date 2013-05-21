@@ -16,28 +16,31 @@ import org.quartz.CronExpression
 
 import scalaz._
 
-trait Scheduler[M[_]] {
+trait Scheduler[M[+_]] {
   def enabled: Boolean
 
-  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): M[Validation[String, UUID]]
+  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): EitherT[M, String, UUID]
 
-  def deleteTask(id: UUID): M[Validation[String, PrecogUnit]]
+  def deleteTask(id: UUID): EitherT[M, String, PrecogUnit]
 
-  def statusForTask(id: UUID, limit: Option[Int]): M[Validation[String, Option[(ScheduledTask, Seq[ScheduledRunReport])]]]
+  def statusForTask(id: UUID, limit: Option[Int]): EitherT[M, String, Option[(ScheduledTask, Seq[ScheduledRunReport])]]
 }
 
 class ActorScheduler(scheduler: ActorRef, timeout: Timeout) extends Scheduler[Future] {
   implicit val requestTimeout = timeout
   val enabled = true
 
-  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): Future[Validation[String, UUID]] =
-    (scheduler ? AddTask(repeat, apiKey, authorities, prefix, source, sink, timeoutMillis)).mapTo[Validation[String, UUID]]
+  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): EitherT[Future, String, UUID] = EitherT {
+    (scheduler ? AddTask(repeat, apiKey, authorities, prefix, source, sink, timeoutMillis)).mapTo[String \/ UUID]
+  }
 
-  def deleteTask(id: UUID) =
-    (scheduler ? DeleteTask(id)).mapTo[Validation[String, PrecogUnit]]
+  def deleteTask(id: UUID) = EitherT {
+    (scheduler ? DeleteTask(id)).mapTo[String \/ PrecogUnit]
+  }
 
-  def statusForTask(id: UUID, limit: Option[Int]) =
-    (scheduler ? StatusForTask(id, limit)).mapTo[Validation[String, Option[(ScheduledTask, Seq[ScheduledRunReport])]]]
+  def statusForTask(id: UUID, limit: Option[Int]) = EitherT {
+    (scheduler ? StatusForTask(id, limit)).mapTo[String \/ Option[(ScheduledTask, Seq[ScheduledRunReport])]]
+  }
 }
 
 object NoopScheduler {
@@ -47,7 +50,7 @@ object NoopScheduler {
 class NoopScheduler[M[+_]](implicit M: Monad[M]) extends Scheduler[M] {
   val enabled = false
 
-  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): M[Validation[String, UUID]] = sys.error("No scheduling available")
+  def addTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]): EitherT[M, String, UUID] = sys.error("No scheduling available")
 
   def deleteTask(id: UUID) = sys.error("No scheduling available")
 

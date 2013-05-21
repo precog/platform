@@ -26,7 +26,7 @@ import scalaz.syntax.traverse._
 import TableModule._
 
 trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with AskSupport with Logging {
-  def secureVFS: SecureVFS[Future]
+  def vfs: SecureVFS[Future]
   def storageTimeout: Timeout
 
   trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
@@ -36,7 +36,7 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
         paths <- pathsM(table)
         tableE = paths.toList.traverse[({ type l[a] = EitherT[Future, Resource.ResourceError, a] })#l, ProjectionLike[Future, Long, Slice]] { path =>
           logger.debug("  Loading path: " + path)
-          secureVFS.readProjection(apiKey, path, Version.Current)
+          vfs.readProjection(apiKey, path, Version.Current)
         } map { projections =>
           val length = projections.map(_.length).sum
           logger.debug("Loading from projections: " + projections)

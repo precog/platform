@@ -99,14 +99,13 @@ class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]],
         val cacheControl0 = CacheControl.fromCacheDirectives(cacheDirectives: _*)
         // Internally maxAge/maxStale are compared against ms times
         storedQueries.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map {
-          case Success(StoredQueryResult(stream, cachedAt)) =>
+          case StoredQueryResult(stream, cachedAt) =>
             HttpResponse(OK, 
               headers =  HttpHeaders(cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
               content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
-
-          case Failure(evaluationError) =>
-            logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
-            HttpResponse(InternalServerError)
+        } valueOr { evaluationError =>
+          logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
+          HttpResponse(InternalServerError)
         }
       }
     }

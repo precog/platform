@@ -70,7 +70,7 @@ object Fault {
   case class Error(pos: Option[FaultPosition], message: String) extends Fault
 }
 
-trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]] with */ ParseEvalStack[M] {
+trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
@@ -94,7 +94,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, Slice])]] = {
+    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): EitherT[N, EvaluationError, (Set[Fault], StreamT[N, Slice])] = {
       import trans.constants._
       val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
       val qid = yggConfig.queryId.getAndIncrement()
@@ -102,54 +102,53 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
 
       import EvaluationError._
 
-      // This should be executed within the outer N returned above, so keep
-      // this as a def, and use within an N.point.
+      val solution = EitherT.fromTryCatch[N, EitherT[N, EvaluationError, (Set[Fault], Table)]] {
+        N point {
+          val (faults, bytecode) = asBytecode(query)
 
-      def solution: Validation[Throwable, Validation[EvaluationError, (Set[Fault], N[Table])]] = Validation.fromTryCatch {
-        val (faults, bytecode) = asBytecode(query)
+          val resultVN: N[EvaluationError \/ Table] = {
+            bytecode map { instrs =>
+              ((systemError _) <-: (StackException(_)) <-: decorate(instrs).disjunction) traverse { dag =>
+                applyQueryOptions(opts) {
+                  logger.debug("[QID:%d] Evaluating query".format(qid))
 
-        val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
-          ((systemError _) <-: (StackException(_)) <-: decorate(instrs).disjunction.validation) map { dag =>
-            applyQueryOptions(opts) {
-              logger.debug("[QID:%d] Evaluating query".format(qid))
-
-              if (queryLogger.isDebugEnabled) {
-                eval(dag, evaluationContext, true) map {
-                  _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
-                    slice => "size: " + slice.size
+                  if (queryLogger.isDebugEnabled) {
+                    eval(dag, evaluationContext, true) map {
+                      _.logged(queryLogger, "[QID:"+qid+"]", "begin result stream", "end result stream") {
+                        slice => "size: " + slice.size
+                      }
+                    }
+                  } else {
+                    eval(dag, evaluationContext, true)
                   }
                 }
-              } else {
-                eval(dag, evaluationContext, true)
               }
+            } getOrElse {
+              // compilation errors will be reported as warnings, but there are no results so
+              // we just return an empty stream as the success
+              N.point(\/.right(Table.empty))
             }
           }
-        } getOrElse {
-          // compilation errors will be reported as warnings, but there are no results so
-          // we just return an empty stream as the success
-          success(N.point(Table.empty))
-        }
 
-        resultVN.map { nt =>
-          faults -> {
-            faults.toStream traverse {
-              case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
-              case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
-            } flatMap { errors =>
-              if (errors.exists(_ == true)) N.point(Table.empty) else nt
+          EitherT(resultVN) flatMap { table =>
+            EitherT.right {
+              faults.toStream traverse {
+                case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
+                case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
+              } map { errors =>
+                faults -> (if (errors.exists(_ == true)) Table.empty else table)
+              }
             }
           }
         }
       } 
 
-      N.point(solution).flatMap {
-        case Failure(e) => N.point(Failure(SystemError(e)))
-        case Success(Failure(err)) => N.point(Failure(err))
-        case Success(Success((faults, nt))) => queryReport.done.flatMap { _ =>
-          nt.map { table =>
-            Success(faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(SourceValue.Single).slices))
-          }
-        }
+      for {
+        solutionResult <- solution.leftMap(systemError).join
+        _ <- EitherT.right(queryReport.done)
+      } yield {
+        val (faults, table) = solutionResult
+        (faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(SourceValue.Single).slices))
       }
     }
 
@@ -221,4 +220,3 @@ trait ShardQueryExecutorPlatform[M[+_]] extends /* Platform[M, StreamT[M, Slice]
     }
   }
 }
-// vim: set ts=4 sw=4 et:
