@@ -70,6 +70,12 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       val rowLevel: Boolean = false
       val multivariate: Boolean = false
+
+      /**
+       * This specifies how to align the 2 arguments as they are inputted. For
+       * instance, if we use MorphismAlignment.Cross, then the 2 tables will be
+       * crossed, then passed to `morph1`.
+       */
       def alignment: MorphismAlignment
     }
 

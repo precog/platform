@@ -51,7 +51,7 @@ trait StaticLibrary extends Library {
   }
     
   lazy val libMorphism2 = Set(
-    M2RetainLeft, M2RetainRight, M2RetainMerge,
+    M2RetainLeft, M2RetainRight, M2RetainMerge, M2RetainCross,
     M2Product, M2Synth, M2Strip,
     Morphism2(Vector("std", "lib9"), "baz2", 0x0003))
     
@@ -80,6 +80,10 @@ trait StaticLibrary extends Library {
 
   object M2RetainMerge extends Morphism2(Vector(), "bin9", 0x1000) {
     override val idPolicy = IdentityPolicy.Retain.Merge
+  }
+
+  object M2RetainCross extends Morphism2(Vector(), "bin99", 0x1900) {
+    override val idPolicy = IdentityPolicy.Retain.Cross
   }
 
   object M2RetainLeft extends Morphism2(Vector(), "bin100", 0x1030) {

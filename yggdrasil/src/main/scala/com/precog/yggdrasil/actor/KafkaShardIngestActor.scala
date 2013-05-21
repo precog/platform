@@ -390,18 +390,29 @@ abstract class KafkaShardIngestActor(shardId: String,
 
       val batched: Validation[Error, Future[(Vector[(Long, EventMessage)], YggCheckpoint)]] =
         eventMessages.sequence[({ type λ[α] = Validation[Error, α] })#λ, (Long, EventMessage.EventMessageExtraction)] map { messageSet =>
-          val apiKeys: List[(APIKey, Path)] = messageSet collect {
-            case (_, \/-(IngestMessage(apiKey, path, _, _, _, _, _))) => (apiKey, path)
-            case (_, -\/((apiKey, path, _))) => (apiKey, path)
+          val apiKeys: List[(APIKey, Path)] = msTime({t => logger.debug("Collected api keys from %d messages in %d ms".format(messageSet.size, t)) }) {
+            messageSet collect {
+              case (_, \/-(IngestMessage(apiKey, path, _, _, _, _, _))) => (apiKey, path)
+              case (_, -\/((apiKey, path, _))) => (apiKey, path)
+            }
           }
 
-          val authorityCacheFutures = apiKeys.distinct map {
+          val authoritiesStartTime = System.currentTimeMillis
+
+          val distinctKeys = apiKeys.distinct
+
+          val authorityCacheFutures = distinctKeys map {
             case k @ (apiKey, path) =>
               // infer write authorities without a timestamp here, because we'll only use this for legacy events
-              permissionsFinder.inferWriteAuthorities(apiKey, path, None) map { k -> _ }
+              //val inferStart = System.currentTimeMillis
+              permissionsFinder.inferWriteAuthorities(apiKey, path, None) map { inferred =>
+                //logger.trace("Write authorities inferred on %s in %d ms".format(k, System.currentTimeMillis - inferStart))
+                k -> inferred
+              }
           }
 
           authorityCacheFutures.sequence map { cached =>
+            logger.debug("Computed authorities from %d apiKeys in %d ms".format(distinctKeys.size, System.currentTimeMillis - authoritiesStartTime))
             val authorityCache = cached.foldLeft(Map.empty[(APIKey, Path), Authorities]) {
               case (acc, (k, Some(a))) => acc + (k -> a)
               case (acc, (_, None)) => acc
@@ -420,7 +431,9 @@ abstract class KafkaShardIngestActor(shardId: String,
                 }
             }
 
-            buildBatch(updatedMessages, Vector.empty, fromCheckpoint)
+            msTime({ t => logger.debug("Batch built in %d ms".format(t)) }) {
+              buildBatch(updatedMessages, Vector.empty, fromCheckpoint)
+            }
           }
         }
 

@@ -137,7 +137,8 @@ object MongoPlatformSpecEngine extends Logging {
 trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
     with MongoColumnarTableModule
     with Logging
-    with StringIdMemoryDatasetConsumer[Future] { self =>
+    with StringIdMemoryDatasetConsumer[Future]
+{ self =>
 
   class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
@@ -202,7 +203,7 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
   override def map (fs: => Fragments): Fragments = (Step { startup() }) ^ fs ^ (Step { shutdown() })
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
-    new Evaluator[N](N0)(mn,nm) {
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line]
           with ExceptionQueryLogger[N, instructions.Line]
           with TimingQueryLogger[N, instructions.Line] {
@@ -214,7 +215,6 @@ trait MongoPlatformSpecs extends ParseEvalStackSpecs[Future]
         val maxSliceSize = 1000 // 10 was waaaaay too small, and we have other specs that cover that case
       }
       val yggConfig = new YggConfig
-      def freshIdScanner = self.freshIdScanner
     }
 }
 
