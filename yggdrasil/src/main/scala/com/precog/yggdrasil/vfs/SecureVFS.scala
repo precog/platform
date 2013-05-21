@@ -10,7 +10,7 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table.Slice
-import com.precog.util.InstantOrdering
+import com.precog.util._
 import Resource._
 
 import akka.dispatch.Future
@@ -37,6 +37,10 @@ import scala.math.Ordered._
 case class StoredQueryResult[M[+_]](data: StreamT[M, Slice], cachedAt: Option[Instant])
 
 class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock) extends Logging {
+  def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
+    vfs.writeAll(data)
+  }
+
   def readResource(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Resource] = {
     //FIXME: Unsecured for now
     vfs.readResource(path, version)
