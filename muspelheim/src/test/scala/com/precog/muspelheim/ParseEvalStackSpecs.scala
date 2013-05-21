@@ -24,6 +24,7 @@ import common._
 import common.kafka._
 
 import com.precog.util._
+import com.precog.common.accounts._
 
 import daze._
 
@@ -42,6 +43,8 @@ import yggdrasil.util._
 import muspelheim._
 
 import org.specs2.mutable._
+
+import org.joda.time.DateTime
 
 import akka.dispatch.Future
 import akka.dispatch.Await
@@ -97,6 +100,10 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val idSource = new FreshAtomicIdSource
   }
 
+  private val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
+    new DateTime, "dummyAPIKey", Path.Root, AccountPlan.Free)
+  private def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, new DateTime)
+
   def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
 
   def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
@@ -114,7 +121,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val tree = forest.head
 
     val Right(dag) = decorate(emit(tree))
-    consumeEval("dummyAPIKey", dag, Path.Root) match {
+    consumeEval(dag, dummyEvaluationContext) match {
       case Success(result) =>
         parseEvalLogger.debug("Evaluation complete for query: " + str)
         result

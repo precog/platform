@@ -70,7 +70,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
       }
   
       def apply(input: Table, ctx: MorphContext): M[Table] = M.point {
-        val storageMetadata = userMetadataView(ctx.evalContext.apiKey)
+        val storageMetadata = userMetadataView(ctx.evalContext.account.apiKey)
         val result = Table(
           input.transform(SourceValue.Single).slices flatMap { slice =>
             slice.columns.get(ColumnRef.identity(CString)) collect { 

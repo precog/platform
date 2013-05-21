@@ -41,8 +41,6 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   import instructions._
   import library._
 
-  val testAPIKey = "testAPIKey"
-
   val line = Line(1, 1, "")
   def inputOp1(op: Op1, loadFrom: String) = {
     dag.Operate(BuiltInFunction1Op(op),
@@ -50,7 +48,7 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   }
 
   def testEval(graph: DepGraph): Set[SEvent] = {
-    consumeEval(testAPIKey, graph, Path.Root) match {
+    consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results
       case Failure(error) => throw error
     }

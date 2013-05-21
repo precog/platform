@@ -103,8 +103,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
     syncExecutorFor(apiKey) map { queryExecV =>
       queryExecV map { queryExec =>
         new QueryExecutor[Future, StreamT[Future, CharBuffer]] {
-          def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-            queryExec.execute(apiKey, query, prefix, opts) map (_ map (_._2))
+          def execute(query: String, context: EvaluationContext, opts: QueryOptions) = {
+            queryExec.execute(query, context, opts) map (_ map (_._2))
           }
         }
       }
@@ -123,14 +123,14 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, CharBuffer]] with
     def complete(results: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]])(implicit
         M: ShardQueryMonad): Future[Validation[EvaluationError, A]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
-      val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+    def execute(query: String, context: EvaluationContext, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
+      val userQuery = UserQuery(query, context.basePath, opts.sortOn, opts.sortOrder)
 
-      createJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
+      createJob(context.apiKey, Some(userQuery.serialize), opts.timeout)(executionContext) flatMap { implicit shardQueryMonad: ShardQueryMonad =>
         import JobQueryState._
 
         val result: Future[Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] = {
-          sink.apply(executor.execute(apiKey, query, prefix, opts)) recover {
+          sink.apply(executor.execute(query, context, opts)) recover {
             case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
             case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
             case ex =>
