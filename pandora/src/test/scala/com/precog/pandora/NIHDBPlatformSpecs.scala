@@ -161,8 +161,7 @@ class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
 
 trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
     with LongIdMemoryDatasetConsumer[Future]
-    with NIHDBColumnarTableModule
-    with NIHDBStorageMetadataSource { self =>
+    with NIHDBColumnarTableModule { self =>
 
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
 
@@ -197,11 +196,12 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
       def freshIdScanner = self.freshIdScanner
   }
 
-  override val accessControl = new UnrestrictedAccessControl[Future]
-
   val storageTimeout = Timeout(300 * 1000)
 
   val projectionsActor = NIHDBPlatformSpecsActor.actor
+
+  val actorVFS = new ActorVFS(projectionsActor, blueeyes.util.Clock.System, storageTimeout, storageTimeout)
+  val vfs = null
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M
