@@ -14,7 +14,7 @@ import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
 trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
-  def vfs: SecureVFS[M]
+  def vfs: VFSMetadata[M]
 
   import trans._
 
