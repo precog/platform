@@ -56,14 +56,15 @@ object VersionLog {
   final val completedLogName = "completedLog"
   final val currentVersionFilename = "HEAD"
 
-  final val unsetSentinel = "unset".serialize.renderCompact
+  final val unsetSentinel = "unset"
+  final val unsetSentinelJV = unsetSentinel.serialize.renderCompact
 
   final def hasCurrent(baseDir: File): IO[Boolean] = {
     val currentFile = new File(baseDir, currentVersionFilename)
 
     IO(currentFile.exists) flatMap { exists =>
       if (exists) {
-        IOUtils.readFileToString(currentFile) map { _ != unsetSentinel }
+        IOUtils.readFileToString(currentFile) map { _ != unsetSentinelJV }
       } else {
         IO(false)
       }
@@ -174,7 +175,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
     } map { _ => PrecogUnit }
   }
 
-  def clearHead = IOUtils.writeToFile(unsetSentinel, headFile).map { _ =>
+  def clearHead = IOUtils.writeToFile(unsetSentinelJV, headFile).map { _ =>
     currentVersion = None
   }
 }
