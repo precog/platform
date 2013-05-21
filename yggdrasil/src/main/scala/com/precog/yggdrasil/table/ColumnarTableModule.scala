@@ -92,40 +92,6 @@ trait ColumnarTableModuleConfig {
 }
 
 object ColumnarTableModule {
-  /*
-//  def renderJson[M[+_]](slices: StreamT[M, Slice], delimiter: Char = '\n')(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
-//    def delimiterBuffer = {
-//      val back = CharBuffer.allocate(1)
-//      back.put(delimiter)
-//      back.flip()
-//      back
-//    }
-//
-//    def delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
-//
-//    def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
-//      StreamT[M, CharBuffer](slices.step map {
-//        case StreamT.Yield(slice, tail) => {
-//          val (stream, rendered2) = slice.renderJson[M](delimiter)
-//
-//          val stream2 = if (rendered && rendered2)
-//            delimitStream ++ stream
-//          else
-//            stream
-//
-//          StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
-//        }
-//
-//        case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
-//
-//        case StreamT.Done => StreamT.Done
-//      })
-//    }
-
-    foldFlatMap(slices, false)
-  }
-  */
-
   def renderJson[M[+_]](slices: StreamT[M, Slice], prefix: String, delimiter: String, suffix: String)(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
     import scalaz.\/._
     def wrap(stream: StreamT[M, CharBuffer]) = {

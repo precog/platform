@@ -25,6 +25,7 @@ import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table.Slice
@@ -55,30 +56,36 @@ import scala.math.Ordered._
 case class StoredQueryResult[M[+_]](data: StreamT[M, Slice], cachedAt: Option[Instant])
 
 class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock) extends Logging {
-
   def readResource(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Resource] = {
     //FIXME: Unsecured for now
     vfs.readResource(path, version)
   }
 
   def readQuery(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, String] = {
+    //FIXME: Unsecured for now
     vfs.readQuery(path, version)
   }
 
   def readProjection(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, ProjectionLike[M, Long, Slice]] = {
+    //FIXME: Unsecured for now
     vfs.readProjection(path, version)
   }
 
-  def findDirectChildren(apiKey: APIKey, path: Path)(implicit M: Monad[M]) = {
-    for {
-      permitted <- permissionsFinder.findBrowsableChildren(apiKey, path) 
-      children <- vfs.findDirectChildren(path) 
-    } yield {
+  def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
+    sys.error("todo")
+  }
+
+  def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
+    sys.error("todo")
+  }
+
+  def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]] = {
+    ^(vfs.findDirectChildren(path), permissionsFinder.findBrowsableChildren(apiKey, path)) { (children, permitted) =>
       children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
     }
   }
 
-  def executeStoredQuery(platform: Platform[M, StreamT[M, Slice]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): M[Validation[EvaluationError, StoredQueryResult[M]]] = {
+  def executeStoredQuery(platform: Platform[M, StreamT[M, Slice]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult[M]] = {
     import queryOptions.cacheControl._
     val cachePath = path / Path(".cached")
     def fallBack = if (onlyIfCached) {
@@ -87,46 +94,36 @@ class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], job
     } else {
       // if current cached version is older than the max age or cached
       // version does not exist, then run synchronously and cache (if cacheable)
-      executeUncached(platform, apiKey, path, queryOptions, cacheable.option(cachePath)).run.map(_.validation)
+      executeUncached(platform, apiKey, path, queryOptions, cacheable.option(cachePath))
     }
 
     logger.debug("Checking on cached result for %s with maxAge = %s and recacheAfter = %s and cacheable = %s".format(path, maxAge, recacheAfter, cacheable))
-    platform.metadataClient.currentVersion(apiKey, cachePath) flatMap {
+    EitherT.right(vfs.currentVersion(cachePath)) flatMap {
       case Some(VersionEntry(id, _, timestamp)) if maxAge.forall(ms => timestamp.plus(ms) >= clock.instant()) =>
+        import EvaluationError._
+
         logger.debug("Found fresh cache entry (%s) for query on %s".format(timestamp, path))
         if (recacheAfter.exists(ms => timestamp.plus(ms) < clock.instant())) {
           // if recacheAfter has expired since the head version was cached,
           // then return the cached version and refresh the cache
           for {
-            writeAsOpt <- platform.metadataClient.currentAuthorities(apiKey, path)
-            writeAsV = writeAsOpt.toSuccess(nels("Unable to determine write authorities for caching of %s".format(path.path)))
-            basePathV = path.prefix.toSuccess(nels("Path %s cannot be relativized.".format(path.path)))
-            taskIdV <- (writeAsV tuple basePathV) traverse { 
-              case (writeAs, basePath) =>
-                scheduler.addTask(None, apiKey, writeAs, basePath, path, cachePath, None).map(_.toValidationNel)
-            } 
-            currentV <- readProjection(apiKey, cachePath, Version.Current).run map { 
-              _.validation leftMap { err => nels(err.toString) } //TODO: obviously suboptimal
-            }
+            queryResource <- readResource(apiKey, path, Version.Current) leftMap storageError
+            basePath      <- EitherT((path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path))).point[M])
+            taskId     <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
+            projection <- readProjection(apiKey, cachePath, Version.Current) leftMap storageError
           } yield {
-            (taskIdV.flatMap(a => a) |@| currentV) { (_, projection) => 
-              // FIXME: because we're getting data back from
-              // NIHDBProjection, it contains the identities. Is there
-              // a better way/place to do this deref?
-              StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
-            } leftMap { errors =>
-              EvaluationError.systemError {
-                new RuntimeException("Errors occurred running previously cached query: " + errors.shows)
-              }
-            }
+            // FIXME: because we're getting data back from
+            // NIHDBProjection, it contains the identities. Is there
+            // a better way/place to do this deref?
+            StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
           }
         } else {
           // simply return the cached results
-          val cachedResults = readProjection(apiKey, cachePath, Version.Current) map { proj =>
+          readProjection(apiKey, cachePath, Version.Current) map { proj =>
             StoredQueryResult(proj.getBlockStream(None), Some(timestamp))
+          } leftMap { 
+            StorageError(_) 
           }
-
-          cachedResults.run.map(_.validation.leftMap(StorageError(_)))
         }
          
       case Some(VersionEntry(_, _, timestamp)) =>
@@ -150,16 +147,12 @@ class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], job
       caching  <- cacheAt match {
         case Some(cachePath) =>
           for {
-            writeAs <- EitherT {
-              platform.metadataClient.currentAuthorities(apiKey, cachePath) map {
-                _.toRightDisjunction(storageError(PermissionsError("Unable to determine write authorities for caching of %s".format(path))))
-              }
-            }
+            resource <- readResource(apiKey, cachePath, Version.Current).leftMap(StorageError(_))
             perms <- EitherT.right(permissionsFinder.writePermissions(apiKey, cachePath, clock.instant()))
             job <- EitherT.right(jobManager.createJob(apiKey, "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now())))
           } yield {
             val allPerms = Map(apiKey -> perms.toSet[Permission])
-            vfs.persistingStream(apiKey, cachePath, writeAs, perms.toSet[Permission], Some(job.id), raw) 
+            vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw) 
           }
 
         case None =>
@@ -169,7 +162,6 @@ class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], job
       StoredQueryResult(caching, None)
     }
   }
-
 }
 
 

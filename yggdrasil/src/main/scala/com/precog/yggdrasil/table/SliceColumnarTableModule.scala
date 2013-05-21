@@ -56,7 +56,7 @@ import scala.collection.mutable
 
 import TableModule._
 
-trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] with StorageMetadataSource[M] {
+trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] {
   type TableCompanion <: SliceColumnarTableCompanion
 
   trait SliceColumnarTableCompanion extends BlockStoreColumnarTableCompanion {

@@ -78,7 +78,6 @@ case class ShardState(
     platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
-    vfs: SecureVFS[Future], 
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
@@ -163,7 +162,7 @@ trait ShardService extends
         dataPath("/meta/fs") {
           get {
             produce(application/json)(
-              new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder) map { _ map { _ map { _ map { jvalueToChunk } } } }
+              new BrowseServiceHandler[ByteChunk](state.platform.vfs, state.apiKeyFinder) map { _ map { _ map { _ map { jvalueToChunk } } } }
             )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
           } ~
           options {
@@ -197,7 +196,7 @@ trait ShardService extends
       dataPath("/analysis/fs") {
         get {
           shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-            new AnalysisServiceHandler(state.platform, state.vfs, state.clock)
+            new AnalysisServiceHandler(state.platform, state.platform.vfs, state.clock)
           }
         }
       }
@@ -207,7 +206,7 @@ trait ShardService extends
   private def dataHandler[A](state: ShardState) = {
     dataPath("/data/fs") {
       get {
-        new DataServiceHandler[A](state.vfs)
+        new DataServiceHandler[A](state.platform.vfs)
       }
     }
   }
