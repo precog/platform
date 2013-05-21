@@ -51,6 +51,8 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
   trait PrecogLib extends ColumnarTableLib {
     import trans._
 
+    override def _lib2 = super._lib2 ++ Set(Enrichment)
+
     object Enrichment extends Op2(PrecogNamespace, "enrichment") {
       
       val tpe = BinaryOperationType(
