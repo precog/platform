@@ -88,10 +88,10 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = {
-      val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
+    def execute(query: String, evaluationContext: EvaluationContext, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = {
       val qid = yggConfig.queryId.getAndIncrement()
-      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
+      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s" format 
+        (qid, evaluationContext.apiKey, query, evaluationContext.basePath))
 
       import EvaluationError._
 

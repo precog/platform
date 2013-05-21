@@ -5,6 +5,7 @@ import annotation.tailrec
 
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.TableModule._
@@ -42,7 +43,7 @@ trait EvaluatorConfig extends IdSourceConfig {
   def maxSliceSize: Int
 }
 
-case class EvaluationContext(apiKey: APIKey, basePath: Path, startTime: DateTime)
+case class EvaluationContext(apiKey: APIKey, account: AccountDetails, basePath: Path, startTime: DateTime)
 
 trait EvaluatorModule[M[+_]] extends CrossOrdering
     with Memoizer
@@ -134,7 +135,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * and `prepareEval` (which has the primary eval loop).
      */
     def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): N[Table] = {
-      evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
+      evalLogger.debug("Eval for {} = {}", ctx.account.apiKey.toString, graph)
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
 
@@ -412,7 +413,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               Path(prefixStr) = ctx.basePath
               f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("/$", "")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
-              back <- transState liftM mn(pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe))
+              back <- transState liftM mn(pendingTable.table.transform(trans2).load(ctx.account.apiKey, jtpe))
             } yield PendingTable(back, graph, TransSpec1.Id)
           
           case dag.Morph1(mor, parent) => 

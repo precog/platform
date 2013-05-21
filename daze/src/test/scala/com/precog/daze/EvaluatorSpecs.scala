@@ -2,6 +2,7 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.common.accounts._
 import com.precog.util._
 
 import com.precog.yggdrasil._
@@ -56,7 +57,9 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
+  def testAccount = AccountDetails("00001", "test@email.com",
+    new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  val defaultEvaluationContext = EvaluationContext("testAPIKey", testAccount, Path.Root, new DateTime)
   val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
     def info(msg: String): M[Unit] = M.point(())
     def warn(msg: String): M[Unit] = M.point(())
@@ -138,7 +141,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph, path: Path = Path.Root, optimize: Boolean = true)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, path, optimize) match {
+    val ctx = defaultEvaluationContext.copy(basePath = path)
+    (consumeEval(graph, ctx, optimize) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })/* and 

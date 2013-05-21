@@ -29,7 +29,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, Path.Root) match {
+    (consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) 

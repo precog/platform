@@ -6,6 +6,7 @@ import com.precog.common._
 
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.common.accounts._
 import com.precog.muspelheim._
 
 import blueeyes.core.data._
@@ -24,13 +25,15 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.CharBuffer
 import java.io.{ StringWriter, PrintWriter }
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.Validation.{ success, failure }
 import scalaz.syntax.monad._
 
-final class QueryServiceNotAvailable(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
+final class QueryServiceNotAvailable(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
   val service = { (request: HttpRequest[ByteChunk]) =>
-    success({ (r: APIKey, p: Path, q: String, opts: QueryOptions) =>
+    success({ (r: APIKey, a: AccountDetails, p: Path, q: String, opts: QueryOptions) =>
       M.point(HttpResponse(HttpStatus(NotFound, "This service is not available in this version.")))
     })
   }
@@ -38,7 +41,7 @@ final class QueryServiceNotAvailable(implicit M: Monad[Future]) extends CustomHt
   val metadata = DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query.")
 }
 
-abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
 
@@ -68,15 +71,16 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomH
   }
 
   lazy val service = (request: HttpRequest[ByteChunk]) => {
-    success((apiKey: APIKey, path: Path, query: String, opts: QueryOptions) => query.trim match {
+    success((apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) => query.trim match {
       case Command("ls", arg) => list(apiKey, Path(arg.trim))
       case Command("list", arg) => list(apiKey, Path(arg.trim))
       case Command("ds", arg) => describe(apiKey, Path(arg.trim))
       case Command("describe", arg) => describe(apiKey, Path(arg.trim))
       case qt =>
-        platform.executorFor(apiKey) flatMap {
+        platform.executorFor(apiKey) flatMap { //TODO: executorFor can just take an Account.
           case Success(executor) =>
-            executor.execute(apiKey, query, path, opts) flatMap {
+            val ctx = EvaluationContext(apiKey, account, path, new DateTime)
+            executor.execute(query, ctx, opts) flatMap {
               case Success(result) =>
                 extractResponse(request, result) map (appendHeaders(opts))
               case Failure(error) =>

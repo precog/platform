@@ -3,6 +3,7 @@ package com.precog.daze
 import com.precog.common._
 import com.precog.bytecode._
 import com.precog.common.Path
+import com.precog.common.accounts._
 
 import com.precog.common.security._
 import com.precog.yggdrasil._
@@ -47,7 +48,10 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
   }
 
-  val defaultEvaluationContext = EvaluationContext("", Path.Root, new DateTime())
+  val testAPIKey = "testAPIKey"
+  def testAccount = AccountDetails("00001", "test@email.com",
+    new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  val defaultEvaluationContext = EvaluationContext(testAPIKey, testAccount, Path.Root, new DateTime)
   val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
     def info(msg: String): M[Unit] = M.point(())
     def warn(msg: String): M[Unit] = M.point(())

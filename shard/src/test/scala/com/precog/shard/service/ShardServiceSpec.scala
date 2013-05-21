@@ -84,6 +84,7 @@ trait TestShardService extends
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
+  private val accountFinder = new StaticAccountFinder[Future]("test", "who-cares")
 
   val rootAPIKey = apiKeyManager.rootAPIKey.copoint
 
@@ -124,7 +125,7 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
+    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, self.accountFinder, jobManager, clock, Stoppable.Noop)
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
@@ -393,7 +394,7 @@ trait TestPlatform extends ManagedPlatform { self =>
 
   protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
     new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         if (query == "bad query") {
           val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))

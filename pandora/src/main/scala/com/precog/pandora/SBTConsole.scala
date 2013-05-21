@@ -42,6 +42,8 @@ import com.codecommit.gll.LineStream
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.comonad._
@@ -109,6 +111,10 @@ object SBTConsole {
     val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
+    val rootAccount = AccountDetails("root", "nobody@precog.com",
+      new DateTime, rootAPIKey, Path.Root, AccountPlan.Root)
+    def evaluationContext = EvaluationContext(rootAPIKey, rootAccount, Path.Root, new DateTime)
+
 
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
@@ -129,7 +135,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      consumeEval(rootAPIKey, dag, Path.Root)
+      consumeEval(dag, evaluationContext)
     }
 
     def produceDAG(str: String) = {
