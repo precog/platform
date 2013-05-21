@@ -21,6 +21,8 @@ package com.precog.daze
 
 import org.specs2.mutable._
 
+import blueeyes.json._
+
 import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.common.Path
@@ -57,7 +59,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   }
 
   def op2Input(op: Op2, const: RValue, loadFrom: Line => dag.LoadLocal) = {
-    Join(BuiltInFunction2Op(op), CrossLeftSort, loadFrom(line), Const(const)(line))(line)
+    Join(BuiltInFunction2Op(op), Cross(None), loadFrom(line), Const(const)(line))(line)
   }
         
   "for homogeneous sets, the appropriate string function" should {
@@ -345,7 +347,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 2, -36, -73, -81, -6)
     }
     "determine compareToIgnoreCase" in {
-      val input = Join(BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(compareToIgnoreCase), Cross(None),
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("QUIRKY"))(line))(line)
         
@@ -373,7 +375,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 2, -36, -73, -81, -6)
     }
     "determine compareIgnoreCase" in {
-      val input = Join(BuiltInFunction2Op(compareIgnoreCase), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(compareIgnoreCase), Cross(None),
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("QUIRKY"))(line))(line)
         
@@ -388,7 +390,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 2, -4, -73, -81, -6)
     }
     "determine equals" in {
-      val input = Join(BuiltInFunction2Op(library.equals), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(library.equals), Cross(None),
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("quirky"))(line))(line)
         
@@ -403,7 +405,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine indexOf" in {
-      val input = Join(BuiltInFunction2Op(indexOf), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(indexOf), Cross(None),
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
         Const(CString("e"))(line))(line)
         
@@ -418,7 +420,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(-1, 7, 4, 12, 6)
     }
     "determine equalsIgnoreCase" in {
-      val input = Join(BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(equalsIgnoreCase), Cross(None),
         dag.LoadLocal(Const(CString("/hom/strings"))(line))(line), 
         Const(CString("QUIRKY"))(line))(line)
         
@@ -521,7 +523,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
 
     "determine codePointAt with valid integer" in {
-      val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(codePointAt), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -536,7 +538,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(101, 32, 34, 115)
     }
     "determine codePointAt with invalid integer" in {
-      val input = Join(BuiltInFunction2Op(codePointAt), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(codePointAt), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CNum(7.5))(line))(line)
         
@@ -551,7 +553,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain()
     }
     "determine startsWith" in {
-      val input = Join(BuiltInFunction2Op(startsWith), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(startsWith), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CString("s"))(line))(line)
         
@@ -566,7 +568,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine lastIndexOf" in {
-      val input = Join(BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(lastIndexOf), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CString("s"))(line))(line)
         
@@ -581,7 +583,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(-1, 3, 14, 27)
     }
     "determine concat" in {
-      val input = Join(BuiltInFunction2Op(concat), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(concat), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CString("7"))(line))(line)
         
@@ -596,7 +598,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
     }
     "determine endsWith" in {
-      val input = Join(BuiltInFunction2Op(endsWith), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(endsWith), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CString("y"))(line))(line)
         
@@ -611,7 +613,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine codePointBefore with valid integer" in {
-      val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(codePointBefore), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -626,7 +628,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(99, 58, 97, 101)
     }
     "determine codePointBefore with invalid integer" in {
-      val input = Join(BuiltInFunction2Op(codePointBefore), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(codePointBefore), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CNum(7.5))(line))(line)
         
@@ -641,7 +643,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain()
     }
     "determine takeLeft with valid integer" in {
-      val input = Join(BuiltInFunction2Op(takeLeft), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(takeLeft), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
@@ -655,7 +657,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "quirky", "solstice", "Monkey: ", "(\"alpha\"", "  Whites").only
     }
     "determine takeRight with valid integer" in {
-      val input = Join(BuiltInFunction2Op(takeRight), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(takeRight), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
@@ -669,7 +671,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", "quirky", "tice + 7", "[Brains]", "\"gamma\")", "!!1!!   ").only
     }
     "determine dropLeft with valid integer" in {
-      val input = Join(BuiltInFunction2Op(dropLeft), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(dropLeft), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
@@ -683,7 +685,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain("", " + 7", "[Brains]", ", \"beta\", \"gamma\")", "pace       is   awesome  !!!1!!   ").only
     }
     "determine dropRight with valid integer" in {
-      val input = Join(BuiltInFunction2Op(dropRight), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(dropRight), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
       
@@ -785,7 +787,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(true, false)
     }
     "determine indexOf" in {
-      val input = Join(BuiltInFunction2Op(indexOf), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(indexOf), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
         Const(CString("e"))(line))(line)
         
@@ -800,7 +802,7 @@ trait StringLibSpecs[M[+_]] extends Specification
       result2 must contain(-1, 7, 4, 12, 6)
     }
     "determine equalsIgnoreCase" in {
-      val input = Join(BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(equalsIgnoreCase), Cross(None),
         dag.LoadLocal(Const(CString("/het/strings"))(line))(line), 
         Const(CString("QUIRKY"))(line))(line)
         
@@ -883,15 +885,15 @@ trait StringLibSpecs[M[+_]] extends Specification
 
   "split" should {
 
-    val o = scala.math.Ordering.by[(Long, _), Long](_._1)
+    val o = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
-    def mogrify(result: Set[(Vector[Long], SValue)]): List[Vector[String]] =
+    def mogrify(result: Set[(Vector[SValue], SValue)]): List[Vector[String]] =
       result.toList.map {
         case (Vector(n), SArray(elems)) => (n, elems)
       }.sorted(o).map(_._2.map { case SString(s) => s })
 
     def mktree(f: Op2, path: String, sep: String) =
-      Join(BuiltInFunction2Op(f), CrossLeftSort,
+      Join(BuiltInFunction2Op(f), Cross(None),
         dag.LoadLocal(Const(CString(path))(line))(line),
         Const(CString(sep))(line))(line)
 

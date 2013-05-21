@@ -636,6 +636,27 @@ trait ColumnarTableModule[M[+_]]
         ExactSize(values.length)
       )
     }
+
+    def join(left: Table, right: Table, orderHint: Option[JoinOrder] = None)(leftKeySpec: TransSpec1, rightKeySpec: TransSpec1, joinSpec: TransSpec2): M[(JoinOrder, Table)] = {
+      val emptySpec = trans.ConstLiteral(CEmptyArray, Leaf(Source))
+      for {
+        left0 <- left.sort(leftKeySpec)
+        right0 <- right.sort(rightKeySpec)
+        cogrouped = left0.cogroup(leftKeySpec, rightKeySpec, right0)(emptySpec, emptySpec, trans.WrapArray(joinSpec))
+      } yield {
+        JoinOrder.KeyOrder -> cogrouped.transform(trans.DerefArrayStatic(Leaf(Source), CPathIndex(0)))
+      }
+    }
+
+    def cross(left: Table, right: Table, orderHint: Option[CrossOrder] = None)(spec: TransSpec2): M[(CrossOrder, Table)] = {
+      import CrossOrder._
+      M.point(orderHint match {
+        case Some(CrossRight | CrossRightLeft) =>
+          CrossRight -> right.cross(left)(TransSpec2.flip(spec))
+        case _ =>
+          CrossLeft -> left.cross(right)(spec)
+      })
+    }
   }
 
   abstract class ColumnarTable(slices0: StreamT[M, Slice], val size: TableSize) extends TableLike with SamplableColumnarTable { self: Table =>
@@ -734,24 +755,23 @@ trait ColumnarTableModule[M[+_]]
      * different than if the tables were normalized.
      */
     def zip(t2: Table): M[Table] = {
-      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
-
-      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice], acc: StreamT[M, Slice]): M[StreamT[M, Slice]] = {
-        slices1.uncons flatMap { 
+      def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice]): StreamT[M, Slice] = {
+        StreamT(slices1.uncons flatMap {
           case Some((head1, tail1)) =>
-            slices2.uncons flatMap {
-              case Some((head2, tail2)) => {
-                rec(tail1, tail2, head1.zip(head2) :: acc)
-              }
-              case None => M.point(acc)
+            slices2.uncons map {
+              case Some((head2, tail2)) =>
+                StreamT.Yield(head1 zip head2, rec(tail1, tail2))
+              case None =>
+                StreamT.Done
             }
-          case None => M.point(acc)
-        }
+
+          case None =>
+            M point StreamT.Done
+        })
       }
 
-      val resultSlices = rec(slices, t2.slices, StreamT.empty[M, Slice])
-
-      resultSlices map { sl => Table(sl, resultSize) }
+      val resultSize = EstimateSize(0, size.maxSize min t2.size.maxSize)
+      M point Table(rec(slices, t2.slices), resultSize)
 
       // todo investigate why the code below makes all of RandomLibSpecs explode
       // val resultSlices = Apply[({ type l[a] = StreamT[M, a] })#l].zip.zip(slices, t2.slices) map { case (s1, s2) => s1.zip(s2) }
@@ -1343,10 +1363,11 @@ trait ColumnarTableModule[M[+_]]
       val sizeCheck = for (resultSize <- newSizeM) yield
         resultSize < yggConfig.maxSaneCrossSize && resultSize >= 0
 
-      if (sizeCheck getOrElse true)
+      if (sizeCheck getOrElse true) {
         Table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }), newSize)
-      else
+      } else {
         throw EnormousCartesianException(this.size, that.size)
+      }
     }
 
     /**
@@ -1369,8 +1390,12 @@ trait ColumnarTableModule[M[+_]]
               StreamT.Done
             }
         )
-        
-        Table(stream((id.initial, filter.initial), slices), UnknownSize)
+
+        val slices0 = StreamT.wrapEffect(this.sort(spec) map { sorted =>
+          stream((id.initial, filter.initial), sorted.slices)
+        })
+
+        Table(slices0, EstimateSize(0L, size.maxSize))
       }
 
       distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
@@ -1667,4 +1692,3 @@ trait ColumnarTableModule[M[+_]]
     def metrics = TableMetrics(readStarts.get, blockReads.get)
   }
 }
-// vim: set ts=4 sw=4 et:

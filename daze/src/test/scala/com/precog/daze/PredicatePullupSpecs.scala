@@ -61,31 +61,31 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
             IntersectBucketSpec(
               IntersectBucketSpec(
                 Extra(
-                  Join(instructions.LtEq,CrossLeftSort,
-                    Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+                  Join(instructions.LtEq,Cross(None),
+                    Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                     Const(CLong(1329643873628L))(loc)
                   )(loc)
                 ),
                 Extra(
-                  Join(instructions.GtEq,CrossLeftSort,
-                    Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+                  Join(instructions.GtEq,Cross(None),
+                    Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                     Const(CLong(1328779873610L))(loc)
                   )(loc)
                 )
               ),
               UnfixedSolution(1,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("userId"))(loc))(loc)
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("userId"))(loc))(loc)
               )
             )
           ),
-          Join(instructions.JoinObject,CrossLeftSort,
-            Join(instructions.WrapObject,CrossLeftSort,
+          Join(instructions.JoinObject,Cross(None),
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("userId"))(loc),
               SplitParam(1, id)(loc)
             )(loc),
-            Join(instructions.WrapObject,CrossLeftSort,
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("time"))(loc),
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
@@ -97,12 +97,12 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         Filter(IdentitySort,
           load,
           Join(instructions.And,IdentitySort,
-            Join(instructions.LtEq,CrossLeftSort,
-              Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+            Join(instructions.LtEq,Cross(None),
+              Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
               Const(CLong(1329643873628L))(loc)
             )(loc),
-            Join(instructions.GtEq,CrossLeftSort,
-              Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+            Join(instructions.GtEq,Cross(None),
+              Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
               Const(CLong(1328779873610L))(loc)
             )(loc)
           )(loc)
@@ -113,20 +113,20 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Group(0,
             filteredLoad,
             UnfixedSolution(1,
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 filteredLoad,
                 Const(CString("userId"))(loc)
               )(loc)
             )
           ),
-          Join(instructions.JoinObject,CrossLeftSort,
-            Join(instructions.WrapObject,CrossLeftSort,
+          Join(instructions.JoinObject,Cross(None),
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("userId"))(loc),
               SplitParam(1, id)(loc)
             )(loc),
-            Join(instructions.WrapObject,CrossLeftSort,
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("time"))(loc),
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
@@ -164,35 +164,35 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               IntersectBucketSpec(
                 IntersectBucketSpec(
                   Extra(
-                    Join(instructions.LtEq,CrossLeftSort,
-                      Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+                    Join(instructions.LtEq,Cross(None),
+                      Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                       Const(CLong(1329643873628L))(loc)
                     )(loc)
                   ),
                   Extra(
-                    Join(instructions.GtEq,CrossLeftSort,
-                      Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+                    Join(instructions.GtEq,Cross(None),
+                      Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                       Const(CLong(1328779873610L))(loc)
                     )(loc)
                   )
                 ),
                 UnfixedSolution(1,
-                  Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("userId"))(loc))(loc)
+                  Join(instructions.DerefObject,Cross(None), load, Const(CString("userId"))(loc))(loc)
                 )
               ),
               UnfixedSolution(2,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("pageId"))(loc))(loc)
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("pageId"))(loc))(loc)
               )
             )
           ),
-          Join(instructions.JoinObject,CrossLeftSort,
-            Join(instructions.WrapObject,CrossLeftSort,
+          Join(instructions.JoinObject,Cross(None),
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("userId"))(loc),
               SplitParam(1, id)(loc)
             )(loc),
-            Join(instructions.WrapObject,CrossLeftSort,
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("time"))(loc),
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 SplitGroup(0, load.identities, id)(loc),
                 Const(CString("time"))(loc)
               )(loc)
@@ -204,12 +204,12 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Filter(IdentitySort,
             load,
             Join(instructions.And,IdentitySort,
-              Join(instructions.LtEq,CrossLeftSort,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+              Join(instructions.LtEq,Cross(None),
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                 Const(CLong(1329643873628L))(loc)
               )(loc),
-              Join(instructions.GtEq,CrossLeftSort,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("time"))(loc))(loc),
+              Join(instructions.GtEq,Cross(None),
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("time"))(loc))(loc),
                 Const(CLong(1328779873610L))(loc)
               )(loc)
             )(loc)
@@ -221,27 +221,27 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               filteredLoad,
               IntersectBucketSpec(
                 UnfixedSolution(1,
-                  Join(instructions.DerefObject,CrossLeftSort,
+                  Join(instructions.DerefObject,Cross(None),
                     filteredLoad,
                     Const(CString("userId"))(loc)
                   )(loc)
                 ),
                 UnfixedSolution(2,
-                  Join(instructions.DerefObject,CrossLeftSort,
+                  Join(instructions.DerefObject,Cross(None),
                     filteredLoad,
                     Const(CString("pageId"))(loc)
                   )(loc)
                 )
               )
             ),
-            Join(instructions.JoinObject,CrossLeftSort,
-              Join(instructions.WrapObject,CrossLeftSort,
+            Join(instructions.JoinObject,Cross(None),
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("userId"))(loc),
                 SplitParam(1, id)(loc)
               )(loc),
-              Join(instructions.WrapObject,CrossLeftSort,
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("time"))(loc),
-                Join(instructions.DerefObject,CrossLeftSort,
+                Join(instructions.DerefObject,Cross(None),
                   SplitGroup(0, load.identities, id)(loc),
                   Const(CString("time"))(loc)
                 )(loc)
@@ -276,11 +276,11 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
             load,
             IntersectBucketSpec(
               UnfixedSolution(1,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Gender"))(loc))(loc)
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("Gender"))(loc))(loc)
               ),
               Extra(
-                Join(instructions.Eq,CrossLeftSort,
-                  Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Edition"))(loc))(loc),
+                Join(instructions.Eq,Cross(None),
+                  Join(instructions.DerefObject,Cross(None), load, Const(CString("Edition"))(loc))(loc),
                   Const(CLong(2000))(loc)
                 )(loc)
               )
@@ -295,7 +295,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Group(2,
             SplitGroup(0, load.identities, id1)(loc),
             UnfixedSolution(3,
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 SplitGroup(0, load.identities, id1)(loc),
                 Const(CString("Weight"))(loc)
               )(loc)
@@ -308,8 +308,8 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
       val filteredLoad =
         Filter(IdentitySort,
           load,
-          Join(instructions.Eq,CrossLeftSort,
-            Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Edition"))(loc))(loc),
+          Join(instructions.Eq,Cross(None),
+            Join(instructions.DerefObject,Cross(None), load, Const(CString("Edition"))(loc))(loc),
             Const(CLong(2000))(loc)
           )(loc)
         )(loc)
@@ -319,7 +319,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Group(0,
             filteredLoad,
             UnfixedSolution(1,
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 filteredLoad,
                 Const(CString("Gender"))(loc)
               )(loc)
@@ -337,7 +337,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
               id1
             )(loc),
             UnfixedSolution(3,
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 SplitGroup(0, load.identities, id1)(loc),
                 Const(CString("Weight"))(loc)
               )(loc)
@@ -371,32 +371,32 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
             load,
             IntersectBucketSpec(
               UnfixedSolution(1,
-                Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Gender"))(loc))(loc)
+                Join(instructions.DerefObject,Cross(None), load, Const(CString("Gender"))(loc))(loc)
               ),
               Extra(
-                Join(instructions.Eq,CrossLeftSort,
-                  Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Edition"))(loc))(loc),
+                Join(instructions.Eq,Cross(None),
+                  Join(instructions.DerefObject,Cross(None), load, Const(CString("Edition"))(loc))(loc),
                   Const(CLong(2000))(loc)
                 )(loc)
               )
             )
           ),
-          Join(instructions.JoinObject,CrossLeftSort,
-            Join(instructions.WrapObject,CrossLeftSort,
+          Join(instructions.JoinObject,Cross(None),
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("gender1"))(loc),
               SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.JoinObject,IdentitySort,
-              Join(instructions.WrapObject,CrossLeftSort,
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("gender2"))(loc),
-                Join(instructions.DerefObject,CrossLeftSort,
+                Join(instructions.DerefObject,Cross(None),
                   load,
                   Const(CString("Gender"))(loc)
                 )(loc)
               )(loc),
-              Join(instructions.WrapObject,CrossLeftSort,
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("gender3"))(loc),
-                Join(instructions.DerefObject,CrossLeftSort,
+                Join(instructions.DerefObject,Cross(None),
                   SplitGroup(0,load.identities, id)(loc),
                   Const(CString("Gender"))(loc)
                 )(loc)
@@ -408,8 +408,8 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
       val filteredLoad =
         Filter(IdentitySort,
           load,
-          Join(instructions.Eq,CrossLeftSort,
-            Join(instructions.DerefObject,CrossLeftSort, load, Const(CString("Edition"))(loc))(loc),
+          Join(instructions.Eq,Cross(None),
+            Join(instructions.DerefObject,Cross(None), load, Const(CString("Edition"))(loc))(loc),
             Const(CLong(2000))(loc)
           )(loc)
         )(loc)
@@ -419,28 +419,28 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
           Group(0,
             filteredLoad,
             UnfixedSolution(1,
-              Join(instructions.DerefObject,CrossLeftSort,
+              Join(instructions.DerefObject,Cross(None),
                 filteredLoad,
                 Const(CString("Gender"))(loc)
               )(loc)
             )
           ),
-          Join(instructions.JoinObject,CrossLeftSort,
-            Join(instructions.WrapObject,CrossLeftSort,
+          Join(instructions.JoinObject,Cross(None),
+            Join(instructions.WrapObject,Cross(None),
               Const(CString("gender1"))(loc),
               SplitParam(1, id)(loc)
             )(loc),
             Join(instructions.JoinObject,IdentitySort,
-              Join(instructions.WrapObject,CrossLeftSort,
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("gender2"))(loc),
-                Join(instructions.DerefObject,CrossLeftSort,
+                Join(instructions.DerefObject,Cross(None),
                   filteredLoad,
                   Const(CString("Gender"))(loc)
                 )(loc)
               )(loc),
-              Join(instructions.WrapObject,CrossLeftSort,
+              Join(instructions.WrapObject,Cross(None),
                 Const(CString("gender3"))(loc),
-                Join(instructions.DerefObject,CrossLeftSort,
+                Join(instructions.DerefObject,Cross(None),
                   SplitGroup(0, load.identities, id)(loc),
                   Const(CString("Gender"))(loc)
                 )(loc)
