@@ -124,8 +124,8 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
 
           val options = params.deref(CPathField("options"))
           // TODO: Add these values to MorphContext.
-          // val baseOpts = Map(jfield("accountId", ctx.accountId), jfield("email", ctx.email))
-          val baseOpts = Map.empty[String, JValue]
+          val account = ctx.evalContext.account
+          val baseOpts = Map(jfield("accountId", account.accountId), jfield("email", account.email))
           val chunks: List[((String, Map[String, JValue]), BitSet)] = chunks0 map { case (row, members) =>
             val url = urls(row)
             val opts = options.toJValue(row) match {
