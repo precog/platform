@@ -79,7 +79,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
         }
         
         // Array operations
-        case graph @ Join(JoinArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(JoinArray, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -90,7 +90,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               Join(JoinArray, sort, left2, right2)(graph.loc)
           }
 
-        case graph @ Join(DerefArray, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(DerefArray, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -101,7 +101,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               Join(DerefArray, sort, left2, right2)(graph.loc)
           }
 
-        case graph @ Join(ArraySwap, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(ArraySwap, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -117,7 +117,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
           }
 
         // Object operations
-        case graph @ Join(WrapObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(WrapObject, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -128,7 +128,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               Join(WrapObject, sort, left2, right2)(graph.loc)
           }
 
-        case graph @ Join(DerefObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(DerefObject, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -139,7 +139,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               Join(DerefObject, sort, left2, right2)(graph.loc)
           }
 
-        case graph @ Join(JoinObject, sort @ (CrossLeftSort | CrossRightSort), left, right) =>
+        case graph @ Join(JoinObject, sort @ Cross(_), left, right) =>
           val left2 = recurse(left)
           val right2 = recurse(right)
 
@@ -150,7 +150,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
               Join(JoinObject, sort, left2, right2)(graph.loc)
           }
 
-        case graph @ Join(op, sort @ (CrossLeftSort | CrossRightSort), left, right) => {
+        case graph @ Join(op, sort @ Cross(_), left, right) => {
           val left2 = recurse(left)
           val right2 = recurse(right)
           
@@ -183,7 +183,7 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
           graphM getOrElse Join(op, sort, left2, right2)(graph.loc)
         }
           
-        case graph @ Filter(sort @ (CrossLeftSort | CrossRightSort), left, right) => {
+        case graph @ Filter(sort @ Cross(_), left, right) => {
           val left2 = recurse(left)
           val right2 = recurse(right)
           

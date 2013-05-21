@@ -28,6 +28,8 @@ trait DAG extends Instructions {
 
   import instructions._
   import library._
+
+  import TableModule.CrossOrder // TODO: Move cross order out of yggdrasil.
   
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
     import dag._
@@ -43,9 +45,7 @@ trait DAG extends Instructions {
       def processJoinInstr(instr: JoinInstr) = {
         val maybeOpSort = Some(instr) collect {
           case instructions.Map2Match(op) => (op, IdentitySort)
-          case instructions.Map2Cross(op) => (op, CrossLeftSort)
-          case instructions.Map2CrossLeft(op) => (op, CrossLeftSort)
-          case instructions.Map2CrossRight(op) => (op, CrossRightSort)
+          case instructions.Map2Cross(op) => (op, Cross(None))
         }
         
         val eitherRootsOp = maybeOpSort map {
@@ -233,9 +233,7 @@ trait DAG extends Instructions {
         }
         
         case instr @ FilterMatch => processFilter(instr, IdentitySort)
-        case instr @ FilterCross => processFilter(instr, CrossLeftSort)
-        case instr @ FilterCrossLeft => processFilter(instr, CrossLeftSort)
-        case instr @ FilterCrossRight => processFilter(instr, CrossRightSort)
+        case instr @ FilterCross => processFilter(instr, Cross(None))
         
         case Dup => {
           roots match {
@@ -420,8 +418,12 @@ trait DAG extends Instructions {
     val loc: Line
     
     def identities: Identities
+
+    /** Returns true if the identities are guaranteed to be unique. */
+    def uniqueIdentities: Boolean
     
-    def sorting: dag.TableSort
+    /** The set of available value-sorted keys. */
+    def valueKeys: Set[Int]
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
@@ -485,11 +487,7 @@ trait DAG extends Instructions {
 
           case graph @ dag.Filter(joinSort, target, boolean) => dag.Filter(joinSort, memoized(target), memoized(boolean))(graph.loc)
 
-          case dag.Sort(parent, indexes) => dag.Sort(memoized(parent), indexes)
-
-          case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(parent), sortField, valueField, id)
-
-          case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(parent), id)
+          case dag.AddSortKey(parent, sortField, valueField, id) => dag.AddSortKey(memoized(parent), sortField, valueField, id)
 
           case dag.Memoize(parent, priority) => dag.Memoize(memoized(parent), priority)
         }
@@ -680,14 +678,8 @@ trait DAG extends Instructions {
                       newBoolean <- memoized(boolean)
                     } yield dag.Filter(joinSort, newTarget, newBoolean)(graph.loc)
         
-                  case dag.Sort(parent, indexes) =>
-                    for { newParent <- memoized(parent) } yield dag.Sort(newParent, indexes)
-        
-                  case dag.SortBy(parent, sortField, valueField, id) =>
-                    for { newParent <- memoized(parent) } yield dag.SortBy(newParent, sortField, valueField, id)
-        
-                  case dag.ReSortBy(parent, id) =>
-                    for { newParent <- memoized(parent) } yield dag.ReSortBy(newParent, id)
+                  case dag.AddSortKey(parent, sortField, valueField, id) =>
+                    for { newParent <- memoized(parent) } yield dag.AddSortKey(newParent, sortField, valueField, id)
         
                   case dag.Memoize(parent, priority) =>
                     for { newParent <- memoized(parent) } yield dag.Memoize(newParent, priority)
@@ -849,11 +841,7 @@ trait DAG extends Instructions {
           val acc2 = foldDown0(target, acc |+| f(target))
           foldDown0(boolean, acc2 |+| f(boolean))
 
-        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))
-
-        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
-
-        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))
+        case dag.AddSortKey(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))
       }
@@ -885,8 +873,10 @@ trait DAG extends Instructions {
     //tic variable node
     case class SplitParam(id: Int, parentId: Identifier)(val loc: Line) extends DepGraph {
       val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -895,7 +885,9 @@ trait DAG extends Instructions {
     
     //grouping node (e.g. foo where foo.a = 'b)
     case class SplitGroup(id: Int, identities: Identities, parentId: Identifier)(val loc: Line) extends DepGraph {
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
+
+      def uniqueIdentities = false
       
       val isSingleton = false
       
@@ -904,8 +896,10 @@ trait DAG extends Instructions {
     
     case class Const(value: RValue)(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -916,7 +910,9 @@ trait DAG extends Instructions {
     class Undefined(val loc: Line) extends DepGraph with Root {
       lazy val identities = Identities.Undefined
 
-      val sorting = IdentitySort
+      def uniqueIdentities = false
+
+      def valueKeys = Set.empty
 
       val isSingleton = false
 
@@ -937,8 +933,10 @@ trait DAG extends Instructions {
     
     case class New(parent: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -946,15 +944,18 @@ trait DAG extends Instructions {
     }
 
     case class Morph1(mor: Morphism1, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = mor.idPolicy match {
-        case _: IdentityPolicy.Retain => parent.identities
-        
-        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
-        
-        case IdentityPolicy.Strip => Identities.Specs.empty
+      private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
+        case IdentityPolicy.Product(left, right) => (specs(left) ++ specs(right)).distinct  // keeps first instance seen of the id
+        case (_: IdentityPolicy.Retain) => parent.identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
+        case IdentityPolicy.Strip => Vector.empty
       }
+
+      lazy val identities = Identities.Specs(specs(mor.idPolicy))
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -962,31 +963,24 @@ trait DAG extends Instructions {
     }
 
     case class Morph2(mor: Morphism2, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
-      lazy val identities = mor.idPolicy match {
-        case IdentityPolicy.Retain.Left =>
-          left.identities
-        
-        case IdentityPolicy.Retain.Right =>
-          right.identities
-        
-        case IdentityPolicy.Retain.Merge => {
-          // backwards compatibility with idAlignment
-          if (mor.idAlignment == IdentityAlignment.MatchAlignment)
-            (left.identities ++ right.identities).distinct
-          else if (mor.idAlignment == IdentityAlignment.RightAlignment)
-            right.identities
-          else if (mor.idAlignment == IdentityAlignment.LeftAlignment)
-            left.identities
-          else
-            left.identities ++ right.identities
-        }
-        
-        case IdentityPolicy.Synthesize => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
-        
-        case IdentityPolicy.Strip => Identities.Specs.empty
+
+      private def specs(policy: IdentityPolicy): Vector[IdentitySpec] = policy match {
+        case IdentityPolicy.Product(left, right) => (specs(left) ++ specs(right)).distinct  // keeps first instance seen of the id
+        case IdentityPolicy.Retain.Left => left.identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Retain.Right => right.identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Retain.Merge =>
+          IdentityMatch(left, right).identities.fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Retain.Cross =>
+          (left.identities ++ right.identities).fold(Predef.identity, Vector.empty)
+        case IdentityPolicy.Synthesize => Vector(SynthIds(IdGen.nextInt()))
+        case IdentityPolicy.Strip => Vector.empty
       }
+
+      lazy val identities = Identities.Specs(specs(mor.idPolicy))
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -995,8 +989,10 @@ trait DAG extends Instructions {
 
     case class Distinct(parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1009,8 +1005,10 @@ trait DAG extends Instructions {
         case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
         case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
       }
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = false
       
@@ -1019,8 +1017,10 @@ trait DAG extends Instructions {
     
     case class Operate(op: UnaryOperation, parent: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = parent.identities
+
+      def uniqueIdentities = parent.uniqueIdentities
       
-      lazy val sorting = parent.sorting
+      def valueKeys = parent.valueKeys
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1029,8 +1029,10 @@ trait DAG extends Instructions {
     
     case class Reduce(red: Reduction, parent: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = true
       
@@ -1041,8 +1043,10 @@ trait DAG extends Instructions {
       val loc = parent.loc
       
       lazy val identities = Identities.Specs.empty
+
+      def uniqueIdentities = false
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       val isSingleton = false
       
@@ -1051,8 +1055,10 @@ trait DAG extends Instructions {
     
     case class Split(spec: BucketSpec, child: DepGraph, id: Identifier)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+
+      def uniqueIdentities = true
       
-      val sorting = IdentitySort
+      def valueKeys = Set.empty
       
       lazy val isSingleton = false
       
@@ -1077,8 +1083,10 @@ trait DAG extends Instructions {
     
     case class Assert(pred: DepGraph, child: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = child.identities
+
+      def uniqueIdentities = child.uniqueIdentities
       
-      val sorting = child.sorting
+      def valueKeys = child.valueKeys
       
       lazy val isSingleton = child.isSingleton
       
@@ -1090,8 +1098,10 @@ trait DAG extends Instructions {
       val peer = IUI(true, Filter(leftJoin, left, pred)(loc), Filter(rightJoin, right, Operate(Comp, pred)(loc))(loc))(loc)
       
       lazy val identities = peer.identities
+
+      def uniqueIdentities = peer.uniqueIdentities
       
-      val sorting = peer.sorting
+      def valueKeys = peer.valueKeys
       
       lazy val isSingleton = peer.isSingleton
       
@@ -1100,8 +1110,10 @@ trait DAG extends Instructions {
     
     case class Observe(data: DepGraph, samples: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = data.identities
+
+      def uniqueIdentities = data.uniqueIdentities
       
-      val sorting = data.sorting
+      def valueKeys = Set.empty
       
       lazy val isSingleton = data.isSingleton
       
@@ -1114,7 +1126,9 @@ trait DAG extends Instructions {
         case _ => Identities.Undefined
       }
 
-      val sorting = IdentitySort    // TODO not correct!
+      def uniqueIdentities = false
+
+      def valueKeys = Set.empty  // TODO not correct!
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
@@ -1123,73 +1137,53 @@ trait DAG extends Instructions {
     
     case class Diff(left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph with StagingPoint {
       lazy val identities = left.identities
+
+      def uniqueIdentities = left.uniqueIdentities
       
-      val sorting = IdentitySort    // TODO not correct!
+      def valueKeys = left.valueKeys
       
-      lazy val isSingleton = left.isSingleton && right.isSingleton
+      lazy val isSingleton = left.isSingleton
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
     // TODO propagate AOT value computation
     case class Join(op: BinaryOperation, joinSort: JoinSort, left: DepGraph, right: DepGraph)(val loc: Line) extends DepGraph {
+
       lazy val identities = joinSort match {
-        case CrossRightSort => right.identities ++ left.identities
-        case CrossLeftSort => left.identities ++ right.identities
-        
-        case _ => (left.identities ++ right.identities).distinct
+        case Cross(_) => left.identities ++ right.identities
+        case _ => IdentityMatch(left, right).identities
       }
-      
-      lazy val sorting = joinSort match {
-        case tbl: TableSort => tbl
-        case CrossLeftSort => left.sorting // This isn't correct.
-        case CrossRightSort => right.sorting
+
+      def uniqueIdentities = joinSort match {
+        case Cross(_) | IdentitySort => left.uniqueIdentities && right.uniqueIdentities
+        case _ => false
       }
+
+      lazy val valueKeys = left.valueKeys ++ right.valueKeys
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
+      
     }
     
     case class Filter(joinSort: JoinSort, target: DepGraph, boolean: DepGraph)(val loc: Line) extends DepGraph {
       lazy val identities = joinSort match {
-        case CrossRightSort => boolean.identities ++ target.identities
-        case CrossLeftSort => target.identities ++ boolean.identities
-        case _ => (target.identities ++ boolean.identities).distinct
+        case Cross(_) => target.identities ++ boolean.identities
+        case _ => IdentityMatch(target, boolean).identities
+      }
+
+      def uniqueIdentities = joinSort match {
+        case IdentitySort | Cross(_) => target.uniqueIdentities && boolean.uniqueIdentities
+        case _ => false
       }
       
-      lazy val sorting = joinSort match {
-        case tbl: TableSort => tbl
-        case CrossLeftSort => target.sorting
-        case CrossRightSort => boolean.sorting
-      }
+      lazy val valueKeys = target.valueKeys ++ boolean.valueKeys
       
       lazy val isSingleton = target.isSingleton
       
       lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
-    }
-    
-    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph with StagingPoint {
-      val loc = parent.loc
-      
-      lazy val identities = parent.identities.fold(specs => {
-        val (first, second) = specs.zipWithIndex partition {
-          case (_, i) => indexes contains i
-        }
-        
-        val prefix = first sortWith {
-          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
-        }
-        
-        val (back, _) = (prefix ++ second).unzip
-        Identities.Specs(back)
-      }, Identities.Undefined)
-      
-      val sorting = IdentitySort
-      
-      lazy val isSingleton = parent.isSingleton
-      
-      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     /**
@@ -1203,24 +1197,14 @@ trait DAG extends Instructions {
      * share the same identity.  This is very important to ensure correctness in
      * evaluation of the `Join` node.
      */
-    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph with StagingPoint {
+    case class AddSortKey(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
       val loc = parent.loc
 
       lazy val identities = parent.identities
+
+      def uniqueIdentities = parent.uniqueIdentities
       
-      val sorting = ValueSort(id)
-      
-      lazy val isSingleton = parent.isSingleton
-      
-      lazy val containsSplitArg = parent.containsSplitArg
-    }
-    
-    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph with StagingPoint {
-      val loc = parent.loc
-      
-      lazy val identities = parent.identities
-      
-      val sorting = ValueSort(id)
+      lazy val valueKeys = Set(id)
       
       lazy val isSingleton = parent.isSingleton
       
@@ -1231,7 +1215,11 @@ trait DAG extends Instructions {
       val loc = parent.loc
       
       lazy val identities = parent.identities
-      lazy val sorting = parent.sorting
+
+      def uniqueIdentities = parent.uniqueIdentities
+
+      def valueKeys = parent.valueKeys
+
       lazy val isSingleton = parent.isSingleton
       
       lazy val containsSplitArg = parent.containsSplitArg
@@ -1250,6 +1238,7 @@ trait DAG extends Instructions {
     
     sealed trait IdentitySpec {
       def canonicalize: IdentitySpec = this
+      def possibilities: Set[IdentitySpec] = Set(this)
     }
 
     case class LoadIds(path: String) extends IdentitySpec
@@ -1266,7 +1255,7 @@ trait DAG extends Instructions {
         pos reduceOption CoproductIds orElse pos.headOption getOrElse this2
       }
       
-      private def possibilities: Set[IdentitySpec] = {
+      override def possibilities: Set[IdentitySpec] = {
         val leftPos = left match {
           case left: CoproductIds => left.possibilities
           case _ => Set(left)
@@ -1281,16 +1270,79 @@ trait DAG extends Instructions {
       }
     }
 
-    
     sealed trait JoinSort
     sealed trait TableSort extends JoinSort
     
     case object IdentitySort extends TableSort
     case class ValueSort(id: Int) extends TableSort
-    // case object NullSort extends TableSort -- Not USED!
     
-    case object CrossLeftSort extends JoinSort
-    case object CrossRightSort extends JoinSort
+    // sealed trait Join
+    // case object IdentityJoin(ids: Vetor[Int]) extends Join
+    // case class PartialIdentityJoin(ids: Vector[Int]) extends Join
+    // case class ValueJoin(id: Int) extends Join
+    case class Cross(hint: Option[CrossOrder] = None) extends JoinSort
+
+    case class IdentityMatch(left: DepGraph, right: DepGraph) {
+      def identities: Identities = (left.identities, right.identities) match {
+        case (Identities.Specs(lSpecs), Identities.Specs(rSpecs)) =>
+          val specs = (sharedIndices map { case (lIdx, _) => lSpecs(lIdx) }) ++
+              (leftIndices map lSpecs) ++ (rightIndices map rSpecs)
+          Identities.Specs(specs map (_.canonicalize))
+        case (_, _) => Identities.Undefined
+      }
+
+      private def canonicalize(identities: Identities) = identities match {
+        case Identities.Specs(ids) => Identities.Specs(ids map (_.canonicalize))
+        case other => other
+      }
+
+      private val leftIdentities = canonicalize(left.identities)
+      private val rightIdentities = canonicalize(right.identities)
+
+      private def intersects(a: IdentitySpec, b: IdentitySpec): Boolean =
+        !(a.possibilities intersect b.possibilities).isEmpty
+
+      private def union(a: IdentitySpec, b: IdentitySpec): IdentitySpec = (a, b) match {
+        case (CoproductIds(_, _), CoproductIds(_, _)) =>
+          (a.possibilities ++ b.possibilities).reduceRight(CoproductIds(_, _))
+        case (CoproductIds(_, _), _) => a
+        case (_, CoproductIds(_, _)) => b
+        case _ => a
+      }
+
+      private def findMatch(specs: Vector[IdentitySpec])(spec: (IdentitySpec, Int)): Option[(IdentitySpec, (Int, Int))] = {
+        val idx = specs indexWhere { s => intersects(spec._1, s) }
+        if (idx < 0) None else Some((union(spec._1, specs(idx)), (spec._2, idx)))
+      }
+
+      private def matches = (leftIdentities, rightIdentities) match {
+        case (Identities.Specs(a), Identities.Specs(b)) =>
+          a.zipWithIndex flatMap findMatch(b)
+        case (Identities.Undefined, _) | (_, Identities.Undefined) => Vector.empty
+      }
+
+      private def extras(identities: Identities): Vector[Int] = identities match {
+        case Identities.Specs(ids) =>
+          ids.zipWithIndex collect { case (id, index) if !(sharedIds contains id) =>
+            index
+          }
+        case _ => Vector.empty
+      }
+
+      val (sharedIds, sharedIndices) = matches.unzip
+      val leftIndices = extras(leftIdentities)
+      val rightIndices = extras(rightIdentities)
+
+      def mapLeftIndex(i: Int): Int = {
+        val j = sharedIndices.unzip._1.indexOf(i)
+        if (j < 0) leftIndices.indexOf(i) + sharedIndices.size else j
+      }
+
+      def mapRightIndex(i: Int): Int = {
+        val j = sharedIndices.unzip._2.indexOf(i)
+        if (j < 0) rightIndices.indexOf(i) + sharedIndices.size + leftIndices.size else j
+      }
+    }
   }
   
   
