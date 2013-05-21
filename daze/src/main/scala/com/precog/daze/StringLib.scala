@@ -21,15 +21,17 @@ package com.precog
 package daze
 
 import com.precog.common._
-import bytecode._
-import bytecode.Library
-
-import yggdrasil._
-import yggdrasil.table._
-
+import com.precog.bytecode._
+import com.precog.bytecode.Library
 import com.precog.util._
 
-import java.lang.String
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
+
+import scalaz._
+import scalaz.std.option._
+
+import java.util.regex.{Pattern, PatternSyntaxException}
 
 import TransSpecModule._
 
@@ -356,8 +358,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object lastIndexOf extends Op2SSL("lastIndexOf", _ lastIndexOf _)
 
     object parseNum extends Op1F1(StringNamespace, "parseNum") {
-      import java.util.regex.Pattern
-
       val intPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)$")
       val decPattern = Pattern.compile("^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
 
@@ -397,26 +397,91 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    object split extends Op2F2(StringNamespace, "split") {
-      import java.util.regex.Pattern
-
+    object split extends Op2(StringNamespace, "split") {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
-
-      private def build(c1: StrColumn, c2: StrColumn) = new Map2Column(c1, c2) with HomogeneousArrayColumn[String] {
-        val tpe = CArrayType(CString)
-        override def isDefinedAt(row: Int): Boolean =
-          super.isDefinedAt(row) && c1.isDefinedAt(row) && c2.isDefinedAt(row)
-
-        def apply(row: Int): Array[String] =
-          Pattern.compile(Pattern.quote(c2(row))).split(c1(row), -1)
+      
+      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+        trans.Scan(
+          trans.InnerArrayConcat(
+            trans.WrapArray(
+              trans.Map1(left, UnifyStrDate)),
+            trans.WrapArray(
+              trans.Map1(right, UnifyStrDate))),
+          scanner)
       }
-
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::split") {
-        case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
-        case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
-        case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
-        case (c1: DateColumn, c2: DateColumn) => build(dateToStrCol(c1), dateToStrCol(c2))
+      
+      object scanner extends CScanner[M] {
+        type A = Unit
+        
+        def init = ()
+        
+        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+          M point {
+            val leftM: Option[StrColumn] = columns collect {
+              case (ColumnRef(CPath(CPathIndex(0)), CString), col: StrColumn) => col
+            } headOption
+            
+            val rightM: Option[StrColumn] = columns collect {
+              case (ColumnRef(CPath(CPathIndex(1)), CString), col: StrColumn) => col
+            } headOption
+            
+            val zippedM = implicitly[Applicative[Option]].apply2(leftM, rightM) { (_, _) }
+            
+            val columnsM: Option[Map[ColumnRef, Column]] = zippedM flatMap {
+              case (left, right) => {
+                val result = new Array[Array[String]](range.length)
+                val defined = new BitSet(range.length)
+                
+                RangeUtil.loop(range) { row =>
+                  if (left.isDefinedAt(row) && right.isDefinedAt(row)) {
+                    try {
+                      // TOOD cache compiled patterns for awesome sauce
+                      result(row) =
+                        Pattern.compile(Pattern.quote(right(row))).split(left(row), -1)
+                        
+                      defined.flip(row)
+                    } catch {
+                      case _: PatternSyntaxException =>
+                    }
+                  }
+                }
+                
+                if (defined.nextSetBit(0) < 0) {      // not defined anywhere
+                  None
+                } else {
+                  var maxIdx = -1
+                  RangeUtil.loop(range) { row =>
+                    if (defined.get(row)) {
+                      maxIdx = maxIdx max (result(row).length - 1)
+                    }
+                  }
+                  
+                  if (maxIdx < 0) {
+                    None
+                  } else {
+                    val columnArray = new Array[StrColumn](maxIdx + 1)
+                    
+                    RangeUtil.loop(0 until columnArray.length) { i =>
+                      columnArray(i) = new StrColumn {
+                        def isDefinedAt(row: Int) = defined.get(row) && i < result(row).length
+                        def apply(row: Int) = result(row)(i)
+                      }
+                    }
+                    
+                    val columns: Map[ColumnRef, Column] = (0 until columnArray.length).map({ i =>
+                      ColumnRef(CPath(CPathIndex(i)), CString) -> columnArray(i)
+                    })(collection.breakOut)
+                    
+                    Some(columns)
+                  }
+                }
+              }
+            }
+            
+            ((), columnsM getOrElse Map())
+          }
+        }
       }
     }
 
@@ -438,8 +503,6 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     }
 
     object splitRegex extends Op2F2(StringNamespace, "splitRegex") {
-      import java.util.regex.Pattern
-
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
 
@@ -469,5 +532,11 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         case (c1: DateColumn, c2: DateColumn) => build(dateToStrCol(c1), dateToStrCol(c2))
       }
     }
+    
+      
+    val UnifyStrDate = CF1P("builtin::str::unifyStrDate")({
+      case c: StrColumn => c
+      case c: DateColumn => dateToStrCol(c)
+    })
   }
 }

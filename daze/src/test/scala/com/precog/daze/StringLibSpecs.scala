@@ -913,6 +913,16 @@ trait StringLibSpecs[M[+_]] extends Specification
       Vector("", "", "crazy", "", ""),
       Vector("something", "basically", "reasonable")
     )
+    
+    "quote a regular expression in a split" in {
+      val input = Join(BuiltInFunction2Op(split), Cross(None),
+        Const(CString("foo{bar"))(line),
+        Const(CString("{"))(line))(line)
+        
+      testEval(input) collect {
+        case (_, SArray(vec)) => vec collect { case SString(str) => str }
+      } mustEqual Set(Vector("foo", "bar"))
+    }
 
     "split heterogenous data on ," in {
       tester(split, "/het/strings2", ",") must_== commaSplitString2
