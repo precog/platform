@@ -36,10 +36,10 @@ import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with BaseBlockStoreTestModule[M]
-    with IdSourceScannerModule[M]{ outer =>
+    with IdSourceScannerModule { outer =>
       
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) = 
-    new Evaluator[N](N0)(mn,nm) {
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
@@ -48,7 +48,6 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
-      def freshIdScanner = outer.freshIdScanner
     }
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
@@ -144,7 +143,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate simple two-value multiplication" in {
       val line = Line(1, 1, "")
       
-      val input = Join(Mul, Cross(None),
+      val input = Join(Mul, CrossLeftSort,
         Const(CLong(6))(line),
         Const(CLong(7))(line))(line)
         
@@ -318,7 +317,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val numbers = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
       val numbers2 = dag.LoadLocal(Const(CString("/numbers2"))(line))(line)
 
-      val input = Join(Add, Cross(None), numbers, numbers2)(line)
+      val input = Join(Add, CrossLeftSort, numbers, numbers2)(line)
 
       testEval(input, Path("/hom")) { result =>
         result must haveSize(30)
@@ -386,7 +385,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val parent = dag.LoadLocal(Const(CString("/hom/numbers7"))(line))(line)
 
-      val input = Join(Add, Cross(None),
+      val input = Join(Add, CrossRightSort,
         dag.Reduce(Count, parent)(line),
         dag.Reduce(Sum, parent)(line))(line)
 
@@ -412,7 +411,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         List((spec, reds)),
         parent)
 
-      val input = Join(Add, Cross(None), 
+      val input = Join(Add, CrossRightSort, 
         joinDeref(mega, 0, 0, line),
         joinDeref(mega, 0, 1, line))(line)
         
@@ -468,7 +467,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         List((weight, mean), (height, max)),
         parent)
 
-      val input = Join(Add, Cross(None), 
+      val input = Join(Add, CrossRightSort, 
         joinDeref(mega, 0, 0, line),
         joinDeref(mega, 1, 0, line))(line)
 
@@ -491,9 +490,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val mega = dag.MegaReduce(List((trans.Leaf(trans.Source), List(Count, Sum, Mean))), parent)
 
-      val input = Join(Add, Cross(None),
+      val input = Join(Add, CrossLeftSort,
         joinDeref(mega, 0, 0, line),
-        Join(Add, Cross(None), 
+        Join(Add, CrossLeftSort, 
           joinDeref(mega, 0, 1, line),
           joinDeref(mega, 0, 2, line))(line))(line)
 
@@ -516,15 +515,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
-      val id = Join(DerefObject, Cross(None), load, Const(CString("userId"))(line))(line)
-      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
+      val id = Join(DerefObject, CrossLeftSort, load, Const(CString("userId"))(line))(line)
+      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(Min, id)(line)
       val r2 = dag.Reduce(Max, height)(line)
       val r3 = dag.Reduce(Mean, weight)(line)
 
-      val input = Join(Sub, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
+      val input = Join(Sub, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -544,14 +543,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
-      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
+      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(Min, height)(line)
       val r2 = dag.Reduce(Max, height)(line)
       val r3 = dag.Reduce(Mean, weight)(line)
 
-      val input = Join(Sub, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
+      val input = Join(Sub, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -571,13 +570,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
-      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
+      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(Min, weight)(line)
       val r2 = dag.Reduce(Max, weight)(line)
       val r3 = dag.Reduce(Mean, weight)(line)
 
-      val input = Join(Sub, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
+      val input = Join(Sub, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -597,15 +596,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val load = dag.LoadLocal(Const(CString("/hom/heightWeightAcrossSlices"))(line))(line)
 
-      val id = Join(DerefObject, Cross(None), load, Const(CString("userId"))(line))(line)
-      val height = Join(DerefObject, Cross(None), load, Const(CString("height"))(line))(line)
-      val weight = Join(DerefObject, Cross(None), load, Const(CString("weight"))(line))(line)
+      val id = Join(DerefObject, CrossLeftSort, load, Const(CString("userId"))(line))(line)
+      val height = Join(DerefObject, CrossLeftSort, load, Const(CString("height"))(line))(line)
+      val weight = Join(DerefObject, CrossLeftSort, load, Const(CString("weight"))(line))(line)
 
       val r1 = dag.Reduce(Max, id)(line)
       val r2 = dag.Reduce(Max, height)(line)
       val r3 = dag.Reduce(Max, weight)(line)
 
-      val input = Join(Sub, Cross(None), r1, Join(Add, Cross(None), r2, r3)(line))(line)
+      val input = Join(Sub, CrossLeftSort, r1, Join(Add, CrossLeftSort, r2, r3)(line))(line)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -622,11 +621,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "from different paths" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Add, Cross(None),
-          Join(DerefObject, Cross(None), 
+        val input = Join(Add, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort, 
             dag.LoadLocal(Const(CString("/clicks"))(line))(line),
             Const(CString("time"))(line))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             dag.LoadLocal(Const(CString("/hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line))(line)
 
@@ -646,10 +645,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val heightWeight = dag.LoadLocal(Const(CString("/hom/heightWeight"))(line))(line)
 
         val input = Join(Add, IdentitySort,
-          Join(DerefObject, Cross(None), 
+          Join(DerefObject, CrossLeftSort, 
             heightWeight,
             Const(CString("weight"))(line))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             heightWeight,
             Const(CString("height"))(line))(line))(line)
 
@@ -669,10 +668,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val heightWeight = dag.LoadLocal(Const(CString("/heightWeight"))(line))(line)
 
         val input = Join(Add, IdentitySort,
-          Join(DerefObject, Cross(None), 
+          Join(DerefObject, CrossLeftSort, 
             heightWeight,
             Const(CString("weight"))(line))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             heightWeight,
             Const(CString("height"))(line))(line))(line)
 
@@ -692,7 +691,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "addition" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Add, Cross(None),
+        val input = Join(Add, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -710,7 +709,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "subtraction" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Sub, Cross(None),
+        val input = Join(Sub, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -729,7 +728,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "multiplication" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mul, Cross(None),
+        val input = Join(Mul, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -747,7 +746,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "division" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Div, Cross(None),
+        val input = Join(Div, CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -765,7 +764,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "mod both positive" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mod, Cross(None),
+        val input = Join(Mod, CrossLeftSort,
           Const(CLong(11))(line),
           Const(CLong(4))(line))(line)
           
@@ -782,7 +781,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "mod both negative" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mod, Cross(None),
+        val input = Join(Mod, CrossLeftSort,
           Const(CLong(-11))(line),
           Const(CLong(-4))(line))(line)
           
@@ -799,7 +798,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "mod negative left" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mod, Cross(None),
+        val input = Join(Mod, CrossLeftSort,
           Const(CLong(-11))(line),
           Const(CLong(4))(line))(line)
           
@@ -816,7 +815,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "mod" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mod, Cross(None),
+        val input = Join(Mod, CrossLeftSort,
           Const(CLong(11))(line),
           Const(CLong(-4))(line))(line)
           
@@ -834,7 +833,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "pow" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Pow, Cross(None),
+        val input = Join(Pow, CrossLeftSort,
           Const(CLong(11))(line),
           Const(CLong(3))(line))(line)
 
@@ -854,7 +853,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "addition" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Add, Cross(None),
+        val input = Join(Add, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -872,7 +871,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "subtraction" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Sub, Cross(None),
+        val input = Join(Sub, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -890,7 +889,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "multiplication" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Mul, Cross(None),
+        val input = Join(Mul, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -908,7 +907,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "division" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Div, Cross(None),
+        val input = Join(Div, CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
           Const(CLong(5))(line))(line)
           
@@ -931,8 +930,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Reduce(Count,
         Filter(IdentitySort,
           clicks,
-          Join(Gt, Cross(None),
-            Join(DerefObject, Cross(None),
+          Join(Gt, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               clicks,
               Const(CString("time"))(line))(line),
             Const(CLong(0))(line))(line))(line))(line)
@@ -999,8 +998,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "filter a dataset to return a set of boolean" in {
       val line = Line(1, 1, "")
 
-      val input = Join(Gt, Cross(None),
-            Join(DerefObject, Cross(None),
+      val input = Join(Gt, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               dag.LoadLocal(Const(CString("/clicks"))(line))(line),
               Const(CString("time"))(line))(line),
             Const(CLong(0))(line))(line)
@@ -1020,7 +1019,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Reduce(Count,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           dag.LoadLocal(Const(CString("/clicks"))(line))(line),
           Const(CString("time"))(line))(line))(line)
 
@@ -1039,7 +1038,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "a reduction on the right side of the cross" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Add, Cross(None), 
+        val input = Join(Add, CrossLeftSort, 
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           dag.Reduce(Count, 
             Const(CLong(42))(line))(line))(line)
@@ -1058,7 +1057,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "a reduction on the left side of the cross" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Add, Cross(None), 
+        val input = Join(Add, CrossLeftSort, 
           dag.Reduce(Count, 
             Const(CLong(42))(line))(line),
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
@@ -1077,7 +1076,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "a root on the right side of the cross" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Add, Cross(None),  
+        val input = Join(Add, CrossLeftSort,  
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
           Const(CLong(3))(line))(line)
          
@@ -1095,7 +1094,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "a root on the left side of the cross" >> {
         val line = Line(1, 1, "")
 
-        val input = Join(Add, Cross(None), 
+        val input = Join(Add, CrossLeftSort, 
           Const(CLong(3))(line),
           dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
 
@@ -1114,7 +1113,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate wrap_object on a single numeric value" in {
       val line = Line(1, 1, "")
       
-      val input = Join(WrapObject, Cross(None),
+      val input = Join(WrapObject, CrossLeftSort,
         Const(CString("answer"))(line),
         Const(CLong(42))(line))(line)
         
@@ -1141,9 +1140,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate wrap_object on an object" in {
       val line = Line(1, 1, "")
       
-      val input = Join(WrapObject, Cross(None),
+      val input = Join(WrapObject, CrossLeftSort,
         Const(CString("answer"))(line),
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("question"))(line),
           Const(CNull)(line))(line))(line)
         
@@ -1173,9 +1172,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate wrap_object on clicks dataset" in {
       val line = Line(1, 1, "")
       
-      val input = Join(WrapObject, Cross(None),
+      val input = Join(WrapObject, CrossLeftSort,
         Const(CString("aa"))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           dag.LoadLocal(Const(CString("/clicks"))(line))(line),
           Const(CString("user"))(line))(line))(line)
         
@@ -1244,11 +1243,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate join_object on single values" in {
       val line = Line(1, 1, "")
       
-      val input = Join(JoinObject, Cross(None),
-        Join(WrapObject, Cross(None),
+      val input = Join(JoinObject, CrossLeftSort,
+        Join(WrapObject, CrossLeftSort,
           Const(CString("question"))(line),
           Const(CString("What is six times seven?"))(line))(line),
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("answer"))(line),
           Const(CLong(42))(line))(line))(line)
         
@@ -1280,7 +1279,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate join_array on single values" in {
       val line = Line(1, 1, "")
       
-      val input = Join(JoinArray, Cross(None),
+      val input = Join(JoinArray, CrossLeftSort,
         Operate(WrapArray,
           Const(CLong(24))(line))(line),
         Operate(WrapArray,
@@ -1312,10 +1311,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = 
-        Join(JoinArray, Cross(None),
+        Join(JoinArray, CrossLeftSort,
           Operate(WrapArray,
             Const(CLong(12))(line))(line),
-          Join(JoinArray, Cross(None),
+          Join(JoinArray, CrossLeftSort,
             Operate(WrapArray,
               Const(CLong(24))(line))(line),
             Operate(WrapArray,
@@ -1348,11 +1347,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "at start" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(ArraySwap, Cross(None),
-          Join(JoinArray, Cross(None),
+        val input = Join(ArraySwap, CrossLeftSort,
+          Join(JoinArray, CrossLeftSort,
             Operate(WrapArray,
               Const(CLong(12))(line))(line),
-            Join(JoinArray, Cross(None),
+            Join(JoinArray, CrossLeftSort,
               Operate(WrapArray,
                 Const(CLong(24))(line))(line),
               Operate(WrapArray,
@@ -1385,11 +1384,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "at end" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(ArraySwap, Cross(None),
-          Join(JoinArray, Cross(None),
+        val input = Join(ArraySwap, CrossLeftSort,
+          Join(JoinArray, CrossLeftSort,
             Operate(WrapArray,
               Const(CLong(12))(line))(line),
-            Join(JoinArray, Cross(None),
+            Join(JoinArray, CrossLeftSort,
               Operate(WrapArray,
                 Const(CLong(24))(line))(line),
               Operate(WrapArray,
@@ -1423,7 +1422,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate descent on a homogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefObject, Cross(None),
+      val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line),
         Const(CString("first"))(line))(line)
         
@@ -1441,7 +1440,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate descent on a heterogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefObject, Cross(None),
+      val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/pairs"))(line))(line),
         Const(CString("first"))(line))(line)
         
@@ -1460,7 +1459,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate descent producing a heterogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefObject, Cross(None),
+      val input = Join(DerefObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/het-pairs"))(line))(line),
         Const(CString("first"))(line))(line)
         
@@ -1519,7 +1518,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val red = Sum
 
       val mega = dag.MegaReduce(List((trans.Leaf(trans.Source), List(red))), parent)
-      val input = Join(DerefArray, Cross(None), Join(DerefArray, Cross(None), mega, Const(CLong(0))(line))(line), Const(CLong(0))(line))(line)
+      val input = Join(DerefArray, CrossLeftSort, Join(DerefArray, CrossLeftSort, mega, Const(CLong(0))(line))(line), Const(CLong(0))(line))(line)
         
       // We don't optimize since MegaReduce can only be created through an optimization.
       testEval(input, optimize = false) { result =>
@@ -1536,7 +1535,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate array dereference on a homogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefArray, Cross(None),
+      val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/arrays"))(line))(line),
         Const(CLong(2))(line))(line)
         
@@ -1554,7 +1553,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate array dereference on a heterogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefArray, Cross(None),
+      val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line),
         Const(CLong(2))(line))(line)
         
@@ -1572,7 +1571,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate array dereference producing a heterogeneous set" in {
       val line = Line(1, 1, "")
       
-      val input = Join(DerefArray, Cross(None),
+      val input = Join(DerefArray, CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/het-arrays"))(line))(line),
         Const(CLong(2))(line))(line)
         
@@ -1595,10 +1594,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val pairs = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
       
       val input = Join(Sub, IdentitySort,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("first"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("second"))(line))(line))(line)
         
@@ -1618,10 +1617,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val pairs = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
       
       val input = Join(Div, IdentitySort,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("first"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("second"))(line))(line))(line)
         
@@ -1641,10 +1640,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val pairs = dag.LoadLocal(Const(CString("/pairs"))(line))(line)
       
       val input = Join(Div, IdentitySort,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("first"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           pairs,
           Const(CString("second"))(line))(line))(line)
         
@@ -1706,8 +1705,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         clicks2,
         Filter(IdentitySort,
           clicks2, 
-          Join(Gt, Cross(None),
-            Join(DerefObject, Cross(None),
+          Join(Gt, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               clicks2,
               Const(CString("time"))(line))(line),
             Const(CLong(0))(line))(line))(line))(line)
@@ -1737,8 +1736,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           clicks2,
           Filter(IdentitySort,
             clicks2, 
-            Join(Gt, Cross(None),
-              Join(DerefObject, Cross(None),
+            Join(Gt, CrossLeftSort,
+              Join(DerefObject, CrossLeftSort,
                 clicks2,
                 Const(CString("time"))(line))(line),
               Const(CLong(0))(line))(line))(line))(line))(line)
@@ -1850,15 +1849,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = IUI(false,
         Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
-            Join(Mod, Cross(None),
+          Join(Eq, CrossLeftSort,
+            Join(Mod, CrossLeftSort,
               numbers,
               Const(CLong(2))(line))(line),
             Const(CLong(0))(line))(line))(line),
         Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
-            Join(Mod, Cross(None),
+          Join(Eq, CrossLeftSort,
+            Join(Mod, CrossLeftSort,
               numbers,
               Const(CLong(3))(line))(line),
             Const(CLong(0))(line))(line))(line))(line)
@@ -1881,7 +1880,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Lt, Cross(None),
+          Join(Lt, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -1902,7 +1901,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Lt, Cross(None),
+          Join(Lt, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -1923,7 +1922,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(LtEq, Cross(None),
+          Join(LtEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -1944,7 +1943,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Gt, Cross(None),
+          Join(Gt, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -1965,7 +1964,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(GtEq, Cross(None),
+          Join(GtEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -1986,7 +1985,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2004,7 +2003,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "equal without a filter" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Eq, Cross(None),
+        val input = Join(Eq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line),
             Const(CLong(13))(line))(line)
           
@@ -2025,7 +2024,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2045,10 +2044,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Join(And, IdentitySort,
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(77))(line))(line),
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2070,10 +2069,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Join(And, IdentitySort,
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(77))(line))(line),
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2095,10 +2094,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Join(Or, IdentitySort,
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(77))(line))(line),
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2120,7 +2119,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Operate(Comp,
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2143,7 +2142,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Lt, Cross(None),
+          Join(Lt, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2164,7 +2163,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(LtEq, Cross(None),
+          Join(LtEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2185,7 +2184,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(LtEq, Cross(None),
+          Join(LtEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2206,7 +2205,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Gt, Cross(None),
+          Join(Gt, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2227,7 +2226,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(GtEq, Cross(None),
+          Join(GtEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2247,10 +2246,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line),
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2271,7 +2270,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2292,7 +2291,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers9,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers9,
             Const(RArray.empty)(line))(line))(line)
           
@@ -2313,7 +2312,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers9,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers9,
             Const(RObject.empty)(line))(line))(line)
           
@@ -2334,10 +2333,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
-            Join(JoinArray, Cross(None),
-              Join(JoinArray, Cross(None),
+            Join(JoinArray, CrossLeftSort,
+              Join(JoinArray, CrossLeftSort,
                 Operate(WrapArray, Const(CLong(9))(line))(line),
                 Operate(WrapArray, Const(CLong(10))(line))(line))(line),
               Operate(WrapArray, Const(CLong(11))(line))(line))(line))(line))(line)
@@ -2359,10 +2358,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
-            Join(JoinArray, Cross(None),
-              Join(JoinArray, Cross(None),
+            Join(JoinArray, CrossLeftSort,
+              Join(JoinArray, CrossLeftSort,
                 Operate(WrapArray, Const(CLong(9))(line))(line),
                 Operate(WrapArray, Const(CLong(10))(line))(line))(line),
               Operate(WrapArray, Const(CLong(11))(line))(line))(line))(line))(line)
@@ -2385,9 +2384,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(Eq, Cross(None),
+          Join(Eq, CrossLeftSort,
             numbers,
-              Join(WrapObject, Cross(None),
+              Join(WrapObject, CrossLeftSort,
                 Const(CString("foo"))(line),
                 Const(CString("bar"))(line))(line))(line))(line)
 
@@ -2406,7 +2405,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "equal without a filter" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(Eq, Cross(None),
+        val input = Join(Eq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
             Const(CLong(13))(line))(line)
           
@@ -2427,7 +2426,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       "not equal without a filter" >> {
         val line = Line(1, 1, "")
         
-        val input = Join(NotEq, Cross(None),
+        val input = Join(NotEq, CrossLeftSort,
             dag.LoadLocal(Const(CString("/het/numbers"))(line))(line),
             Const(CLong(13))(line))(line)
           
@@ -2451,7 +2450,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
             Const(CLong(13))(line))(line))(line)
           
@@ -2477,7 +2476,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
             Const(RArray.empty)(line))(line))(line)
           
@@ -2499,7 +2498,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
             Const(RObject.empty)(line))(line))(line)
           
@@ -2521,9 +2520,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
-            Join(JoinArray, Cross(None),
+            Join(JoinArray, CrossLeftSort,
               Operate(WrapArray, Const(CLong(9))(line))(line),
               Operate(WrapArray, Const(CLong(10))(line))(line))(line))(line))(line)
 
@@ -2547,9 +2546,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         val input = Filter(IdentitySort,
           numbers,
-          Join(NotEq, Cross(None),
+          Join(NotEq, CrossLeftSort,
             numbers,
-            Join(WrapObject, Cross(None),
+            Join(WrapObject, CrossLeftSort,
               Const(CString("foo"))(line),
               Const(CNull)(line))(line))(line))(line)
 
@@ -2573,10 +2572,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Join(And, IdentitySort,
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(77))(line))(line),
-            Join(NotEq, Cross(None),
+            Join(NotEq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2603,10 +2602,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Join(Or, IdentitySort,
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(77))(line))(line),
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2628,7 +2627,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         val input = Filter(IdentitySort,
           numbers,
           Operate(Comp,
-            Join(Eq, Cross(None),
+            Join(Eq, CrossLeftSort,
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
@@ -2656,7 +2655,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = Join(Mul, IdentitySort,
         numbers,
-        Join(Sub, Cross(None),
+        Join(Sub, CrossLeftSort,
           numbers,
           dag.LoadLocal(Const(CString("/hom/numbers3"))(line))(line))(line))(line)
           
@@ -2681,7 +2680,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val numbers3 = dag.LoadLocal(Const(CString("/hom/numbers3"))(line))(line)
       
       val input = Join(And, IdentitySort,
-        Join(And, Cross(None),
+        Join(And, CrossLeftSort,
           Join(Eq, IdentitySort, numbers, numbers)(line),
           Join(Eq, IdentitySort, numbers3, numbers3)(line))(line),
         Join(Eq, IdentitySort, numbers3, numbers3)(line))(line)
@@ -2695,7 +2694,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = Join(Mul, IdentitySort,
         numbers,
-        Join(Sub, Cross(None),
+        Join(Sub, CrossLeftSort,
           numbers, 
           dag.New(numbers)(line))(line))(line)
           
@@ -2729,12 +2728,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Split(
         dag.Group(1, nums, UnfixedSolution(0, nums)),
-        Join(Add, Cross(None),
+        Join(Add, CrossLeftSort,
           SplitGroup(1, nums.identities, id)(line),
           dag.Reduce(Max,
             Filter(IdentitySort,
               nums,
-              Join(Lt, Cross(None),
+              Join(Lt, CrossLeftSort,
                 nums,
                 SplitParam(0, id)(line))(line))(line))(line))(line), id)(line)
               
@@ -2762,8 +2761,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Split(
         dag.Group(1,
-          Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line),
-          UnfixedSolution(0, Join(DerefObject, Cross(None), clicks, Const(CString("user"))(line))(line))),
+          Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line),
+          UnfixedSolution(0, Join(DerefObject, CrossLeftSort, clicks, Const(CString("user"))(line))(line))),
         SplitGroup(1, clicks.identities, id)(line), id)(line)
         
       testEval(input) { result =>
@@ -2784,14 +2783,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Split(
         dag.Group(1,
-          Join(DerefObject, Cross(None), clicks, Const(CString("page"))(line))(line),
+          Join(DerefObject, CrossLeftSort, clicks, Const(CString("page"))(line))(line),
           IntersectBucketSpec(
             dag.Extra(
-              Join(Eq, Cross(None),
-                Join(DerefObject, Cross(None), clicks, Const(CString("page"))(line))(line),
+              Join(Eq, CrossLeftSort,
+                Join(DerefObject, CrossLeftSort, clicks, Const(CString("page"))(line))(line),
                 Const(CString("/sign-up.html"))(line))(line)),
             UnfixedSolution(0, 
-              Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line)))),
+              Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line)))),
         dag.Reduce(Count, SplitGroup(1, clicks.identities, id)(line))(line), id)(line)
         
       testEval(input) { results =>
@@ -2812,10 +2811,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
       val data = Join(JoinObject, IdentitySort,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           clicks,
           Const(CString("user"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           clicks,
           Const(CString("page"))(line))(line))(line)
       
@@ -2840,7 +2839,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val id = new Identifier
       
       val input = dag.Split(
-        dag.Group(1, data, UnfixedSolution(0, Join(DerefObject, Cross(None), data, Const(CString("page"))(line))(line))),
+        dag.Group(1, data, UnfixedSolution(0, Join(DerefObject, CrossLeftSort, data, Const(CString("page"))(line))(line))),
         SplitGroup(1, data.identities, id)(line), id)(line)
         
       testEval(input) { results =>
@@ -2865,12 +2864,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input0 = dag.Memoize(
-        dag.Join(Add, Cross(None), 
+        dag.Join(Add, CrossLeftSort, 
           dag.LoadLocal(Const(CString("/clicks"))(line))(line),
           Const(CLong(5))(line))(line),
         1)
 
-      val input1 = dag.Join(Add, Cross(None), 
+      val input1 = dag.Join(Add, CrossLeftSort, 
           dag.LoadLocal(Const(CString("/clicks"))(line))(line),
           Const(CLong(5))(line))(line)
 
@@ -2902,14 +2901,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         dag.Group(1,
           clicks,
           UnfixedSolution(0, 
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               clicks,
               Const(CString("user"))(line))(line))),
-        Join(JoinObject, Cross(None),
-          Join(WrapObject, Cross(None),
+        Join(JoinObject, CrossLeftSort,
+          Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
             SplitParam(0, id)(line))(line),
-          Join(WrapObject, Cross(None),
+          Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
               SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
@@ -2946,9 +2945,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
     "evaluate with on the clicks dataset" in {
       val line = Line(1, 1, "")
       
-      val input = Join(JoinObject, Cross(None),
+      val input = Join(JoinObject, CrossLeftSort,
         dag.LoadLocal(Const(CString("/clicks"))(line))(line),
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("t"))(line),
           Const(CLong(42))(line))(line))(line)
           
@@ -2980,27 +2979,27 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val clicks = 
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("time"))(line),
           Const(CLong(42))(line))(line)
       
-      val predicate = Join(Lt, Cross(None),
-        Join(DerefObject, Cross(None),
+      val predicate = Join(Lt, CrossLeftSort,
+        Join(DerefObject, CrossLeftSort,
           clicks,
           Const(CString("time"))(line))(line),
         Const(CLong(1000))(line))(line)
       
       val a = dag.IUI(true,
-        dag.Filter(Cross(None),
+        dag.Filter(CrossLeftSort,
           Const(CLong(1))(line),
           predicate)(line),
-        dag.Filter(Cross(None),
+        dag.Filter(CrossLeftSort,
           Const(CLong(0))(line),
           Operate(Comp, predicate)(line))(line))(line)
       
-      val input = Join(JoinObject, Cross(None),    // TODO Cross(None) breaks even more creatively!
+      val input = Join(JoinObject, CrossLeftSort,    // TODO CrossLeftSort breaks even more creatively!
         clicks,
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("a"))(line),
           a)(line))(line)
           
@@ -3021,8 +3020,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       //
       val input = Filter(IdentitySort,
         clicks,
-        Join(Eq, Cross(None),
-          Join(DerefObject, Cross(None),
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
             clicks,
             Const(CString("user"))(line))(line),
           Const(CNull)(line))(line))(line)
@@ -3071,22 +3070,22 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         dag.Group(1,
           clicks,
           UnfixedSolution(0,
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               clicks,
               Const(CString("user"))(line))(line))),
-        Join(JoinObject, Cross(None),
-          Join(WrapObject, Cross(None),
+        Join(JoinObject, CrossLeftSort,
+          Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
             SplitParam(0, id)(line))(line),
-          Join(WrapObject, Cross(None),
+          Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
               SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
        
       val input = Filter(IdentitySort,
         histogram,
-        Join(Eq, Cross(None),
-          Join(DerefObject, Cross(None),
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
             histogram,
             Const(CString("num"))(line))(line),
           Const(CLong(9))(line))(line))(line)
@@ -3122,24 +3121,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         dag.Group(1,
           clicks,
           UnfixedSolution(0,
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               clicks,
               Const(CString("user"))(line))(line))),
-        Join(JoinObject, Cross(None),
-          Join(WrapObject, Cross(None),
+        Join(JoinObject, CrossLeftSort,
+          Join(WrapObject, CrossLeftSort,
             Const(CString("user"))(line),
             SplitParam(0, id)(line))(line),
-          Join(WrapObject, Cross(None),
+          Join(WrapObject, CrossLeftSort,
             Const(CString("num"))(line),
             dag.Reduce(Count,
               SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
 
       val input = Join(JoinObject, IdentitySort,
         histogram,
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("rank"))(line),
           dag.Morph1(Rank, 
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               histogram,
               Const(CString("num"))(line))(line))(line))(line))(line)
 
@@ -3167,15 +3166,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
       
-      val input = Join(JoinObject, Cross(None),
-        Join(WrapObject, Cross(None),
+      val input = Join(JoinObject, CrossLeftSort,
+        Join(WrapObject, CrossLeftSort,
           Const(CString("aa"))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             clicks,
             Const(CString("user"))(line))(line))(line),
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString("bb"))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             dag.New(clicks)(line),
             Const(CString("user"))(line))(line))(line))(line)
             
@@ -3239,10 +3238,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val input = dag.Join(
         Add,
         ValueSort(0),
-        AddSortKey(clicks, "time", "time", 0),
-        AddSortKey(clicks2, "time", "time", 0))(line)
+        SortBy(clicks, "time", "time", 0),
+        SortBy(clicks2, "time", "time", 0))(line)
         
-      testEval(dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line)) { expected =>
+      testEval(dag.Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line)) { expected =>
         val decimalValues = expected.toList collect {
           case (_, SDecimal(d)) => d 
         }
@@ -3282,10 +3281,10 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Join(Eq, IdentitySort,
         dag.Join(Add, ValueSort(0),
-          AddSortKey(clicks, "time", "time", 0),
-          AddSortKey(clicks2, "time", "time", 0))(line),
-        dag.Join(Mul, Cross(None),
-          dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line),
+          SortBy(clicks, "time", "time", 0),
+          SortBy(clicks2, "time", "time", 0))(line),
+        dag.Join(Mul, CrossLeftSort,
+          dag.Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line),
           Const(CLong(2))(line))(line))(line)
         
       testEval(input) { result =>
@@ -3308,14 +3307,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Filter(
         ValueSort(0),
-        AddSortKey(clicks, "time", "time", 0),
+        SortBy(clicks, "time", "time", 0),
         dag.Join(
           Gt,
-          Cross(None),
-          AddSortKey(clicks2, "time", "time", 0),
+          CrossLeftSort,
+          SortBy(clicks2, "time", "time", 0),
           Const(CLong(500))(line))(line))(line)
         
-      testEval(dag.Join(DerefObject, Cross(None), clicks, Const(CString("time"))(line))(line)) { expected =>
+      testEval(dag.Join(DerefObject, CrossLeftSort, clicks, Const(CString("time"))(line))(line)) { expected =>
         val decimalValues = expected.toList collect {
           case (_, SDecimal(d)) => d
         }
@@ -3353,8 +3352,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val tweets = dag.LoadLocal(Const(CString("/election/tweets"))(line))(line)
       
-      val input = dag.Join(Add, Cross(None),
-        dag.Join(Add, Cross(None),
+      val input = dag.Join(Add, CrossLeftSort,
+        dag.Join(Add, CrossLeftSort,
           tweets,
           tweets)(line),
         tweets)(line)
@@ -3378,11 +3377,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       
       val input = dag.Filter(IdentitySort,
         t1,
-        Join(Eq, Cross(None),
-          Join(DerefObject, Cross(None),
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
             t1,
             Const(CString("time"))(line))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             t2,
             Const(CString("time"))(line))(line))(line))(line)
           
@@ -3419,14 +3418,14 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           "c" -> CNum(2)))(line))(line)
       
       val input = dag.Cond(
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("a"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("b"))(line))(line),
         IdentitySort,
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("c"))(line))(line),
         IdentitySort)(line)
@@ -3451,12 +3450,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           "c" -> CNum(2)))(line))(line)
       
       val input = dag.Cond(
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("a"))(line))(line),
         dag.Const(CNum(1))(line),
-        Cross(None),
-        Join(DerefObject, Cross(None),
+        CrossLeftSort,
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("c"))(line))(line),
         IdentitySort)(line)
@@ -3481,15 +3480,15 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           "c" -> CNum(2)))(line))(line)
       
       val input = dag.Cond(
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("a"))(line))(line),
-        Join(DerefObject, Cross(None),
+        Join(DerefObject, CrossLeftSort,
           source,
           dag.Const(CString("c"))(line))(line),
         IdentitySort,
         dag.Const(CNum(1))(line),
-        Cross(None))(line)
+        CrossLeftSort)(line)
           
       testEval(input) { resultsE =>
         resultsE must haveSize(1)
@@ -3514,7 +3513,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           clicks,
           UnfixedSolution(2,
             Cond(
-              Join(Eq, Cross(None),
+              Join(Eq, CrossLeftSort,
                 clicks,
                 dag.Const(CNull)(line))(line),
               clicks, IdentitySort,
@@ -3534,21 +3533,21 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        */
       
       val input = dag.Morph1(Flatten,
-        Join(JoinArray, Cross(None),
+        Join(JoinArray, CrossLeftSort,
           Operate(WrapArray, 
-            Join(JoinObject, Cross(None),
-              Join(WrapObject, Cross(None),
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("a"))(line),
                 dag.Const(CLong(1))(line))(line),
-              Join(WrapObject, Cross(None),
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("b"))(line),
                 dag.Const(CLong(2))(line))(line))(line))(line),
           Operate(WrapArray, 
-            Join(JoinObject, Cross(None),
-              Join(WrapObject, Cross(None),
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("a"))(line),
                 dag.Const(CLong(3))(line))(line),
-              Join(WrapObject, Cross(None),
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("b"))(line),
                 dag.Const(CLong(4))(line))(line))(line))(line))(line))(line)
                 
@@ -3578,30 +3577,30 @@ trait EvaluatorSpecs[M[+_]] extends Specification
        * foo := flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
        * foo where foo.a = 1
        */
-     (None)
+      
       val foo = dag.Morph1(Flatten,
-        Join(JoinArray, Cross(None),
+        Join(JoinArray, CrossLeftSort,
           Operate(WrapArray, 
-            Join(JoinObject, Cross(None),
-              Join(WrapObject, Cross(None),
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("a"))(line),
                 dag.Const(CLong(1))(line))(line),
-              Join(WrapObject, Cross(None),
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("b"))(line),
                 dag.Const(CLong(2))(line))(line))(line))(line),
           Operate(WrapArray, 
-            Join(JoinObject, Cross(None),
-              Join(WrapObject, Cross(None),
+            Join(JoinObject, CrossLeftSort,
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("a"))(line),
                 dag.Const(CLong(3))(line))(line),
-              Join(WrapObject, Cross(None),
+              Join(WrapObject, CrossLeftSort,
                 dag.Const(CString("b"))(line),
                 dag.Const(CLong(4))(line))(line))(line))(line))(line))(line)
       
       val input = dag.Filter(IdentitySort,
         foo,
-        Join(Eq, Cross(None),
-          Join(DerefObject, Cross(None),
+        Join(Eq, CrossLeftSort,
+          Join(DerefObject, CrossLeftSort,
             foo,
             dag.Const(CString("a"))(line))(line),
           dag.Const(CLong(1))(line))(line))(line)
@@ -3613,11 +3612,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   }
 
   def joinDeref(left: DepGraph, first: Int, second: Int, line: Line): DepGraph = 
-    Join(DerefArray, Cross(None),
-      Join(DerefArray, Cross(None),
+    Join(DerefArray, CrossLeftSort,
+      Join(DerefArray, CrossLeftSort,
         left,
         Const(CLong(first))(line))(line),
       Const(CLong(second))(line))(line)
+
 }
 
 object EvaluatorSpecs extends EvaluatorSpecs[YId] with test.YIdInstances 

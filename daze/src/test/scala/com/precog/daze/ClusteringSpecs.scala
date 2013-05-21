@@ -285,7 +285,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
     dag.Join(JoinObject, IdentitySort,
       input,
-      dag.Join(WrapObject, Cross(Some(TableModule.CrossOrder.CrossRight)),
+      dag.Join(WrapObject, CrossLeftSort,
         Const(CString("point"))(line),
         points)(line))(line)
   }

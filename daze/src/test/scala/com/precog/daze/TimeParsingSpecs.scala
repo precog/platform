@@ -36,7 +36,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
 
   "parse a time string into an ISO801 string, given its format" should {
     "time zone not specified" in {
-      val input = Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
+      val input = Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
         Const(CString("Jun 3, 2020 3:12:33 AM"))(line),
         Const(CString("MMM d, yyyy h:mm:ss a"))(line))(line)
         
@@ -50,7 +50,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "time zone specified" in {
-      val input = Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
+      val input = Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
         Const(CString("Jun 3, 2020 3:12:33 AM -08:00"))(line),
         Const(CString("MMM d, yyyy h:mm:ss a Z"))(line))(line)
         
@@ -64,7 +64,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "malformed string" in {
-      val input = Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
+      val input = Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
         Const(CString("Jun 3, 2020 3:12:33 AM -08:00 asteroid"))(line),
         Const(CString("MMM d, yyyy h:mm:ss a Z"))(line))(line)
         
@@ -77,7 +77,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
 
     "results used in another time function from homogeneous set" in {
       val input = dag.Operate(BuiltInFunction1Op(Date),
-        Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
+        Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
           dag.LoadLocal(Const(CString("/hom/timeString"))(line))(line),
           Const(CString("MMM dd yyyy k:mm:ss.SSS"))(line))(line))(line)
         
@@ -91,7 +91,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "from heterogeneous set" in {
-      val input = Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
+      val input = Join(BuiltInFunction2Op(ParseDateTime), CrossLeftSort,
           dag.LoadLocal(Const(CString("/het/timeString"))(line))(line),
           Const(CString("MMM dd yyyy k:mm:ss.SSS"))(line))(line)
         
@@ -105,7 +105,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "ChangeTimeZone function with not fully formed string without tz" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
           Const(CString("2010-06-04"))(line),
           Const(CString("-10:00"))(line))(line)
         
@@ -119,7 +119,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "ChangeTimeZone function with not fully formed string with tz" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
           Const(CString("2010-06-04T+05:00"))(line),
           Const(CString("-10:00"))(line))(line)
         
@@ -133,7 +133,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "Plus function with not fully formed string without tz" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
           Const(CString("2010-06-04T05:04:01"))(line),
           Const(CLong(10))(line))(line)
         
@@ -147,7 +147,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "Plus function with not fully formed string with tz" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
           Const(CString("2010-06-04T05:04:01.000+05:00"))(line),
           Const(CLong(10))(line))(line)
         
@@ -161,7 +161,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "Plus function with space instead of T" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
           Const(CString("2010-06-04 05:04:01"))(line),
           Const(CLong(10))(line))(line)
         
@@ -174,7 +174,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
       result must contain("2010-06-04T05:14:01.000Z")
     }
     "Between function with not fully formed string without tz" in {
-      val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursBetween), CrossLeftSort,
           Const(CString("2010-06-04T05:04:01"))(line),
           Const(CString("2010-06-04T07:04:01+00:00"))(line))(line)
         
@@ -188,7 +188,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     }
 
     "Between function with not fully formed string with tz" in {
-      val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursBetween), CrossLeftSort,
           Const(CString("2010-06-04T05:04:01+05:00"))(line),
           Const(CString("2010-06-04T05:04:01+01:00"))(line))(line)
         

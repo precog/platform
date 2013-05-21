@@ -57,7 +57,7 @@ trait PlatformConfig extends BaseConfig
     with BlockStoreColumnarTableModuleConfig
 
 trait Platform extends muspelheim.ParseEvalStack[Future]
-    with IdSourceScannerModule[Future]
+    with IdSourceScannerModule
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with StandaloneActorProjectionSystem
@@ -116,11 +116,10 @@ object SBTConsole {
     val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
-      new Evaluator[N](N0) {
+      new Evaluator[N](N0) with IdSourceScannerModule {
         type YggConfig = PlatformConfig
         val yggConfig = console.yggConfig
         val report = LoggingQueryLogger[N](N0)
-        def freshIdScanner = console.freshIdScanner
       }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {

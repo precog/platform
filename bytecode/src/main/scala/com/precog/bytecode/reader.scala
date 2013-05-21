@@ -128,6 +128,8 @@ trait BytecodeReader extends Reader {
         case 0x00 => unOp map Map1
         case 0x01 => binOp map Map2Match
         case 0x02 => binOp map Map2Cross
+        case 0x04 => binOp map Map2CrossLeft
+        case 0x06 => binOp map Map2CrossRight
         
         case 0x08 => reduction map Reduce
         case 0x09 => morphism1 map Morph1
@@ -142,6 +144,8 @@ trait BytecodeReader extends Reader {
         
         case 0x14 => Some(FilterMatch)
         case 0x16 => Some(FilterCross)
+        case 0x17 => Some(FilterCrossLeft)
+        case 0x18 => Some(FilterCrossRight)
         
         case 0x1A => Some(Group(parameter))
         case 0x1B => Some(MergeBuckets((code & 0x01) == 1))

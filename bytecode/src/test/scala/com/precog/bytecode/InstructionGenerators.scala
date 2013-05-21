@@ -22,6 +22,8 @@ trait InstructionGenerators extends Instructions {
     genMap1,
     genMap2Match,
     genMap2Cross,
+    genMap2CrossLeft,
+    genMap2CrossRight,
     
     genReduce,
     genMorph1,
@@ -42,6 +44,8 @@ trait InstructionGenerators extends Instructions {
     
     genFilterMatch,
     genFilterCross,
+    genFilterCrossLeft,
+    genFilterCrossRight,
     
     genDup,
     genDrop,
@@ -67,6 +71,8 @@ trait InstructionGenerators extends Instructions {
   private lazy val genMap1 = genUnaryOp map Map1
   private lazy val genMap2Match = genBinaryOp map Map2Match
   private lazy val genMap2Cross = genBinaryOp map Map2Cross
+  private lazy val genMap2CrossLeft = genBinaryOp map Map2CrossLeft
+  private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   
   private lazy val genReduce = genReduction map Reduce
   private lazy val genMorph1 = genMorphism1 map Morph1
@@ -87,6 +93,8 @@ trait InstructionGenerators extends Instructions {
   
   private lazy val genFilterMatch = FilterMatch
   private lazy val genFilterCross = FilterCross
+  private lazy val genFilterCrossLeft = FilterCrossLeft
+  private lazy val genFilterCrossRight = FilterCrossRight
   
   private lazy val genDup = Dup
   private lazy val genDrop = Drop

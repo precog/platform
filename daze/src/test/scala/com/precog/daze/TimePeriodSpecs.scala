@@ -69,15 +69,15 @@ trait TimePeriodSpecs[M[+_]] extends Specification
   }
 
   def createObject(field: String, op1: Op1, value: String) = {
-    Join(WrapObject, Cross(None),
+    Join(WrapObject, CrossLeftSort,
       Const(CString(field))(line),
       Operate(BuiltInFunction1Op(op1),
         Const(CString(value))(line))(line))(line)
   }
 
   def joinObject(obj1: DepGraph, obj2: DepGraph, obj3: DepGraph) = {
-    Join(JoinObject, Cross(None),
-        Join(JoinObject, Cross(None),
+    Join(JoinObject, CrossLeftSort,
+        Join(JoinObject, CrossLeftSort,
           obj1,
           obj2)(line),
         obj3)(line)
@@ -143,13 +143,13 @@ trait TimePeriodSpecs[M[+_]] extends Specification
       val objects = dag.LoadLocal(Const(CString("/hom/timerange"))(line))(line)
 
       def deref(field: String) = {
-        dag.Join(DerefObject, Cross(None),
+        dag.Join(DerefObject, CrossLeftSort,
           objects,
           Const(CString(field))(line))(line)
       }
 
       def createObject2(field: String, op1: Op1) = {
-        Join(WrapObject, Cross(None),
+        Join(WrapObject, CrossLeftSort,
           Const(CString(field))(line),
           Operate(BuiltInFunction1Op(op1),
             deref(field))(line))(line)
@@ -165,7 +165,7 @@ trait TimePeriodSpecs[M[+_]] extends Specification
           end)(line),
         step)(line)
 
-      val range = Join(WrapObject, Cross(None),
+      val range = Join(WrapObject, CrossLeftSort,
         Const(CString("range"))(line),
         Operate(BuiltInFunction1Op(TimeRange), obj)(line))(line)
 

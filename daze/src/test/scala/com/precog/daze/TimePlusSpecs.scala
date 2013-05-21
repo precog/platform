@@ -36,7 +36,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
   "time plus functions (homogeneous case)" should {
     "compute incrememtation of positive number of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -56,7 +56,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2017-12-28T22:38:19.430+06:00")
     }
     "compute incrememtation of negative number of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(-5))(line))(line)
         
@@ -76,7 +76,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2007-12-28T22:38:19.430+06:00")
     }
     "compute incrememtation of zero of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(0))(line))(line)
         
@@ -97,7 +97,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of months" in {
-      val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -118,7 +118,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of weeks" in {
-      val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -138,7 +138,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2010-06-03T09:37:52.599+08:00")
     }
     "compute incrememtation of days" in {
-      val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(DaysPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -158,7 +158,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2013-01-02T22:38:19.430+06:00")
     }
     "compute incrememtation of hours" in {
-      val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -178,7 +178,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-29T03:38:19.430+06:00")
     }
     "compute incrememtation of minutes" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -198,7 +198,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-28T22:43:19.430+06:00")
     }
     "compute incrememtation of seconds" in {
-      val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -218,7 +218,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-28T22:38:24.430+06:00")
     }
     "compute incrememtation of ms" in {
-      val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MillisPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -241,7 +241,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
   "time plus functions (heterogeneous case)" should {
     "compute incrememtation of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -262,7 +262,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of months" in {
-      val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -283,7 +283,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of weeks" in {
-      val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -303,7 +303,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2010-06-03T09:37:52.599+08:00")
     }
     "compute incrememtation of days" in {
-      val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(DaysPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -323,7 +323,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2013-01-02T22:38:19.430+06:00")
     }
     "compute incrememtation of hours" in {
-      val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -343,7 +343,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-29T03:38:19.430+06:00")
     }
     "compute incrememtation of minutes" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -363,7 +363,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-28T22:43:19.430+06:00")
     }
     "compute incrememtation of seconds" in {
-      val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -383,7 +383,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-12-28T22:38:24.430+06:00")
     }
     "compute incrememtation of ms" in {
-      val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MillisPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
@@ -406,7 +406,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
   "time plus functions (homogeneous case across slices)" should {
     "compute incrememtation of positive number of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -443,7 +443,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2017-08-15T21:05:04.684Z")
     }
     "compute incrememtation of negative number of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(-5))(line))(line)
 
@@ -480,7 +480,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2002-03-24T04:49:22.259-09:00")
     }
     "compute incrememtation of zero of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(0))(line))(line)
 
@@ -518,7 +518,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of months" in {
-      val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -556,7 +556,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of weeks" in {
-      val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -593,7 +593,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-09-19T21:05:04.684Z")
     }
     "compute incrememtation of days" in {
-      val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(DaysPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -630,7 +630,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2011-02-15T14:53:34.278-01:00")
     }
     "compute incrememtation of hours" in {
-      val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -667,7 +667,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2009-05-18T16:33:38.358+11:00")
     }
     "compute incrememtation of minutes" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -704,7 +704,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2009-05-18T11:38:38.358+11:00")
     }
     "compute incrememtation of seconds" in {
-      val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -741,7 +741,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2012-07-30T13:18:45.252-03:00")
     }
     "compute incrememtation of ms" in {
-      val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MillisPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -781,7 +781,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
   "time plus functions (heterogeneous case across slices)" should {
     "compute incrememtation of years" in {
-      val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(YearsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -807,7 +807,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of months" in {
-      val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MonthsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -833,7 +833,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
 
     "compute incrememtation of weeks" in {
-      val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(WeeksPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -858,7 +858,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2008-07-01T16:27:24.858Z")
     }
     "compute incrememtation of days" in {
-      val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(DaysPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -883,7 +883,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2008-07-07T18:53:43.506-04:00")
     }
     "compute incrememtation of hours" in {
-      val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(HoursPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -908,7 +908,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2010-10-25T06:51:16.248+04:00")
     }
     "compute incrememtation of minutes" in {
-      val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MinutesPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -933,7 +933,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2009-08-17T05:59:08.513+02:00")
     }
     "compute incrememtation of seconds" in {
-      val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(SecondsPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -958,7 +958,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
         "2008-07-02T18:53:48.506-04:00")
     }
     "compute incrememtation of ms" in {
-      val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
+      val input = Join(BuiltInFunction2Op(MillisPlus), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 

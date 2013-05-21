@@ -25,7 +25,7 @@ trait MathLibSpecs[M[+_]] extends Specification
   val homn4 = "/hom/numbers4"
 
   def inputOp2(op: Op2, loadFrom: String, const: RValue) = {
-    Join(BuiltInFunction2Op(op), Cross(None),
+    Join(BuiltInFunction2Op(op), CrossLeftSort,
       dag.LoadLocal(Const(CString(loadFrom))(line))(line),
       Const(const)(line))(line)
   }
@@ -464,7 +464,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
     }
     "compute min" in {
-      val input = Join(BuiltInFunction2Op(min), Cross(None),
+      val input = Join(BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -479,7 +479,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 1, -1, 7, -23)
     }
     "compute hypot" in {
-      val input = Join(BuiltInFunction2Op(hypot), Cross(None),
+      val input = Join(BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -494,7 +494,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
     }
     "compute pow" in {
-      val input = Join(BuiltInFunction2Op(pow), Cross(None),
+      val input = Join(BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -509,7 +509,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
     }
     "compute maxOf" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -524,7 +524,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7, 42)
     }
     "compute atan2" in {
-      val input = Join(BuiltInFunction2Op(atan2), Cross(None),
+      val input = Join(BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -539,7 +539,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
     }
     "compute copySign" in {
-      val input = Join(BuiltInFunction2Op(copySign), Cross(None),
+      val input = Join(BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -554,7 +554,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 1.0, 42.0, 23.0)
     }
     "compute IEEEremainder" in {
-      val input = Join(BuiltInFunction2Op(IEEEremainder), Cross(None),
+      val input = Join(BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -949,7 +949,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
     }
     "compute min" in {
-      val input = Join(BuiltInFunction2Op(min), Cross(None),
+      val input = Join(BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -964,7 +964,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 1, -1, 7, -23)
     }
     "compute hypot" in {
-      val input = Join(BuiltInFunction2Op(hypot), Cross(None),
+      val input = Join(BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -979,7 +979,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
     }
     "compute pow" in {
-      val input = Join(BuiltInFunction2Op(pow), Cross(None),
+      val input = Join(BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -994,7 +994,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
     }
     "compute maxOf" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1009,7 +1009,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7, 42)
     }    
     "compute maxOf over numeric arrays (doesn't map over arrays)" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1024,7 +1024,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(47)
     }    
     "compute maxOf over numeric arrays and numeric objects (doesn't map over arrays or objects)" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers7"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1039,7 +1039,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7)
     }    
     "compute maxOf over numeric arrays and numeric objects (using Map2)" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers7"))(line))(line),
         dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line)
         
@@ -1054,7 +1054,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(47)
     }
     "compute atan2" in {
-      val input = Join(BuiltInFunction2Op(atan2), Cross(None),
+      val input = Join(BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1069,7 +1069,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
     }
     "compute copySign" in {
-      val input = Join(BuiltInFunction2Op(copySign), Cross(None),
+      val input = Join(BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1084,7 +1084,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 1.0, 42.0, 23.0)
     }
     "compute IEEEremainder" in {
-      val input = Join(BuiltInFunction2Op(IEEEremainder), Cross(None),
+      val input = Join(BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbers4"))(line))(line),
         Const(CLong(7))(line))(line)
         
@@ -1479,7 +1479,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(1.7763568394002505E-15, 8.881784197001252E-16, 4.440892098500626E-16, 4.9E-324)
     }
     "compute min" in {
-      val input = Join(BuiltInFunction2Op(min), Cross(None),
+      val input = Join(BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1494,7 +1494,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, -7, -3, -12, 6, -5, 7, -14, -9, -13)
     }
     "compute hypot" in {
-      val input = Join(BuiltInFunction2Op(hypot), Cross(None),
+      val input = Join(BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1509,7 +1509,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(13.892443989449804, 11.40175425099138, 8.602325267042627, 12.206555615733702, 16.55294535724685, 9.219544457292887, 15.652475842498529, 14.7648230602334, 7.0, 7.615773105863909, 13.038404810405298, 9.899494936611665)
     }
     "compute pow" in {
-      val input = Join(BuiltInFunction2Op(pow), Cross(None),
+      val input = Join(BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1524,7 +1524,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 170859375, 62748517, 19487171, -2187.0, -35831808, -4782969.0, 823543.0, -62748517, 279936.0, -105413504, 1.0E+7, -78125.0, -823543.0, 105413504)
     }
     "compute maxOf" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1539,7 +1539,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(10, 14, 13, 7, 11, 15)
     }
     "compute atan2" in {
-      val input = Join(BuiltInFunction2Op(atan2), Cross(None),
+      val input = Join(BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1554,7 +1554,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.0, 1.1341691669813554, -0.6202494859828215, 1.1071487177940904, -1.1071487177940904, -0.9097531579442097, 1.0040671092713902, 0.7086262721276703, -0.4048917862850834, 1.0768549578753155, -1.0768549578753155, 0.960070362405688, -1.042721878368537, 0.7853981633974483, -0.7853981633974483)
     }
     "compute copySign" in {
-      val input = Join(BuiltInFunction2Op(copySign), Cross(None),
+      val input = Join(BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1569,7 +1569,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 5, 10, 14, 6, 9, 13, 12, 7, 3, 11, 15)
     }
     "compute IEEEremainder" in {
-      val input = Join(BuiltInFunction2Op(IEEEremainder), Cross(None),
+      val input = Join(BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1964,7 +1964,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(2.220446049250313E-16, 4.9E-324, 1.7763568394002505E-15, 8.881784197001252E-16, 4.440892098500626E-16)
     }
     "compute min" in {
-      val input = Join(BuiltInFunction2Op(min), Cross(None),
+      val input = Join(BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1979,7 +1979,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 5, -3, 1, 2, 7, -1)
     }
     "compute hypot" in {
-      val input = Join(BuiltInFunction2Op(hypot), Cross(None),
+      val input = Join(BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -1994,7 +1994,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(13.892443989449804, 8.602325267042627, 7.280109889280518, 7.0710678118654755, 7.0, 7.615773105863909)
     }
     "compute pow" in {
-      val input = Join(BuiltInFunction2Op(pow), Cross(None),
+      val input = Join(BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -2009,7 +2009,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 1, -2187, 78125, 35831808, 128, -1)
     }
     "compute maxOf" in {
-      val input = Join(BuiltInFunction2Op(maxOf), Cross(None),
+      val input = Join(BuiltInFunction2Op(maxOf), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -2024,7 +2024,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(7, 12)
     }
     "compute atan2" in {
-      val input = Join(BuiltInFunction2Op(atan2), Cross(None),
+      val input = Join(BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -2039,7 +2039,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0.1418970546041639, 0.0, -0.1418970546041639, 0.6202494859828215, 0.27829965900511133, -0.4048917862850834, 1.042721878368537)
     }
     "compute copySign" in {
-      val input = Join(BuiltInFunction2Op(copySign), Cross(None),
+      val input = Join(BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
@@ -2054,7 +2054,7 @@ trait MathLibSpecs[M[+_]] extends Specification
       result2 must contain(0, 5, 1, 2, 12, 3)
     }
     "compute IEEEremainder" in {
-      val input = Join(BuiltInFunction2Op(IEEEremainder), Cross(None),
+      val input = Join(BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Const(CLong(7))(line))(line)
 
