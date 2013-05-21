@@ -1,6 +1,6 @@
 package com.precog.muspelheim
 
-import com.precog.bytecode._
+import com.precog.bytecode.{JType, JObjectFixedT, JTextT}
 import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.common.security._
@@ -9,8 +9,10 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 import com.precog.util._
 import SValue._
+import Resource._
 
 import blueeyes.json._
 
@@ -34,15 +36,13 @@ import scala.collection.immutable.TreeMap
 
 import TableModule._
 
-trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
+trait RawJsonStorageModule[M[+_]] { self =>
   implicit def M: Monad[M]
 
   protected def projectionData(path: Path) = {
     if (!projections.contains(path)) load(path)
     projections(path)
   }
-
-  def userMetadataView(apiKey: APIKey) = metadata
 
   private implicit val ordering = IdentitiesOrder.toScalaOrdering
 
@@ -86,22 +86,20 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
   val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
   for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
-  private val metadata = new StorageMetadata[M] {
-    val M = self.M
-    def findDirectChildren(path: Path) = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
-    def findSize(path: Path) = M.point(projections.get(path).map(_.size.toLong).getOrElse(0L))
-    def findSelectors(path: Path) = M.point(structures.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-    def findStructure(path: Path, selector: CPath) = M.point {
-      val structs = structures.getOrElse(path, Set.empty[ColumnRef])
-      val types : Map[CType, Long] = structs.collect {
-        // FIXME: This should use real counts
-        case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-      }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+  val vfs: VFSMetadata[M] = new VFSMetadata[M] {
+    implicit val M: Monad[M] = self.M
+    override def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]] = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
+    override def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
+      M.point {
+        val structs = structures.getOrElse(path, Set.empty[ColumnRef])
+        val types : Map[CType, Long] = structs.collect {
+          // FIXME: This should use real counts
+          case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+        }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
 
-      PathStructure(types, structs.map(_.selector))
+        PathStructure(types, structs.map(_.selector))
+      }
     }
-    def currentVersion(path: Path) = M.point(None)
-    def currentAuthorities(path: Path) = M.point(None)
   }
 }
 

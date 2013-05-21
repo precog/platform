@@ -54,12 +54,13 @@ class NIHDBFileStoreSpec extends Specification with Logging {
         case UpdateSuccess(_) => ok
       }
 
-      (projectionsActor ? Read(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadResult].copoint must beLike {
-        case ReadSuccess(_, Some(blob : Blob)) => blob.asString.unsafePerformIO mustEqual loremIpsum
+      (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
+        case ReadSuccess(_, blob : BlobResource) => blob.asString.unsafePerformIO mustEqual loremIpsum
       }
     }
 
     "Properly handle atomic version updates" in {
+      import Resource._
       val testPath = Path("/versioned/blob")
 
       val streamId = UUID.randomUUID
@@ -69,16 +70,16 @@ class NIHDBFileStoreSpec extends Specification with Logging {
       }
 
       // We haven't terminated the stream yet, so it shouldn't find anything
-      (projectionsActor ? ReadProjection(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
-        case ReadProjectionSuccess(_, None) => ok
+      (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
+        case ReadFailure(_, NotFound(_)) => ok
       }
 
       (projectionsActor ? IngestData(Seq((1L, IngestMessage(testAPIKey, testPath, Authorities(testAccount), Seq(IngestRecord(EventId.fromLong(42L), JString("Foo!"))), None, Clock.System.instant, StreamRef.Create(streamId, true)))))).copoint must beLike {
         case UpdateSuccess(_) => ok
       }
 
-      (projectionsActor ? ReadProjection(testPath, Version.Current, Some(testAPIKey))).mapTo[ReadProjectionResult].copoint must beLike {
-        case ReadProjectionSuccess(_, Some(proj)) => proj.length mustEqual 2
+      (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
+        case ReadSuccess(_, proj: NIHDBResource) => proj.db.length.copoint mustEqual 2
       }
     }
   }
