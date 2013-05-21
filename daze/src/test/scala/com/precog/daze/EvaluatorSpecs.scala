@@ -76,6 +76,7 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
 
   val projections = Map.empty[Path, Projection]
+  def vfs = sys.error("VFS metadata not supported in test.")
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
     override def load(table: Table, apiKey: APIKey, jtpe: JType) = {

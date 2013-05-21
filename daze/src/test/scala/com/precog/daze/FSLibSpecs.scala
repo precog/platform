@@ -28,6 +28,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 
 import org.joda.time.DateTime
 import org.specs2.mutable.Specification
@@ -60,7 +61,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
     Path("/foo2/bar1/baz/quux1" ) -> Map(ColumnRef(CPath.Identity, CString) -> 40L)
   )                                       
                                           
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M] = new StubStorageMetadata[M](projectionMetadata)
+  val vfs = new StubVFSMetadata[M](projectionMetadata)
 
   def pathTable(path: String) = {
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))

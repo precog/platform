@@ -55,8 +55,15 @@ import scala.math.Ordered._
 
 case class StoredQueryResult[M[+_]](data: StreamT[M, Slice], cachedAt: Option[Instant])
 
-class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock) extends Logging {
+trait VFSMetadata[M[+_]] {
+  // TODO: Find the right balance of abstraction here.
+  def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]]
+  def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
+}
+
+class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock) extends VFSMetadata[M] with Logging {
   def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
+    //FIXME: Unsecured for now
     vfs.writeAll(data)
   }
 

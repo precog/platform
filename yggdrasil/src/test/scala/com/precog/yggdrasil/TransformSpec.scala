@@ -1752,7 +1752,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
   def testIsType(sample: SampleData) = {
     val (_, schema) = sample.schema.getOrElse(0 -> List())
-    val cschema = schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
+    val cschema = schema map { case (jpath, ctype) => ColumnRef(CPath(jpath), ctype) }
 
     // using a generator with heterogeneous data, we're just going to produce
     // the jtype that chooses all of the elements of the non-random data.
@@ -1819,7 +1819,7 @@ trait TransformSpec[M[+_]] extends TableModuleTestSupport[M] with Specification 
 
   def testTyped(sample: SampleData) = {
     val (_, schema) = sample.schema.getOrElse(0 -> List())
-    val cschema = schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
+    val cschema = schema map { case (jpath, ctype) => ColumnRef(CPath(jpath), ctype) }
 
     // using a generator with heterogeneous data, we're just going to produce
     // the jtype that chooses all of the elements of the non-random data.
