@@ -66,12 +66,12 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
       val input =
         Join(Add, IdentitySort,
-          Join(Add, Cross(None),
-            Join(DerefObject, Cross(None),
+          Join(Add, CrossLeftSort,
+            Join(DerefObject, CrossLeftSort,
               t1,
               Const(CString("first"))(line))(line),
             dag.Reduce(Count, t1)(line))(line),
-          Join(DerefObject, Cross(None),
+          Join(DerefObject, CrossLeftSort,
             t1,
             Const(CString("second"))(line))(line))(line)
 

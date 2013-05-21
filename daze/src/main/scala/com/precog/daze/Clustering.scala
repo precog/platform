@@ -537,7 +537,7 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
     object KMediansClustering extends Morphism2(Stats4Namespace, "kMedians") with KMediansCoreSetClustering {
       val tpe = BinaryOperationType(JType.JUniverseT, JNumberT, JObjectUnfixedT)
 
-      lazy val alignment = MorphismAlignment.Custom(IdentityPolicy.Retain.Cross, alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
 
       type KS = List[Int]
       val epsilon = 0.1
@@ -704,7 +704,7 @@ trait ClusteringLibModule[M[+_]] extends ColumnarTableModule[M] with EvaluatorMe
 
       override val idPolicy = IdentityPolicy.Retain.Merge
 
-      lazy val alignment = MorphismAlignment.Custom(IdentityPolicy.Retain.Cross, alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))

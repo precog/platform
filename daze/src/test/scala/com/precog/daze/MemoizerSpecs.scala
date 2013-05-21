@@ -44,7 +44,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
         Join(Add, IdentitySort,
           clicks,
           Operate(Neg,
-            Join(Mul, Cross(None),
+            Join(Mul, CrossLeftSort,
               clicks,
               Const(CLong(42))(line))(line))(line))(line)
           
@@ -60,7 +60,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val input =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, clicks)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             clicks,
             clicks)(line))(line)
             
@@ -69,7 +69,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val expected =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, memoClicks)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             memoClicks,
             memoClicks)(line))(line)
             
@@ -91,7 +91,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val input =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, split)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             split,
             split)(line))(line)
             
@@ -100,7 +100,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val expected =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, memoSplit)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             memoSplit,
             memoSplit)(line))(line)
             
@@ -118,7 +118,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val join =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, clicks)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             clicks,
             clicks)(line))(line)
             
@@ -131,7 +131,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val expectedJoin =
         Join(Add, IdentitySort,
           dag.Morph1(libMorphism1.head, memoClicks)(line),
-          Join(Mul, Cross(None),
+          Join(Mul, CrossLeftSort,
             memoClicks,
             memoClicks)(line))(line)
             

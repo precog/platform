@@ -280,12 +280,6 @@ trait TransSpecModule extends FNModule {
       val LeftId = Leaf(SourceLeft)
       val RightId = Leaf(SourceRight)
 
-      /** Flips all `SourceLeft`s to `SourceRight`s and vice versa. */
-      def flip(spec: TransSpec2): TransSpec2 = TransSpec.mapSources(spec) {
-        case SourceLeft => SourceRight
-        case SourceRight => SourceLeft
-      }
-
       def DerefArray0(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(0))
       def DerefArray1(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(1))
       def DerefArray2(source: Source2) = DerefArrayStatic(Leaf(source), CPathIndex(2))

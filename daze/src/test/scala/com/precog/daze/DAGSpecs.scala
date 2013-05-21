@@ -115,15 +115,15 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val line = Line(1, 1, "")
       val medals = dag.LoadLocal(Const(CString("/summer_games/london_medals"))(line))(line)
 
-      val expected = Join(JoinArray, Cross(None),
+      val expected = Join(JoinArray, CrossLeftSort,
         Operate(WrapArray,
           dag.Reduce(Reduction(Vector(), "max", 0x2001), 
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               medals,
               Const(CString("Weight"))(line))(line))(line))(line),
         Operate(WrapArray,
           dag.Reduce(Reduction(Vector(), "max", 0x2001), 
-            Join(DerefObject, Cross(None),
+            Join(DerefObject, CrossLeftSort,
               medals,
               Const(CString("HeightIncm"))(line))(line))(line))(line))(line)
 
@@ -244,7 +244,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
             s2 @ dag.Split(
               dag.Group(4, Const(CFalse), UnfixedSolution(3, Const(CLong(42)))),
               IUI(true,
-                Join(Add, Cross(_),
+                Join(Add, CrossLeftSort,
                   sg1: SplitGroup,
                   sp1: SplitParam),
                 sg2: SplitGroup), id2), id1)) => {
@@ -478,33 +478,33 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val expectedSpec = IntersectBucketSpec(
         IntersectBucketSpec(
           dag.Group(0,
-            Join(DerefObject,Cross(None),
+            Join(DerefObject,CrossLeftSort,
               dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("revenue"))(line))(line),
             UnfixedSolution(1,
-              Join(DerefObject,Cross(None),
+              Join(DerefObject,CrossLeftSort,
                 dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                 Const(CString("revenue"))(line))(line))),
           dag.Group(2,
-            Join(DerefObject,Cross(None),
+            Join(DerefObject,CrossLeftSort,
               dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line),
             UnfixedSolution(3,
-              Join(DerefObject,Cross(None),
+              Join(DerefObject,CrossLeftSort,
               dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line)))),
         dag.Group(4,
           dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
           UnfixedSolution(3,
-            Join(DerefObject,Cross(None),
+            Join(DerefObject,CrossLeftSort,
               dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line))))
       
-      val expectedTarget = Join(JoinObject,Cross(None),
-        Join(WrapObject,Cross(None),
+      val expectedTarget = Join(JoinObject,CrossLeftSort,
+        Join(WrapObject,CrossLeftSort,
           Const(CString("revenue"))(line),
           SplitParam(1, id)(line))(line),
-        Join(WrapObject,Cross(None),
+        Join(WrapObject,CrossLeftSort,
           Const(CString("num"))(line),
           dag.Reduce(Reduction(Vector(), "count", 0x002000),
             SplitGroup(4, Identities.Specs(Vector(LoadIds("/campaigns"))), id)(line))(line))(line))(line)
@@ -524,7 +524,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       "map2_cross" >> {
         val line = Line(1, 1, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Cross(Add)))
-        result mustEqual Right(Join(Add, Cross(None), Const(CTrue)(line), Const(CFalse)(line))(line))
+        result mustEqual Right(Join(Add, CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
       }
       
       "assert" >> {
@@ -561,7 +561,19 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
     "parse a filter_cross" in {
       val line = Line(1, 1, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross))
-      result mustEqual Right(Filter(Cross(None), Const(CTrue)(line), Const(CFalse)(line))(line))
+      result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
+    }
+    
+    "parse a filter_crossl" in {
+      val line = Line(1, 1, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
+      result mustEqual Right(Filter(CrossLeftSort, Const(CTrue)(line), Const(CFalse)(line))(line))
+    }
+    
+    "parse a filter_crossr" in {
+      val line = Line(1, 1, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
+      result mustEqual Right(Filter(CrossRightSort, Const(CTrue)(line), Const(CFalse)(line))(line))
     }
     
     "continue processing beyond a filter" in {

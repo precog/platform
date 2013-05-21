@@ -305,10 +305,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
-          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
-          table.transform(valueSpec).reduce(reducer(ctx)) map extract
-        }
+        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -458,10 +455,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
-          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
-          table.transform(valueSpec).reduce(reducer(ctx)) map extract
-        }
+        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -621,10 +615,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
-          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
-          table.transform(valueSpec).reduce(reducer(ctx)) map extract
-        }
+        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -829,10 +820,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
-          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
-          table.transform(valueSpec).reduce(reducer(ctx)) map extract
-        }
+        def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx)) map extract
       }
     }
 
@@ -841,7 +829,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
      *
      * This provides scaffolding that is useful in all cases.
      */
-    trait BaseRankScanner extends CScanner[M] {
+    trait BaseRankScanner extends CScanner {
       import scala.collection.mutable
 
       // collapses number columns into one decimal column.
@@ -984,7 +972,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
 
         val m = decimalize(_m, range)
 
@@ -1005,23 +993,19 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
         val row = findFirstDefined(defined, range)
 
         // if none of our rows are defined let's short-circuit out of here!
-        val back = if (row == end) { 
-          (ctxt, Map.empty[ColumnRef, Column])
-        } else {
-          // build the actual rank array
-          val (values, curr, lastRow) = buildRankArrayIndexed(defined, range, ctxt)
-  
-          // build the context to be used for the next slice
-          val ctxt2 = buildRankContext(m, lastRow, curr, curr + 1L)
-  
-          // construct the column ref and column to return
-          val col2: Column = shiftColumn(ArrayLongColumn(defined, values), start)
-          val data = Map(ColumnRef(CPath.Identity, CLong) -> col2)
-  
-          (ctxt2, data)
-        }
-        
-        M point back
+        if (row == end) return (ctxt, Map.empty[ColumnRef, Column])
+
+        // build the actual rank array
+        val (values, curr, lastRow) = buildRankArrayIndexed(defined, range, ctxt)
+
+        // build the context to be used for the next slice
+        val ctxt2 = buildRankContext(m, lastRow, curr, curr + 1L)
+
+        // construct the column ref and column to return
+        val col2: Column = shiftColumn(ArrayLongColumn(defined, values), start)
+        val data = Map(ColumnRef(CPath.Identity, CLong) -> col2)
+
+        (ctxt2, data)
       }
     }
 
@@ -1121,7 +1105,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
         val m = decimalize(_m, range)
 
         val start = range.start
@@ -1141,26 +1125,22 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
         val row = findFirstDefined(defined, range)
 
         // if none of our rows are defined let's short-circuit out of here!
-        val back = if (row == end) {
-          (ctxt, Map.empty[ColumnRef, Column])
-        } else {
-          // find a bitset of duplicate rows and the last defined row
-          val (duplicateRows, lastRow) = findDuplicates(defined, definedCols, cols, range, row)
-  
-          // build the actual rank array
-          val (values, curr, next) = buildRankArrayUnique(defined, duplicateRows, range, ctxt)
-  
-          // build the context to be used for the next slice
-          val ctxt2 = buildRankContext(m, lastRow, curr, next)
-  
-          // construct the column ref and column to return
-          val col2 = shiftColumn(ArrayLongColumn(defined, values), start)
-          val data = Map(ColumnRef(CPath.Identity, CLong) -> col2)
-  
-          (ctxt2, data)
-        }
-        
-        M point back
+        if (row == end) return (ctxt, Map.empty[ColumnRef, Column])
+
+        // find a bitset of duplicate rows and the last defined row
+        val (duplicateRows, lastRow) = findDuplicates(defined, definedCols, cols, range, row)
+
+        // build the actual rank array
+        val (values, curr, next) = buildRankArrayUnique(defined, duplicateRows, range, ctxt)
+
+        // build the context to be used for the next slice
+        val ctxt2 = buildRankContext(m, lastRow, curr, next)
+
+        // construct the column ref and column to return
+        val col2 = shiftColumn(ArrayLongColumn(defined, values), start)
+        val data = Map(ColumnRef(CPath.Identity, CLong) -> col2)
+
+        (ctxt2, data)
       }
     }
 
@@ -1210,11 +1190,11 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
     }
 
-    final class DummyScanner(length: Long) extends CScanner[M] {
+    final class DummyScanner(length: Long) extends CScanner {
       type A = Long
       def init: A = 0L
 
-      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         val defined = cols.values.foldLeft(BitSetUtil.create()) { (bitset, col) =>
           bitset.or(col.definedAt(range.start, range.end))
           bitset
@@ -1242,7 +1222,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           ColumnRef(CPath(CPathIndex(idx)), CLong) -> makeColumn(idx)
         })(collection.breakOut)
 
-        M point (n, cols0)
+        (n, cols0)
       }
     }
 
@@ -1250,7 +1230,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       val tpe = UnaryOperationType(JType.JUniverseT, retType)
       override val idPolicy = IdentityPolicy.Retain.Merge
       
-      def rankScanner(size: Long): CScanner[M]
+      def rankScanner(size: Long): CScanner
       
       private val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       private val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)

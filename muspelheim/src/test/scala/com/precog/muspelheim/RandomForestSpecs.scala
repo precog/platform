@@ -65,6 +65,7 @@ trait RandomForestSpecs extends EvalStackSpecs {
             features0[5]
           ]
 
+
         trainingData := {predictors: features, dependent: data.mpg}
 
         std::stats::rfRegression(trainingData, features)
@@ -153,7 +154,7 @@ trait RandomForestSpecs extends EvalStackSpecs {
     "return well-predicted classification results" in {
       val input = """
         data0 := //iris
-        data := data0 with { rand: observe(data0, std::random::uniform(42)) }
+        data := data0 with { rand: observe(data0, std::random::uniform(42)) } 
 
         pt := 0.9
 

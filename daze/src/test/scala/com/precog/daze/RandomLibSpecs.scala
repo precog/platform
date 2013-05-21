@@ -115,11 +115,11 @@ trait RandomLibSpecs[M[+_]] extends Specification
 
     val observe = dag.Observe( numbers, uniform)(line)
 
-    val randObj = dag.Join(WrapObject, Cross(None), 
+    val randObj = dag.Join(WrapObject, CrossLeftSort, 
       Const(CString("rand"))(line),
       observe)(line)
 
-    val numbersObj = dag.Join(WrapObject, Cross(None),
+    val numbersObj = dag.Join(WrapObject, CrossLeftSort,
       Const(CString("data"))(line),
       numbers)(line)
 

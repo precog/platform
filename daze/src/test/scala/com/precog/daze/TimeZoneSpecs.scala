@@ -59,7 +59,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
   "changing time zones (homogenous case)" should {
     "change to the correct time zone" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
@@ -71,7 +71,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
     }
 
     "not modify millisecond value" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
@@ -89,7 +89,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
     }
 
     "work correctly for fractional zones" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("-10:30"))(line))(line)
         
@@ -107,7 +107,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
 
   "changing time zones (heterogeneous case)" should {
     "change to the correct time zone" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
@@ -123,7 +123,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
     }
 
     "not modify millisecond value" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
@@ -141,7 +141,7 @@ trait TimeZoneSpecs[M[+_]] extends Specification
     }
 
     "work correctly for fractional zones" in {
-      val input = Join(BuiltInFunction2Op(ChangeTimeZone), Cross(None),
+      val input = Join(BuiltInFunction2Op(ChangeTimeZone), CrossLeftSort,
         dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("-10:30"))(line))(line)
         

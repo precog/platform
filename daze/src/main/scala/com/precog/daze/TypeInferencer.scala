@@ -28,7 +28,8 @@ import com.precog.util.Identifier
 
 trait TypeInferencer extends DAG {
   import instructions.{
-    BinaryOperation, ArraySwap, WrapArray, WrapObject, DerefArray, DerefObject
+    BinaryOperation, ArraySwap, WrapArray, WrapObject, DerefArray, DerefObject,
+    JoinInstr, Map2, Map2Cross, Map2CrossLeft, Map2CrossRight
   }
   import dag._
 
@@ -82,13 +83,13 @@ trait TypeInferencer extends DAG {
           case Morph2(m, left, right) =>
             inner(Some(m.tpe.arg1), inner(Some(m.tpe.arg0), typing, splits, left), splits, right)
     
-          case Join(DerefObject, Cross(_), left, right @ ConstString(str)) =>
+          case Join(DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
             inner(jtpe map { jtpe0 => JObjectFixedT(Map(str -> jtpe0)) }, typing, splits, left)
     
-          case Join(DerefArray, Cross(_), left, right @ ConstDecimal(d)) =>
+          case Join(DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
             inner(jtpe map { jtpe0 => JArrayFixedT(Map(d.toInt -> jtpe0)) }, typing, splits, left)
     
-          case Join(WrapObject, Cross(_), ConstString(str), right) => {
+          case Join(WrapObject, CrossLeftSort | CrossRightSort, ConstString(str), right) => {
             val jtpe2 = jtpe map {
               case JObjectFixedT(map) =>
                 map get str getOrElse universe
@@ -99,7 +100,7 @@ trait TypeInferencer extends DAG {
             inner(jtpe2, typing, splits, right)
           }
     
-          case Join(ArraySwap, Cross(_), left, right) => {
+          case Join(ArraySwap, CrossLeftSort | CrossRightSort, left, right) => {
             val jtpe2 = jtpe flatMap {
               case JArrayFixedT(_) => jtpe
               case _ => Some(JArrayUnfixedT)
@@ -125,8 +126,12 @@ trait TypeInferencer extends DAG {
           case Filter(_, target, boolean) =>
             inner(Some(JBooleanT), inner(jtpe, typing, splits, target), splits, boolean)
     
-          case AddSortKey(parent, _, _, _) => inner(jtpe, typing, splits, parent)
+          case Sort(parent, _) => inner(jtpe, typing, splits, parent)
+    
+          case SortBy(parent, _, _, _) => inner(jtpe, typing, splits, parent)
           
+          case ReSortBy(parent, _) => inner(jtpe, typing, splits, parent)
+  
           case Memoize(parent, _) => inner(jtpe, typing, splits, parent)
     
           case Distinct(parent) => inner(jtpe, typing, splits, parent)
