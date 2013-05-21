@@ -104,12 +104,12 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
     lib(name)
   }
 
-  def lookupScanner(namespace: List[String], name: String): CScanner[M] = {
-    val lib = Map[String, CScanner[M]](
-      "sum" -> new CScanner[M] {
+  def lookupScanner(namespace: List[String], name: String): CScanner = {
+    val lib = Map[String, CScanner](
+      "sum" -> new CScanner {
         type A = BigDecimal
         val init = BigDecimal(0)
-        def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+        def scan(a: BigDecimal, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
           val identityPath = cols collect { case c @ (ColumnRef(CPath.Identity, _), _) => c }
           val prioritized = identityPath.values filter {
             case (_: LongColumn | _: DoubleColumn | _: NumColumn) => true
@@ -141,12 +141,19 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
             }
           }
           
-          M point (a2, Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
+          (a2, Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(mask, arr)))
         }
       }
     )
 
     lib(name)
+  }
+
+  def debugPrint(dataset: Table): Unit = {
+    println("\n\n")
+    dataset.slices.foreach { slice => {
+      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
+    }}
   }
 }
 

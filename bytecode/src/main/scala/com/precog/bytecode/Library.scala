@@ -54,7 +54,10 @@ object IdentityPolicy {
   /** All IDs are discarded. */
   case object Strip extends IdentityPolicy
 
-  /** Both identity policies are adhered to, and then concatenated. */
+  /** Both identity policies are adhered to, and then concatenated uniquely.
+    * Differs from `Retain.Cross` in that it distincts its identities, whereas
+    * cross retains all identities.
+    */
   case class Product(left: IdentityPolicy, right: IdentityPolicy) extends IdentityPolicy
 }
 
@@ -71,6 +74,8 @@ trait FunctionLike {
 trait Morphism1Like extends FunctionLike {
   val tpe: UnaryOperationType
   val isInfinite: Boolean = false
+
+  /** This specifies how identities are returned by the Morphism1. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 
@@ -81,6 +86,8 @@ object Morphism1Like {
 
 trait Morphism2Like extends FunctionLike {
   val tpe: BinaryOperationType
+
+  /** This specifies how identities are returned by the Morphism2. */
   val idPolicy: IdentityPolicy = IdentityPolicy.Strip      // TODO remove this default
 }
 

@@ -21,7 +21,6 @@ package com.precog.common
 package accounts
 
 import com.precog.common.Path
-import com.precog.util.cache.Cache
 import com.precog.common.client._
 import com.precog.common.security._
 import com.precog.util._
@@ -68,15 +67,14 @@ object WebAccountFinder extends Logging {
        serviceConfig.get[String]("user").toSuccess(nels("Configuration property service.user is required")) |@|
        serviceConfig.get[String]("password").toSuccess(nels("Configuration property service.password is required"))) {
         (protocol, host, port, path, user, password) =>
-          val cacheSize = serviceConfig[Int]("cache_size", 1000)
           logger.info("Creating new WebAccountFinder with properties %s://%s:%s/%s %s:%s".format(protocol, host, port.toString, path, user, password))
-          new WebAccountFinder(protocol, host, port, path, user, password, cacheSize)
+          new WebAccountFinder(protocol, host, port, path, user, password)
       }
     }
   }
 }
 
-class WebAccountFinder(protocol: String, host: String, port: Int, path: String, user: String, password: String, cacheSize: Int)(implicit executor: ExecutionContext) extends WebClient(protocol, host, port, path) with AccountFinder[Response] with Logging {
+class WebAccountFinder(protocol: String, host: String, port: Int, path: String, user: String, password: String)(implicit executor: ExecutionContext) extends WebClient(protocol, host, port, path) with AccountFinder[Response] with Logging {
   import scalaz.syntax.monad._
   import EitherT.{ left => leftT, right => rightT, _ }
   import \/.{ left, right }
@@ -85,37 +83,29 @@ class WebAccountFinder(protocol: String, host: String, port: Int, path: String, 
 
   implicit val M: Monad[Future] = new FutureMonad(executor)
 
-  private[this] val apiKeyToAccountCache = Cache.simple[APIKey, AccountId](Cache.MaxSize(cacheSize))
-
   def findAccountByAPIKey(apiKey: APIKey) : Response[Option[AccountId]] = {
     logger.debug("Finding account for API key " + apiKey + " with " + (protocol, host, port, path, user, password).toString)
-    apiKeyToAccountCache.get(apiKey).map { id =>
-      logger.debug("Cache hit for API key " + apiKey)
-      rightT(Promise.successful(Some(id)): Future[Option[AccountId]])
-    }.getOrElse {
-      invoke { client =>
-        logger.info("Cache miss for API key %s, querying accounts service.".format(apiKey))
-        eitherT(client.query("apiKey", apiKey).get[JValue]("/accounts/") map {
-          case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
-            logger.info("Got response for apiKey " + apiKey)
+    invoke { client =>
+      logger.info("Querying accounts service for API key %s".format(apiKey))
+      eitherT(client.query("apiKey", apiKey).get[JValue]("/accounts/") map {
+        case HttpResponse(HttpStatus(OK, _), _, Some(jaccountId), _) =>
+          logger.info("Got response for apiKey " + apiKey)
             (((_:Extractor.Error).message) <-: jaccountId.validated[WrappedAccountId] :-> { wid =>
-                apiKeyToAccountCache.put(apiKey, wid.accountId)
-                Some(wid.accountId)
+              Some(wid.accountId)
             }).disjunction
 
-          case HttpResponse(HttpStatus(OK, _), _, None, _) =>
-            logger.warn("No account found for apiKey: " + apiKey)
-            right(None)
+        case HttpResponse(HttpStatus(OK, _), _, None, _) =>
+          logger.warn("No account found for apiKey: " + apiKey)
+          right(None)
 
-          case res =>
-            logger.error("Unexpected response from accounts service for findAccountByAPIKey: " + res)
-            left("Unexpected response from accounts service; unable to proceed: " + res)
-        } recoverWith {
-          case ex =>
-            logger.error("findAccountByAPIKey for " + apiKey + "failed.", ex)
-            Promise.successful(left("Client error accessing accounts service; unable to proceed: " + ex.getMessage))
-        })
-      }
+        case res =>
+          logger.error("Unexpected response from accounts service for findAccountByAPIKey: " + res)
+          left("Unexpected response from accounts service; unable to proceed: " + res)
+      } recoverWith {
+        case ex =>
+          logger.error("findAccountByAPIKey for " + apiKey + "failed.", ex)
+          Promise.successful(left("Client error accessing accounts service; unable to proceed: " + ex.getMessage))
+      })
     }
   }
 

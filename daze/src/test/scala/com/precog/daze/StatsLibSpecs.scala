@@ -25,6 +25,8 @@ import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.common.Path
 
+import blueeyes.json._
+
 import scalaz._
 import scalaz.std.list._
 
@@ -243,7 +245,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       ).reduceLeft(joiner)
 
       // sort a tuple by its first (Long) field
-      val ordering = scala.math.Ordering.by[(Long, _), Long](_._1)
+      val ordering = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
       // this is ugly, but so is the structure coming out of testEval :/
       val result: List[Map[String, SValue]] = testEval(input).toList.map {
@@ -293,7 +295,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       ).reduceLeft(joiner)
 
       // sort a tuple by its first (Long) field
-      val ordering = scala.math.Ordering.by[(Long, _), Long](_._1)
+      val ordering = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
       // this is ugly, but so is the structure coming out of testEval :/
       val result: List[Map[String, SValue]] = testEval(input).toList.map {
@@ -558,7 +560,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true))
     }
-  }   
+  }
   
   "heterogenous sets" should {
     "median" >> {
@@ -945,7 +947,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true))
     }
-  } 
+  }
 
   
   "for homogenous sets, in a cross, the appropriate stats function" should {
@@ -1048,7 +1050,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true))
     }
-  }    
+  }
   
   "for the same homogenous set, the appropriate stats function" should {
     "compute linear correlation" in {
@@ -1150,7 +1152,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true))
     }
-  }  
+  }
   
 
   "for a homogenous set and a value, the appropriate stats function" should {
@@ -1647,6 +1649,60 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       result2 must contain(Vector(true, true)).only
     }
+
+    "simple exponential smoothing" in {
+      val line = Line(1, 1, "")
+      val data = dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
+      def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
+
+      val left = Join(JoinObject, IdentitySort,
+          Join(WrapObject, Cross(None), const("smooth"),
+            Join(DerefObject, Cross(None), data, const("weight"))(line))(line),
+          Join(WrapObject, Cross(None), const("by"),
+            Join(DerefObject, Cross(None), data, const("height"))(line))(line))(line)
+      val right = const(BigDecimal(0.5))
+      val input = dag.Morph2(SimpleExponentialSmoothing, left, right)(line)
+
+      val result = testEval(input)
+
+      result must haveAllElementsLike {
+        case (ids, _) => ids.size must_== 1
+        case _ => ko
+      }
+
+      result must haveSize(22)
+
+      val values = result collect { case (_, SDecimal(x)) => x }
+      values must contain(BigDecimal(88), BigDecimal(104), BigDecimal(131.5))
+    }
+
+    "double exponential smoothing" in {
+      val line = Line(1, 1, "")
+      val data = dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
+      def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
+
+      val left = Join(JoinObject, IdentitySort,
+          Join(WrapObject, Cross(None), const("smooth"),
+            Join(DerefObject, Cross(None), data, const("weight"))(line))(line),
+          Join(WrapObject, Cross(None), const("by"),
+            Join(DerefObject, Cross(None), data, const("height"))(line))(line))(line)
+      val right = Join(JoinObject, Cross(None),
+        Join(WrapObject, Cross(None), const("alpha"), const(BigDecimal(0.7)))(line),
+        Join(WrapObject, Cross(None), const("beta"), const(BigDecimal(0.5)))(line))(line)
+      val input = dag.Morph2(DoubleExponentialSmoothing, left, right)(line)
+
+      val result = testEval(input)
+
+      result must haveAllElementsLike {
+        case (ids, _) => ids.size must_== 1
+        case _ => ko
+      }
+
+      result must haveSize(22)
+
+      val values = result collect { case (_, SDecimal(x)) => x }
+      values must contain(BigDecimal(88), BigDecimal(120), BigDecimal(156.9))
+    }
   }
 
   "heterogenous sets across two slice boundaries (22 elements)" should {
@@ -1995,6 +2051,60 @@ trait StatsLibSpecs[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
+    }
+
+    "simple exponential smoothing" in {
+      val line = Line(1, 1, "")
+      val data = dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
+      def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
+
+      val left = Join(JoinObject, IdentitySort,
+          Join(WrapObject, Cross(None), const("smooth"),
+            Join(DerefObject, Cross(None), data, const("weight"))(line))(line),
+          Join(WrapObject, Cross(None), const("by"),
+            Join(DerefObject, Cross(None), data, const("height"))(line))(line))(line)
+      val right = const(BigDecimal(0.7))
+      val input = dag.Morph2(SimpleExponentialSmoothing, left, right)(line)
+
+      val result = testEval(input)
+
+      result must haveSize(17)
+
+      result must haveAllElementsLike {
+        case (ids, _) => ids.size must_== 1
+        case _ => ko
+      }
+
+      val values = result collect { case (_, SDecimal(x)) => x }
+      values must contain(BigDecimal(131), BigDecimal("40.0777"), BigDecimal("103.72331"))
+    }
+
+    "double exponential smoothing" in {
+      val line = Line(1, 1, "")
+      val data = dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
+      def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
+
+      val left = Join(JoinObject, IdentitySort,
+          Join(WrapObject, Cross(None), const("smooth"),
+            Join(DerefObject, Cross(None), data, const("weight"))(line))(line),
+          Join(WrapObject, Cross(None), const("by"),
+            Join(DerefObject, Cross(None), data, const("height"))(line))(line))(line)
+      val right = Join(JoinObject, Cross(None),
+        Join(WrapObject, Cross(None), const("alpha"), const(BigDecimal(0.7)))(line),
+        Join(WrapObject, Cross(None), const("beta"), const(BigDecimal(0.5)))(line))(line)
+      val input = dag.Morph2(DoubleExponentialSmoothing, left, right)(line)
+
+      val result = testEval(input)
+
+      result must haveSize(17)
+
+      result must haveAllElementsLike {
+        case (ids, _) => ids.size must_== 1
+        case _ => ko
+      }
+
+      val values = result collect { case (_, SDecimal(x)) => x }
+      values must contain(BigDecimal(131), BigDecimal("1.111"), BigDecimal("53.06660"))
     }
   }
 }

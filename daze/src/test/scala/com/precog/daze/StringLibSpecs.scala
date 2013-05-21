@@ -21,6 +21,8 @@ package com.precog.daze
 
 import org.specs2.mutable._
 
+import blueeyes.json._
+
 import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.common.Path
@@ -883,9 +885,9 @@ trait StringLibSpecs[M[+_]] extends Specification
 
   "split" should {
 
-    val o = scala.math.Ordering.by[(Long, _), Long](_._1)
+    val o = scala.math.Ordering.by[(SValue, _), SValue](_._1)
 
-    def mogrify(result: Set[(Vector[Long], SValue)]): List[Vector[String]] =
+    def mogrify(result: Set[(Vector[SValue], SValue)]): List[Vector[String]] =
       result.toList.map {
         case (Vector(n), SArray(elems)) => (n, elems)
       }.sorted(o).map(_._2.map { case SString(s) => s })

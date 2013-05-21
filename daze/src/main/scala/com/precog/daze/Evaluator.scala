@@ -295,9 +295,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             val resultM = Table.cross(lTable.compact(valueSpec), rTable.compact(valueSpec), hint)(crossSpec)
 
             transState liftM mn(resultM map { case (joinOrder, table) =>
-              def leftIds: Vector[Int] = Vector.range(0, left.identities.length)
-              def rightIds: Vector[Int] = Vector.range(0, right.identities.length)
-
               val sort = joinOrder match {
                 case CrossLeft =>
                   ptLeft.sort match {
@@ -306,7 +303,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                         case IdentityOrder(rIds) if graph.uniqueIdentities => rIds
                         case _ => Vector.empty
                       }
-                      IdentityOrder(ids ++ rIds.map(_ + leftIds.size))
+                      IdentityOrder(ids ++ rIds.map(_ + left.identities.length))
 
                     case otherSort => otherSort
                   }
@@ -318,7 +315,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                         case IdentityOrder(lIds) if graph.uniqueIdentities => lIds
                         case _ => Vector.empty
                       }
-                      IdentityOrder(ids.map(_ + leftIds.size) ++ lIds)
+                      IdentityOrder(ids.map(_ + left.identities.length) ++ lIds)
 
                     case valueOrder => valueOrder
                   }
@@ -326,14 +323,14 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 case CrossLeftRight => // Not actually hit yet. Soon!
                   (ptLeft.sort, ptRight.sort) match {
                     case (IdentityOrder(lIds), IdentityOrder(rIds)) =>
-                      IdentityOrder(lIds ++ rIds.map(_ + leftIds.size))
+                      IdentityOrder(lIds ++ rIds.map(_ + left.identities.length))
                     case (otherSort, _) => otherSort
                   }
 
                 case CrossRightLeft => // Not actually hit yet. Soon!
                   (ptLeft.sort, ptRight.sort) match {
                     case (IdentityOrder(lIds), IdentityOrder(rIds)) =>
-                      IdentityOrder(rIds.map(_ + leftIds.size) ++ lIds)
+                      IdentityOrder(rIds.map(_ + left.identities.length) ++ lIds)
                     case (otherSort, _) => otherSort
                   }
               }
@@ -506,7 +503,6 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
-              
               tableM2 = pendingTable.table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
             } yield PendingTable(tableM2, graph, TransSpec1.Id, IdentityOrder(graph))
         
@@ -534,16 +530,16 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             val spec: (TransSpec2, TransSpec2) => TransSpec2 = { (srcLeft, srcRight) =>
               trans.InnerArrayConcat(trans.WrapArray(srcLeft), trans.WrapArray(srcRight))
             }
-            
+
             val joined: StateT[N, EvaluatorState, (Morph1Apply, PendingTable)] = mor.alignment match {
               case MorphismAlignment.Cross(morph1) =>
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, None)(spec)).tupled
 
-              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) > 0 =>
+              case MorphismAlignment.Match(morph1) if areJoinable(left, right) =>
                 ((transState liftM mn(morph1)) |@| join(graph, left, right, IdentitySort)(spec)).tupled
 
               // TODO: Remove and see if things break. Also, 
-              case MorphismAlignment.Match(morph1) if sharedPrefixLength(left, right) == 0 =>
+              case MorphismAlignment.Match(morph1) =>
                 val hint = if (left.isSingleton || !right.isSingleton) CrossOrder.CrossRight
                            else CrossOrder.CrossLeft
                 ((transState liftM mn(morph1)) |@| cross(graph, left, right, Some(hint))(spec)).tupled
@@ -779,7 +775,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               }
             }
          
-          case Memoize(parent, priority) => 
+          case Memoize(parent, _) => 
             for {
               pending <- prepareEval(parent, splits)
               table = pending.table.transform(liftToValues(pending.trans))
@@ -1085,14 +1081,10 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case (a, CoproductIds(left, right)) => disjunctiveEquals(a, left) || disjunctiveEquals(a, right)
       case (a, b) => a == b
     }
-    
-    private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = (left.identities, right.identities) match {
-      case (Identities.Specs(a), Identities.Specs(b)) =>
-        a zip b takeWhile disjunctiveEquals length
-      case (Identities.Undefined, _) | (_, Identities.Undefined) =>
-        0
-    }
 
+    private def areJoinable(left: DepGraph, right: DepGraph): Boolean =
+      IdentityMatch(left, right).sharedIndices.size > 0
+    
     private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
       case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
       case IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)

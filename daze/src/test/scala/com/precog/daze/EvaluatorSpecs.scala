@@ -55,10 +55,10 @@ import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     with BaseBlockStoreTestModule[M]
-    with IdSourceScannerModule[M]{ outer =>
+    with IdSourceScannerModule { outer =>
       
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) = 
-    new Evaluator[N](N0)(mn,nm) {
+    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
@@ -67,7 +67,6 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
-      def freshIdScanner = outer.freshIdScanner
     }
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
