@@ -6,8 +6,8 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 
 import com.precog.daze._
-import com.precog.muspelheim._
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.execution._
 
 import java.nio.CharBuffer
 
@@ -47,12 +47,12 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
-    for {
-      executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
+    val executionResult = for {
+      executor <- asyncExecutorFor(apiKey) leftMap { EvaluationError.invalidState }
       result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
-    } yield {
-      result getOrElse sys.error("Jellybean Sunday")
-    }
+    } yield result 
+
+    executionResult.valueOr(err => sys.error(err.toString))
   }
 
   def cancel(jobId: JobId, ticks: Int): Future[Boolean] = schedule(ticks) {
@@ -170,33 +170,36 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
 
       def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
         val numTicks = query.toInt
-        schedule(0) {
-          Success(StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
-            case i if i < numTicks =>
-              schedule(1) {
-                Some((Slice.fromJValues(Stream(JString("."))), i + 1))
-              }.liftM[JobQueryT]
+        EitherT.right[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
+          schedule(0) {
+            StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
+              case i if i < numTicks =>
+                schedule(1) {
+                  Some((Slice.fromJValues(Stream(JString("."))), i + 1))
+                }.liftM[JobQueryT]
 
-            case _ =>
-              shardQueryMonad.point { None }
-          })
-        }.liftM[JobQueryT]
+              case _ =>
+                shardQueryMonad.point { None }
+            }
+          }.liftM[JobQueryT]
+        }
       }
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-    Future(Success(new AsyncQueryExecutor {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
+    EitherT.right(Future(new AsyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-    Future(Success(new SyncQueryExecutor {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
+    EitherT.right(Future(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
+/*
   val metadataClient = new MetadataClient[Future] {
     def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
@@ -204,6 +207,7 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     def currentVersion(apiKey: APIKey, path: Path) = M.point(None)
     def currentAuthorities(apiKey: APIKey, path: Path) = M.point(None)
   }
+  */
 
   def startup = Future { true }
   def shutdown = Future { actorSystem.shutdown; true }

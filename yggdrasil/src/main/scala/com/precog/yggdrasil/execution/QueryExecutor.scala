@@ -71,9 +71,6 @@ object CacheControl {
 
 
 trait QueryExecutor[M[+_], +A] { self =>
-  /**
-    * Execute the provided query, returning the *values* of the result set (discarding identities)
-    */
   def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, A]
 
   def map[B](f: A => B)(implicit M: Functor[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {

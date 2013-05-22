@@ -9,7 +9,7 @@ import com.precog.common.jobs._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs.Resource
-import com.precog.util.FutureFunctor
+import com.precog.util._
 
 import akka.dispatch.{ Future, ExecutionContext }
 

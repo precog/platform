@@ -5,7 +5,7 @@ import com.precog.common.jobs._
 
 import com.precog.common.security._
 import com.precog.daze._
-import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 
 import java.nio.CharBuffer
 
@@ -80,9 +80,10 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val result = for {
-      executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
-      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) mapValue {
-        case (w, s) => (w, (w: Option[(JobId, AtomicInteger)], s))
+      // TODO: No idea how to work with EitherT[TestFuture, so sys.error it is]
+      executor <- executorFor(apiKey) valueOr { err => sys.error(err.toString) }
+      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)).valueOr(err => sys.error(err.toString)) mapValue { 
+        case (w, s) => (w, (w: Option[(JobId, AtomicInteger)], s)) 
       }
     } yield {
       val (Some((jobId, ticks)), result) = result0
@@ -92,7 +93,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
         case None => Future(n)
       }
 
-      (jobId, ticks, count(0, result map (dropStreamToFuture(_)) getOrElse sys.error("Escape boat life jacket")))
+      (jobId, ticks, count(0, dropStreamToFuture(result)))
     }
 
     result.value
@@ -233,39 +234,39 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
     val clock = self.clock
   }
 
-  def executorFor(apiKey: APIKey): TestFuture[Validation[String, QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]]]] = {
-    Applicative[TestFuture].point(Success(new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
-      import UserQuery.Serialization._
+  def executorFor(apiKey: APIKey): EitherT[TestFuture, String, QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]]] = {
+    EitherT.right {
+      Applicative[TestFuture] point {
+        new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
+          import UserQuery.Serialization._
 
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
-        val numTicks = query.toInt
+          def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+            val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+            val numTicks = query.toInt
 
-        WriterT(createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
-          val ticks = new AtomicInteger()
-          val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
-            case i if i < numTicks =>
-              schedule(1) {
-                ticks.getAndIncrement()
-                Some((CharBuffer.wrap("."), i + 1))
-              }.liftM[JobQueryT]
+            EitherT.right[TestFuture, EvaluationError, StreamT[TestFuture, CharBuffer]] {
+              WriterT {
+                createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
+                  val ticks = new AtomicInteger()
+                  val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
+                    case i if i < numTicks =>
+                      schedule(1) {
+                        ticks.getAndIncrement()
+                        Some((CharBuffer.wrap("."), i + 1))
+                      }.liftM[JobQueryT]
 
-            case _ =>
-              M0.point { None }
+                    case _ =>
+                      M0.point { None }
+                  }
+
+                  (Tag(M0.jobId map (_ -> ticks)), completeJob(result))
+                }
+              }
+            }
           }
-
-          (Tag(M0.jobId map (_ -> ticks)), Success(completeJob(result)))
-        })
+        }
       }
-    }))
-  }
-
-  val metadataClient = new MetadataClient[TestFuture] {
-    def size(userUID: String, path: Path) = sys.error("todo")
-    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
-    def currentVersion(apiKey: APIKey, path: Path) = sys.error("wtf?")
-    def currentAuthorities(apiKey: APIKey, path: Path) = sys.error("That this is necessary is absurd.")
+    }
   }
 
   def startup = Applicative[TestFuture].point { true }

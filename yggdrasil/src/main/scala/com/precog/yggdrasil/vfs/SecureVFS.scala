@@ -40,6 +40,7 @@ trait VFSMetadata[M[+_]] {
   // TODO: Find the right balance of abstraction here.
   def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]]
   def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
+  def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
 }
 
 class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock) extends VFSMetadata[M] with Logging {
