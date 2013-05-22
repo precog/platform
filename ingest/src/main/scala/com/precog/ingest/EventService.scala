@@ -44,10 +44,11 @@ import com.precog.common.Path
 
 object EventService {
   case class State(
-    accessControl: APIKeyFinder[Future], 
-    ingestHandler: IngestServiceHandler, 
+    accessControl: APIKeyFinder[Future],
+    ingestHandler: IngestServiceHandler,
+    dataHandler: IngestServiceHandler,
     fileCreateHandler: FileStoreHandler,
-    archiveHandler: ArchiveServiceHandler[ByteChunk], 
+    archiveHandler: ArchiveServiceHandler[ByteChunk],
     shardClient: HttpClient[ByteChunk],
     stop: Stoppable
   )
@@ -85,7 +86,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
   def configureEventService(config: Configuration): State
 
   protected[this] def buildServiceState(
-      serviceConfig: ServiceConfig, 
+      serviceConfig: ServiceConfig,
       apiKeyFinder: APIKeyFinder[Future],
       permissionsFinder: PermissionsFinder[Future],
       eventStore: EventStore[Future],
@@ -93,12 +94,13 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
       stoppable: Stoppable): State = {
     import serviceConfig._
 
-    val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields)
+    val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, StoreMode.Append)
+    val dataHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, StoreMode.Create)
     val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, Clock.System, deleteTimeout)
     val createHandler = new FileStoreHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
     val shardClient = (new HttpClientXLightWeb).protocol(shardLocation.protocol).host(shardLocation.host).port(shardLocation.port)
 
-    EventService.State(apiKeyFinder, ingestHandler, createHandler, archiveHandler, shardClient, stoppable)
+    EventService.State(apiKeyFinder, ingestHandler, dataHandler, createHandler, archiveHandler, shardClient, stoppable)
   }
 
   def eventOptionsResponse = CORSHeaders.apply[JValue, Future](M)
@@ -112,7 +114,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
         } ->
         request { (state: State) =>
           import CORSHeaderHandler.allowOrigin
-          implicit val FR = M.compose[({ type l[a] = Function2[APIKey, Path, a] })#l] 
+          implicit val FR = M.compose[({ type l[a] = Function2[APIKey, Path, a] })#l]
 
           allowOrigin("*", executionContext) {
             encode[ByteChunk, Future[HttpResponse[JValue]], Future[HttpResponse[ByteChunk]]] {
@@ -122,7 +124,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
                   dataService(state)
                 //}
               }
-            } ~ 
+            } ~
             shardProxy(state.shardClient)
           }
         } ->
@@ -155,14 +157,14 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
       path("/data") {
         dataPath("/fs") {
           accept(ApplicationJson, XJsonStream) {
-            post { state.ingestHandler } ~
-            put { state.ingestHandler } ~
-            patch { state.ingestHandler }
+            post { state.dataHandler } ~
+            put { state.dataHandler } ~
+            patch { state.dataHandler }
           } ~ {
             post { state.fileCreateHandler } ~
             put { state.fileCreateHandler }
           }
-        } 
+        }
       }
     }
   }
@@ -174,6 +176,6 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
           proxy(shardClient) { _ => true }
         }
       }
-    } 
+    }
   }
 }
