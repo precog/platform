@@ -29,7 +29,8 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
-import com.precog.shard.scheduling.NoopScheduler
+import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.scheduling.NoopScheduler
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 
@@ -178,7 +179,7 @@ trait TestShardService extends
         response.status.code match {
           case OK | Accepted => //assume application/json
             response map {
-              case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _)) 
+              case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _))
               case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
             }
 
@@ -189,7 +190,7 @@ trait TestShardService extends
                 case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
               }
             } else {
-              response map { 
+              response map {
                 case Left(bb) => Left(JString(new String(bb.array, "UTF-8")))
                 case chunk => Right(StreamT.wrapEffect(chunkToFutureString.apply(chunk).map(s => CharBuffer.wrap(JString(s).renderCompact) :: StreamT.empty[Future, CharBuffer])))
               }
@@ -308,7 +309,7 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject query when API key not found" in {
       query(simpleQuery, Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) =>
           content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
@@ -378,7 +379,7 @@ class ShardServiceSpec extends TestShardService {
     }
     "reject browse when API key not found" in {
       browse(Some("not-gonna-find-it")).copoint must beLike {
-        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) => 
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) =>
           content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
@@ -417,14 +418,14 @@ trait TestPlatform extends ManagedPlatform { self =>
     val clock = Clock.System
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-    Future(Success(new AsyncQueryExecutor {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
+    EitherT.right(Future(new AsyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-    Future(Success(new SyncQueryExecutor {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
+    EitherT.right(Future(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
@@ -435,7 +436,7 @@ trait TestPlatform extends ManagedPlatform { self =>
         if (query == "bad query") {
           val mu = shardQueryMonad.jobId traverse { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
-          } 
+          }
 
           shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
             mu map { _ => success(toSlice(JNum(2))) }
@@ -467,7 +468,7 @@ trait TestPlatform extends ManagedPlatform { self =>
         )
       )
     }
-    
+
     def currentVersion(apiKey: APIKey, path: Path) = Future(None)
     def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
   }
