@@ -126,87 +126,47 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
         trans.Scan(
           trans.InnerArrayConcat(
-            trans.WrapArray(left),
-            trans.WrapArray(right)),
-          scanner)
+            trans.WrapArray(
+              trans.Map1(left, UnifyStrDate)),
+            trans.WrapArray(
+              trans.Map1(right, UnifyStrDate))),
+          MatchScanner)
       }
       
-      object scanner extends CScanner {
-        type A = Unit
-        
-        def init = ()
-        
-        def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-          val targetM = columns get ColumnRef(CPath.Identity \ 0, CString)
-          val regexM = columns get ColumnRef(CPath.Identity \ 1, CString)
+      val MatchScanner = CF2Array("std::string::regexMatch") {
+        case (target: StrColumn, regex: StrColumn, range) => {
+          val table = new Array[Array[String]](range.length)
+          val defined = new BitSet(range.length)
           
-          val columns2M = for (targetRaw <- targetM; regexRaw <- regexM) yield {
-            val target: StrColumn = targetRaw match {
-              case c: StrColumn => c
-              case c: DateColumn => dateToStrCol(c)
-              case c => sys.error("didn't expect %s" format c)
-            }
-
-            val regex: StrColumn = regexRaw match {
-              case c: StrColumn => c
-              case c: DateColumn => dateToStrCol(c)
-              case c => sys.error("didn't expect %s" format c)
-            }
-            
-            val table = new Array[Array[String]](range.length)
-            val defined = new BitSet(range.length)
-            var maxLength = 0
-            
-            RangeUtil.loop(range) { i =>
-              if (target.isDefinedAt(i) && regex.isDefinedAt(i)) {
-                val str = target(i)
+          RangeUtil.loop(range) { i =>
+            if (target.isDefinedAt(i) && regex.isDefinedAt(i)) {
+              val str = target(i)
+              
+              try {
+                val reg = regex(i).r
                 
-                try {
-                  val reg = regex(i).r
-                  
-                  str match {
-                    case reg(capture @ _*) => {
-                      val capture2 = capture map { str =>
-                        if (str == null)
-                          ""
-                        else
-                          str
-                      }
-                      
-                      table(i) = capture2.toArray
-                      defined.set(i)
-                      maxLength = maxLength max table(i).length
+                str match {
+                  case reg(capture @ _*) => {
+                    val capture2 = capture map { str =>
+                      if (str == null)
+                        ""
+                      else
+                        str
                     }
                     
-                    case _ =>
+                    table(i) = capture2.toArray
+                    defined.set(i)
                   }
-                } catch {
-                  case _: java.util.regex.PatternSyntaxException =>   // yay, scala 
-                }
-              }
-            }
-            
-            if (maxLength > 0) {
-              val pairs = 0 until maxLength map { idx =>
-                val col = new StrColumn {
-                  def isDefinedAt(row: Int) =
-                    defined.get(row) && idx < table(row).length
                   
-                  def apply(row: Int) = table(row)(idx)
+                  case _ =>
                 }
-                
-                val ref = ColumnRef(CPath.Identity \ idx, CString)
-                
-                ref -> col
+              } catch {
+                case _: java.util.regex.PatternSyntaxException =>   // yay, scala 
               }
-              
-              Map(pairs: _*)
-            } else {
-              Map[ColumnRef, Column]()
             }
           }
           
-          ((), columns2M getOrElse Map[ColumnRef, Column]())
+          (CString, table, defined)
         }
       }
     }
@@ -425,76 +385,28 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
     
-    def splitScanner(quote: Boolean): CScanner = new CScanner {
-      type A = Unit
-      
-      def init = ()
-      
-      def scan(a: Unit, columns: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
-        val leftM: Option[StrColumn] = columns collect {
-          case (ColumnRef(CPath(CPathIndex(0)), CString), col: StrColumn) => col
-        } headOption
+    def splitScanner(quote: Boolean) = CF2Array("std::string::split(%s)".format(quote)) {
+      case (left: StrColumn, right: StrColumn, range) => {
+        val result = new Array[Array[String]](range.length)
+        val defined = new BitSet(range.length)
         
-        val rightM: Option[StrColumn] = columns collect {
-          case (ColumnRef(CPath(CPathIndex(1)), CString), col: StrColumn) => col
-        } headOption
-        
-        val zippedM = implicitly[Applicative[Option]].apply2(leftM, rightM) { (_, _) }
-        
-        val columnsM: Option[Map[ColumnRef, Column]] = zippedM flatMap {
-          case (left, right) => {
-            val result = new Array[Array[String]](range.length)
-            val defined = new BitSet(range.length)
-            
-            RangeUtil.loop(range) { row =>
-              if (left.isDefinedAt(row) && right.isDefinedAt(row)) {
-                try {
-                  val pattern = if (quote) Pattern.quote(right(row)) else right(row)
-                  
-                  // TOOD cache compiled patterns for awesome sauce
-                  result(row) =
-                    Pattern.compile(pattern).split(left(row), -1)
-                    
-                  defined.flip(row)
-                } catch {
-                  case _: PatternSyntaxException =>
-                }
-              }
-            }
-            
-            if (defined.nextSetBit(0) < 0) {      // not defined anywhere
-              None
-            } else {
-              var maxIdx = -1
-              RangeUtil.loop(range) { row =>
-                if (defined.get(row)) {
-                  maxIdx = maxIdx max (result(row).length - 1)
-                }
-              }
+        RangeUtil.loop(range) { row =>
+          if (left.isDefinedAt(row) && right.isDefinedAt(row)) {
+            try {
+              val pattern = if (quote) Pattern.quote(right(row)) else right(row)
+                
+                // TOOD cache compiled patterns for awesome sauce
+              result(row) =
+              Pattern.compile(pattern).split(left(row), -1)
               
-              if (maxIdx < 0) {
-                None
-              } else {
-                val columnArray = new Array[StrColumn](maxIdx + 1)
-                
-                RangeUtil.loop(0 until columnArray.length) { i =>
-                  columnArray(i) = new StrColumn {
-                    def isDefinedAt(row: Int) = defined.get(row) && i < result(row).length
-                    def apply(row: Int) = result(row)(i)
-                  }
-                }
-                
-                val columns: Map[ColumnRef, Column] = (0 until columnArray.length).map({ i =>
-                  ColumnRef(CPath(CPathIndex(i)), CString) -> columnArray(i)
-                })(collection.breakOut)
-                
-                Some(columns)
-              }
+              defined.flip(row)
+            } catch {
+              case _: PatternSyntaxException =>
             }
           }
         }
         
-        ((), columnsM getOrElse Map())
+        (CString, result, defined)
       }
     }
     
