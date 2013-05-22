@@ -7,6 +7,7 @@ import com.precog.common.security._
 
 import com.precog.daze._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table.Slice
 
 import java.nio.CharBuffer
@@ -47,12 +48,10 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
-    for {
-      executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
-      result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
-    } yield {
-      result getOrElse sys.error("Jellybean Sunday")
-    }
+    (for {
+      executor <- asyncExecutorFor(apiKey)
+      result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)).leftMap(_.toString)
+    } yield result) valueOr sys.error("Lemon curry?")
   }
 
   def cancel(jobId: JobId, ticks: Int): Future[Boolean] = schedule(ticks) {
@@ -185,14 +184,14 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-    Future(Success(new AsyncQueryExecutor {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
+    EitherT.right(Future(new AsyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-    Future(Success(new SyncQueryExecutor {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
+    EitherT.right(Future(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }

@@ -6,6 +6,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.execution._
 
 import java.nio.CharBuffer
 
@@ -81,7 +82,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val result = for {
       executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
-      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) mapValue {
+      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) map {
         case (w, s) => (w, (w: Option[(JobId, AtomicInteger)], s))
       }
     } yield {
