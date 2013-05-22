@@ -107,7 +107,11 @@ trait RawJsonStorageModule[M[+_]] { self =>
 
   val vfs: VFSMetadata[M] = new VFSMetadata[M] {
     implicit val M: Monad[M] = self.M
-    override def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]] = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
+
+    override def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]] = {
+      M.point(projections.keySet.filter(_.isDirectChildOf(path)))
+    }
+
     override def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
       M.point {
         val structs = structures.getOrElse(path, Set.empty[ColumnRef])
@@ -118,6 +122,10 @@ trait RawJsonStorageModule[M[+_]] { self =>
 
         PathStructure(types, structs.map(_.selector))
       }
+    }
+
+    def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
+      EitherT.right(M.point(0l))
     }
   }
 }

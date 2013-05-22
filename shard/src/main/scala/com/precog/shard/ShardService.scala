@@ -162,7 +162,7 @@ trait ShardService extends
         dataPath("/meta/fs") {
           get {
             produce(application/json)(
-              new BrowseServiceHandler[ByteChunk](state.platform.vfs, state.apiKeyFinder) map { _ map { _ map { _ map { jvalueToChunk } } } }
+              new BrowseServiceHandler[ByteChunk](state.platform.vfs) map { _ map { _ map { _ map { jvalueToChunk } } } }
             )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
           } ~
           options {

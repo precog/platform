@@ -48,14 +48,11 @@ import scalaz.syntax.bifunctor._
 //import scalaz.syntax.validation._
 import scalaz.syntax.apply._
 
-class BrowseServiceHandler[A](vfs: SecureVFS[Future], accessControl: AccessControl[Future])(implicit executor: ExecutionContext)
-    extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
-  private implicit val M = new blueeyes.bkka.FutureMonad(executor)
-
-  def size(apiKey: APIKey, path: Path): EitherT[Future, ResourceError, JNum] =
+class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
+  def size(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JNum] =
     vfs.size(apiKey, path, Version.Current) map { JNum(_) }
 
-  def browse(apiKey: APIKey, path: Path): EitherT[Future, ResourceError, JArray] = {
+  def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
     EitherT.right {
       vfs.findDirectChildren(apiKey, path) map { paths =>
         JArray(paths.map(p => JString(p.toString.substring(1))).toSeq: _*)
@@ -63,7 +60,7 @@ class BrowseServiceHandler[A](vfs: SecureVFS[Future], accessControl: AccessContr
     }
   }
 
-  def structure(apiKey: APIKey, path: Path, property: CPath): EitherT[Future, ResourceError, JObject] = {
+  def structure(apiKey: APIKey, path: Path, property: CPath): EitherT[M, ResourceError, JObject] = {
     /**
      * This turns a set of types/counts into something usable by strucutre. It
      * will serialize the longs to JNums and unify CNumericTypes under "Number".
@@ -83,6 +80,11 @@ class BrowseServiceHandler[A](vfs: SecureVFS[Future], accessControl: AccessContr
                     "types" -> JObject(normalizeTypes(types))))
     }
   }
+}
+
+class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Future])
+    extends BrowseSupport[Future](vfs0) with CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
+  
 
   val service = (request: HttpRequest[A]) => success { (apiKey: APIKey, path: Path) =>
     request.parameters.get('type).map(_.toLowerCase) map {

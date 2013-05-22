@@ -28,8 +28,8 @@ import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.muspelheim._
-import com.precog.shard.scheduling.NoopScheduler
+import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.scheduling.NoopScheduler
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 
@@ -147,13 +147,14 @@ trait TestShardService extends
       )
     }
 
-    val vfs = NoopVFS
-
     val scheduler = NoopScheduler[Future]
 
-    val storedQueries = new VFSStoredQueries(platform, vfs, scheduler, jobManager, null /** FIXME **/, clock)
+    val accountFinder = new StaticAccountFinder[Future]("root", rootAPIKey)
+    //val vfs = null: VFS[Future]
+    //val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder)
+    //val storedQueries = new SecureVFS(vfs, permissionsFinder, jobManager, scheduler, clock)
 
-    ShardState(platform, self.apiKeyFinder, new StaticAccountFinder[Future]("root", rootAPIKey), vfs, storedQueries, scheduler, jobManager, clock, Stoppable.Noop)
+    ShardState(platform, self.apiKeyFinder, accountFinder, scheduler, jobManager, clock, Stoppable.Noop)
   }
 
   val utf8 = Charset.forName("UTF-8")
@@ -417,14 +418,14 @@ trait TestPlatform extends ManagedPlatform { self =>
     val clock = Clock.System
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-    Future(Success(new AsyncQueryExecutor {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
+    EitherT.right(Future(new AsyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-    Future(Success(new SyncQueryExecutor {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
+    EitherT.right(Future(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
@@ -437,16 +438,19 @@ trait TestPlatform extends ManagedPlatform { self =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
           } 
 
-          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
-            mu map { _ => success(toSlice(JNum(2))) }
+          EitherT[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
+            shardQueryMonad.liftM[Future, EvaluationError \/ StreamT[JobQueryTF, Slice]] {
+              mu map { _ => \/.right(toSlice(JNum(2))) }
+            }
           }
         } else {
-          shardQueryMonad.point(success(toSlice(JNum(2))))
+          EitherT[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]](shardQueryMonad.point(\/.right(toSlice(JNum(2)))))
         }
       }
     }
   }
 
+/*
   val metadataClient = new MetadataClient[Future] {
     def size(userUID: String, path: Path) = Future { success(JNum(1)) }
 
@@ -471,6 +475,7 @@ trait TestPlatform extends ManagedPlatform { self =>
     def currentVersion(apiKey: APIKey, path: Path) = Future(None)
     def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
   }
+  */
 
   def status() = Future(Success(JArray(List(JString("status")))))
 
