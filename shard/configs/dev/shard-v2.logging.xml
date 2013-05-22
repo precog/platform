@@ -16,7 +16,7 @@
     </encoder>
   </appender>
 
-  <logger name="blueeyes.core.http" level="info" />
+  <logger name="blueeyes.core" level="info" />
   <!--
   <logger name="com.precog.yggdrasil.actor.KafkaShardIngestActor" level="debug" />
   <logger name="com.precog.yggdrasil.actor.ProjectionsActor" level="debug" />

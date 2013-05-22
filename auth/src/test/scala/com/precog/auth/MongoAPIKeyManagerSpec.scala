@@ -65,7 +65,7 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
 
     "issue new API key" in new TestAPIKeyManager {
       val name = "newAPIKey"
-      val fResult = apiKeyManager.newAPIKey(Some(name), None, rootAPIKey, Set.empty)
+      val fResult = apiKeyManager.createAPIKey(Some(name), None, rootAPIKey, Set.empty)
 
       val result = Await.result(fResult, timeout)
 
@@ -78,8 +78,8 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
 
     "list children API keys" in new TestAPIKeyManager {
       val (result, expected) = Await.result(for {
-        k1 <- apiKeyManager.newAPIKey(Some("blah1"), None, child2.apiKey, Set.empty)
-        k2 <- apiKeyManager.newAPIKey(Some("blah2"), None, child2.apiKey, Set.empty)
+        k1 <- apiKeyManager.createAPIKey(Some("blah1"), None, child2.apiKey, Set.empty)
+        k2 <- apiKeyManager.createAPIKey(Some("blah2"), None, child2.apiKey, Set.empty)
         kids <- apiKeyManager.findAPIKeyChildren(child2.apiKey)
       } yield (kids, List(k1, k2)), timeout)
 
@@ -153,9 +153,9 @@ class MongoAPIKeyManagerSpec extends Specification with RealMongoSpecSupport wit
     val notFoundAPIKeyID = "NOT-GOING-TO-FIND"
 
     val rootAPIKey = Await.result(apiKeyManager.rootAPIKey, to)
-    val child1 = Await.result(apiKeyManager.newAPIKey(Some("child1"), None, rootAPIKey, Set.empty), to)
-    val child2 = Await.result(apiKeyManager.newAPIKey(Some("child2"), None, rootAPIKey, Set.empty), to)
-    val grantChild1 = Await.result(apiKeyManager.newAPIKey(Some("grantChild1"), None, child1.apiKey, Set.empty), to)
+    val child1 = Await.result(apiKeyManager.createAPIKey(Some("child1"), None, rootAPIKey, Set.empty), to)
+    val child2 = Await.result(apiKeyManager.createAPIKey(Some("child2"), None, rootAPIKey, Set.empty), to)
+    val grantChild1 = Await.result(apiKeyManager.createAPIKey(Some("grantChild1"), None, child1.apiKey, Set.empty), to)
 
     // wait until the keys appear in the DB (some delay between insert request and actor insert)
     def waitForAppearance(apiKey: APIKey, name: String) {

@@ -114,41 +114,34 @@ trait AccountService extends BlueEyesServiceBuilder with AuthenticationCombinato
           import CORSHeaderHandler.allowOrigin
           import handlers._
           allowOrigin("*", executionContext) {
-            jsonp[ByteChunk] {
-              produce(MimeTypes.application / MimeTypes.json) {
-                transcode {
-                  path("/accounts/") {
-                    path("'accountId/password/reset") {
-                      path("/'resetToken") {
-                        post(PasswordResetHandler)
+            jsonp {
+              jvalue[ByteChunk] {
+                path("/accounts/") {
+                  post(PostAccountHandler) ~
+                  path("'accountId/password/reset") {
+                    post(GenerateResetTokenHandler) ~
+                    path("/'resetToken") {
+                      post(PasswordResetHandler)
+                    } 
+                  } ~
+                  path("search") {
+                    get(SearchAccountsHandler)
+                  } ~
+                  path("'accountId/grants/") {
+                    post(CreateAccountGrantHandler)
+                  } ~
+                  auth(handlers.accountManager) {
+                    get(ListAccountsHandler) ~
+                    path("'accountId") {
+                      get(GetAccountDetailsHandler) ~
+                      delete(DeleteAccountHandler) ~
+                      path("/password") {
+                        put(PutAccountPasswordHandler)
                       } ~
-                      post(GenerateResetTokenHandler)
-                    } ~
-                    path("search") {
-                      get(SearchAccountHandler)
-                    } ~
-                    post(PostAccountHandler) ~
-                    path("search") {
-                      parameter('email) {
-                        get(SearchAccountsHandler)
-                      }
-                    } ~
-                    path("'accountId/grants/") {
-                      post(CreateAccountGrantHandler)
-                    } ~
-                    auth(handlers.accountManager) {
-                      get(ListAccountsHandler) ~
-                      path("'accountId") {
-                        get(GetAccountDetailsHandler) ~
-                        delete(DeleteAccountHandler) ~
-                        path("/password") {
-                          put(PutAccountPasswordHandler)
-                        } ~
-                        path("/plan") {
-                          get(GetAccountPlanHandler) ~
-                          put(PutAccountPlanHandler) ~
-                          delete(DeleteAccountPlanHandler)
-                        }
+                      path("/plan") {
+                        get(GetAccountPlanHandler) ~
+                        put(PutAccountPlanHandler) ~
+                        delete(DeleteAccountPlanHandler)
                       }
                     }
                   }

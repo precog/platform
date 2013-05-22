@@ -36,6 +36,7 @@ import scalaz.Ordering._
 import scalaz.std.set._
 import scalaz.std.list._
 import scalaz.std.stream._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
@@ -187,7 +188,7 @@ trait JDBCColumnarTableModule
                   pgo.getValue.split(",|=>").toList.map { v => val t = v.trim; t.substring(1, t.length - 1) }.grouped(2).foreach {
                     case List(key, value) =>
                       val hsRef = ColumnRef(selector \ key, CString)
-                      val column = buildColumns.getOrElse(hsRef, ArrayStrColumn.empty(yggConfig.maxSliceSize)).asInstanceOf[ArrayStrColumn].tap { c => c.update(rowId, value) }
+                      val column = buildColumns.getOrElse(hsRef, ArrayStrColumn.empty(yggConfig.maxSliceSize)).asInstanceOf[ArrayStrColumn].unsafeTap { c => c.update(rowId, value) }
                       buildColumns += (hsRef -> column)
 
                     case invalid => logger.error("Invalid pair in hstore value: " + invalid)

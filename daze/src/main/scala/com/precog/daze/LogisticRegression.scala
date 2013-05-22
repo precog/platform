@@ -228,7 +228,8 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
           // `arraySpec` generates the schema in which the Coefficients will be returned
           val arraySpec = InnerArrayConcat(trans.WrapArray(xsSpec), trans.WrapArray(ySpec))
-          val table = table0.transform(arraySpec)
+          val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
+          val table = table0.transform(valueSpec).transform(arraySpec)
 
           val schemas: M[Seq[JType]] = table.schemas map { _.toSeq }
           
@@ -273,13 +274,14 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
 
       override val idPolicy = IdentityPolicy.Retain.Merge
 
-      lazy val alignment = MorphismAlignment.Custom(IdentityAlignment.CrossAlignment, alignCustom _)
+      lazy val alignment = MorphismAlignment.Custom(IdentityPolicy.Retain.Cross, alignCustom _)
 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
         def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
-
-        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, sigmoid _)) }
+        t2.transform(spec).reduce(reducer) map { models =>
+          (t1.transform(spec), morph1Apply(models, sigmoid _))
+        }
       }
     }
   }

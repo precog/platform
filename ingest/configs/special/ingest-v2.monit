@@ -1,9 +1,9 @@
 check process ingest-v2 with pidfile /var/run/precog/ingest-v2.pid
   start program = "/usr/sbin/service ingest-v2 start" with timeout 30 seconds
   stop program  = "/usr/sbin/service ingest-v2 stop"
-  if failed port 30060 protocol http and request '/ingest/v2/health' with timeout 15 seconds for 3 cycles 
+  if failed port 30060 protocol http and request '/ingest/v2/health' with timeout 15 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh ingest-v2"
-  if failed port 30060 protocol http and request '/ingest/v2/health' with timeout 15 seconds for 8 cycles 
+  if failed port 30060 protocol http and request '/ingest/v2/health' with timeout 15 seconds for 8 cycles
      then restart
   if 3 restarts within 10 cycles then timeout
   group ingest-v2
@@ -17,12 +17,12 @@ check file ingest-v2.server.log with path /var/log/precog/ingest-v2.server.log
   group ingest-v2
 
 check file ingest-v2.stdout.log with path /var/log/precog/ingest-v2.stdout.log
+  ignore match " at.*"
+  if match "Promise already completed" for 5 cycles then alert
   if match "Exception" for 1 cycles then alert
-  if match "Error" for 1 cycles then alert
+  if match "\.Error" for 1 cycles then alert
   if match "Too many open files" for 1 cycles
       then exec "/usr/bin/lsof -p $(cat /var/run/precog/ingest-v2.pid) > /tmp/lsof-dump-$(date '+%s').txt"
   if match "Too many open files" for 1 cycles then alert
-  alert derek-cell@chen-becker.org on { content }
   depends on ingest-v2
   group ingest-v2
-

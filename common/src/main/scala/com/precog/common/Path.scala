@@ -27,7 +27,7 @@ class Path private (val elements: String*) {
   def / (that: Path) = new Path(elements ++ that.elements: _*)
   def - (that: Path): Option[Path] = elements.startsWith(that.elements).option(new Path(elements.drop(that.elements.length): _*))
 
-  def isEqualOrParent(that: Path) = that.elements.startsWith(this.elements)
+  def isEqualOrParentOf(that: Path) = that.elements.startsWith(this.elements)
 
   def isChildOf(that: Path) = elements.startsWith(that.elements) && length > that.length
 
@@ -37,6 +37,8 @@ class Path private (val elements: String*) {
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth)
 
   def urlEncode: Path = new Path(elements.map(java.net.URLEncoder.encode(_, "UTF-8")): _*)
+
+  def prefix: Option[Path] = elements.nonEmpty.option(Path(components.init))
 
   override def equals(that: Any) = that match {
     case Path(`path`) => true

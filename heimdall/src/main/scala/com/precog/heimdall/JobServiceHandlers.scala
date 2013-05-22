@@ -335,9 +335,17 @@ extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Log
               jobs.expire(jobId, timestamp) map (Validation.fromEither(_)) map (_ map (_.state))
             }
 
-          case _ =>
+          case JString(state) =>
             Future(HttpResponse[JValue](BadRequest, content = Some(JString(
-              "Invalid 'state given. Expected one of 'start', 'cancel', or 'abort'."
+              "Invalid 'state '%s'. Expected one of 'started', 'cancelled', 'finished', 'aborted' or 'expired'." format state
+            ))))
+
+          case JUndefined =>
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString("No 'state given."))))
+
+          case other =>
+            Future(HttpResponse[JValue](BadRequest, content = Some(JString(
+              "Invalid 'state given: %s is not a string.".format(other.renderCompact)
             ))))
         }
       }
@@ -362,11 +370,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
       chunks <- request.content
     } yield {
       val mimeType = request.mimeTypes.headOption
-      val data = chunks.fold({ buffer => 
-        flipBytes(buffer) :: StreamT.empty[Future, Array[Byte]]
-      }, { buffers =>
-        buffers map (flipBytes(_))
-      })
+      val data = chunks.fold(_ :: StreamT.empty[Future, Array[Byte]], identity)
 
       jobs.setResult(jobId, mimeType, data) map {
         case Right(_) =>
@@ -403,8 +407,7 @@ extends CustomHttpService[ByteChunk, Future[HttpResponse[ByteChunk]]] {
               val headers = mimeType.foldLeft(HttpHeaders.Empty) { (headers, mimeType) =>
                 headers + `Content-Type`(mimeType)
               }
-              val chunks = Right(data map (ByteBuffer.wrap(_)))
-              HttpResponse[ByteChunk](OK, headers, Some(chunks))
+              HttpResponse[ByteChunk](OK, headers, Some(Right(data)))
           }
       }
     } getOrElse {

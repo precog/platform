@@ -120,7 +120,7 @@ trait PrecogLibModule[M[+_]] extends ColumnarTableLibModule[M] with TransSpecMod
 
           val resultsM: M[List[Result[Slice]]] = chunks traverse { case ((url, opts), members) =>
             val chunkValues = values.redefineWith(members)
-            val (stream, _) = chunkValues.renderJson[M](',')
+            val (stream, _) = chunkValues.renderJson[M](",")
 
             concatenate(stream) map ("[" + _ + "]") flatMap { data =>
               val fields = opts.mapValues(_.renderCompact) + ("data" -> data)

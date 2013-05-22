@@ -45,11 +45,17 @@ import org.slf4j.LoggerFactory
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
+object ParseEvalStackSpecs {
+  val testAPIKey = "dummyAPIKey"
+  val testAccount = "dummyAccount"
+}
+
 trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
     with EchoHttpClientModule[M]
     with MemoryDatasetConsumer[M]
-    with IdSourceScannerModule[M] { self =>
+    with IdSourceScannerModule { self =>
+  import ParseEvalStackSpecs._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
