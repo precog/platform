@@ -41,6 +41,7 @@ import com.weiglewilczek.slf4s.Logging
 import org.joda.time.DateTime
 
 import scalaz._
+import scalaz.syntax.id._
 import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 
@@ -113,7 +114,7 @@ class FileJobManager[M[+_]] private[FileJobManager] (workDir: File, monadM: Mona
   }
 
   def createJob(auth: APIKey, name: String, jobType: String, data: Option[JValue], started: Option[DateTime]) = M.point {
-    Job(newJobId, auth, name, jobType, data, started map (Started(_, NotStarted)) getOrElse NotStarted).tap { job =>
+    Job(newJobId, auth, name, jobType, data, started map (Started(_, NotStarted)) getOrElse NotStarted) unsafeTap { job =>
       val jobState = FileJobState(job, None, Map.empty)
       saveJob(job.id, jobState)
     }

@@ -86,22 +86,25 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     object MorphismAlignment {
       case class Match(morph: M[Morph1Apply]) extends MorphismAlignment 
       case class Cross(morph: M[Morph1Apply]) extends MorphismAlignment
-      case class Custom(alignment: IdentityAlignment, f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
+      case class Custom(alignment: IdentityPolicy, f: (Table, Table) => M[(Table, Morph1Apply)]) extends MorphismAlignment
     }
 
     abstract class Morphism1(val namespace: Vector[String], val name: String) extends Morphism1Like with Morph1Apply {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
+      val rowLevel: Boolean = false
     }
     
     abstract class Morphism2(val namespace: Vector[String], val name: String) extends Morphism2Like {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
+      val rowLevel: Boolean = false
       val multivariate: Boolean = false
+
+      /**
+       * This specifies how to align the 2 arguments as they are inputted. For
+       * instance, if we use MorphismAlignment.Cross, then the 2 tables will be
+       * crossed, then passed to `morph1`.
+       */
       def alignment: MorphismAlignment
-      override final def idAlignment: IdentityAlignment = alignment match {
-        case MorphismAlignment.Match(_) => IdentityAlignment.MatchAlignment
-        case MorphismAlignment.Cross(_) => IdentityAlignment.CrossAlignment
-        case MorphismAlignment.Custom(alignment, _) => alignment
-      }
     }
 
     abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
@@ -116,6 +119,8 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
         trans.Map1(source, f1(ctx))
       
       def f1(ctx: MorphContext): F1
+
+      override val rowLevel: Boolean = true
 
       override def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1F1(this)
     }
@@ -138,11 +143,15 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       
       def f2(ctx: MorphContext): F2
 
+      override val rowLevel: Boolean = true
+
       override def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2F2(this)
     }
 
     abstract class Reduction(val namespace: Vector[String], val name: String)(implicit M: Monad[M]) extends ReductionLike with Morph1Apply {
       val opcode: Int = defaultReductionOpcode.getAndIncrement
+      val rowLevel: Boolean = false
+
       type Result
 
       def monoid: Monoid[Result]

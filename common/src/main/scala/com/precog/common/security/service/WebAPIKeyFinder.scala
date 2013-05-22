@@ -148,8 +148,8 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
     results.toStream.sequence.map(_.foldLeft(true)(_ && _))
   }
 
-  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): Response[v1.APIKeyDetails] = {
-    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, path, keyName, keyDesc, Set())
+  def createAPIKey(accountId: AccountId, keyName: Option[String] = None, keyDesc: Option[String] = None): Response[v1.APIKeyDetails] = {
+    val keyRequest = v1.NewAPIKeyRequest.newAccount(accountId, keyName, keyDesc, Set())
 
     withJsonClient { client =>
       eitherT(client.query("apiKey", rootAPIKey).post[JValue]("apikeys/")(keyRequest.serialize) map {

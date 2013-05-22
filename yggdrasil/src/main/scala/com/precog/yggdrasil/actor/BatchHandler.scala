@@ -22,6 +22,7 @@ package actor
 
 import metadata.ColumnMetadata
 import metadata.ColumnMetadata._
+import vfs.UpdateSuccess
 import com.precog.util._
 import com.precog.common._
 
@@ -75,10 +76,18 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
 
+    case UpdateSuccess(path) =>
+      logger.trace("Update complete for " + path)
+      remaining -= 1
+      if (remaining == 0) self ! PoisonPill
+
     case ArchiveComplete(path) =>
       logger.info("Archive complete for " + path)
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
+
+    case other =>
+      logger.warn("Received unexpected message in BatchHandler: " + other)
   }
 
   override def postStop() = {

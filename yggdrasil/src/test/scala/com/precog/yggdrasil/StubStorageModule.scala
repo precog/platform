@@ -67,6 +67,9 @@ class StubStorageMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Lo
 
     PathStructure(types, children.toSet)
   }
+
+  def currentVersion(path: Path) = M.point(None)
+  def currentAuthorities(path: Path) = M.point(None)
 }
 
 trait StubProjectionModule[M[+_], Key, Block] extends ProjectionModule[M, Key, Block] { self =>

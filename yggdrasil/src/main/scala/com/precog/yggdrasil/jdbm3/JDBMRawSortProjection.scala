@@ -43,10 +43,10 @@ import scalaz.syntax.monad._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-class JDBMRawSortProjection[M[+_]] private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int, val length: Long, M: Monad[M]) extends SortProjectionLike[M,Array[Byte],Slice] with Logging {
+class JDBMRawSortProjection[M[+_]] private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sortOrder: DesiredSortOrder, sliceSize: Int, val length: Long) extends ProjectionLike[M,Array[Byte],Slice] with Logging {
   import JDBMProjection._
 
-  def structure = M.point((sortKeyRefs ++ valRefs).toSet)
+  def structure(implicit M: Monad[M]) = M.point((sortKeyRefs ++ valRefs).toSet)
 
   def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()

@@ -39,6 +39,7 @@ import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 
 import com.precog.util.FilesystemFileOps
 import com.precog.util.PrecogUnit
@@ -57,7 +58,6 @@ import org.slf4j.{LoggerFactory, MDC}
 import org.joda.time.Instant
 
 import java.io.File
-import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
@@ -70,6 +70,7 @@ import scalaz.syntax.traverse._
 import scalaz.std.iterable._
 import scalaz.std.indexedSeq._
 import scalaz.std.anyVal._
+import scalaz.std.list._
 
 import org.streum.configrity.Configuration
 
@@ -141,10 +142,9 @@ trait NIHDBQueryExecutorComponent  {
       val metadataClient = new StorageMetadataClient[Future](this)
 
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
-
-      val shardActors @ ShardActors(ingestSupervisor, _) =
-        initShardActors(permissionsFinder, projectionsActor)
+      val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
+      val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
       trait TableCompanion extends NIHDBColumnarTableCompanion //{
 //        import scalaz.std.anyVal._
@@ -165,7 +165,7 @@ trait NIHDBQueryExecutorComponent  {
         }).validation
       }
 
-      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
         (for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
@@ -175,27 +175,27 @@ trait NIHDBQueryExecutorComponent  {
         }).validation
       }
 
-      override def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-        implicit val mn = new (Future ~> ShardQuery) {
+      override def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
+        implicit val mn = new (Future ~> JobQueryTF) {
           def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
         }
 
-        new ShardQueryExecutor[ShardQuery](shardQueryMonad) {
+        new ShardQueryExecutor[JobQueryTF](shardQueryMonad) with IdSourceScannerModule {
           val M = shardQueryMonad.M
           type YggConfig = NIHDBQueryExecutorConfig
           val yggConfig = platform.yggConfig
           val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
-          def freshIdScanner = platform.freshIdScanner
+          override def freshIdScanner = platform.freshIdScanner
         } map { case (faults, result) =>
           result
         }
       }
 
       def shutdown() = for {
-        _ <- Stoppable.stop(shardActors.stoppable)
-        _ <- ShardActors.actorStop(yggConfig, projectionsActor, "projections")
-        _ <- ShardActors.actorStop(yggConfig, masterChef, "masterChef")
-        _ <- chefs.map(ShardActors.actorStop(yggConfig, _, "masterChef")).sequence
+        _ <- Stoppable.stop(ingestSystem.map(_.stoppable).getOrElse(Stoppable.fromFuture(Future(()))))
+        _ <- IngestSystem.actorStop(yggConfig, projectionsActor, "projections")
+        _ <- IngestSystem.actorStop(yggConfig, masterChef, "masterChef")
+        _ <- chefs.map(IngestSystem.actorStop(yggConfig, _, "masterChef")).sequence
       } yield {
         queryLogger.info("Actor ecossytem shutdown complete.")
         jobActorSystem.shutdown()

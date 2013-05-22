@@ -22,11 +22,15 @@ package service
 
 import com.precog.daze._
 import com.precog.common._
+import com.precog.common.ingest.FileContent
 
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.common.accounts._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
+import com.precog.util.InstantOrdering
 
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -46,32 +50,32 @@ import java.io.{ StringWriter, PrintWriter }
 
 import org.joda.time.DateTime
 
+import scala.math.Ordered._
+
 import scalaz._
+import scalaz.NonEmptyList.nels
 import scalaz.Validation.{ success, failure }
+import scalaz.std.stream._
+import scalaz.std.option._
+import scalaz.std.anyVal._
+import scalaz.syntax.apply._
+import scalaz.syntax.applicative._
 import scalaz.syntax.monad._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.traverse._
+import scalaz.syntax.std.option._
 
-final class QueryServiceNotAvailable(implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] {
-  val service = { (request: HttpRequest[ByteChunk]) =>
-    success({ (r: APIKey, a: AccountDetails, p: Path, q: String, opts: QueryOptions) =>
-      M.point(HttpResponse(HttpStatus(NotFound, "This service is not available in this version.")))
-    })
-  }
-
-  val metadata = DescriptionMetadata("Takes a quirrel query and returns the result of evaluating the query.")
-}
-
-abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+abstract class QueryServiceHandler[A](implicit M: Monad[Future])
+    extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
-
-  def extractResponse(request: HttpRequest[_], a: A): Future[HttpResponse[QueryResult]]
+  def extractResponse(request: HttpRequest[_], a: A, outputType: MimeType): Future[HttpResponse[QueryResult]]
 
   private val Command = """:(\w+)\s+(.+)""".r
 
-  private def handleErrors[A](qt: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
+  private def handleErrors[A](query: String, result: EvaluationError): HttpResponse[QueryResult] = result match {
     case SystemError(error) =>
-      error.printStackTrace()
-      logger.error("An error occurred processing the query: " + qt, error)
+      logger.error("An error occurred processing the query: " + query, error)
       HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
 
     case InvalidStateError(error) =>
@@ -84,72 +88,65 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future]) extends CustomH
     import blueeyes.core.http.MimeTypes._
 
     opts.output match {
-      case CSVOutput => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
+      case FileContent.TextCSV => response.copy(headers = response.headers + `Content-Type`(text/csv) + `Content-Disposition`(attachment(Some("results.csv"))))
       case _ => response.copy(headers = response.headers + `Content-Type`(application/json))
     }
   }
 
-  lazy val service = (request: HttpRequest[ByteChunk]) => {
-    success((apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) => query.trim match {
-      case Command("ls", arg) => list(apiKey, Path(arg.trim))
-      case Command("list", arg) => list(apiKey, Path(arg.trim))
-      case Command("ds", arg) => describe(apiKey, Path(arg.trim))
-      case Command("describe", arg) => describe(apiKey, Path(arg.trim))
-      case qt =>
-        platform.executorFor(apiKey) flatMap { //TODO: executorFor can just take an Account.
-          case Success(executor) =>
-            val ctx = EvaluationContext(apiKey, account, path, new DateTime)
-            executor.execute(query, ctx, opts) flatMap {
-              case Success(result) =>
-                extractResponse(request, result) map (appendHeaders(opts))
-              case Failure(error) =>
-                handleErrors(qt, error).point[Future]
-            }
+  val service = (request: HttpRequest[ByteChunk]) => {
+    success { (apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) =>
+      platform.executorFor(apiKey) flatMap {
+        case Success(executor) =>
+          val ctx = EvaluationContext(apiKey, account, path, new DateTime)
+          executor.execute(query, ctx, opts) flatMap {
+            case Success(result) =>
+              extractResponse(request, result, opts.output) map (appendHeaders(opts))
+            case Failure(error) =>
+              handleErrors(query, error).point[Future]
+          }
 
-          case Failure(error) =>
-            logger.error("Failure during evaluator setup: " + error)
-            HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
-        }
-    })
+        case Failure(error) =>
+          logger.error("Failure during evaluator setup: " + error)
+          HttpResponse[QueryResult](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!")).point[Future]
+      }
+    }
   }
 
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
-
-  def list(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.browse(apiKey, p).map {
-      case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
-      case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error listing path: " + p))))
-    }
-  }
-
-  def describe(apiKey: APIKey, p: Path) = {
-    platform.metadataClient.structure(apiKey, p, CPath.Identity).map {
-      case Success(r) => HttpResponse[QueryResult](OK, content = Some(Left(r)))
-      case Failure(e) => HttpResponse[QueryResult](BadRequest, content = Some(Left(JString("Error describing path: " + p))))
-    }
-  }
 }
 
-class BasicQueryServiceHandler(
-    val platform: Platform[Future, (Set[Fault], StreamT[Future, CharBuffer])])(implicit
-    val M: Monad[Future]) extends QueryServiceHandler[(Set[Fault], StreamT[Future, CharBuffer])] {
+class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future])
+    extends CustomHttpService[ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[QueryResult]]] with Logging {
+  import blueeyes.core.http.HttpHeaders._
+  import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
 
-  def extractResponse(request: HttpRequest[_], result: (Set[Fault], StreamT[Future, CharBuffer])): Future[HttpResponse[QueryResult]] = M.point {
-    val (faults, stream) = result
-    if (faults.isEmpty) {
-      HttpResponse[QueryResult](OK, content = Some(Right(stream)))
-    } else {
-      val json = JArray(faults.toList map { fault =>
-        JObject(
-          JField("message", JString(fault.message)) ::
-          (fault.pos map { pos =>
-            JField("position", pos.serialize) :: Nil
-          } getOrElse Nil)
-        )
-      })
-      HttpResponse[QueryResult](BadRequest, content = Some(Left(json)))
+  val service = (request: HttpRequest[ByteChunk]) => {
+    ShardServiceCombinators.queryOpts(request) map { queryOptions =>
+      { (details: (APIKey, AccountDetails), path: Path) =>
+        val (apiKey, accountDetails) = details
+        val context = EvaluationContext(apiKey, accountDetails, path, clock.now())
+        val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
+        logger.debug("Received analysis request with cache directives: " + cacheDirectives)
+        // Internally maxAge/maxStale are compared against ms times
+        val maxAge = cacheDirectives.collectFirst { case `max-age`(Some(n)) => n.number * 1000 }
+        val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number * 1000 }
+        val cacheable = cacheDirectives exists { _ != `no-cache`}
+        val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
+        storedQueries.executeStoredQuery(context, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
+          case Success(StoredQueryResult(stream, cachedAt)) =>
+            val headers = cachedAt map { lastTime =>
+              HttpHeaders(`Last-Modified`(HttpDateTimes.StandardDateTime(lastTime.toDateTime)))
+            } getOrElse HttpHeaders()
+            HttpResponse(OK, headers = headers, content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
+          case Failure(evaluationError) =>
+            logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
+            HttpResponse(InternalServerError)
+        }
+      }
     }
   }
+
+  def metadata = DescriptionMetadata("""Returns the result of executing a stored query.""")
 }
 
 sealed trait SyncResultFormat
@@ -159,10 +156,10 @@ object SyncResultFormat {
 }
 
 class SyncQueryServiceHandler(
-    val platform: Platform[Future, (Option[JobId], StreamT[Future, CharBuffer])],
+    val platform: Platform[Future, (Option[JobId], StreamT[Future, Slice])],
     jobManager: JobManager[Future],
     defaultFormat: SyncResultFormat)(implicit
-    M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, CharBuffer])] {
+    M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, Slice])] {
 
   import scalaz.syntax.std.option._
   import scalaz.std.option._
@@ -171,8 +168,11 @@ class SyncQueryServiceHandler(
   def ensureTermination(data0: StreamT[Future, CharBuffer]) =
     TerminateJson.ensure(silenceShardQueryExceptions(data0))
 
-  def extractResponse(request: HttpRequest[_], result: (Option[JobId], StreamT[Future, CharBuffer])): Future[HttpResponse[QueryResult]] = {
+  def extractResponse(request: HttpRequest[_], result: (Option[JobId], StreamT[Future, Slice]), outputType: MimeType): Future[HttpResponse[QueryResult]] = {
     import SyncResultFormat._
+
+    val (jobId, slices) = result
+    val charBuffers = Resource.toCharBuffers(outputType, slices)
 
     val format = request.parameters get 'format map {
       case "simple" => Right(Simple)
@@ -180,7 +180,7 @@ class SyncQueryServiceHandler(
       case badFormat => Left("unknown format '%s'" format badFormat)
     } getOrElse Right(defaultFormat)
 
-    (format, result._1, result._2) match {
+    (format, jobId, charBuffers) match {
       case (Left(msg), _, _) =>
         HttpResponse[QueryResult](HttpStatus(BadRequest, msg)).point[Future]
 
@@ -264,7 +264,7 @@ class SyncQueryServiceHandler(
 }
 
 class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
-  def extractResponse(request: HttpRequest[_], jobId: JobId): Future[HttpResponse[QueryResult]] = {
+  def extractResponse(request: HttpRequest[_], jobId: JobId, outputType: MimeType): Future[HttpResponse[QueryResult]] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result))).point[Future]
   }

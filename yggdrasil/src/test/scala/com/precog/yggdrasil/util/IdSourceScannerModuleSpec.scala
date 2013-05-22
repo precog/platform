@@ -28,7 +28,7 @@ import org.specs2.mutable._
 
 import scalaz._
 
-trait IdSourceScannerModuleSpec[M[+_]] extends IdSourceScannerModule[M] with TableModuleTestSupport[M] with Specification {
+trait IdSourceScannerModuleSpec[M[+_]] extends IdSourceScannerModule with TableModuleTestSupport[M] with Specification {
   private val blockSize = 10000
   
   implicit def M: Monad[M] with Comonad[M]

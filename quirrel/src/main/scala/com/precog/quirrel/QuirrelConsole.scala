@@ -57,6 +57,7 @@ object QuirrelConsole {
         val name = "expandGlob"
         val opcode = 0x0001
         val tpe = UnaryOperationType(JType.JUniverseT, JType.JUniverseT)
+        val rowLevel = false
       }
     }
 
@@ -77,5 +78,3 @@ object QuirrelConsole {
       Tree.node((sigma, expr), Stream.empty)
   }
 }
-
-// vim: set ts=4 sw=4 et:

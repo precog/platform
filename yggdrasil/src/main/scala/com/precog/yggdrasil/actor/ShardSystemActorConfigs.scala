@@ -99,7 +99,7 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
 
   def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog
 
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = {
+  override def initIngestActor(actorSystem: ActorSystem, routingActor: ActorRef, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = {
     yggConfig.ingestConfig map { conf =>
       val consumer = new SimpleConsumer(yggConfig.kafkaHost,
                                         yggConfig.kafkaPort,
@@ -112,8 +112,10 @@ trait KafkaIngestActorProjectionSystem extends ShardSystemActorModule {
                                    consumer = consumer,
                                    topic = yggConfig.kafkaTopic,
                                    permissionsFinder = permissionsFinder,
+                                   routingActor = routingActor, 
                                    ingestFailureLog = ingestFailureLog(checkpoint, conf.failureLogRoot),
                                    fetchBufferSize = conf.bufferSize,
+                                   idleDelay = yggConfig.batchStoreDelay,
                                    ingestTimeout = conf.batchTimeout,
                                    maxCacheSize = conf.maxParallel,
                                    maxConsecutiveFailures = conf.maxConsecutiveFailures) {
@@ -139,7 +141,7 @@ trait StandaloneShardSystemConfig extends ShardConfig {
 
 trait StandaloneActorProjectionSystem extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
-  override def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = None
+  override def initIngestActor(actorSystem: ActorSystem, routingActor: ActorRef, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]) = None
   override def checkpointCoordination = CheckpointCoordination.Noop
 }
 

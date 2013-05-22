@@ -29,6 +29,7 @@ trait StdLibEvaluatorStack[M[+_]]
     with StdLibOpFinderModule[M] 
     with StdLibStaticInlinerModule[M] 
     with ReductionFinderModule[M]
+    with JoinOptimizerModule[M]
     with PredicatePullupsModule[M] {
 
   trait Lib extends StdLib with StdLibOpFinder
@@ -45,5 +46,3 @@ trait StdLibEvaluatorStack[M[+_]]
     def coerceToDouble(ctx: MorphContext) = cf.util.CoerceToDouble
   }
 }
-
-// vim: set ts=4 sw=4 et:

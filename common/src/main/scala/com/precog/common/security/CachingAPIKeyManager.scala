@@ -86,11 +86,11 @@ class CachingAPIKeyManager[M[+_]](manager: APIKeyManager[M], settings: CachingAP
   def rootGrantId: M[GrantId] = manager.rootGrantId
   def rootAPIKey: M[APIKey] = manager.rootAPIKey
 
-  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
-    manager.newAPIKey(name, description, issuerKey, grants) map { _ tap add unsafePerformIO }
+  def createAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]) =
+    manager.createAPIKey(name, description, issuerKey, grants) map { _ tap add unsafePerformIO }
 
-  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]) =
-    manager.newGrant(name, description, issuerKey, parentIds, perms, expiration) map { _ tap add unsafePerformIO }
+  def createGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]) =
+    manager.createGrant(name, description, issuerKey, parentIds, perms, expiration) map { _ tap add unsafePerformIO }
 
   def findAPIKey(tid: APIKey) = apiKeyCache.get(tid) match {
     case None =>

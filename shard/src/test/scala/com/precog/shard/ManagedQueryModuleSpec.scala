@@ -243,7 +243,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
-  def actorSystem: ActorSystem  
+  def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
 
@@ -266,7 +266,7 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
 
         WriterT(createJob(ctx.account.apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
           val ticks = new AtomicInteger()
-          val result = StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
+          val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
             case i if i < numTicks =>
               schedule(1) {
                 ticks.getAndIncrement()
@@ -287,6 +287,8 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
     def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
+    def currentVersion(apiKey: APIKey, path: Path) = sys.error("wtf?")
+    def currentAuthorities(apiKey: APIKey, path: Path) = sys.error("That this is necessary is absurd.")
   }
 
   def startup = Applicative[TestFuture].point { true }

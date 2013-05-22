@@ -41,6 +41,8 @@ trait PrecogLibSpecs[M[+_]] extends Specification
   import instructions._
   import library._
 
+  import TableModule.CrossOrder._
+
   val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
@@ -53,20 +55,20 @@ trait PrecogLibSpecs[M[+_]] extends Specification
   private val line = Line(1, 1, "")
   private def const[A: CValueType](a: A) = Const(CValueType[A](a))(line)
 
-  val echo = Join(WrapObject, CrossLeftSort, const("url"), const("http://echo"))(line)
+  val echo = Join(WrapObject, Cross(None), const("url"), const("http://echo"))(line)
   // { "url": "http://wrapper", "options": { "field": "abc" } }
-  val wrapper = Join(JoinObject, CrossLeftSort,
-    Join(WrapObject, CrossLeftSort, const("url"), const("http://wrapper"))(line),
-    Join(WrapObject, CrossLeftSort,
+  val wrapper = Join(JoinObject, Cross(None),
+    Join(WrapObject, Cross(None), const("url"), const("http://wrapper"))(line),
+    Join(WrapObject, Cross(None),
       const("options"),
-      Join(WrapObject, CrossLeftSort, const("field"), const("abc"))(line))(line))(line)
-  val misbehave = Join(WrapObject, CrossLeftSort, const("url"), const("http://misbehave"))(line)
-  val empty = Join(WrapObject, CrossLeftSort, const("url"), const("http://empty"))(line)
-  val serverError = Join(WrapObject, CrossLeftSort, const("url"), const("http://server-error"))(line)
+      Join(WrapObject, Cross(None), const("field"), const("abc"))(line))(line))(line)
+  val misbehave = Join(WrapObject, Cross(None), const("url"), const("http://misbehave"))(line)
+  val empty = Join(WrapObject, Cross(None), const("url"), const("http://empty"))(line)
+  val serverError = Join(WrapObject, Cross(None), const("url"), const("http://server-error"))(line)
 
   "enrichment" should {
     "enrich a homogenous set" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/hom/numbers4"))(line),
           echo)(line)
 
@@ -77,7 +79,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
     }
 
     "enrich a homogenous set by wrapping" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/hom/numbers4"))(line),
           wrapper)(line)
 
@@ -90,7 +92,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
     }
 
     "enrich a heterogeneous set" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/het/numbers6"))(line),
           echo)(line)
 
@@ -109,7 +111,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
     }
 
     "misbehaving enricher fails" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/hom/numbers4"))(line),
           misbehave)(line)
 
@@ -117,7 +119,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
     }
 
     "empty enricher fails" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/hom/numbers4"))(line),
           empty)(line)
 
@@ -125,7 +127,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
     }
 
     "failing enricher fails" in {
-      val input = Join(BuiltInFunction2Op(Enrichment), CrossLeftSort,
+      val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
           dag.LoadLocal(const("/hom/numbers4"))(line),
           serverError)(line)
 

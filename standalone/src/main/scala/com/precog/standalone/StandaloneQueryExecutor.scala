@@ -97,12 +97,12 @@ trait StandaloneQueryExecutor
     def freshIdScanner = platform.freshIdScanner
   }
 
-  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-    implicit val mn = new (Future ~> ShardQuery) {
+  protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
+    implicit val mn = new (Future ~> JobQueryTF) {
       def apply[A](fut: Future[A]) = fut.liftM[JobQueryT]
     }
 
-    new ShardQueryExecutor[ShardQuery](shardQueryMonad) {
+    new ShardQueryExecutor[JobQueryTF](shardQueryMonad) {
       val M = platform.M
       type YggConfig = platform.YggConfig
       val yggConfig = platform.yggConfig
@@ -120,7 +120,7 @@ trait StandaloneQueryExecutor
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
     logger.debug("Creating new sync executor for %s => %s".format(apiKey, executionContext))
     Promise.successful(Success(new SyncQueryExecutor {
       def executionContext: ExecutionContext = platform.executionContext

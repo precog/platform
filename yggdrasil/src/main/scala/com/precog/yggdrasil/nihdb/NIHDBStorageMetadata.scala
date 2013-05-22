@@ -21,8 +21,9 @@ package com.precog.yggdrasil
 package nihdb
 
 import com.precog.common._
-import com.precog.common.security.APIKey
+import com.precog.common.security._
 import com.precog.yggdrasil.metadata.{PathStructure, StorageMetadata}
+import com.precog.yggdrasil.vfs._
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.dispatch.{Future, Promise}
@@ -48,12 +49,12 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   }
 
   private def findProjection(path: Path): Future[Option[NIHDBProjection]] =
-    (projectionsActor ? AccessProjection(path, apiKey)).mapTo[Option[NIHDBProjection]]
+    (projectionsActor ? ReadProjection(path, Version.Current, Some(apiKey))).mapTo[ReadProjectionResult].map(_.projection)
 
-  def findSize(path: Path): Future[Long] = findProjection(path).flatMap {
-    case Some(proj) => proj.length
-    case None => Promise.successful(0L)(asyncContext)
-  }
+  private def findResource(path: Path): Future[Option[Resource]] =
+    (projectionsActor ? Read(path, Version.Current, Some(apiKey))).mapTo[ReadResult].map(_.resource)
+
+  def findSize(path: Path): Future[Long] = findProjection(path).map { _.map(_.length).getOrElse(0L) }
 
   def findSelectors(path: Path): Future[Set[CPath]] = findProjection(path).flatMap {
     case Some(proj) => proj.structure.map(_.map(_.selector))
@@ -61,14 +62,21 @@ class NIHDBStorageMetadata(apiKey: APIKey, projectionsActor: ActorRef, actorSyst
   }
 
   def findStructure(path: Path, selector: CPath): Future[PathStructure] = {
-    OptionT(findProjection(path)) flatMapF (_.getSnapshot()) flatMapF { snapshot =>
-      val childrenM = M.point { snapshot.structure map (_._1) }
-      // val countM = M.point { snapshot.count(Some(Set(selector))) }
-      val typesM = M.point { snapshot.reduce(Reductions.count, selector) }
-      (childrenM /*|@| countM*/ |@| typesM) { (children/*, count*/, types) =>
-        PathStructure(types, children)
+    OptionT(findProjection(path)) flatMapF { projection =>
+      for {
+        children <- projection.structure
+      } yield {
+        PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
       }
     } getOrElse PathStructure.Empty
+  }
+
+  def currentAuthorities(path: Path): Future[Option[Authorities]] = {
+    findResource(path) map { _ map { _.authorities } }
+  }
+
+  def currentVersion(path: Path) = {
+    (projectionsActor ? CurrentVersion(path, apiKey)).mapTo[Option[VersionEntry]]
   }
 }
 

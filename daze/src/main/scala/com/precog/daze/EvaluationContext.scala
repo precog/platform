@@ -19,27 +19,26 @@
  */
 package com.precog.daze
 
-trait SortPushDown extends DAG {
-  import dag._
+import org.joda.time.DateTime
 
-  /**
-   * This optimization pushes sorts down in the DAG where possible. The reason
-   * for this is to try to encourage the sort to memoizable at run time --
-   * smaller inner graphs means there is a higher chance we'll see the node
-   * pop-up twice.
-   *
-   * This particular optimization is incredibly useful when we have some table
-   * that is not in sorted identity order (say it is ValueSort'ed) and we then
-   * construct a new object that is essentially just derefs of this table,
-   * followed by wrapping in objects. This will result in N sorts, where N is
-   * the number of keys in the table, which is nuts.
-   */
-  def pushDownSorts(graph: DepGraph): DepGraph = {
-    graph mapDown (rewrite => {
-      case s @ Sort(Join(op, CrossLeftSort, left, const @ Const(_)), sortBy) =>
-        Join(op, CrossLeftSort, rewrite(Sort(left, sortBy)), const)(s.loc)
-      case s @ Sort(Join(op, CrossRightSort, const @ Const(_), right), sortBy) =>
-        Join(op, CrossRightSort, const, rewrite(Sort(right, sortBy)))(s.loc)
-    })
-  }
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Versioned._
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
+
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.common.accounts._
+
+import shapeless._
+
+case class EvaluationContext(apiKey: APIKey, account: AccountDetails, basePath: Path, startTime: DateTime)
+
+object EvaluationContext {
+  implicit val iso = Iso.hlist(EvaluationContext.apply _, EvaluationContext.unapply _)
+
+  val schemaV1 = "apiKey" :: "account" :: "basePath" :: "startTime" :: HNil
+
+  implicit val decomposer: Decomposer[EvaluationContext] = decomposerV(schemaV1, Some("1.0".v))
+  implicit val extractor:  Extractor[EvaluationContext]  = extractorV(schemaV1, Some("1.0".v))
 }

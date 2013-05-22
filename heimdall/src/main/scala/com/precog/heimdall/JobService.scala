@@ -99,7 +99,7 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
                 }
               }
             } ~
-            jsonp[ByteChunk] {
+            jsonp {
               produce(MimeTypes.application / MimeTypes.json) {
                 path("/jobs/") {
                   get(new ListJobsHandler(jobs)) ~

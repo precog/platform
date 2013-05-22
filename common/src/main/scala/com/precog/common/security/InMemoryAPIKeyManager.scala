@@ -61,16 +61,22 @@ class InMemoryAPIKeyManager[M[+_]](clock: Clock)(implicit val M: Monad[M]) exten
   private val deletedAPIKeys = mutable.Map.empty[APIKey, APIKeyRecord]
   private val deletedGrants = mutable.Map.empty[GrantId, Grant]
 
-  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
+  def populateAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, apiKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
+    val record = APIKeyRecord(apiKey, name, description, issuerKey, grants, false)
+    apiKeys.put(record.apiKey, record)
+    record.point[M]
+  }
+
+  def createAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): M[APIKeyRecord] = {
     val record = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     apiKeys.put(record.apiKey, record)
     record.point[M]
   }
 
-  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant] = {
-    val newGrant = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, clock.instant(), expiration)
-    grants.put(newGrant.grantId, newGrant)
-    newGrant.point[M]
+  def createGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): M[Grant] = {
+    val grant = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, clock.instant(), expiration)
+    grants.put(grant.grantId, grant)
+    grant.point[M]
   }
 
   def listAPIKeys() = apiKeys.values.toList.point[M]

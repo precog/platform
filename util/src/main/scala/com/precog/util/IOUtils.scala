@@ -58,8 +58,8 @@ object IOUtils extends Logging {
     props
   }
 
-  def writeToFile(s: String, f: File): IO[PrecogUnit] = IO {
-    FileUtils.writeStringToFile(f, s, UTF8)
+  def writeToFile(s: String, f: File, append: Boolean = false): IO[PrecogUnit] = IO {
+    FileUtils.writeStringToFile(f, s, UTF8, append)
     PrecogUnit
   }
 
@@ -77,6 +77,11 @@ object IOUtils extends Logging {
     writeToFile(s, tmpFile) flatMap {
       _ => IO(tmpFile.renameTo(f)) // TODO: This is only atomic on POSIX systems
     }
+  }
+
+  def makeDirectory(dir: File): IO[PrecogUnit] = IO {
+    if (dir.isDirectory || dir.mkdirs) PrecogUnit
+    else throw new IOException("Failed to create directory " + dir)
   }
 
   def recursiveDelete(dir: File): IO[PrecogUnit] = IO {
