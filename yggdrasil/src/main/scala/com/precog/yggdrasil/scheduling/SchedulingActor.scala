@@ -44,243 +44,245 @@ case class DeleteTask(id: UUID)
 
 case class StatusForTask(id: UUID, limit: Option[Int])
 
-object SchedulingActor {
-  type TaskKey = (Path, Path)
+trait SchedulingActorModule extends SecureVFSModule[Future, Long, Slice] {
+  object SchedulingActor {
+    type TaskKey = (Path, Path)
 
-  private[SchedulingActor] case object WakeForRun extends SchedulingMessage
+    private[SchedulingActor] case object WakeForRun extends SchedulingMessage
 
-  private[SchedulingActor] case class AddTasksToQueue(tasks: Seq[ScheduledTask]) extends SchedulingMessage
+    private[SchedulingActor] case class AddTasksToQueue(tasks: Seq[ScheduledTask]) extends SchedulingMessage
 
-  private[SchedulingActor] case class RemoveTaskFromQueue(id: UUID) extends SchedulingMessage
+    private[SchedulingActor] case class RemoveTaskFromQueue(id: UUID) extends SchedulingMessage
 
-  private[SchedulingActor] case class TaskComplete(id: UUID, endedAt: DateTime, total: Long, error: Option[String]) extends SchedulingMessage
+    private[SchedulingActor] case class TaskComplete(id: UUID, endedAt: DateTime, total: Long, error: Option[String]) extends SchedulingMessage
 
-  private[SchedulingActor] case class TaskInProgress(task: ScheduledTask, startedAt: DateTime)
-}
-
-class SchedulingActor(
-    jobManager: JobManager[Future], 
-    permissionsFinder: PermissionsFinder[Future], 
-    vfs: VFS[Future],
-    storage: ScheduleStorage[Future], 
-    platform: Platform[Future, StreamT[Future, Slice]], 
-    clock: Clock, 
-    storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), 
-    resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging { 
-  import SchedulingActor._
-    
-  private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
-
-  private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
-
-  private[this] implicit val executor = context.dispatcher
-
-  // Although PriorityQueue is mutable, we're going to treat it as immutable since most methods on it act that way
-  private[this] var scheduleQueue = PriorityQueue.empty[(DateTime, ScheduledTask)]
-
-  private[this] var scheduledAwake: Option[Cancellable] = None
-
-  private[this] var running = Map.empty[TaskKey, TaskInProgress]
-
-  // We need to keep this around in case a task is running when its removal is requested
-  private[this] var pendingRemovals = Set.empty[UUID]
-
-  override def preStart = {
-    val now = new Date
-
-    storage.listTasks onSuccess { 
-      case tasks => self ! AddTasksToQueue(tasks)
-    }
+    private[SchedulingActor] case class TaskInProgress(task: ScheduledTask, startedAt: DateTime)
   }
 
-  override def postStop = {
-    scheduledAwake foreach { sa =>
-      if (! sa.isCancelled) {
-        sa.cancel()
-      }
-    }
-  }
+  class SchedulingActor(
+      jobManager: JobManager[Future], 
+      permissionsFinder: PermissionsFinder[Future], 
+      vfs: VFS,
+      storage: ScheduleStorage[Future], 
+      platform: Platform[Future, StreamT[Future, Slice]], 
+      clock: Clock, 
+      storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), 
+      resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging { 
+    import SchedulingActor._
+      
+    private[this] final implicit val scheduleOrder: Ordering[(DateTime, ScheduledTask)] = Ordering.by(_._1.getMillis)
 
-  def scheduleNextTask(): Unit = {
-    // Just make sure we don't multi-schedule
-    scheduledAwake foreach { sa =>
-      if (! sa.isCancelled) {
-        sa.cancel()
+    private[this] implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
+
+    private[this] implicit val executor = context.dispatcher
+
+    // Although PriorityQueue is mutable, we're going to treat it as immutable since most methods on it act that way
+    private[this] var scheduleQueue = PriorityQueue.empty[(DateTime, ScheduledTask)]
+
+    private[this] var scheduledAwake: Option[Cancellable] = None
+
+    private[this] var running = Map.empty[TaskKey, TaskInProgress]
+
+    // We need to keep this around in case a task is running when its removal is requested
+    private[this] var pendingRemovals = Set.empty[UUID]
+
+    override def preStart = {
+      val now = new Date
+
+      storage.listTasks onSuccess { 
+        case tasks => self ! AddTasksToQueue(tasks)
       }
     }
 
-    scheduleQueue.headOption foreach { head =>
-      val delay = Duration(new JodaDuration(new DateTime, head._1).getMillis, TimeUnit.MILLISECONDS)
-
-      scheduledAwake = Some(context.system.scheduler.scheduleOnce(delay, self, WakeForRun))
-    }
-  }
-
-  def nextRun(threshold: Date, task: ScheduledTask) = {
-    task.repeat.flatMap { sched => Option(sched.getNextValidTimeAfter(threshold)) } map { nextTime =>
-      (new DateTime(nextTime), task)
-    }
-  }
-
-  def rescheduleTasks(tasks: Seq[ScheduledTask]): Unit = {
-    val (toRemove, toReschedule) = tasks.partition { task => pendingRemovals.contains(task.id) }
-
-    toRemove foreach { task =>
-      logger.info("Removing completed task after run: " + task.id)
-      pendingRemovals -= task.id
-    }
-
-    scheduleQueue ++= {
-      toReschedule flatMap { task =>
-        nextRun(new Date, task) unsafeTap { next => 
-          if (next.isEmpty) logger.warn("No further run times for " + task)
+    override def postStop = {
+      scheduledAwake foreach { sa =>
+        if (! sa.isCancelled) {
+          sa.cancel()
         }
       }
     }
 
-    scheduleNextTask()
-  }
-
-  def removeTask(id: UUID) = {
-    scheduleQueue = scheduleQueue.filterNot(_._2.id == id)
-    pendingRemovals += id
-  }
-
-  def executeTask(task: ScheduledTask): Future[PrecogUnit] = {
-    if (running.contains((task.source, task.sink))) {
-      // We don't allow for more than one concurrent instance of a given task
-      Promise successful PrecogUnit
-    } else {
-      def consumeStream(totalSize: Long, stream: StreamT[Future, Slice]): Future[Long] = {
-        stream.uncons flatMap {
-          case Some((x, xs)) => consumeStream(totalSize + x.size, xs)
-          case None => M.point(totalSize)
+    def scheduleNextTask(): Unit = {
+      // Just make sure we don't multi-schedule
+      scheduledAwake foreach { sa =>
+        if (! sa.isCancelled) {
+          sa.cancel()
         }
       }
 
-      val ourself = self
-      val startedAt = new DateTime
+      scheduleQueue.headOption foreach { head =>
+        val delay = Duration(new JodaDuration(new DateTime, head._1).getMillis, TimeUnit.MILLISECONDS)
 
-      implicit val readTimeout = resourceTimeout
+        scheduledAwake = Some(context.system.scheduler.scheduleOnce(delay, self, WakeForRun))
+      }
+    }
 
-      // This cannot occur inside a Future, or we would be exposing Actor state outside of this thread
-      running += ((task.source, task.sink) -> TaskInProgress(task, startedAt))
+    def nextRun(threshold: Date, task: ScheduledTask) = {
+      task.repeat.flatMap { sched => Option(sched.getNextValidTimeAfter(threshold)) } map { nextTime =>
+        (new DateTime(nextTime), task)
+      }
+    }
 
-      val execution = for {  
-        job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
-        executionResult = 
-          for {
-            executor <- platform.executorFor(task.apiKey) leftMap { EvaluationError.invalidState _ }
-            script <- vfs.readQuery(task.source, Version.Current) leftMap { EvaluationError.storageError }
-            perms <- EitherT.right(permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant())) 
-            permSet = perms.toSet[Permission]
-            allPerms = Map(task.apiKey -> permSet)
-            stream <- executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout))
-            persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream, clock)
-            totalSize <- EitherT.right(consumeStream(0, persistingStream))
-          } yield totalSize
+    def rescheduleTasks(tasks: Seq[ScheduledTask]): Unit = {
+      val (toRemove, toReschedule) = tasks.partition { task => pendingRemovals.contains(task.id) }
 
-        errorHandling = executionResult.swap flatMap { error => 
-          EitherT.right {
-            jobManager.abort(job.id, error.toString) map {
-              _.disjunction.fold(
-                jobAbortFailure => SystemError(new RuntimeException(jobAbortFailure)),
-                jobAbortSuccess => error
-              )
-            }
+      toRemove foreach { task =>
+        logger.info("Removing completed task after run: " + task.id)
+        pendingRemovals -= task.id
+      }
+
+      scheduleQueue ++= {
+        toReschedule flatMap { task =>
+          nextRun(new Date, task) unsafeTap { next => 
+            if (next.isEmpty) logger.warn("No further run times for " + task)
           }
         }
-
-        result <- errorHandling.swap.fold[PrecogUnit](
-          failure => {
-            logger.error("An error was encountered processing a scheduled query execution: " + failure)
-            ourself ! TaskComplete(task.id, clock.now(), 0, Some(failure.toString))   
-          },
-          totalSize => ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
-        )
-      } yield result
-      
-      execution.onFailure {
-        case t: Throwable =>
-          logger.error("Scheduled query execution failed by thrown error.", t)
-          ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString))
-          PrecogUnit
       }
-    }
-  }
-
-  def receive = {
-    case AddTask(repeat, apiKey, authorities, prefix, source, sink, timeout) =>
-      val ourself = self
-      val taskId = UUID.randomUUID()
-      val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
-      val addResult: EitherT[Future, String, PrecogUnit] = repeat match {
-        case None =>
-          EitherT.right(executeTask(newTask))
-
-        case Some(_) =>
-          storage.addTask(newTask) map { task =>
-            ourself ! AddTasksToQueue(Seq(task)) 
-          }
-      }
-      
-      addResult.run.map(_ => taskId) recover {
-        case t: Throwable =>
-          logger.error("Error adding task " + newTask, t)
-          \/.left("Internal error adding task")
-      } pipeTo sender
-
-    case DeleteTask(id) =>
-      val ourself = self
-      val deleteResult = storage.deleteTask(id) map { result =>
-        ourself ! RemoveTaskFromQueue(id)
-        result
-      } 
-      
-      deleteResult.run recover {
-        case t: Throwable =>
-          logger.error("Error deleting task " + id, t)
-          \/.left("Internal error deleting task")
-      } pipeTo sender
-
-    case StatusForTask(id, limit) =>
-      storage.statusFor(id, limit) map(Success(_)) recover {
-        case t: Throwable =>
-          logger.error("Error getting status for task " + id, t)
-          Failure("Internal error getting status for task")
-      } pipeTo sender
-
-    case AddTasksToQueue(tasks) =>
-      rescheduleTasks(tasks)
-
-    case RemoveTaskFromQueue(id) =>
-      removeTask(id)
-
-    case WakeForRun =>
-      val now = new DateTime
-      val (toRun, newQueue) = scheduleQueue.partition(_._1.isAfter(now))
-      scheduleQueue = newQueue
-      toRun.map(_._2).foreach(executeTask)
 
       scheduleNextTask()
+    }
 
-    case TaskComplete(id, endedAt, total, error) =>
-      running.values.find(_.task.id == id) match {
-        case Some(TaskInProgress(task, startAt)) =>
-          error match {
-            case None =>
-              logger.info("Scheduled task %s completed with %d records in %d millis".format(id, total, (new JodaDuration(startAt, endedAt)).getMillis))
+    def removeTask(id: UUID) = {
+      scheduleQueue = scheduleQueue.filterNot(_._2.id == id)
+      pendingRemovals += id
+    }
 
-            case Some(error) =>
-              logger.warn("Scheduled task %s failed after %d millis: %s".format(id, (new JodaDuration(startAt, clock.now())).getMillis, error))
+    def executeTask(task: ScheduledTask): Future[PrecogUnit] = {
+      if (running.contains((task.source, task.sink))) {
+        // We don't allow for more than one concurrent instance of a given task
+        Promise successful PrecogUnit
+      } else {
+        def consumeStream(totalSize: Long, stream: StreamT[Future, Slice]): Future[Long] = {
+          stream.uncons flatMap {
+            case Some((x, xs)) => consumeStream(totalSize + x.size, xs)
+            case None => M.point(totalSize)
+          }
+        }
+
+        val ourself = self
+        val startedAt = new DateTime
+
+        implicit val readTimeout = resourceTimeout
+
+        // This cannot occur inside a Future, or we would be exposing Actor state outside of this thread
+        running += ((task.source, task.sink) -> TaskInProgress(task, startedAt))
+
+        val execution = for {  
+          job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
+          executionResult = 
+            for {
+              executor <- platform.executorFor(task.apiKey) leftMap { EvaluationError.invalidState _ }
+              script <- vfs.readQuery(task.source, Version.Current) leftMap { EvaluationError.storageError }
+              perms <- EitherT.right(permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant())) 
+              permSet = perms.toSet[Permission]
+              allPerms = Map(task.apiKey -> permSet)
+              stream <- executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout))
+              persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream, clock)
+              totalSize <- EitherT.right(consumeStream(0, persistingStream))
+            } yield totalSize
+
+          errorHandling = executionResult.swap flatMap { error => 
+            EitherT.right {
+              jobManager.abort(job.id, error.toString) map {
+                _.disjunction.fold(
+                  jobAbortFailure => SystemError(new RuntimeException(jobAbortFailure)),
+                  jobAbortSuccess => error
+                )
+              }
+            }
           }
 
-          storage.reportRun(ScheduledRunReport(id, startAt, endedAt, total, error.toList))
-          running -= (task.source -> task.sink)
-          rescheduleTasks(Seq(task))
-
-        case None =>
-          logger.error("Task completion reported for unknown task " + id)
+          result <- errorHandling.swap.fold[PrecogUnit](
+            failure => {
+              logger.error("An error was encountered processing a scheduled query execution: " + failure)
+              ourself ! TaskComplete(task.id, clock.now(), 0, Some(failure.toString))   
+            },
+            totalSize => ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
+          )
+        } yield result
+        
+        execution.onFailure {
+          case t: Throwable =>
+            logger.error("Scheduled query execution failed by thrown error.", t)
+            ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString))
+            PrecogUnit
+        }
       }
+    }
+
+    def receive = {
+      case AddTask(repeat, apiKey, authorities, prefix, source, sink, timeout) =>
+        val ourself = self
+        val taskId = UUID.randomUUID()
+        val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
+        val addResult: EitherT[Future, String, PrecogUnit] = repeat match {
+          case None =>
+            EitherT.right(executeTask(newTask))
+
+          case Some(_) =>
+            storage.addTask(newTask) map { task =>
+              ourself ! AddTasksToQueue(Seq(task)) 
+            }
+        }
+        
+        addResult.run.map(_ => taskId) recover {
+          case t: Throwable =>
+            logger.error("Error adding task " + newTask, t)
+            \/.left("Internal error adding task")
+        } pipeTo sender
+
+      case DeleteTask(id) =>
+        val ourself = self
+        val deleteResult = storage.deleteTask(id) map { result =>
+          ourself ! RemoveTaskFromQueue(id)
+          result
+        } 
+        
+        deleteResult.run recover {
+          case t: Throwable =>
+            logger.error("Error deleting task " + id, t)
+            \/.left("Internal error deleting task")
+        } pipeTo sender
+
+      case StatusForTask(id, limit) =>
+        storage.statusFor(id, limit) map(Success(_)) recover {
+          case t: Throwable =>
+            logger.error("Error getting status for task " + id, t)
+            Failure("Internal error getting status for task")
+        } pipeTo sender
+
+      case AddTasksToQueue(tasks) =>
+        rescheduleTasks(tasks)
+
+      case RemoveTaskFromQueue(id) =>
+        removeTask(id)
+
+      case WakeForRun =>
+        val now = new DateTime
+        val (toRun, newQueue) = scheduleQueue.partition(_._1.isAfter(now))
+        scheduleQueue = newQueue
+        toRun.map(_._2).foreach(executeTask)
+
+        scheduleNextTask()
+
+      case TaskComplete(id, endedAt, total, error) =>
+        running.values.find(_.task.id == id) match {
+          case Some(TaskInProgress(task, startAt)) =>
+            error match {
+              case None =>
+                logger.info("Scheduled task %s completed with %d records in %d millis".format(id, total, (new JodaDuration(startAt, endedAt)).getMillis))
+
+              case Some(error) =>
+                logger.warn("Scheduled task %s failed after %d millis: %s".format(id, (new JodaDuration(startAt, clock.now())).getMillis, error))
+            }
+
+            storage.reportRun(ScheduledRunReport(id, startAt, endedAt, total, error.toList))
+            running -= (task.source -> task.sink)
+            rescheduleTasks(Seq(task))
+
+          case None =>
+            logger.error("Task completion reported for unknown task " + id)
+        }
+    }
   }
 }

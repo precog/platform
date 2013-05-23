@@ -40,15 +40,15 @@ trait JobService extends BlueEyesServiceBuilder with HttpRequestHandlerCombinato
 
   def clock: Clock
 
-  type Resource
+  type JobResource
 
-  def close(res: Resource): Future[Unit]
+  def close(res: JobResource): Future[Unit]
 
-  case class JobServiceState(resource: Resource, jobManager: JobManager[Future], authService: AuthService[Future], clock: Clock)
+  case class JobServiceState(resource: JobResource, jobManager: JobManager[Future], authService: AuthService[Future], clock: Clock)
 
   def authService(config: Configuration): AuthService[Future]
 
-  def jobManager(config: Configuration): (Resource, JobManager[Future])
+  def jobManager(config: Configuration): (JobResource, JobManager[Future])
 
   implicit val timeout: Timeout = Timeout(30000)
 

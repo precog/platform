@@ -2,7 +2,8 @@ package com.precog.yggdrasil
 package execution
 
 import com.precog.yggdrasil.TableModule
-import com.precog.yggdrasil.vfs.Resource._
+import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.vfs.ResourceError._
 import com.precog.common._
 
 import com.precog.common.security._

@@ -23,7 +23,7 @@ import org.joda.time.DateTime
 import scalaz._
 
 trait TestJobService extends BlueEyesServiceSpecification with JobService with AkkaDefaults {
-  type Resource = Unit
+  type JobResource = Unit
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(5, "seconds"))
   val validAPIKey = "secret"
