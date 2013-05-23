@@ -176,7 +176,7 @@ class SchedulingActor(
             permSet = perms.toSet[Permission]
             allPerms = Map(task.apiKey -> permSet)
             stream <- executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout))
-            persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream)
+            persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream, clock)
             totalSize <- EitherT.right(consumeStream(0, persistingStream))
           } yield totalSize
 

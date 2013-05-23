@@ -31,10 +31,6 @@ import org.joda.time._
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import scalaz.{Success, NonEmptyList}
-import scalaz.Scalaz._
-import scalaz.Validation._
-
 import blueeyes.akka_testing._
 import blueeyes.core.data._
 import blueeyes.bkka._
@@ -51,6 +47,9 @@ import blueeyes.util.Clock
 import DefaultBijections._
 
 import scalaz._
+import scalaz.effect._
+import scalaz.Validation._
+import scalaz.std.option._
 import scalaz.syntax.comonad._
 
 import java.nio.CharBuffer
@@ -108,13 +107,17 @@ trait TestShardService extends
   } copoint
 
   def configureShardState(config: Configuration) = Future {
+    val accountFinder = new StaticAccountFinder[Future]("test", testAPIKey)
+    val scheduler = NoopScheduler[Future]
     val platform = new TestPlatform {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
       override val accessControl = new DirectAPIKeyFinder(self.apiKeyManager)(self.M)
+
       val defaultTimeout = Duration(90, TimeUnit.SECONDS)
-      val M = self.M
+      implicit val M = self.M
+      implicit val IOT = new (IO ~> Future) { def apply[A](io: IO[A]) = Future { io.unsafePerformIO } }
 
       override val jobManager = self.jobManager
 
@@ -126,14 +129,11 @@ trait TestShardService extends
         Path("/inaccessible") ->     Set("other"),
         Path("/inaccessible/foo") -> Set("other")
       )
+
+      val rawVFS = new InMemoryVFS[Future](Map(), clock)
+      val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder, clock.instant())
+      val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, scheduler, clock)
     }
-
-    val scheduler = NoopScheduler[Future]
-
-    val accountFinder = new StaticAccountFinder[Future]("root", rootAPIKey)
-    //val vfs = null: VFS[Future]
-    //val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder)
-    //val storedQueries = new SecureVFS(vfs, permissionsFinder, jobManager, scheduler, clock)
 
     ShardState(platform, self.apiKeyFinder, accountFinder, scheduler, jobManager, clock, Stoppable.Noop)
   }

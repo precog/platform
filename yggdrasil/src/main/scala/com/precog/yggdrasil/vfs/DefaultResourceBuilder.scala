@@ -63,14 +63,12 @@ class DefaultResourceBuilder(
   }
 
   // Resource creation/open and discovery
-  def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDBResource] = {
+  def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDB] = {
     for {
       nihDir <- ensureDescriptorDir(versionDir) 
       nihdbV <- NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
     } yield { 
-      nihdbV.disjunction map {
-        NIHDBResource(_, authorities)(actorSystem)
-      } leftMap {
+      nihdbV.disjunction leftMap {
         ResourceError.fromExtractorError("Failed to create NIHDB in %s as %s".format(versionDir.toString, authorities)) 
       }
     }
@@ -79,9 +77,7 @@ class DefaultResourceBuilder(
   def openNIHDB(descriptorDir: File): IO[ResourceError \/ NIHDBResource] = {
     NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem) map {
       _ map { 
-        _.disjunction map {
-          case (authorities, nihdb) => NIHDBResource(nihdb, authorities)(actorSystem)
-        } leftMap {
+        _.disjunction map { NIHDBResource(_) } leftMap {
           ResourceError.fromExtractorError("Failed to open NIHDB from %s".format(descriptorDir.toString)) 
         }
       } getOrElse {

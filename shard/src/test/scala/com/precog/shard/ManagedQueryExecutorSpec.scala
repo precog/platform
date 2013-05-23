@@ -44,6 +44,9 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
+  val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
+
+  def vfs = sys.error("do I really need this?")
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
@@ -82,8 +85,6 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
       }
     } yield finalJob
   }
-
-  val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   step {
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
@@ -198,16 +199,6 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
       val executionContext = self.executionContext
     }))
   }
-
-/*
-  val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path) = sys.error("todo")
-    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
-    def currentVersion(apiKey: APIKey, path: Path) = M.point(None)
-    def currentAuthorities(apiKey: APIKey, path: Path) = M.point(None)
-  }
-  */
 
   def startup = Future { true }
   def shutdown = Future { actorSystem.shutdown; true }

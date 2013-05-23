@@ -20,6 +20,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
@@ -162,7 +163,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
 
-  val accountFinder = None
+  //val accountFinder = None
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
@@ -179,9 +180,13 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   val storageTimeout = Timeout(300 * 1000)
 
   val projectionsActor = NIHDBPlatformSpecsActor.actor
+  val apiKeyFinder = new DirectAPIKeyFinder(new InMemoryAPIKeyManager[Future](yggConfig.clock))
+  val accountFinder = new StaticAccountFinder[Future](ParseEvalStackSpecs.testAccount, ParseEvalStackSpecs.testAPIKey, Some("/"))
+  val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, yggConfig.clock.instant())
+  val jobManager = new InMemoryJobManager[Future]
 
-  val actorVFS = new ActorVFS(projectionsActor, blueeyes.util.Clock.System, storageTimeout, storageTimeout)
-  val vfs = null
+  val actorVFS = new ActorVFS(projectionsActor, storageTimeout, storageTimeout)
+  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M

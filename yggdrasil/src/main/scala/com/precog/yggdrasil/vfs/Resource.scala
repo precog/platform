@@ -31,7 +31,7 @@ import org.joda.time.DateTime
 
 import scala.annotation.tailrec
 
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
@@ -41,9 +41,11 @@ sealed trait Resource {
   def authorities: Authorities
   def append(data: PathData): IO[PrecogUnit]
   def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]]
+
+  def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
 }
 
-object Resource extends Logging {
+object Resource extends Logging { self =>
   val QuirrelData = MimeType("application", "x-quirrel-data")
   val AnyMimeType = MimeType("*", "*")
 
@@ -111,6 +113,18 @@ object Resource extends Logging {
   }
 
   object ResourceError {
+    def corrupt(message: String): ResourceError with FatalError = Corrupt(message)
+    def ioError(ex: Throwable): ResourceError with FatalError = IOError(ex)
+    def illegalWrite(message: String): ResourceError with UserError = IllegalWriteRequestError(message)
+    def permissionsError(message: String): ResourceError with UserError = PermissionsError(message)
+    def notFound(message: String): ResourceError with UserError = NotFound(message)
+
+    def all(errors: NonEmptyList[ResourceError]): ResourceError with FatalError with UserError = new ResourceErrors(
+      errors flatMap {
+        case ResourceErrors(e0) => e0
+        case other => NonEmptyList(other)
+      }
+    )
     def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
       Corrupt("%s:\n%s" format (msg, error.message))
     }
@@ -124,10 +138,29 @@ object Resource extends Logging {
   case class IllegalWriteRequestError(message: String) extends ResourceError with UserError
   case class PermissionsError(message: String) extends ResourceError with UserError
   case class NotFound(message: String) extends ResourceError with UserError
+
+  case class ResourceErrors private[Resource] (errors: NonEmptyList[ResourceError]) extends ResourceError with FatalError with UserError { self =>
+    override def fold[A](fatalError: FatalError => A, userError: UserError => A) = {
+      val hasFatal = errors.list.exists(_.fold(_ => true, _ => false))
+      if (hasFatal) fatalError(self) else userError(self)
+    }
+  }
 }
 
-case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: ActorSystem) extends Resource with Logging {
+trait ProjectionResource extends Resource {
+  def append(data: PathData): IO[PrecogUnit]
+  def length: Future[Long]
+  def projection: Future[ProjectionLike[Future, Long, Slice]]
+  def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]]
+
+  def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
+}
+
+case class NIHDBResource(val db: NIHDB) extends ProjectionResource with Logging {
   val mimeType: MimeType = Resource.QuirrelData
+
+  def authorities = db.authorities
+
   def append(data: PathData): IO[PrecogUnit] = data match {
     case NIHDBData(batch) =>
       db.insert(batch)
@@ -136,12 +169,12 @@ case class NIHDBResource(db: NIHDB, authorities: Authorities)(implicit as: Actor
       IO.throwIO(new IllegalArgumentException("Attempt to insert non-event blob data of type %s to NIHDB".format(mimeType.value)))
   }
 
-  def projection = NIHDBProjection.wrap(this)
+  def projection = NIHDBProjection.wrap(db)
 
   def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): Future[Option[StreamT[Future, Array[Byte]]]] = {
     import Resource.{ bufferOutput, toCharBuffers }
     import FileContent._
-    NIHDBProjection.wrap(this) map { p =>
+    projection map { p =>
       val sliceStream = p.getBlockStream(None)
       mimeType match {
         case Some(ApplicationJson) | None => Some(bufferOutput(toCharBuffers(ApplicationJson, sliceStream)))
@@ -223,7 +256,6 @@ final case class BlobResource(dataFile: File, metadata: BlobMetadata) extends Re
 
   def append(data: PathData): IO[PrecogUnit] = data match {
     case _ => IO.throwIO(new IllegalArgumentException("Blob append not yet supported"))
-
 //    case BlobData(bytes, mimeType) => Future {
 //      if (mimeType != metadata.mimeType) {
 //        throw new IllegalArgumentException("Attempt to append %s data to a %s blob".format(mimeType, metadata.mimeType))
@@ -238,6 +270,8 @@ final case class BlobResource(dataFile: File, metadata: BlobMetadata) extends Re
 //
 //    case _ => Promise.failed(new IllegalArgumentException("Attempt to insert non-blob data to blob"))
   }
+
+  def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
 }
 
 object BlobResource {

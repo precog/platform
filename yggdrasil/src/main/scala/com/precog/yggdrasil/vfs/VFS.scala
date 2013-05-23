@@ -26,8 +26,12 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
 import scalaz.EitherT._
+import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
+import scalaz.syntax.traverse._
+import scalaz.syntax.std.option._
+import scalaz.syntax.std.list._
 import scalaz.effect.IO
 
 sealed trait Version
@@ -39,10 +43,10 @@ object Version {
 /**
  * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
  */
-abstract class VFS[M[+_]](implicit M: Monad[M]) {
-  protected def IOT: IO ~> M
-
+abstract class VFS[M[+_]](implicit M: Monad[M], IOT: IO ~> M) extends Logging { //FIXME: IOT is a worthless hack.
   def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
+
+  def writeAllSync(data: Seq[(Long, EventMessage)]): EitherT[M, ResourceError, PrecogUnit]
 
   def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
 
@@ -74,62 +78,9 @@ abstract class VFS[M[+_]](implicit M: Monad[M]) {
 
   def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure]
 
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
+  //def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
 
-}
-
-
-class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
-
-  val IOT = new (IO ~> Future) {
-    def apply[A](io: IO[A]) = M.point(io.unsafePerformIO)
-  }
-
-  def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
-    IO { projectionsActor ! IngestData(data) }
-  }
-  
-  def readResource(path: Path, version: Version): EitherT[Future, ResourceError,Resource] = {
-    implicit val t = projectionReadTimeout
-    EitherT {
-      (projectionsActor ? Read(path, version)).mapTo[ReadResult] map {
-        case ReadSuccess(_, resource) => \/.right(resource)
-        case ReadFailure(_, error) => \/.left(error)
-      }
-    }
-  }
-
-  // NIHDBProjection works in Future, so although this depends on 
-  def readProjection(path: Path, version: Version): EitherT[Future, ResourceError, NIHDBProjection] = {
-    readResource(path, version) flatMap {
-      case nihdb: NIHDBResource => right(nihdb.projection)
-      case _ => left(NotFound("Requested resource at %s version %s cannot be interpreted as a Quirrel dataset.".format(path.path, version)).point[Future])
-    }
-  }
-
-  def findDirectChildren(path: Path): Future[Set[Path]] = {
-    implicit val t = projectionReadTimeout
-    val paths = (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
-    paths map { _ flatMap { _ - path }}
-  }
-
-  def currentStructure(path: Path, selector: CPath): EitherT[Future, ResourceError, PathStructure] = {
-    readProjection(path, Version.Current) flatMap { projection => 
-      right {
-        for (children <- projection.structure) yield {
-          PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
-        }
-      }
-    }
-  }
-
-  def currentVersion(path: Path) = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? CurrentVersion(path)).mapTo[Option[VersionEntry]]
-  }
-
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice] = {
-    implicit val askTimeout = sliceIngestTimeout
+  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice], clock: Clock): StreamT[M, Slice] = {
     val streamId = java.util.UUID.randomUUID()
     val allPerms = Map(apiKey -> perms)
 
@@ -151,28 +102,23 @@ class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: 
                 // used for caching queries right now.
                 val streamRef = StreamRef.Replace(streamId, terminal)
                 val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
-                (projectionsActor ? IngestData(Seq((pseudoOffset, msg)))).mapTo[PathActionResponse]
+                writeAllSync(Seq((pseudoOffset, msg))).run
               }
             } yield {
-              par match {
-                case UpdateSuccess(_) =>
-                  Some((x, (pseudoOffset + 1, xs)))
-                case PathFailure(_, errors) =>
+              par.fold(
+                errors => {
                   logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
                   None
-                case UpdateFailure(_, errors) =>
-                  logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
-                  None
-
-                case invalid =>
-                  logger.error("Unexpected response to persist: " + invalid)
-                  None
-              }
+                },
+                _ => Some((x, (pseudoOffset + 1, xs)))
+              )
             }
 
           case None =>
-            None.point[Future]
+            None.point[M]
         }
     }
   }
 }
+
+

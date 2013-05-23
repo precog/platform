@@ -283,7 +283,7 @@ object Console extends App {
         val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"), new InMemoryJobManager[Future], yggConfig.clock)))
 
         val jobManager = new InMemoryJobManager[Future]
-        val actorVFS = new ActorVFS(projectionsActor, Clock.System, yggConfig.storageTimeout, yggConfig.storageTimeout)
+        val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
         val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
 
         trait TableCompanion extends NIHDBColumnarTableCompanion

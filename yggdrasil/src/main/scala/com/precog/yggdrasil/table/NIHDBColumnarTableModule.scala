@@ -25,6 +25,7 @@ import scalaz.syntax.traverse._
 
 import TableModule._
 
+// TODO: rename to VFSColumnarTableModule. Nothing NIHDB-specific here
 trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with AskSupport with Logging {
   def vfs: SecureVFS[Future]
   def storageTimeout: Timeout
