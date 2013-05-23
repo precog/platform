@@ -80,15 +80,12 @@ case class FindChildren(path: Path) extends PathOp //FIXME: remove auth
 case class CurrentVersion(path: Path) extends PathOp 
 
 
-sealed trait PathActionResponse
-
-case class PathFailure(path: Path, error: ResourceError) extends PathActionResponse
-case class UpdateSuccess(path: Path) extends PathActionResponse
-case class UpdateFailure(path: Path, error: ResourceError) extends PathActionResponse
-
+sealed trait PathActionResponse 
 sealed trait ReadResult extends PathActionResponse
+sealed trait WriteResult extends PathActionResponse
 
+case class UpdateSuccess(path: Path) extends WriteResult
 case class ReadSuccess(path: Path, resource: Resource) extends ReadResult
-case class ReadFailure(path: Path, error: ResourceError) extends ReadResult
+case class PathOpFailure(path: Path, error: ResourceError) extends ReadResult with WriteResult
 
 /* class FileSystem */

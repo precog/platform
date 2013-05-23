@@ -42,7 +42,6 @@ trait ProjectionModule[M[+_], Key, Block] {
   }
 }
 
-
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
 
 trait ProjectionLike[M[+_], Key, Block] {

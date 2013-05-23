@@ -66,8 +66,6 @@ case class Status(cooked: Int, pending: Int, rawSize: Int)
 case object GetStructure
 case class Structure(columns: Set[(CPath, CType)])
 
-case object GetAuthorities
-
 sealed trait InsertResult
 case class Inserted(offset: Long, size: Int) extends InsertResult
 case object Skipped extends InsertResult
@@ -78,18 +76,18 @@ object NIHDB {
   final val projectionIdGen = new AtomicInteger()
 
   final def create(chef: ActorRef, authorities: Authorities, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem): IO[Validation[Error, NIHDB]] = {
-    NIHDBActor.create(chef, authorities, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { actor => new NIHDBImpl(actor, timeout) } }
+    NIHDBActor.create(chef, authorities, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { actor => new NIHDBImpl(actor, timeout, authorities) } }
   }
 
   final def open(chef: ActorRef, baseDir: File, cookThreshold: Int, timeout: Timeout, txLogScheduler: ScheduledExecutorService)(implicit actorSystem: ActorSystem) = {
-    NIHDBActor.open(chef, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { _ map { case (authorities, actor) => (authorities, new NIHDBImpl(actor, timeout)) } } }
+    NIHDBActor.open(chef, baseDir, cookThreshold, timeout, txLogScheduler) map { _ map { _ map { case (authorities, actor) => new NIHDBImpl(actor, timeout, authorities) } } }
   }
 
   final def hasProjection(dir: File) = NIHDBActor.hasProjection(dir)
 }
 
 trait NIHDB {
-  def authorities: Future[Authorities]
+  def authorities: Authorities
 
   def insert(batch: Seq[NIHDB.Batch]): IO[PrecogUnit]
 
@@ -120,13 +118,10 @@ trait NIHDB {
   def close(implicit actorSystem: ActorSystem): Future[PrecogUnit]
 }
 
-private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: Timeout)(implicit executor: ExecutionContext) extends NIHDB with GracefulStopSupport with AskSupport {
+private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: Timeout, val authorities: Authorities)(implicit executor: ExecutionContext) extends NIHDB with GracefulStopSupport with AskSupport {
   private implicit val impTimeout = timeout
 
   val projectionId = NIHDB.projectionIdGen.getAndIncrement
-
-  def authorities: Future[Authorities] =
-    (actor ? GetAuthorities).mapTo[Authorities]
 
   def insert(batch: Seq[NIHDB.Batch]): IO[PrecogUnit] =
     IO(actor ! Insert(batch, false)) 
@@ -380,9 +375,6 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
 
     case GetStatus =>
       sender ! Status(blockState.cooked.length, blockState.pending.size, blockState.rawLog.length)
-
-    case GetAuthorities =>
-      sender ! currentState.authorities
   }
 }
 

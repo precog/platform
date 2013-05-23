@@ -84,7 +84,9 @@ class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], job
   }
 
   def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
-    sys.error("todo")
+    readProjection(apiKey, path, version) map {
+      _.fold(_.metadata.size, _.fuckfuckfuck)
+    }
   }
 
   def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
@@ -164,7 +166,7 @@ class SecureVFS[M[+_]](vfs: VFS[M], permissionsFinder: PermissionsFinder[M], job
             job <- EitherT.right(jobManager.createJob(apiKey, "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now())))
           } yield {
             val allPerms = Map(apiKey -> perms.toSet[Permission])
-            vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw) 
+            vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw, clock) 
           }
 
         case None =>

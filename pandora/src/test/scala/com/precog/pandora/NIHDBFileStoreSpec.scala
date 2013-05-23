@@ -90,7 +90,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
 
       // We haven't terminated the stream yet, so it shouldn't find anything
       (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
-        case ReadFailure(_, NotFound(_)) => ok
+        case PathOpFailure(_, NotFound(_)) => ok
       }
 
       (projectionsActor ? IngestData(Seq((1L, IngestMessage(testAPIKey, testPath, Authorities(testAccount), Seq(IngestRecord(EventId.fromLong(42L), JString("Foo!"))), None, Clock.System.instant, StreamRef.Create(streamId, true)))))).copoint must beLike {

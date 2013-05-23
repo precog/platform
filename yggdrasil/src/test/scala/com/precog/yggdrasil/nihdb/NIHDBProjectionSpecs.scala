@@ -87,7 +87,7 @@ class NIHDBProjectionSpecs extends Specification with ScalaCheck with FutureMatc
 
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def projection = fromFuture(NIHDBProjection.wrap(nihdb, authorities))
+    def projection = fromFuture(NIHDBProjection.wrap(nihdb))
 
     def close(proj: NIHDB) = fromFuture(proj.close(actorSystem))
 

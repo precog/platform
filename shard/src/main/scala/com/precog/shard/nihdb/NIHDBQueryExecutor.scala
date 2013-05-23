@@ -152,7 +152,7 @@ trait NIHDBQueryExecutorComponent  {
       private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
       val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
-      private val actorVFS = new ActorVFS(projectionsActor, clock, yggConfig.storageTimeout, yggConfig.storageTimeout) 
+      private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 
 
       private val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(yggConfig.mongoStorageConfig)
       private val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, actorVFS, scheduleStorage, platform, clock)))

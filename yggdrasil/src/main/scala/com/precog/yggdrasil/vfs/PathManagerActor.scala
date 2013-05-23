@@ -88,7 +88,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
   override def postStop = {
     val closeAll = versions.values.toStream traverse {
-      case NIHDBResource(db, _) => db.close(context.system)
+      case NIHDBResource(db) => db.close(context.system)
       case _ => Promise successful PrecogUnit
     }
     
@@ -170,7 +170,9 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
 
         case NIHDBData(data) =>
           resources.createNIHDB(versionDir(version), writeAs) flatMap {
-            _ traverse { _ tap { _.db.insert(data) } }
+            _ traverse { nihdb => 
+              nihdb tap { _.insert(data) } map { NIHDBResource(_) }
+            }
           }
       }
       _ <- created traverse { resource =>
@@ -181,7 +183,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       }
     } yield {
       created.fold(
-        error => UpdateFailure(path, error),
+        error => PathOpFailure(path, error),
         _ => UpdateSuccess(path)
       )
     }
@@ -210,14 +212,14 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             } else {
               //TODO: update job
               logger.warn("Cannot overwrite existing database for " + streamId)
-              IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
+              IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
             }
 
           case other =>
-            IO(requestor ! UpdateFailure(path, other))
+            IO(requestor ! PathOpFailure(path, other))
         },
         resource => for {
-          _ <- resource.db.insert(batch(msg))
+          _ <- resource.append(NIHDBData(batch(msg)))
           // FIXME: completeVersion and setHead should be one op
           _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
         } yield {
@@ -241,7 +243,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
         }
       } else {
         //TODO: update job
-        IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
+        IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
       }
     }
 
@@ -280,7 +282,7 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
             persistFile(!versionLog.isCompleted(streamId), offset, msg, streamId, terminal)
 
           case StreamRef.Append =>
-            IO(requestor ! UpdateFailure(path, IllegalWriteRequestError("Append is not yet supported for binary files.")))
+            IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Append is not yet supported for binary files.")))
         }
 
       case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
@@ -306,11 +308,11 @@ final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, 
       val requestor = sender
       val io: IO[ReadResult] = versionOpt(version) map { version =>
         openResource(version).fold(
-          error => ReadFailure(path, error),
+          error => PathOpFailure(path, error),
           resource => ReadSuccess(path, resource) 
         )
       } getOrElse {
-        IO(ReadFailure(path, Corrupt("Unable to determine any resource version for path %s".format(path.path))))
+        IO(PathOpFailure(path, Corrupt("Unable to determine any resource version for path %s".format(path.path))))
       } 
       
       io.map(requestor ! _).unsafePerformIO

@@ -127,7 +127,8 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): EitherT[Future, EvaluationError, A] = {
       val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
 
-      EitherT.right(createJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext)) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
+      //TODO: this is craziness
+      EitherT.right(createQueryJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext)) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
         import JobQueryState._
 
         complete(EitherT.eitherTHoist[EvaluationError].hoist(sink).apply(executor.execute(apiKey, query, prefix, opts)), opts.output)

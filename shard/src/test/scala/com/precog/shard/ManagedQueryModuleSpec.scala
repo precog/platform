@@ -73,8 +73,11 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   val defaultTimeout = Duration(90, TimeUnit.SECONDS)
 
-  lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
-  def apiKey = "O.o"
+  val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
+  val apiKey = "O.o"
+  def vfs = sys.error("I guess this is necessary.")
+
+  var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   def dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
@@ -124,8 +127,6 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
       jobManager.cancel(jobId, "Yarrrr", yggConfig.clock.now()).map { _.fold(_ => false, _ => true) }.copoint
     }
   }
-
-  var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   step {
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
@@ -265,7 +266,7 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
 
             EitherT.right[TestFuture, EvaluationError, StreamT[TestFuture, CharBuffer]] {
               WriterT {
-                createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
+                createQueryJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
                   val ticks = new AtomicInteger()
                   val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
                     case i if i < numTicks =>
