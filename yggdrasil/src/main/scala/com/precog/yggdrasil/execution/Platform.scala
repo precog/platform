@@ -28,7 +28,7 @@ import blueeyes.json._
 import scalaz._
 
 trait Platform[M[+_], +A] {
-  def vfs: SecureVFS[M]
+  //def vfs: SecureVFS[M]
   def executorFor(apiKey: APIKey): EitherT[M, String, QueryExecutor[M, A]]
 }
 

@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package vfs
 
-import Resource._
 import table.Slice
 import metadata.PathStructure
 
@@ -28,19 +27,24 @@ import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.niflheim.Reductions
+import com.precog.niflheim._
 import com.precog.yggdrasil.actor.IngestData
 import com.precog.yggdrasil.nihdb.NIHDBProjection
 import com.precog.util._
 
-import akka.dispatch.Future
-import akka.actor.ActorRef
-import akka.pattern.ask
-import akka.util.Timeout
-
+import blueeyes.core.http.MimeType
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Decomposer._
 import blueeyes.util.Clock
 
 import java.util.UUID
+import java.nio.ByteBuffer
+import java.util.Arrays
+import java.nio.CharBuffer
+import java.nio.charset.{Charset, CoderResult}
+
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
@@ -59,83 +63,201 @@ object Version {
   case class Archived(uuid: UUID) extends Version
 }
 
-/**
- * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
- */
-abstract class VFS[M[+_]](implicit M: Monad[M], IOT: IO ~> M) extends Logging { //FIXME: IOT is a worthless hack.
-  def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
+sealed trait ResourceError {
+  def fold[A](fatalError: ResourceError.FatalError => A, userError: ResourceError.UserError => A): A
+}
+  
+object ResourceError {
+  implicit val show = Show.showFromToString[ResourceError]
 
-  def writeAllSync(data: Seq[(Long, EventMessage)]): EitherT[M, ResourceError, PrecogUnit]
+  def corrupt(message: String): ResourceError with FatalError = Corrupt(message)
+  def ioError(ex: Throwable): ResourceError with FatalError = IOError(ex)
+  def illegalWrite(message: String): ResourceError with UserError = IllegalWriteRequestError(message)
+  def permissionsError(message: String): ResourceError with UserError = PermissionsError(message)
+  def notFound(message: String): ResourceError with UserError = NotFound(message)
 
-  def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
-
-  def readQuery(path: Path, version: Version): EitherT[M, ResourceError, String] = {
-    readResource(path, version) flatMap {
-      case blob: BlobResource => right(IOT { blob.asString })
-      case _ => left(NotFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version)).point[M])
+  def all(errors: NonEmptyList[ResourceError]): ResourceError with FatalError with UserError = new ResourceErrors(
+    errors flatMap {
+      case ResourceErrors(e0) => e0
+      case other => NonEmptyList(other)
     }
+  )
+
+  def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
+    Corrupt("%s:\n%s" format (msg, error.message))
   }
 
-  def readProjection(path: Path, version: Version): EitherT[M, ResourceError, ProjectionLike[M, Long, Slice]]
-
-  /**
-   * Returns the direct children of path.
-   *
-   * The results are the basenames of the children. So for example, if
-   * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
-   * return (bar, baz).
-   */
-  def findDirectChildren(path: Path): M[Set[Path]]
-
-  def currentVersion(path: Path): M[Option[VersionEntry]]
-
-  def currentSelectors(path: Path): EitherT[M, ResourceError, Set[CPath]] = {
-    readProjection(path, Version.Current) flatMap { proj =>
-      right(proj.structure.map(_.map(_.selector)))
-    }
+  sealed trait FatalError { self: ResourceError =>
+    def fold[A](fatalError: FatalError => A, userError: UserError => A) = fatalError(self)
   }
 
-  def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure]
+  sealed trait UserError { self: ResourceError =>
+    def fold[A](fatalError: FatalError => A, userError: UserError => A) = userError(self)
+  }
 
-  //def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice] 
+  case class Corrupt(message: String) extends ResourceError with FatalError
+  case class IOError(exception: Throwable) extends ResourceError with FatalError
 
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice], clock: Clock): StreamT[M, Slice] = {
-    val streamId = java.util.UUID.randomUUID()
-    val allPerms = Map(apiKey -> perms)
+  case class IllegalWriteRequestError(message: String) extends ResourceError with UserError
+  case class PermissionsError(message: String) extends ResourceError with UserError
+  case class NotFound(message: String) extends ResourceError with UserError
 
-    StreamT.unfoldM((0, stream)) {
-      case (pseudoOffset, s) =>
-        s.uncons flatMap {
-          case Some((x, xs)) =>
-            val ingestRecords = x.toJsonElements.zipWithIndex map {
-              case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
-            }
+  case class ResourceErrors private[ResourceError] (errors: NonEmptyList[ResourceError]) extends ResourceError with FatalError with UserError { self =>
+    override def fold[A](fatalError: FatalError => A, userError: UserError => A) = {
+      val hasFatal = errors.list.exists(_.fold(_ => true, _ => false))
+      if (hasFatal) fatalError(self) else userError(self)
+    }
+  }
+}
 
-            logger.debug("Persisting %d stream records to %s".format(ingestRecords.size, path))
+trait VFSModule[M[+_], Key, Block] extends Logging {
+  import ResourceError._
 
-            for {
-              terminal <- xs.isEmpty
-              par <- {
-                // FIXME: is Replace always desired here? Any case
-                // where we might want Create? AFAICT, this is only
-                // used for caching queries right now.
-                val streamRef = StreamRef.Replace(streamId, terminal)
-                val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
-                writeAllSync(Seq((pseudoOffset, msg))).run
-              }
-            } yield {
-              par.fold(
-                errors => {
-                  logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
-                  None
-                },
-                _ => Some((x, (pseudoOffset + 1, xs)))
-              )
+  type Projection <: ProjectionLike[M, Key, Block]
+
+  sealed trait Resource {
+    def mimeType: MimeType
+    def authorities: Authorities
+    def byteStream(mimeType: Option[MimeType])(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]]
+
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
+  }
+
+  object Resource { self =>
+    def bufferOutput(stream0: StreamT[M, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024)(implicit M: Monad[M]): StreamT[M, Array[Byte]] = {
+      val encoder = charset.newEncoder()
+
+      def loop(stream: StreamT[M, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[M, Array[Byte]] = {
+        StreamT(stream.uncons map {
+          case Some((cbuf, tail)) =>
+            val result = encoder.encode(cbuf, buf, false)
+            if (result == CoderResult.OVERFLOW) {
+              val arr2 = new Array[Byte](bufferSize)
+              StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
+            } else {
+              StreamT.Skip(loop(tail, buf, arr))
             }
 
           case None =>
-            None.point[M]
-        }
+            val result = encoder.encode(CharBuffer.wrap(""), buf, true)
+            if (result == CoderResult.OVERFLOW) {
+              val arr2 = new Array[Byte](bufferSize)
+              StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
+            } else {
+              StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
+            }
+        })
+      }
+
+      val arr = new Array[Byte](bufferSize)
+      loop(stream0, ByteBuffer.wrap(arr), arr)
+    }
+
+  }
+
+  trait ProjectionResource extends Resource {
+    def append(data: NIHDB.Batch): IO[PrecogUnit]
+    def length(implicit M: Monad[M]): M[Long]
+    def projection(implicit M: Monad[M]): M[Projection]
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
+  }
+
+  trait BlobResource extends Resource {
+    def metadata: BlobMetadata
+    def asString(implicit M: Monad[M]): M[Option[String]]
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
+  }
+
+  /**
+   * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
+   */
+  abstract class VFS(implicit M: Monad[M]) { 
+    protected[this] def toJsonElements(block: Block): Vector[JValue]
+
+    def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
+
+    def writeAllSync(data: Seq[(Long, EventMessage)]): EitherT[M, ResourceError, PrecogUnit]
+
+    def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
+
+    def readQuery(path: Path, version: Version): EitherT[M, ResourceError, String] = {
+      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
+
+      readResource(path, version) flatMap {
+        _.fold(
+          br => EitherT(br.asString.map(_.toRightDisjunction(notAQuery))),
+          _ => EitherT.left(notAQuery.point[M])
+        )
+      }
+    }
+
+    def readProjection(path: Path, version: Version): EitherT[M, ResourceError, Projection] = {
+      def notAProjection = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel projection.".format(path.path, version))
+      readResource(path, version) flatMap {
+        _.fold(
+          _ => EitherT.left(notAProjection.point[M]),
+          pr => EitherT.right(pr.projection)
+        )
+      }
+    }
+
+    /**
+     * Returns the direct children of path.
+     *
+     * The results are the basenames of the children. So for example, if
+     * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
+     * return (bar, baz).
+     */
+    def findDirectChildren(path: Path): M[Set[Path]]
+
+    def currentVersion(path: Path): M[Option[VersionEntry]]
+    def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure]
+
+    // TODO: currentStructure has all this information, need to deduplicate
+    def currentSelectors(path: Path): EitherT[M, ResourceError, Set[CPath]] = {
+      readProjection(path, Version.Current) flatMap { proj =>
+        right(proj.structure.map(_.map(_.selector)))
+      }
+    }
+
+    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock): StreamT[M, Block] = {
+      val streamId = java.util.UUID.randomUUID()
+      val allPerms = Map(apiKey -> perms)
+
+      StreamT.unfoldM((0, stream)) {
+        case (pseudoOffset, s) =>
+          s.uncons flatMap {
+            case Some((x, xs)) =>
+              val ingestRecords = toJsonElements(x).zipWithIndex map {
+                case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
+              }
+
+              logger.debug("Persisting %d stream records to %s".format(ingestRecords.size, path))
+
+              for {
+                terminal <- xs.isEmpty
+                par <- {
+                  // FIXME: is Replace always desired here? Any case
+                  // where we might want Create? AFAICT, this is only
+                  // used for caching queries right now.
+                  val streamRef = StreamRef.Replace(streamId, terminal)
+                  val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
+                  writeAllSync(Seq((pseudoOffset, msg))).run
+                }
+              } yield {
+                par.fold(
+                  errors => {
+                    logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
+                    None
+                  },
+                  _ => Some((x, (pseudoOffset + 1, xs)))
+                )
+              }
+
+            case None =>
+              None.point[M]
+          }
+      }
     }
   }
 }
