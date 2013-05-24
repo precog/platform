@@ -44,53 +44,6 @@ object Version {
   case class Archived(uuid: UUID) extends Version
 }
 
-sealed trait ResourceError {
-  def fold[A](fatalError: ResourceError.FatalError => A, userError: ResourceError.UserError => A): A
-}
-  
-object ResourceError {
-  implicit val show = Show.showFromToString[ResourceError]
-
-  def corrupt(message: String): ResourceError with FatalError = Corrupt(message)
-  def ioError(ex: Throwable): ResourceError with FatalError = IOError(ex)
-  def illegalWrite(message: String): ResourceError with UserError = IllegalWriteRequestError(message)
-  def permissionsError(message: String): ResourceError with UserError = PermissionsError(message)
-  def notFound(message: String): ResourceError with UserError = NotFound(message)
-
-  def all(errors: NonEmptyList[ResourceError]): ResourceError with FatalError with UserError = new ResourceErrors(
-    errors flatMap {
-      case ResourceErrors(e0) => e0
-      case other => NonEmptyList(other)
-    }
-  )
-
-  def fromExtractorError(msg: String): Extractor.Error => ResourceError = { error =>
-    Corrupt("%s:\n%s" format (msg, error.message))
-  }
-
-  sealed trait FatalError { self: ResourceError =>
-    def fold[A](fatalError: FatalError => A, userError: UserError => A) = fatalError(self)
-  }
-
-  sealed trait UserError { self: ResourceError =>
-    def fold[A](fatalError: FatalError => A, userError: UserError => A) = userError(self)
-  }
-
-  case class Corrupt(message: String) extends ResourceError with FatalError
-  case class IOError(exception: Throwable) extends ResourceError with FatalError
-
-  case class IllegalWriteRequestError(message: String) extends ResourceError with UserError
-  case class PermissionsError(message: String) extends ResourceError with UserError
-  case class NotFound(message: String) extends ResourceError with UserError
-
-  case class ResourceErrors private[ResourceError] (errors: NonEmptyList[ResourceError]) extends ResourceError with FatalError with UserError { self =>
-    override def fold[A](fatalError: FatalError => A, userError: UserError => A) = {
-      val hasFatal = errors.list.exists(_.fold(_ => true, _ => false))
-      if (hasFatal) fatalError(self) else userError(self)
-    }
-  }
-}
-
 object VFSModule {
   def bufferOutput[M[+_]: Monad](stream0: StreamT[M, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024): StreamT[M, Array[Byte]] = {
     val encoder = charset.newEncoder()
@@ -137,15 +90,15 @@ trait VFSModule[M[+_], Block] extends Logging {
 
   trait ProjectionResource extends Resource {
     def append(data: NIHDB.Batch): IO[PrecogUnit]
-    def length(implicit M: Monad[M]): M[Long]
+    def recordCount(implicit M: Monad[M]): M[Long]
     def projection(implicit M: Monad[M]): M[Projection]
 
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
   }
 
   trait BlobResource extends Resource {
-    def metadata: BlobMetadata
-    def asString(implicit M: Monad[M]): M[Option[String]]
+    def asString(implicit M: Monad[M]): OptionT[M, String]
+    def byteLength: Long
 
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
@@ -167,7 +120,7 @@ trait VFSModule[M[+_], Block] extends Logging {
 
       readResource(path, version) flatMap {
         _.fold(
-          br => EitherT(br.asString.map(_.toRightDisjunction(notAQuery))),
+          br => EitherT(br.asString.run.map(_.toRightDisjunction(notAQuery))),
           _ => EitherT.left(notAQuery.point[M])
         )
       }

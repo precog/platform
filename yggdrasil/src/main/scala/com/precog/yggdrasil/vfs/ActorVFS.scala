@@ -181,14 +181,9 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     }
   }
 
-  object NIHDBResource {
-    val QuirrelData = MimeType("application", "x-quirrel-data")
-    val AnyMimeType = MimeType("*", "*")
-  }
 
   case class NIHDBResource(val db: NIHDB) extends ProjectionResource with Logging {
-    import NIHDBResource._
-    val mimeType: MimeType = QuirrelData
+    val mimeType: MimeType = FileContent.XQuirrelData
 
     def authorities = db.authorities
 
@@ -196,35 +191,19 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
     def projection(implicit M: Monad[Future]) = NIHDBProjection.wrap(db)
 
-    def length(implicit M: Monad[Future]) = projection.map(_.length)
+    def recordCount(implicit M: Monad[Future]) = projection.map(_.length)
 
-    def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): OptionT[Future, StreamT[Future, Array[Byte]]] = {
-      import VFSModule.bufferOutput
-      import ColumnarTableModule.toCharBuffers
-      import FileContent._
-
+    def byteStream(matchType: Option[MimeType])(implicit M: Monad[Future]): OptionT[Future, StreamT[Future, Array[Byte]]] = {
       OptionT(
         projection map { p =>
-          val sliceStream = p.getBlockStream(None)
-          mimeType match {
-            case Some(ApplicationJson) | None => Some(bufferOutput(toCharBuffers(ApplicationJson, sliceStream)))
-            case Some(XJsonStream) => Some(bufferOutput(toCharBuffers(XJsonStream, sliceStream)))
-            case Some(TextCSV) => Some(bufferOutput(toCharBuffers(TextCSV, sliceStream)))
-            case Some(other) => 
-              logger.warn("NIHDB resource cannot be rendered to a byte stream of type %s".format(other.value))
-              None
-          }
+          ColumnarTableModule.byteStream(p.getBlockStream(None), matchType)
         }
       )
     }
   }
 
   object FileBlobResource {
-    import FileContent._
-    import MimeTypes._
-
     val ChunkSize = 100 * 1024
-    private val stringTypes = Set(XQuirrelScript, ApplicationJson, TextCSV, text/plain)
 
     def IOF(implicit M: Monad[Future]): IO ~> Future = new NaturalTransformation[IO, Future] {
       def apply[A](io: IO[A]) = M.point(io.unsafePerformIO)
@@ -235,15 +214,17 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
    * A blob of data that has been persisted to disk.
    */
   final case class FileBlobResource(dataFile: File, metadata: BlobMetadata) extends BlobResource {
+    import FileContent._
     import FileBlobResource._
     
     val authorities: Authorities = metadata.authorities
     val mimeType: MimeType = metadata.mimeType
+    val byteLength = metadata.size
 
     /** Suck the file into a String */
-    def asString(implicit M: Monad[Future]): Future[Option[String]] = M point {
+    def asString(implicit M: Monad[Future]): OptionT[Future, String] = OptionT(M point {
       stringTypes.contains(mimeType).option(IOUtils.readFileToString(dataFile)).sequence.unsafePerformIO
-    }
+    })
 
     /** Stream the file off disk. */
     def ioStream: StreamT[IO, Array[Byte]] = {
