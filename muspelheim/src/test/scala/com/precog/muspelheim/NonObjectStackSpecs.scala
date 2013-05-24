@@ -24,6 +24,7 @@ import com.precog.yggdrasil._
 
 // Currently this is only supported by the full Precog backend
 trait NonObjectStackSpecs extends EvalStackSpecs {
+  import stack._
   "Non-object values" should {
     "handle query on empty array" >> {
       val input = """
