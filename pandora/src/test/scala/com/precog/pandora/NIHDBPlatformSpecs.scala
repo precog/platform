@@ -99,7 +99,7 @@ trait NIHDBTestStack extends TestStackLike[Future]
     with SecureVFSModule[Future, Slice]
     with LongIdMemoryDatasetConsumer[Future]
     with NIHDBTestActors
-    with NIHDBColumnarTableModule { self =>
+    with VFSColumnarTableModule { self =>
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
@@ -136,7 +136,7 @@ trait NIHDBTestStack extends TestStackLike[Future]
     implicit def M = self.M
   }
 
-  trait TableCompanion extends NIHDBColumnarTableCompanion
+  trait TableCompanion extends VFSColumnarTableCompanion
 
   object Table extends TableCompanion
 }

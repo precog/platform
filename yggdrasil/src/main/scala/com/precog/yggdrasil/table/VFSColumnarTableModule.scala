@@ -26,10 +26,10 @@ import scalaz.syntax.traverse._
 import TableModule._
 
 // TODO: rename to VFSColumnarTableModule. Nothing NIHDB-specific here
-trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Slice] with AskSupport with Logging {
+trait VFSColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Slice] with AskSupport with Logging {
   def vfs: SecureVFS
 
-  trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
+  trait VFSColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
       logger.debug("Starting load from " + table.toJson)
       for {

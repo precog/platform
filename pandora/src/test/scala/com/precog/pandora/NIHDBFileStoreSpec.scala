@@ -29,16 +29,16 @@ import scalaz._
 import scalaz.syntax.comonad._
 
 class NIHDBFileStoreSpec extends NIHDBTestActors with Specification with Logging {
-  val tmpDir = IOUtils.createTmpDir("filestorespec").unsafePerformIO
   class YggConfig extends NIHDBTestActorsConfig {
+    val tmpDir = IOUtils.createTmpDir("filestorespec").unsafePerformIO
     val config = Configuration parse { "precog.storage.root = %s".format(tmpDir) }
     val clock = blueeyes.util.Clock.System
     val maxSliceSize = 10
+
+    logger.info("Running NIHDBFileStoreSpec under " + tmpDir)
   } 
 
   object yggConfig extends YggConfig
-
-  logger.info("Running NIHDBFileStoreSpec under " + tmpDir)
 
   implicit val timeout = new Timeout(5000)
 
@@ -87,6 +87,6 @@ class NIHDBFileStoreSpec extends NIHDBTestActors with Specification with Logging
   override def map(fs: => Fragments): Fragments = fs ^ step {
     logger.info("Unlocking actor")
     //projectionSystem.release
-    IOUtils.recursiveDelete(tmpDir).unsafePerformIO
+    IOUtils.recursiveDelete(yggConfig.tmpDir).unsafePerformIO
   }
 }

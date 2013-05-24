@@ -393,7 +393,6 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     * subdir for the path.
     */
   final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, shutdownTimeout: Duration, clock: Clock) extends Actor with Logging {
-
     private[this] implicit def executor: ExecutionContext = context.dispatcher
     private[this] implicit val futureM = new FutureMonad(executor)
 
@@ -450,15 +449,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
               }
             } yield resource 
         } getOrElse {
-          left(IO(Corrupt("No version found to exist for resource %s.".format(path.path))))
+          left(IO(Corrupt("No version %s found to exist for resource %s.".format(version, path.path))))
         }
-      }
-    }
-
-    private def openNIHDB(version: UUID): EitherT[IO, ResourceError, NIHDBResource] = {
-      openResource(version) flatMap {
-        case nr: NIHDBResource => right(IO(nr))
-        case other => left(IO(NotFound("Located resource on %s is a BLOB, not a projection" format path.path)))
       }
     }
 
@@ -499,38 +491,43 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
       logger.debug("About to persist %d messages; replying to %s".format(msgs.size, requestor.toString))
 
+      def openNIHDB(version: UUID): EitherT[IO, ResourceError, ProjectionResource] = {
+        openResource(version) flatMap {
+          _.fold(
+            blob => left(IO(NotFound("Located resource on %s is a BLOB, not a projection" format path.path))),
+            db => right(IO(db))
+          )
+        }
+      }
+
       def persistNIHDB(createIfAbsent: Boolean, offset: Long, msg: IngestMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
         def batch(msg: IngestMessage) = NIHDB.Batch(offset, msg.data.map(_.value))
 
-        openNIHDB(streamId).fold[IO[PrecogUnit]](
-          {
-            case NotFound(_) =>
-              if (createIfAbsent) {
-                logger.trace("Creating new nihdb database for streamId " + streamId)
-                performCreate(msg.apiKey, NIHDBData(List(batch(msg))), streamId, msg.writeAs, terminal) map { response =>
-                  maybeCompleteJob(msg, terminal, response) pipeTo requestor
-                  PrecogUnit
-                }
-              } else {
-                //TODO: update job
-                logger.warn("Cannot overwrite existing database for " + streamId)
-                IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Cannot overwrite existing resource. %s not applied.".format(msg.toString))))
-              }
-
-            case other =>
-              IO(requestor ! PathOpFailure(path, other))
-          },
-          resource => for {
-            _ <- resource.append(batch(msg))
-            // FIXME: completeVersion and setHead should be one op
-            _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
-          } yield {
-            logger.trace("Sent insert message for " + msg + " to nihdb")
-            // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
-            maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) pipeTo requestor
-            PrecogUnit
-          }
-        ).join
+        if (versionLog.find(streamId).isDefined) {
+          openNIHDB(streamId).fold[IO[PrecogUnit]](
+            error => IO(requestor ! PathOpFailure(path, error)),
+            resource => for {
+              _ <- resource.append(batch(msg))
+              // FIXME: completeVersion and setHead should be one op
+              _ <- terminal.whenM(versionLog.completeVersion(streamId) >> versionLog.setHead(streamId))
+            } yield {
+              logger.trace("Sent insert message for " + msg + " to nihdb")
+              // FIXME: We aren't actually guaranteed success here because NIHDB might do something screwy.
+              maybeCompleteJob(msg, terminal, UpdateSuccess(msg.path)) pipeTo requestor
+              PrecogUnit
+            }
+          ).join
+        } else if (createIfAbsent) {
+            logger.trace("Creating new nihdb database for streamId " + streamId)
+            performCreate(msg.apiKey, NIHDBData(List(batch(msg))), streamId, msg.writeAs, terminal) map { response =>
+              maybeCompleteJob(msg, terminal, response) pipeTo requestor
+              PrecogUnit
+            }
+        } else {
+          //TODO: update job
+          logger.warn("Cannot create new database for " + streamId)
+          IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Cannot create new resource. %s not applied.".format(msg.toString))))
+        }
       }
 
       def persistFile(createIfAbsent: Boolean, offset: Long, msg: StoreFileMessage, streamId: UUID, terminal: Boolean): IO[PrecogUnit] = {
