@@ -38,7 +38,7 @@ class StubVFSMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]]
     }
   }
 
-  def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
+  def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
     M.point {
       val types: Map[CType, Long] = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) collect {
         case (ColumnRef(`property`, ctype), count) => (ctype, count)

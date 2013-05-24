@@ -129,7 +129,38 @@ trait TestShardService extends BlueEyesServiceSpecification
         Path("/inaccessible/foo") -> Set("other")
       )
 
-      val rawVFS = new InMemoryVFS(Map(), clock)
+      def stubValue(authorities: Authorities):((Array[Byte], MimeType) \/ Vector[JValue], Authorities) = 
+        (\/.right(Vector(JObject("foo" -> JString("foov"), "bar" -> JNum(1)), JObject("foo" -> JString("foov2")))), authorities)
+
+      val stubData = ownerMap mapValues { accounts => stubValue(Authorities.ifPresent(accounts).get) }
+/*
+  val metadataClient = new MetadataClient[Future] {
+    def size(userUID: String, path: Path) = Future { success(JNum(1)) }
+
+    def browse(apiKey: APIKey, path: Path) = Future {
+      if (path == Path("/errpath")) {
+        failure("Bad path; this is just used to stimulate an error response and not duplicate any genuine failure.")
+      } else {
+        success(JArray(List(JString("foo"), JString("bar"))))
+      }
+    }
+
+    def structure(apiKey: APIKey, path: Path, cpath: CPath) = Future {
+      success(
+        JObject(
+          "structure" -> JObject(
+            "foo" -> JNum(123)
+          )
+        )
+      )
+    }
+
+    def currentVersion(apiKey: APIKey, path: Path) = Future(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
+  }
+  */
+
+      val rawVFS = new InMemoryVFS(stubData, clock)
       val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder, clock.instant())
       val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, scheduler, clock)
     }
@@ -350,6 +381,8 @@ class ShardServiceSpec extends TestShardService {
       val obj = JObject(Map("foo" -> JArray(JString("foo")::JString("bar")::Nil)))
       browse().copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(Left(obj)), _) => 
+          failure("Not found: " + obj.renderCompact)
       }
     }
     "reject browse when no API key provided" in {
@@ -365,10 +398,10 @@ class ShardServiceSpec extends TestShardService {
     }
     "return error response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
-        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(response)), _) =>
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(Left(response)), _) =>
           (response \ "errors") must beLike {
             case JArray(JString(err) :: Nil) =>
-              err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
+              err must startWith("Could not find any resource that corresponded to path")
           }
       }
     }
@@ -429,33 +462,6 @@ trait TestPlatform extends ManagedPlatform { self =>
       }
     }
   }
-
-/*
-  val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path) = Future { success(JNum(1)) }
-
-    def browse(apiKey: APIKey, path: Path) = Future {
-      if (path == Path("/errpath")) {
-        failure("Bad path; this is just used to stimulate an error response and not duplicate any genuine failure.")
-      } else {
-        success(JArray(List(JString("foo"), JString("bar"))))
-      }
-    }
-
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = Future {
-      success(
-        JObject(
-          "structure" -> JObject(
-            "foo" -> JNum(123)
-          )
-        )
-      )
-    }
-
-    def currentVersion(apiKey: APIKey, path: Path) = Future(None)
-    def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
-  }
-  */
 
   def status() = Future(Success(JArray(List(JString("status")))))
 

@@ -136,6 +136,8 @@ trait VFSModule[M[+_], Block] extends Logging {
       }
     }
 
+    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
+
     /**
      * Returns the direct children of path.
      *
@@ -146,14 +148,15 @@ trait VFSModule[M[+_], Block] extends Logging {
     def findDirectChildren(path: Path): M[Set[Path]]
 
     def currentVersion(path: Path): M[Option[VersionEntry]]
-    def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure]
 
+/*
     // TODO: currentStructure has all this information, need to deduplicate
     def currentSelectors(path: Path): EitherT[M, ResourceError, Set[CPath]] = {
       readProjection(path, Version.Current) flatMap { proj =>
         right(proj.structure.map(_.map(_.selector)))
       }
     }
+    */
 
     def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock): StreamT[M, Block] = {
       val streamId = java.util.UUID.randomUUID()

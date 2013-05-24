@@ -203,24 +203,18 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
       }
     }
 
-    def currentStructure(path: Path, selector: CPath): EitherT[M, ResourceError, PathStructure] = {
-      EitherT(M.point(data.get((path, Version.Current)).toRightDisjunction(NotFound("No data found at path %s.".format(path.path))))) flatMap {
-        case JsonRecord(resource, _) => 
-          EitherT.right(
-            for {
-              p <- resource.projection
-              columnRefs <- p.structure 
-            } yield { 
-              val types : Map[CType, Long] = columnRefs.collect {
-                // FIXME: This should use real counts
-                case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-              }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
+      readProjection(path, version) flatMap { projection =>
+        EitherT.right(
+          for (columnRefs <- projection.structure) yield { 
+            val types : Map[CType, Long] = columnRefs.collect {
+              // FIXME: This should use real counts
+              case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+            }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
 
-              PathStructure(types, columnRefs.map(_.selector))
-            }
-          )
-        case _ => 
-          EitherT.left(M point { NotFound("Data at path %s is binary and thus has no JSON structure.".format(path.path)) })
+            PathStructure(types, columnRefs.map(_.selector))
+          }
+        )
       }
     }
   }

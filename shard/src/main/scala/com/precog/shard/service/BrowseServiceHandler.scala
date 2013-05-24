@@ -26,7 +26,7 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.std.string._
 import scalaz.syntax.bifunctor._
-//import scalaz.syntax.validation._
+import scalaz.syntax.show._
 import scalaz.syntax.apply._
 
 class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
@@ -55,7 +55,7 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
       } mapValues (_.serialize)
     }
 
-    vfs.structure(apiKey, path, property, Version.Current) map {
+    vfs.pathStructure(apiKey, path, property, Version.Current) map {
       case PathStructure(types, children) =>
         JObject(Map("children" -> children.serialize,
                     "types" -> JObject(normalizeTypes(types))))
@@ -88,10 +88,24 @@ class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Futur
       }
     } map { content0 =>
       HttpResponse[JValue](OK, content = Some(content0))
-    } valueOr { error =>
-      //FIXME: special-case resource error types
-      sys.error("todo")
-      //HttpResponse[JValue](InternalServerError, content = Some(JObject("errors" -> error.serialize)))
+    } valueOr { 
+      _.fold(
+        fatalError => {
+          logger.error("A fatal error was encountered handling browse request %s: %s".format(request.shows, fatalError))
+          HttpResponse[JValue](InternalServerError, content = Some(JObject("errors" -> JArray("sorry, we're looking into it!".serialize))))
+        },
+        {
+          case ResourceError.NotFound(message) =>
+            HttpResponse[JValue](HttpStatusCodes.NotFound, content = Some(JObject("errors" -> JArray("Could not find any resource that corresponded to path %s: %s".format(path.path, message).serialize))))
+
+          case PermissionsError(message) =>
+            HttpResponse[JValue](Forbidden, content = Some(JObject("errors" -> JArray("API key %s does not have the ability to browse path %s: %s".format(apiKey, path.path, message).serialize))))
+
+          case unexpected =>
+            logger.error("An unexpected error was encountered handling browse request %s: %s".format(request.shows, unexpected))
+            HttpResponse[JValue](InternalServerError, content = Some(JObject("errors" -> "sorry, we're looking into it!".serialize)))
+        }
+      )
     }
   }
 
