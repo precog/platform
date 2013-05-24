@@ -27,11 +27,12 @@ import org.specs2.specification.Fragments
 import scalaz._
 import scalaz.syntax.comonad._
 
-class NIHDBFileStoreSpec extends Specification with Logging {
+class NIHDBFileStoreSpec extends NIHDBPlatformSpecs with Specification with Logging {
   val tmpDir = IOUtils.createTmpDir("filestorespec").unsafePerformIO
 
   logger.info("Running NIHDBFileStoreSpec under " + tmpDir)
 
+/*
   val projectionSystem = new NIHDBPlatformSpecsActor(Some(tmpDir.getCanonicalPath))
 
   val projectionsActor = projectionSystem.actor
@@ -40,6 +41,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
 
   implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, Duration(5, "Seconds"))
 
+  */
   implicit val timeout = new Timeout(5000)
 
   val loremIpsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac dolor ac velit consequat vestibulum at id dolor. Vivamus luctus mauris ac massa iaculis a cursus leo porta. Aliquam tellus ligula, mattis quis luctus sed, tempus id ante. Donec sagittis, ante pharetra tempor ultrices, purus massa tincidunt neque, ut tempus massa nisl non libero. Aliquam tincidunt commodo facilisis. Phasellus accumsan dapibus lorem ac aliquam. Nullam vitae ullamcorper risus. Praesent quis tellus lectus."
@@ -55,12 +57,12 @@ class NIHDBFileStoreSpec extends Specification with Logging {
       }
 
       (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
-        case ReadSuccess(_, blob : BlobResource) => blob.asString.unsafePerformIO mustEqual loremIpsum
+        case ReadSuccess(_, blob : BlobResource) => blob.asString.copoint mustEqual loremIpsum
       }
     }
 
     "Properly handle atomic version updates" in {
-      import Resource._
+      import ResourceError._
       val testPath = Path("/versioned/blob")
 
       val streamId = UUID.randomUUID
@@ -86,7 +88,7 @@ class NIHDBFileStoreSpec extends Specification with Logging {
 
   override def map(fs: => Fragments): Fragments = fs ^ step {
     logger.info("Unlocking actor")
-    projectionSystem.release
+    //projectionSystem.release
     IOUtils.recursiveDelete(tmpDir).unsafePerformIO
   }
 }
