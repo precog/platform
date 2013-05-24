@@ -44,35 +44,32 @@ import scalaz.syntax.traverse._
 
 import TableModule._
 
-// TODO: rename to VFSColumnarTableModule. Nothing NIHDB-specific here
 trait VFSColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Slice] with AskSupport with Logging {
   def vfs: SecureVFS
 
   trait VFSColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {
+    def load(table: Table, apiKey: APIKey, tpe: JType): EitherT[Future, ResourceError, Table] = {
       logger.debug("Starting load from " + table.toJson)
       for {
-        paths <- pathsM(table)
-        tableE = paths.toList.traverse[({ type l[a] = EitherT[Future, ResourceError, a] })#l, ProjectionLike[Future, Slice]] { path =>
+        paths <- EitherT.right(pathsM(table))
+        projections <- paths.toList.traverse[({ type l[a] = EitherT[Future, ResourceError, a] })#l, ProjectionLike[Future, Slice]] { path =>
           logger.debug("  Loading path: " + path)
           vfs.readProjection(apiKey, path, Version.Current)
-        } map { projections =>
-          val length = projections.map(_.length).sum
-          logger.debug("Loading from projections: " + projections)
-          Table(projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
-            // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
-            val constraints = proj.structure.map { struct => 
-              Some(Schema.flatten(tpe, struct.toList)) 
-            }
+        }
+      } yield {
+        val length = projections.map(_.length).sum
+        logger.debug("Loading from projections: " + projections)
+        val stream = projections.foldLeft(StreamT.empty[Future, Slice]) { (acc, proj) =>
+          // FIXME: Can Schema.flatten return Option[Set[ColumnRef]] instead?
+          val constraints = proj.structure.map { struct => 
+            Some(Schema.flatten(tpe, struct.toList)) 
+          }
 
-            acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
-          }, ExactSize(length))
+          acc ++ StreamT.wrapEffect(constraints map { c => proj.getBlockStream(c) })
         }
 
-        table <- tableE valueOr { errors =>
-          sys.error("Unable to load table for paths %s as %s: %s".format(paths, apiKey, errors.toString))
-        }
-      } yield table
+        Table(stream, ExactSize(length))
+      } 
     }
   }
 }

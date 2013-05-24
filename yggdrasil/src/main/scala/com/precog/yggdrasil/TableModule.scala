@@ -19,6 +19,7 @@
  */
 package com.precog.yggdrasil
 
+import vfs.ResourceError
 import com.precog.bytecode.JType
 import com.precog.common._
 import com.precog.common.security._
@@ -187,7 +188,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
      * For each distinct path in the table, load all columns identified by the specified
      * jtype and concatenate the resulting slices into a new table.
      */
-    def load(apiKey: APIKey, tpe: JType): M[Table]
+    def load(apiKey: APIKey, tpe: JType): EitherT[M, ResourceError, Table]
     
     /**
      * Folds over the table to produce a single value (stored in a singleton table).

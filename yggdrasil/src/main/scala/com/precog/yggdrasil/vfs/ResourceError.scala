@@ -22,12 +22,17 @@ package vfs
 
 import blueeyes.json.serialization.Extractor
 import scalaz._
+import scalaz.NonEmptyList._
 
 sealed trait ResourceError {
   def fold[A](fatalError: ResourceError.FatalError => A, userError: ResourceError.UserError => A): A
 }
   
 object ResourceError {
+  implicit val semigroup = new Semigroup[ResourceError] {
+    def append(e1: ResourceError, e2: => ResourceError) = all(nels(e1, e2))
+  }
+
   implicit val show = Show.showFromToString[ResourceError]
 
   def corrupt(message: String): ResourceError with FatalError = Corrupt(message)
