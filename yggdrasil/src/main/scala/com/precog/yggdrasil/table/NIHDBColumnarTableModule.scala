@@ -47,7 +47,6 @@ import TableModule._
 // TODO: rename to VFSColumnarTableModule. Nothing NIHDB-specific here
 trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Slice] with AskSupport with Logging {
   def vfs: SecureVFS
-  def storageTimeout: Timeout
 
   trait NIHDBColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
     def load(table: Table, apiKey: APIKey, tpe: JType): Future[Table] = {

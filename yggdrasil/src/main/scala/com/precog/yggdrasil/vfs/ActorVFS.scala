@@ -469,7 +469,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
               }
             } yield resource 
         } getOrElse {
-          left(IO(NotFound("No version found to exist for resource %s.".format(path.path))))
+          left(IO(Corrupt("No version found to exist for resource %s.".format(path.path))))
         }
       }
     }
@@ -627,13 +627,16 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
         logger.debug("Received Read request " + msg)
 
         val requestor = sender
-        val io: IO[ReadResult] = versionOpt(version) map { version =>
-          openResource(version).fold(
-            error => PathOpFailure(path, error),
-            resource => ReadSuccess(path, resource) 
-          )
-        } getOrElse {
-          IO(PathOpFailure(path, Corrupt("Unable to determine any resource version for path %s".format(path.path))))
+        val io: IO[ReadResult] = version match {
+          case Version.Current => 
+            versionLog.current map { v => 
+              openResource(v.id).fold(PathOpFailure(path, _), ReadSuccess(path, _))
+            } getOrElse {
+              IO(PathOpFailure(path, NotFound("No current version found for path %s".format(path.path))))
+            }
+
+          case Version.Archived(id) => 
+            openResource(id).fold(PathOpFailure(path, _), ReadSuccess(path, _))
         } 
         
         io.map(requestor ! _).unsafePerformIO
