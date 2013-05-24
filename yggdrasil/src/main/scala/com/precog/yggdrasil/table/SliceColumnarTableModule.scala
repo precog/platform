@@ -37,13 +37,13 @@ import scala.collection.mutable
 
 import TableModule._
 
-trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Key, Slice] {
+trait SliceColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Slice] {
   type TableCompanion <: SliceColumnarTableCompanion
 
   trait SliceColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    type BD = BlockProjectionData[Key, Slice]
+    //type BD = BlockProjectionData[Key, Slice]
   
-    private object loadMergeEngine extends MergeEngine[Key, BD]
+    //private object loadMergeEngine extends MergeEngine[Key, BD]
 
     def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
       for {
@@ -52,7 +52,7 @@ trait SliceColumnarTableModule[M[+_], Key] extends BlockStoreColumnarTableModule
         totalLength = projections.map(_.length).sum
       } yield {
         def slices(proj: Projection, constraints: Option[Set[ColumnRef]]): StreamT[M, Slice] = {
-          StreamT.unfoldM[M, Slice, Option[Key]](None) { key =>
+          StreamT.unfoldM[M, Slice, Option[proj.Key]](None) { key =>
             proj.getBlockAfter(key, constraints).map { b =>
               b.map {
                 case BlockProjectionData(_, maxKey, slice) =>

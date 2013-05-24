@@ -8,8 +8,8 @@ import blueeyes.json.JValue
 import scalaz._
 import scalaz.syntax.monad._
 
-trait ProjectionModule[M[+_], Key, Block] {
-  type Projection <: ProjectionLike[M, Key, Block]
+trait ProjectionModule[M[+_], Block] {
+  type Projection <: ProjectionLike[M, Block]
   type ProjectionCompanion <: ProjectionCompanionLike[M]
 
   def Projection: ProjectionCompanion
@@ -25,7 +25,9 @@ trait ProjectionModule[M[+_], Key, Block] {
 
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
 
-trait ProjectionLike[M[+_], Key, Block] {
+trait ProjectionLike[M[+_], Block] {
+  type Key
+
   def structure(implicit M: Monad[M]): M[Set[ColumnRef]]
   def length: Long
 

@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+import com.precog.common.ingest.FileContent
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -13,12 +14,14 @@ import TransSpecModule._
 
 import blueeyes.bkka._
 import blueeyes.json._
+import blueeyes.core.http.{MimeType, MimeTypes}
 
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files
 
 import org.slf4j.Logger
+import com.weiglewilczek.slf4s.Logging
 
 import org.apache.jdbm.DBMaker
 import java.io.File
@@ -72,7 +75,7 @@ trait ColumnarTableModuleConfig {
   def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
 }
 
-object ColumnarTableModule {
+object ColumnarTableModule extends Logging {
   def renderJson[M[+_]](slices: StreamT[M, Slice], prefix: String, delimiter: String, suffix: String)(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
     import scalaz.\/._
     def wrap(stream: StreamT[M, CharBuffer]) = {
@@ -302,6 +305,28 @@ object ColumnarTableModule {
         case None =>
           None
       }
+    }
+  }
+
+  def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
+    import FileContent._
+    import MimeTypes._
+
+    val AnyMimeType = anymaintype/anysubtype
+
+    output match {
+      case ApplicationJson | AnyMimeType =>
+        ColumnarTableModule.renderJson(slices, "[", ",", "]")
+
+      case XJsonStream =>
+        ColumnarTableModule.renderJson(slices, "", "\n", "")
+
+      case TextCSV => 
+        ColumnarTableModule.renderCsv(slices)
+
+      case other => 
+        logger.warn("Unrecognized output type requested for conversion of slice stream to char buffers: %s".format(output))
+        StreamT.empty[N, CharBuffer]
     }
   }
 }

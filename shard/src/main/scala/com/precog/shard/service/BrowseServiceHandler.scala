@@ -8,7 +8,7 @@ import com.precog.common.security._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.vfs._
-import Resource._
+import ResourceError._
 
 import blueeyes.core.data._
 import blueeyes.core.http._

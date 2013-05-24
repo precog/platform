@@ -8,7 +8,7 @@ import com.precog.common.ingest.FileContent
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.yggdrasil.execution._
-import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.vfs._
 import com.precog.util.InstantOrdering
 
@@ -46,7 +46,7 @@ import scalaz.syntax.std.option._
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
-  def platform: Platform[Future, A]
+  def execution: Execution[Future, A]
   def extractResponse(request: HttpRequest[_], a: A, outputType: MimeType): Future[HttpResponse[QueryResult]]
 
   private val Command = """:(\w+)\s+(.+)""".r
@@ -74,7 +74,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   val service = (request: HttpRequest[ByteChunk]) => {
     success { (apiKey: APIKey, path: Path, query: String, opts: QueryOptions) =>
       val responseEither = for {
-        executor <- platform.executorFor(apiKey) leftMap { EvaluationError.invalidState } 
+        executor <- execution.executorFor(apiKey) leftMap { EvaluationError.invalidState } 
         result <- executor.execute(apiKey, query, path, opts) 
         httpResponse <- EitherT.right(extractResponse(request, result, opts.output) map (appendHeaders(opts)))
       } yield httpResponse
@@ -86,7 +86,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]], storedQueries: SecureVFS[Future], clock: Clock)(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, Slice]], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
 
@@ -98,11 +98,10 @@ class AnalysisServiceHandler(platform: Platform[Future, StreamT[Future, Slice]],
 
         val cacheControl0 = CacheControl.fromCacheDirectives(cacheDirectives: _*)
         // Internally maxAge/maxStale are compared against ms times
-        storedQueries.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map {
-          case StoredQueryResult(stream, cachedAt) =>
-            HttpResponse(OK, 
-              headers =  HttpHeaders(cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
-              content = Some(Right(Resource.toCharBuffers(queryOptions.output, stream))))
+        platform.vfs.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
+          HttpResponse(OK, 
+            headers =  HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
+            content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data))))
         } valueOr { evaluationError =>
           logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
           HttpResponse(InternalServerError)
@@ -121,7 +120,7 @@ object SyncResultFormat {
 }
 
 class SyncQueryServiceHandler(
-    val platform: Platform[Future, (Option[JobId], StreamT[Future, Slice])],
+    val execution: Execution[Future, (Option[JobId], StreamT[Future, Slice])],
     jobManager: JobManager[Future],
     defaultFormat: SyncResultFormat)(implicit
     M: Monad[Future]) extends QueryServiceHandler[(Option[JobId], StreamT[Future, Slice])] {
@@ -137,7 +136,7 @@ class SyncQueryServiceHandler(
     import SyncResultFormat._
 
     val (jobId, slices) = result
-    val charBuffers = Resource.toCharBuffers(outputType, slices)
+    val charBuffers = ColumnarTableModule.toCharBuffers(outputType, slices)
 
     val format = request.parameters get 'format map {
       case "simple" => Right(Simple)
@@ -228,7 +227,7 @@ class SyncQueryServiceHandler(
   }
 }
 
-class AsyncQueryServiceHandler(val platform: Platform[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
+class AsyncQueryServiceHandler(val execution: Execution[Future, JobId])(implicit M: Monad[Future]) extends QueryServiceHandler[JobId] {
   def extractResponse(request: HttpRequest[_], jobId: JobId, outputType: MimeType): Future[HttpResponse[QueryResult]] = {
     val result = JObject(JField("jobId", JString(jobId)) :: Nil)
     HttpResponse[QueryResult](Accepted, content = Some(Left(result))).point[Future]

@@ -33,17 +33,16 @@ import scalaz.syntax.std.option._
 import scalaz.effect.IO
 import scala.math.Ordered._
 
-trait SecureVFSModule[M[+_], Key, Block] extends VFSModule[M, Key, Block] {
+trait VFSMetadata[M[+_]] {
+  def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]]
+  def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
+  def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
+}
+
+trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
   case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant])
 
-  trait VFSMetadata {
-    // TODO: Find the right balance of abstraction here.
-    def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]]
-    def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
-    def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
-  }
-
-  class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata with Logging {
+  class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
     def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
       //FIXME: Unsecured for now
       vfs.writeAll(data)
@@ -80,7 +79,7 @@ trait SecureVFSModule[M[+_], Key, Block] extends VFSModule[M, Key, Block] {
       }
     }
 
-    def executeStoredQuery(platform: Platform[M, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import queryOptions.cacheControl._
       val cachePath = path / Path(".cached")
       def fallBack = if (onlyIfCached) {
@@ -131,7 +130,7 @@ trait SecureVFSModule[M[+_], Key, Block] extends VFSModule[M, Key, Block] {
       }
     }
 
-    private def executeUncached(platform: Platform[M, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions, cacheAt: Option[Path])(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    private def executeUncached(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions, cacheAt: Option[Path])(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import EvaluationError._
       logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
       for { 

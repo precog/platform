@@ -37,8 +37,8 @@ import scalaz.syntax.std.option._
 import scalaz.syntax.std.list._
 import scalaz.effect.IO
 
-trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Long, Slice] {
-  type Projection = ProjectionLike[M, Long, Slice]
+trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] {
+  type Projection = ProjectionLike[M, Slice]
 
   object InMemoryVFS {
     sealed trait Record {
