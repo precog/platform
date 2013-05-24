@@ -18,15 +18,15 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz.syntax.show._
 
 trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging {
-  def dataPath[A, B](prefix: String)(next: HttpService[A, (APIKey, Path) => Future[B]]) = {
+  def dataPath[A, B, C](prefix: String)(next: HttpService[A, (B, Path) => Future[C]]) = {
     path("""%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n\.])*)/?)?)""".format(prefix)) { 
-      new DelegatingService[A, APIKey => Future[B], A, (APIKey, Path) => Future[B]] {
+      new DelegatingService[A, B => Future[C], A, (B, Path) => Future[C]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
           logger.debug("Handling dataPath request " + request.shows)
         
           val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
-          next.service(request) map { f => (apiKey: APIKey) => f(apiKey, Path(path.getOrElse(""))) }
+          next.service(request) map { f => (b: B) => f(b, Path(path.getOrElse(""))) }
         }
 
         val metadata = AboutMetadata(

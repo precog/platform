@@ -4,11 +4,14 @@ package muspelheim
 import akka.dispatch.Future
 
 import com.precog.common._
+import com.precog.common.accounts._
 
 import com.precog.daze._
 import com.precog.yggdrasil.table.ColumnarTableModule
 
 import com.weiglewilczek.slf4s.Logging
+
+import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.syntax.comonad._
@@ -22,6 +25,10 @@ trait RenderStackSpecs extends EvalStackSpecs
   implicit val M: Monad[Future] with Comonad[Future]
 
   implicit val ntFuture = NaturalTransformation.refl[Future]
+
+  private val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
+    new DateTime, "dummyAPIKey", Path.Root, AccountPlan.Free)
+  private def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, new DateTime)
 
   "full stack rendering" should {
     def evalTable(str: String, debug: Boolean = false): Table = {
@@ -37,7 +44,7 @@ trait RenderStackSpecs extends EvalStackSpecs
       val tree = forest.head
       tree.errors must beEmpty
       val Right(dag) = decorate(emit(tree))
-      val tableM = evaluator.eval(dag, EvaluationContext("dummyAPIKey", Path.Root, new org.joda.time.DateTime()), true)
+      val tableM = evaluator.eval(dag, dummyEvaluationContext, true)
       tableM map { _ transform DerefObjectStatic(Leaf(Source), CPathField("value")) } copoint
     }
     

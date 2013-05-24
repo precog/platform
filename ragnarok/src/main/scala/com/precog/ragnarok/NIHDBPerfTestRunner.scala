@@ -10,8 +10,8 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.util.{ FileOps, FilesystemFileOps, XLightWebHttpClientModule }
 import com.precog.yggdrasil.vfs._
-import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
@@ -33,6 +33,7 @@ import scalaz.syntax.traverse._
 
 final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean, _rootDir: Option[File], testTimeout: Duration = Duration(120, "seconds"))
     extends EvaluatingPerfTestRunner[Future, T]
+    with XLightWebHttpClientModule[Future]
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with NIHDBIngestSupport { self =>
@@ -83,10 +84,11 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-    new Evaluator[N](N0) with IdSourceScannerModule {
+    new Evaluator[N](N0) {
       type YggConfig = self.YggConfig
       val yggConfig = self.yggConfig
       val report = LoggingQueryLogger[N](N0)
+      def freshIdScanner = self.freshIdScanner
     }
   }
 

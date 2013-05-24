@@ -47,7 +47,7 @@ import scalaz.syntax.std.option._
 case class StoredQueryResult[M[+_]](data: StreamT[M, Slice], cachedAt: Option[Instant])
 
 trait StoredQueries[M[+_]] {
-  def executeStoredQuery(apiKey: APIKey, path: Path, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]]
+  def executeStoredQuery(context: EvaluationContext, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]]
 }
 
 object VFSStoredQueries {
@@ -57,31 +57,33 @@ object VFSStoredQueries {
 class VFSStoredQueries[M[+_]: Monad](platform: Platform[M, StreamT[M, Slice]], vfs: VFS[M], scheduler: Scheduler[M], jobManager: JobManager[M], permissionsFinder: PermissionsFinder[M], clock: Clock) extends StoredQueries[M] with Logging {
   import VFSStoredQueries._
 
-  private def executeUncached(apiKey: APIKey, path: Path, queryOptions: QueryOptions, cacheAt: Option[Path]): M[Validation[EvaluationError, StoredQueryResult[M]]] = {
+  private def executeUncached(context: EvaluationContext, queryOptions: QueryOptions, cacheAt: Option[Path]): M[Validation[EvaluationError, StoredQueryResult[M]]] = {
+    val path = context.basePath
     logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
     for {
-      executorV <- platform.executorFor(apiKey)
+      executorV <- platform.executorFor(context.apiKey)
       // TODO: Check read permissions
       queryOpt <- vfs.readQuery(path, Version.Current)
-      queryV = queryOpt.toSuccess(nels("Query not found at %s for %s".format(path.path, apiKey)))
+      queryV = queryOpt.toSuccess(nels("Query not found at %s for %s".format(path.path, context.apiKey)))
       basePathV = path.prefix.toSuccess(nels("Path %s cannot be relativized.".format(path.path)))
-      resultV <- (queryV tuple basePathV tuple executorV.toValidationNel) traverse {
-        case ((query, basePath), executor) => executor.execute(apiKey, query, basePath, queryOptions)
+      contextV = basePathV map (path0 => context.copy(basePath = path0))
+      resultV <- (queryV tuple contextV tuple executorV.toValidationNel) traverse {
+        case ((query, context), executor) => executor.execute(query, context, queryOptions)
       }
       resultV0 = resultV.leftMap(e => EvaluationError.acc(e map { InvalidStateError(_)})).flatMap(a => a)
       cachingV <- cacheAt map { cachedPath =>
         for {
-          writeAs <- platform.metadataClient.currentAuthorities(apiKey, path)
-          perms <- permissionsFinder.writePermissions(apiKey, cachedPath, clock.instant())
-          job <- jobManager.createJob(apiKey, "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now()))
+          writeAs <- platform.metadataClient.currentAuthorities(context.apiKey, path)
+          perms <- permissionsFinder.writePermissions(context.apiKey, cachedPath, clock.instant())
+          job <- jobManager.createJob(context.apiKey, "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now()))
         } yield {
-          val allPerms = Map(apiKey -> perms.toSet[Permission])
+          val allPerms = Map(context.apiKey -> perms.toSet[Permission])
           val writeAsV = writeAs.toSuccess("Unable to determine write authorities for caching of %s".format(path))
           for {
             writeAs <- writeAsV.leftMap(InvalidStateError(_))
             stream <- resultV0
           } yield {
-            vfs.persistingStream(apiKey, cachedPath, writeAs, perms.toSet[Permission], Some(job.id), stream)
+            vfs.persistingStream(context.apiKey, cachedPath, writeAs, perms.toSet[Permission], Some(job.id), stream)
           }
         }
       } getOrElse {
@@ -90,7 +92,9 @@ class VFSStoredQueries[M[+_]: Monad](platform: Platform[M, StreamT[M, Slice]], v
     } yield cachingV.map(StoredQueryResult(_, None))
   }
 
-  def executeStoredQuery(apiKey: APIKey, path: Path, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]] = {
+  def executeStoredQuery(context: EvaluationContext, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]] = {
+    val path = context.basePath
+    val apiKey = context.apiKey
     val cachedPath = cachePath(path)
 
     def fallBack = if (onlyIfCached) {
@@ -99,7 +103,7 @@ class VFSStoredQueries[M[+_]: Monad](platform: Platform[M, StreamT[M, Slice]], v
     } else {
       // if current cached version is older than the max age or cached
       // version does not exist, then run synchronously and cache (if cacheable)
-      executeUncached(apiKey, path, queryOptions, cacheable.option(cachedPath))
+      executeUncached(context, queryOptions, cacheable.option(cachedPath))
     }
 
     logger.debug("Checking on cached result for %s with maxAge = %s and recacheAfter = %s and cacheable = %s".format(path, maxAge, recacheAfter, cacheable))
@@ -114,9 +118,10 @@ class VFSStoredQueries[M[+_]: Monad](platform: Platform[M, StreamT[M, Slice]], v
             writeAsOpt <- platform.metadataClient.currentAuthorities(apiKey, path)
             writeAsV = writeAsOpt.toSuccess(nels("Unable to determine write authorities for caching of %s".format(path.path)))
             basePathV = path.prefix.toSuccess(nels("Path %s cannot be relativized.".format(path.path)))
-            taskIdV <- (writeAsV tuple basePathV) traverse {
-              case (writeAs, basePath) =>
-                scheduler.addTask(None, apiKey, writeAs, basePath, path, cachedPath, None).map(_.toValidationNel)
+            contextV = basePathV map (path0 => context.copy(basePath = path0))
+            taskIdV <- (writeAsV tuple contextV) traverse {
+              case (writeAs, context) =>
+                scheduler.addTask(None, apiKey, writeAs, context, path, cachedPath, None).map(_.toValidationNel)
             }
             currentV <- vfs.readCache(cachedPath, Version.Current) map {
               _.toSuccess(nels("Could not find cached data for path %s.".format(cachedPath)))
@@ -160,5 +165,5 @@ object NoopStoredQueries {
 }
 
 class NoopStoredQueries[M[+_]: Monad] extends StoredQueries[M] {
-  def executeStoredQuery(apiKey: APIKey, path: Path, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]] = sys.error("Stored query execution is not supported.")
+  def executeStoredQuery(context: EvaluationContext, queryOptions: QueryOptions, maxAge: Option[Long], recacheAfter: Option[Long], cacheable: Boolean, onlyIfCached: Boolean): M[Validation[EvaluationError, StoredQueryResult[M]]] = sys.error("Stored query execution is not supported.")
 }
