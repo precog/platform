@@ -85,6 +85,8 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
 }
 
 trait REPL extends ParseEvalStack[Future]
+    with ActorVFSModule
+    with SecureVFSModule[Future, Slice]
     with NIHDBColumnarTableModule
     with LongIdMemoryDatasetConsumer[Future] {
 
@@ -275,14 +277,15 @@ object Console extends App {
         val apiKeyManager = new InMemoryAPIKeyManager[Future](yggConfig.clock)
 
         val accessControl = new DirectAPIKeyFinder(apiKeyManager)
-        val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"), new InMemoryJobManager[Future], yggConfig.clock)))
-
         val jobManager = new InMemoryJobManager[Future]
+        val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
+        val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout)
+
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, Duration(300, "seconds"), yggConfig.clock)))
+
         val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
         val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
 
