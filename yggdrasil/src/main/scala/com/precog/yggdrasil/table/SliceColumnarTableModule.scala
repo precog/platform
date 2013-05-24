@@ -37,15 +37,12 @@ import scala.collection.mutable
 
 import TableModule._
 
+//FIXME: This is only used in test at this point, kill with fire in favor of VFSColumnarTableModule
 trait SliceColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] with ProjectionModule[M, Slice] {
   type TableCompanion <: SliceColumnarTableCompanion
 
   trait SliceColumnarTableCompanion extends BlockStoreColumnarTableCompanion {
-    //type BD = BlockProjectionData[Key, Slice]
-  
-    //private object loadMergeEngine extends MergeEngine[Key, BD]
-
-    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table] = {
+    def load(table: Table, apiKey: APIKey, tpe: JType): EitherT[M, vfs.ResourceError, Table] = EitherT.right {
       for {
         paths       <- pathsM(table)
         projections <- paths.toList.traverse(Projection(_)).map(_.flatten)
@@ -71,6 +68,7 @@ trait SliceColumnarTableModule[M[+_]] extends BlockStoreColumnarTableModule[M] w
 
           acc ++ StreamT.wrapEffect(constraints map { c => slices(proj, c) })
         }
+
         Table(stream, ExactSize(totalLength))
       }
     }

@@ -36,7 +36,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     extends EvaluatingPerfTestRunner[Future, T]
     with SecureVFSModule[Future, Slice]
     with ActorVFSModule
-    with NIHDBColumnarTableModule
+    with VFSColumnarTableModule
     with NIHDBIngestSupport { self =>
     // with StandaloneActorProjectionSystem
     // with SliceColumnarTableModule[Future, Array[Byte]] { self =>
@@ -65,7 +65,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
 
   yggConfig.dataDir.mkdirs()
 
-  trait TableCompanion extends NIHDBColumnarTableCompanion
+  trait TableCompanion extends VFSColumnarTableCompanion
   object Table extends TableCompanion
 
   val accountFinder = new StaticAccountFinder[Future]("", "")

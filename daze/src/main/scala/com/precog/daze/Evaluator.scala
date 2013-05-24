@@ -12,6 +12,7 @@ import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.ColumnarTableModuleConfig
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util.IdSourceConfig
+import com.precog.yggdrasil.vfs._
 import com.precog.util._
 
 import org.joda.time._
@@ -493,7 +494,15 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               Path(prefixStr) = ctx.basePath
               f1 = concatString(ctx).applyl(CString(prefixStr.replaceAll("/$", "")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
-              back <- transState liftM mn(pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe))
+              loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
+                {
+                  case ResourceError.NotFound(message) => report.warn(graph.loc, message) >> Table.empty.point[N]
+                  case ResourceError.PermissionsError(message) => report.warn(graph.loc, message) >> Table.empty.point[N]
+                  case fatal => report.error(graph.loc, "Fatal error while loading dataset") >> report.die() >> Table.empty.point[N]
+                },
+                table => table.point[N]
+              )
+              back <- transState liftM mn(loaded).join
             } yield PendingTable(back, graph, TransSpec1.Id, IdentityOrder(graph))
           
           case dag.Morph1(mor, parent) => 

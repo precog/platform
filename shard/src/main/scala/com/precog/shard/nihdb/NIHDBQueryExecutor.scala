@@ -86,7 +86,7 @@ trait NIHDBQueryExecutorComponent  {
         with ActorVFSModule
         with SchedulingActorModule
         with ShardQueryExecutorPlatform[Future]
-        with NIHDBColumnarTableModule
+        with VFSColumnarTableModule
         with KafkaIngestActorProjectionSystem 
         with GracefulStopSupport { platform =>
 
@@ -143,7 +143,7 @@ trait NIHDBQueryExecutorComponent  {
       val scheduler = new ActorScheduler(scheduleActor, yggConfig.schedulingTimeout)
       val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, scheduler, clock)
 
-      trait TableCompanion extends NIHDBColumnarTableCompanion 
+      trait TableCompanion extends VFSColumnarTableCompanion 
       object Table extends TableCompanion
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)

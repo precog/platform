@@ -126,7 +126,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
-    def load(apiKey: APIKey, tpe: JType): M[Table] = {
+    def load(apiKey: APIKey, tpe: JType) = EitherT.right {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
           def reduce(schema: CSchema, range: Range): Set[Path] = {
@@ -138,10 +138,9 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
         }
       }
 
-      for {
-        paths <- pathsM
-        table =  fromJson(paths.toList.map(projectionData).flatten.toStream)
-      } yield table
+      for (paths <- pathsM) yield {
+        fromJson(paths.toList.map(projectionData).flatten.toStream)
+      }
     }
   }
 }
