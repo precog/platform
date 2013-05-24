@@ -848,6 +848,17 @@ trait DAG extends Instructions {
 
       foldDown0(this, f(this))
     }
+    
+    final def size: Int = {
+      import scalaz.std.anyVal._
+      val seen = mutable.Set[DepGraph]()
+      
+      foldDown(true) {
+        case n if !seen(n) =>
+          seen += n
+          1
+      }
+    }
   }
   
   object dag {
