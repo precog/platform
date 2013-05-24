@@ -84,7 +84,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
 
     def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
       readResource(apiKey, path, version) flatMap { //need mapM
-        _.fold(br => EitherT.right(br.metadata.size.point[M]), pr => EitherT.right(pr.length))
+        _.fold(br => EitherT.right(br.byteLength.point[M]), pr => EitherT.right(pr.recordCount))
       }
     }
 
