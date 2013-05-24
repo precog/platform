@@ -34,7 +34,7 @@ trait RandomStackSpecs extends EvalStackSpecs {
     "give error if distribution is returned unobserved" in {
       val input = """std::random::uniform(12)"""
 
-      evalE(input) must throwAn[Exception]
+      evalE(input) must throwAn[AssertionError]
     }
 
     "guarantee observe of uniform joins with original dataset" in {

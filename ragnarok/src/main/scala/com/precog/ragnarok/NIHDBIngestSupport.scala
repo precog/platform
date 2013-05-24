@@ -26,6 +26,7 @@ import scalaz.syntax.comonad._
 
 import akka.dispatch._
 import akka.actor.{ IO => _, _ }
+import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -82,7 +83,7 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with ActorVFSModule wi
   def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", clock: Clock = Clock.System): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
-    implicit val to = storageTimeout
+    implicit val to = Timeout(300 * 1000)
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)

@@ -49,6 +49,11 @@ object TestStack {
   val testAccount = "dummyAccount"
 }
 
+trait ActorPlatformSpecs {
+  implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
+  implicit val executor = ExecutionContext.defaultExecutionContext(actorSystem)
+}
+
 trait TestStackLike[M[+_]] extends ParseEvalStack[M]
     with MemoryDatasetConsumer[M]
     with IdSourceScannerModule 
@@ -56,14 +61,6 @@ trait TestStackLike[M[+_]] extends ParseEvalStack[M]
   import TestStack._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
-
-  val sliceSize = 10
-
-  def controlTimeout = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
-
-  implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
-
-  implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     parseEvalLogger.trace("Init yggConfig")
@@ -76,10 +73,10 @@ trait TestStackLike[M[+_]] extends ParseEvalStack[M]
     val memoizationWorkDir = scratchDir
 
     val flatMapTimeout = Duration(100, "seconds")
-    val maxEvalDuration = controlTimeout
+    val maxEvalDuration = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
     val clock = blueeyes.util.Clock.System
 
-    val maxSliceSize = self.sliceSize
+    val maxSliceSize = 10
     val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource

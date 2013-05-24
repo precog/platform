@@ -70,32 +70,50 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future] {
 object NIHDBTestStack extends NIHDBTestStack {
   def startup() { }
 
-  def shutdown() {
-    //NIHDBPlatformSpecsActor.release
+  def shutdown() { }
+}
+
+trait NIHDBTestActors extends ActorVFSModule with ActorPlatformSpecs with YggConfigComponent {
+  trait NIHDBTestActorsConfig extends BaseConfig with BlockStoreColumnarTableModuleConfig {
+    val cookThreshold = 10
+    val storageTimeout = Timeout(300 * 1000)
+
+    def clock: blueeyes.util.Clock
   }
+
+  type YggConfig <: NIHDBTestActorsConfig
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(executor, yggConfig.storageTimeout.duration)
+
+  val accountFinder = new StaticAccountFinder[Future](TestStack.testAccount, TestStack.testAPIKey, Some("/"))
+  val apiKeyFinder = new StaticAPIKeyFinder[Future](TestStack.testAPIKey)
+  val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, yggConfig.clock.instant())
+  val jobManager = new InMemoryJobManager[Future]
+
+  val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
+  val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
+
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
 }
 
 trait NIHDBTestStack extends TestStackLike[Future]
     with SecureVFSModule[Future, Slice]
     with LongIdMemoryDatasetConsumer[Future]
-    with ActorVFSModule
+    with NIHDBTestActors
     with NIHDBColumnarTableModule { self =>
-
-  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
       with EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
-      with BlockStoreColumnarTableModuleConfig {
-    val cookThreshold = 10
+      with BlockStoreColumnarTableModuleConfig 
+      with NIHDBTestActorsConfig {
     val ingestConfig = None
   }
 
   object yggConfig extends YggConfig
 
-  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
   //val accountFinder = None
 
@@ -111,20 +129,7 @@ trait NIHDBTestStack extends TestStackLike[Future]
       val yggConfig = new YggConfig
   }
 
-  val storageTimeout = Timeout(300 * 1000)
-
-  val accountFinder = new StaticAccountFinder[Future](TestStack.testAccount, TestStack.testAPIKey, Some("/"))
-  val apiKeyFinder = new StaticAPIKeyFinder[Future](TestStack.testAPIKey)
-
-  val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, yggConfig.clock.instant())
-  val jobManager = new InMemoryJobManager[Future]
-
-  val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
-
-  val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout)
-  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, yggConfig.clock)))
-
-  val actorVFS = new ActorVFS(projectionsActor, storageTimeout, storageTimeout)
+  val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
   val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {

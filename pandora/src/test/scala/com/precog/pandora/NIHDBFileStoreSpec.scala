@@ -17,6 +17,7 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.vfs._
 
 import com.weiglewilczek.slf4s.Logging
+import org.streum.configrity.Configuration
 
 import java.util.UUID
 
@@ -27,24 +28,18 @@ import org.specs2.specification.Fragments
 import scalaz._
 import scalaz.syntax.comonad._
 
-class NIHDBFileStoreSpec extends NIHDBPlatformSpecs with Specification with Logging {
-  type TestStack <: ActorVFSModule
-  import stack._
-
+class NIHDBFileStoreSpec extends NIHDBTestActors with Specification with Logging {
   val tmpDir = IOUtils.createTmpDir("filestorespec").unsafePerformIO
+  class YggConfig extends NIHDBTestActorsConfig {
+    val config = Configuration parse { "precog.storage.root = %s".format(tmpDir) }
+    val clock = blueeyes.util.Clock.System
+    val maxSliceSize = 10
+  } 
+
+  object yggConfig extends YggConfig
 
   logger.info("Running NIHDBFileStoreSpec under " + tmpDir)
 
-/*
-  val projectionSystem = new NIHDBPlatformSpecsActor(Some(tmpDir.getCanonicalPath))
-
-  val projectionsActor = projectionSystem.actor
-
-  val actorSystem = projectionSystem.actorSystem.get
-
-  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, Duration(5, "Seconds"))
-
-  */
   implicit val timeout = new Timeout(5000)
 
   val loremIpsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac dolor ac velit consequat vestibulum at id dolor. Vivamus luctus mauris ac massa iaculis a cursus leo porta. Aliquam tellus ligula, mattis quis luctus sed, tempus id ante. Donec sagittis, ante pharetra tempor ultrices, purus massa tincidunt neque, ut tempus massa nisl non libero. Aliquam tincidunt commodo facilisis. Phasellus accumsan dapibus lorem ac aliquam. Nullam vitae ullamcorper risus. Praesent quis tellus lectus."
