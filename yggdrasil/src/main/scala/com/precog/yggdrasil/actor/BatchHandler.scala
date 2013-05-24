@@ -64,18 +64,18 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       if (remaining == 0) self ! PoisonPill
 
       // These next two cases are errors that should not terminate the batch
-    case UpdateFailure(path, NEL(ResourceError.PermissionsError(msg))) =>
+    case PathOpFailure(path, ResourceError.PermissionsError(msg)) =>
       logger.warn("Permissions failure on %s: %s".format(path, msg))
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
 
-    case UpdateFailure(path, NEL(ResourceError.IllegalWriteRequestError(msg))) =>
+    case PathOpFailure(path, ResourceError.IllegalWriteRequestError(msg)) =>
       logger.warn("Illegal write failure on %s: %s".format(path, msg))
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
 
-    case UpdateFailure(path, errors) =>
-      logger.error("Failure during batch update on %s:\n  %s".format(path, errors.list.mkString("\n  ")))
+    case PathOpFailure(path, err) =>
+      logger.error("Failure during batch update on %s:\n  %s".format(path, err.toString))
       self ! PoisonPill
 
     case ArchiveComplete(path) =>
