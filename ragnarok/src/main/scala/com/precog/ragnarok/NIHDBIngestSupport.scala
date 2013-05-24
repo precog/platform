@@ -32,7 +32,7 @@ import com.weiglewilczek.slf4s.Logging
 /**
  * Provides a simple interface for ingesting bulk JSON data.
  */
-trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
+trait NIHDBIngestSupport extends NIHDBColumnarTableModule with ActorVFSModule with Logging {
   implicit def M: Monad[Future] with Comonad[Future]
   def actorSystem: ActorSystem
 
