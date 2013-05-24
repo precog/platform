@@ -106,7 +106,7 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
 trait REPL extends ParseEvalStack[Future]
     with ActorVFSModule
     with SecureVFSModule[Future, Slice]
-    with NIHDBColumnarTableModule
+    with VFSColumnarTableModule
     with LongIdMemoryDatasetConsumer[Future] {
 
   val dummyAPIKey = "dummyAPIKey"
@@ -308,7 +308,7 @@ object Console extends App {
         val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
         val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
 
-        trait TableCompanion extends NIHDBColumnarTableCompanion
+        trait TableCompanion extends VFSColumnarTableCompanion
 
         object Table extends TableCompanion
 

@@ -80,13 +80,13 @@ trait SBTConsolePlatform extends muspelheim.ParseEvalStack[Future]
     with SecureVFSModule[Future, Slice]
     with ActorVFSModule
     with IdSourceScannerModule
-    with NIHDBColumnarTableModule
+    with VFSColumnarTableModule
     with StandaloneActorProjectionSystem
     with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
 
-  trait TableCompanion extends NIHDBColumnarTableCompanion
+  trait TableCompanion extends VFSColumnarTableCompanion
 
   object Table extends TableCompanion
 }
