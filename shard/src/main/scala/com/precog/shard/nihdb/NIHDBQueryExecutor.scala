@@ -101,6 +101,9 @@ trait NIHDBQueryExecutorComponent  {
 
   def nihdbPlatform(config0: Configuration, extApiKeyFinder: APIKeyFinder[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
     new ManagedPlatform
+        with SecureVFSModule[Future, Slice]
+        with ActorVFSModule
+        with SchedulingActorModule
         with ShardQueryExecutorPlatform[Future]
         with NIHDBColumnarTableModule
         with KafkaIngestActorProjectionSystem 
@@ -142,14 +145,14 @@ trait NIHDBQueryExecutorComponent  {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = extApiKeyFinder
+      //val accessControl = extApiKeyFinder
       val storageTimeout = yggConfig.storageTimeout
-      val jobManager = extJobManager
-      //val metadataClient = new StorageMetadataClient[Future](this)
 
-      private val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
-      private val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-      private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
+      val jobManager = extJobManager
+      val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
+      val resourceBuilder = new ResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout)
+
+      private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, clock)))
       val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
       private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 

@@ -23,7 +23,9 @@ package service
 import com.precog.common.Path
 import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.vfs.Version
 
 import blueeyes.util.Clock
 import blueeyes.core.data._
@@ -43,19 +45,20 @@ import scalaz._
 import scalaz.syntax.show._
 import scalaz.effect.IO
 
-class DataServiceHandler[A](vfs: SecureVFS[Future])(implicit M: Monad[Future])
+// having access to the whole platform is a bit of overkill, but whatever
+class DataServiceHandler[A](platform: Platform[Future, Slice, StreamT[Future, Slice]])(implicit M: Monad[Future])
     extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[ByteChunk]]] with Logging {
 
   val service = (request: HttpRequest[A]) => Success {
     (apiKey: APIKey, path: Path) => {
       val mimeType = request.headers.header[Accept].flatMap(_.mimeTypes.headOption)
-      vfs.readResource(apiKey, path, Version.Current).run flatMap {
+      platform.vfs.readResource(apiKey, path, Version.Current).run flatMap {
         _.fold(
           error => {
             logger.error("Read failure: " + error.shows)
             sys.error("fixme... return an informative HTTP repsonse.")
           },
-          resource => resource.byteStream(mimeType) map { byteStream =>
+          resource => resource.byteStream(mimeType).run map { byteStream =>
             HttpResponse(OK, headers = HttpHeaders(mimeType.map(`Content-Type`(_)).toSeq: _*), content = byteStream.map(Right(_)))
           }
         )

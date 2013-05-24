@@ -83,7 +83,7 @@ sealed trait WriteResult extends PathActionResponse
 case class UpdateSuccess(path: Path) extends WriteResult
 case class PathOpFailure(path: Path, error: ResourceError) extends ReadResult with WriteResult
 
-trait NIHDBVFSModule extends VFSModule[Future, Long, Slice] {
+trait ActorVFSModule extends VFSModule[Future, Slice] {
   type Projection = NIHDBProjection
 
   def permissionsFinder: PermissionsFinder[Future]
@@ -203,28 +203,6 @@ trait NIHDBVFSModule extends VFSModule[Future, Long, Slice] {
   object NIHDBResource {
     val QuirrelData = MimeType("application", "x-quirrel-data")
     val AnyMimeType = MimeType("*", "*")
-
-    def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
-      import FileContent._
-      import MimeTypes._
-
-      val AnyMimeType = anymaintype/anysubtype
-
-      output match {
-        case ApplicationJson | AnyMimeType =>
-          ColumnarTableModule.renderJson(slices, "[", ",", "]")
-
-        case XJsonStream =>
-          ColumnarTableModule.renderJson(slices, "", "\n", "")
-
-        case TextCSV => 
-          ColumnarTableModule.renderCsv(slices)
-
-        case other => 
-          logger.warn("Unrecognized output type requested for conversion of slice stream to char buffers: %s".format(output))
-          StreamT.empty[N, CharBuffer]
-      }
-    }
   }
 
   case class NIHDBResource(val db: NIHDB) extends ProjectionResource with Logging {
@@ -240,8 +218,10 @@ trait NIHDBVFSModule extends VFSModule[Future, Long, Slice] {
     def length(implicit M: Monad[Future]) = projection.map(_.length)
 
     def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): OptionT[Future, StreamT[Future, Array[Byte]]] = {
-      import Resource.{ bufferOutput }
+      import VFSModule.bufferOutput
+      import ColumnarTableModule.toCharBuffers
       import FileContent._
+
       OptionT(
         projection map { p =>
           val sliceStream = p.getBlockStream(None)

@@ -114,7 +114,7 @@ trait ShardService extends
     val utf8 = Charset.forName("UTF-8")
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
-      case Right(stream) => Right(Resource.bufferOutput(stream))
+      case Right(stream) => Right(VFSModule.bufferOutput(stream))
     }
   }
 
@@ -196,7 +196,7 @@ trait ShardService extends
       dataPath("/analysis/fs") {
         get {
           shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-            new AnalysisServiceHandler(state.platform, state.platform.vfs, state.clock)
+            new AnalysisServiceHandler(state.platform, state.clock)
           }
         }
       }
@@ -206,7 +206,7 @@ trait ShardService extends
   private def dataHandler[A](state: ShardState) = {
     dataPath("/data/fs") {
       get {
-        new DataServiceHandler[A](state.platform.vfs)
+        new DataServiceHandler[A](state.platform)
       }
     }
   }

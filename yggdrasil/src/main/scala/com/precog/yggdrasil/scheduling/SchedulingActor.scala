@@ -63,7 +63,7 @@ case class DeleteTask(id: UUID)
 
 case class StatusForTask(id: UUID, limit: Option[Int])
 
-trait SchedulingActorModule extends SecureVFSModule[Future, Long, Slice] {
+trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
   object SchedulingActor {
     type TaskKey = (Path, Path)
 
@@ -83,7 +83,7 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Long, Slice] {
       permissionsFinder: PermissionsFinder[Future], 
       vfs: VFS,
       storage: ScheduleStorage[Future], 
-      platform: Platform[Future, StreamT[Future, Slice]], 
+      platform: Platform[Future, Slice, StreamT[Future, Slice]], 
       clock: Clock, 
       storageTimeout: Duration = Duration(30, TimeUnit.SECONDS), 
       resourceTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)) extends Actor with Logging { 

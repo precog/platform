@@ -110,10 +110,41 @@ object ResourceError {
   }
 }
 
-trait VFSModule[M[+_], Key, Block] extends Logging {
+object VFSModule {
+  def bufferOutput[M[+_]: Monad](stream0: StreamT[M, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024): StreamT[M, Array[Byte]] = {
+    val encoder = charset.newEncoder()
+
+    def loop(stream: StreamT[M, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[M, Array[Byte]] = {
+      StreamT(stream.uncons map {
+        case Some((cbuf, tail)) =>
+          val result = encoder.encode(cbuf, buf, false)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Skip(loop(tail, buf, arr))
+          }
+
+        case None =>
+          val result = encoder.encode(CharBuffer.wrap(""), buf, true)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
+          }
+      })
+    }
+
+    val arr = new Array[Byte](bufferSize)
+    loop(stream0, ByteBuffer.wrap(arr), arr)
+  }
+}
+
+trait VFSModule[M[+_], Block] extends Logging {
   import ResourceError._
 
-  type Projection <: ProjectionLike[M, Key, Block]
+  type Projection <: ProjectionLike[M, Block]
 
   sealed trait Resource {
     def mimeType: MimeType
@@ -123,48 +154,18 @@ trait VFSModule[M[+_], Key, Block] extends Logging {
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
   }
 
-  object Resource { self =>
-    def bufferOutput(stream0: StreamT[M, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024)(implicit M: Monad[M]): StreamT[M, Array[Byte]] = {
-      val encoder = charset.newEncoder()
-
-      def loop(stream: StreamT[M, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[M, Array[Byte]] = {
-        StreamT(stream.uncons map {
-          case Some((cbuf, tail)) =>
-            val result = encoder.encode(cbuf, buf, false)
-            if (result == CoderResult.OVERFLOW) {
-              val arr2 = new Array[Byte](bufferSize)
-              StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
-            } else {
-              StreamT.Skip(loop(tail, buf, arr))
-            }
-
-          case None =>
-            val result = encoder.encode(CharBuffer.wrap(""), buf, true)
-            if (result == CoderResult.OVERFLOW) {
-              val arr2 = new Array[Byte](bufferSize)
-              StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
-            } else {
-              StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
-            }
-        })
-      }
-
-      val arr = new Array[Byte](bufferSize)
-      loop(stream0, ByteBuffer.wrap(arr), arr)
-    }
-
-  }
-
   trait ProjectionResource extends Resource {
     def append(data: NIHDB.Batch): IO[PrecogUnit]
     def length(implicit M: Monad[M]): M[Long]
     def projection(implicit M: Monad[M]): M[Projection]
+
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
   }
 
   trait BlobResource extends Resource {
     def metadata: BlobMetadata
     def asString(implicit M: Monad[M]): M[Option[String]]
+
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
 

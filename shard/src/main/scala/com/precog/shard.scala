@@ -35,8 +35,4 @@ package object shard {
 
   type JobQueryT[M[+_], +A] = QueryT[JobQueryState, M, A]
   type JobQueryTF[+A] = JobQueryT[Future, A]
-
-  type BasicPlatform[M[+_]] = Platform[M, StreamT[Future, Slice]]
-  type AsyncPlatform[M[+_]] = Platform[M, JobId]
-  type SyncPlatform[M[+_]] = Platform[M, (Option[JobId], StreamT[Future, Slice])]
 }

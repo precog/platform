@@ -26,8 +26,7 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.yggdrasil.execution._
-import com.precog.yggdrasil.table.Slice
-import com.precog.yggdrasil.vfs.Resource
+import com.precog.yggdrasil.table._
 import com.precog.util._
 
 import akka.dispatch.{ Future, ExecutionContext }
@@ -51,26 +50,27 @@ import scalaz._
  * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
  * managed) queries and asynchronous queries.
  */
-trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with ManagedQueryModule { self =>
+trait ManagedPlatform extends Platform[Future, Slice, StreamT[Future, Slice]] with ManagedQueryModule { self =>
+  type AsyncExecution[M[+_]] = Execution[M, JobId]
+  type SyncExecution[M[+_]]  = Execution[M, (Option[JobId], StreamT[Future, Slice])]
+
   /**
-   * Returns an `Platform` whose execution returns a `JobId` rather
+   * Returns an `Execution` whose execution returns a `JobId` rather
    * than a `StreamT[Future, Slice]`.
    */
-  def asynchronous: AsyncPlatform[Future] = {
-    new AsyncPlatform[Future] {
-      def vfs = self.vfs
+  def asynchronous: AsyncExecution[Future] = {
+    new AsyncExecution[Future] {
       def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
     }
   }
 
   /**
-   * Returns a `Platform` whose execution returns both the
+   * Returns a `Execution` whose execution returns both the
    * streaming results and its `JobId`. Note that the reults will not be saved
    * to job.
    */
-  def synchronous: SyncPlatform[Future] = {
-    new SyncPlatform[Future] {
-      def vfs = self.vfs
+  def synchronous: SyncExecution[Future] = {
+    new SyncExecution[Future] {
       def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)
     }
   }
@@ -164,7 +164,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     def complete(resultE: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, JobId] = {
       M.jobId map { jobId =>
         resultE map { result =>
-          val convertedStream: StreamT[JobQueryTF, CharBuffer] = Resource.toCharBuffers(outputType, result)
+          val convertedStream: StreamT[JobQueryTF, CharBuffer] = ColumnarTableModule.toCharBuffers(outputType, result)
           //FIXME: Thread this through the EitherT
           jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>

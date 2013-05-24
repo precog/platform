@@ -45,7 +45,7 @@ import scalaz.syntax.traverse._
 import TableModule._
 
 // TODO: rename to VFSColumnarTableModule. Nothing NIHDB-specific here
-trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Long, Slice] with AskSupport with Logging {
+trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] with SecureVFSModule[Future, Slice] with AskSupport with Logging {
   def vfs: SecureVFS
   def storageTimeout: Timeout
 
@@ -54,7 +54,7 @@ trait NIHDBColumnarTableModule extends BlockStoreColumnarTableModule[Future] wit
       logger.debug("Starting load from " + table.toJson)
       for {
         paths <- pathsM(table)
-        tableE = paths.toList.traverse[({ type l[a] = EitherT[Future, ResourceError, a] })#l, ProjectionLike[Future, Long, Slice]] { path =>
+        tableE = paths.toList.traverse[({ type l[a] = EitherT[Future, ResourceError, a] })#l, ProjectionLike[Future, Slice]] { path =>
           logger.debug("  Loading path: " + path)
           vfs.readProjection(apiKey, path, Version.Current)
         } map { projections =>
