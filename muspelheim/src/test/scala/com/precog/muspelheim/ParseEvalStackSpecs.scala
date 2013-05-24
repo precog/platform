@@ -40,16 +40,20 @@ import org.slf4j.LoggerFactory
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
-object ParseEvalStackSpecs {
+trait ParseEvalStackSpecs[M[+_]] extends Specification {
+  type TestStack <: TestStackLike[M]
+}
+
+object TestStack {
   val testAPIKey = "dummyAPIKey"
   val testAccount = "dummyAccount"
 }
 
-trait ParseEvalStackSpecs[M[+_]] extends Specification
-    with ParseEvalStack[M]
+trait TestStackLike[M[+_]] extends ParseEvalStack[M]
     with MemoryDatasetConsumer[M]
-    with IdSourceScannerModule { self =>
-  import ParseEvalStackSpecs._
+    with IdSourceScannerModule 
+    with EvalStackLike { self =>
+  import TestStack._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
 
@@ -89,12 +93,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val preForest = compile(str)
     val forest = preForest filter { _.errors filterNot isWarning isEmpty }
 
-    forest must haveSize(1) or {
-      forall(preForest) { tree =>
-        tree.errors filterNot isWarning must beEmpty
-      }
-    }
-
+    assert(forest.size == 1 || preForest.forall(_.errors filterNot isWarning isEmpty))
     val tree = forest.head
 
     val Right(dag) = decorate(emit(tree))

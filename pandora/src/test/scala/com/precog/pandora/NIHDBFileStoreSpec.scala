@@ -11,7 +11,7 @@ import blueeyes.util.Clock
 import com.precog.common.Path
 import com.precog.common.ingest._
 import com.precog.common.security._
-import com.precog.muspelheim.ParseEvalStackSpecs
+import com.precog.muspelheim._
 import com.precog.util.IOUtils
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.vfs._
@@ -28,6 +28,9 @@ import scalaz._
 import scalaz.syntax.comonad._
 
 class NIHDBFileStoreSpec extends NIHDBPlatformSpecs with Specification with Logging {
+  type TestStack <: ActorVFSModule
+  import stack._
+
   val tmpDir = IOUtils.createTmpDir("filestorespec").unsafePerformIO
 
   logger.info("Running NIHDBFileStoreSpec under " + tmpDir)
@@ -46,7 +49,7 @@ class NIHDBFileStoreSpec extends NIHDBPlatformSpecs with Specification with Logg
 
   val loremIpsum = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac dolor ac velit consequat vestibulum at id dolor. Vivamus luctus mauris ac massa iaculis a cursus leo porta. Aliquam tellus ligula, mattis quis luctus sed, tempus id ante. Donec sagittis, ante pharetra tempor ultrices, purus massa tincidunt neque, ut tempus massa nisl non libero. Aliquam tincidunt commodo facilisis. Phasellus accumsan dapibus lorem ac aliquam. Nullam vitae ullamcorper risus. Praesent quis tellus lectus."
 
-  import ParseEvalStackSpecs._
+  import TestStack._
 
   "NIHDBPlatform storage" should {
     "Properly store and retrieve files" in {

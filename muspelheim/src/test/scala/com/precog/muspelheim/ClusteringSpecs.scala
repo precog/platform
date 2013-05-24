@@ -5,6 +5,7 @@ import com.precog.yggdrasil._
 import com.precog.common._
 
 trait ClusteringSpecs extends EvalStackSpecs {
+  import stack._
 
   def clusterSchema(obj: Map[String, SValue]): List[String] = obj("cluster1") match {
     case SObject(ctr) => ctr.keys.toList.sorted

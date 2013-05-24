@@ -13,13 +13,10 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.syntax.comonad._
 
-trait RenderStackSpecs extends EvalStackSpecs 
-    with ParseEvalStack[Future]
-    with ColumnarTableModule[Future]
-    with MemoryDatasetConsumer[Future]
-    with Logging {
+trait RenderStackSpecs extends EvalStackSpecs with Logging {
+  type TestStack <: EvalStackLike with ParseEvalStack[Future] with ColumnarTableModule[Future] with MemoryDatasetConsumer[Future]
 
-  implicit val M: Monad[Future] with Comonad[Future]
+  import stack._
 
   implicit val ntFuture = NaturalTransformation.refl[Future]
 
