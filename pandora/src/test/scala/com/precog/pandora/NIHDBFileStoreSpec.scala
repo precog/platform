@@ -76,7 +76,7 @@ class NIHDBFileStoreSpec extends NIHDBPlatformSpecs with Specification with Logg
       }
 
       (projectionsActor ? Read(testPath, Version.Current)).mapTo[ReadResult].copoint must beLike {
-        case ReadSuccess(_, blob : BlobResource) => blob.asString.copoint mustEqual loremIpsum
+        case ReadSuccess(_, blob : BlobResource) => blob.asString.run.copoint must beSome(loremIpsum)
       }
     }
 

@@ -110,7 +110,7 @@ trait RawJsonStorageModule[M[+_]] { self =>
       M.point(projections.keySet.filter(_.isDirectChildOf(path)))
     }
 
-    override def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
+    def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
       M.point {
         val structs = structures.getOrElse(path, Set.empty[ColumnRef])
         val types : Map[CType, Long] = structs.collect {

@@ -315,8 +315,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       paths map { _ flatMap { _ - path }}
     }
 
-    def currentStructure(path: Path, selector: CPath): EitherT[Future, ResourceError, PathStructure] = {
-      readProjection(path, Version.Current) flatMap { projection => 
+    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[Future, ResourceError, PathStructure] = {
+      readProjection(path, version) flatMap { projection => 
         right {
           for (children <- projection.structure) yield {
             PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))

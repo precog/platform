@@ -54,7 +54,7 @@ import scala.math.Ordered._
 
 trait VFSMetadata[M[+_]] {
   def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]]
-  def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
+  def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
   def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
 }
 
@@ -88,8 +88,9 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       }
     }
 
-    def structure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
-      sys.error("todo")
+    def pathStructure(apiKey: APIKey, path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
+      //FIXME: Unsecured for now
+      vfs.pathStructure(path, selector, version)
     }
 
     def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]] = {
