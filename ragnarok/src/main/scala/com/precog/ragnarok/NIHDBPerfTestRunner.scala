@@ -53,6 +53,8 @@ import scalaz.syntax.traverse._
 
 final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean, _rootDir: Option[File], testTimeout: Duration = Duration(120, "seconds"))
     extends EvaluatingPerfTestRunner[Future, T]
+    with SecureVFSModule[Future, Slice]
+    with ActorVFSModule
     with NIHDBColumnarTableModule
     with NIHDBIngestSupport { self =>
     // with StandaloneActorProjectionSystem
@@ -98,10 +100,11 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
 
   val chefs = (1 to 4).map { _ => actorSystem.actorOf(Props(makeChef)) }
   val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
-  val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
   val jobManager = new InMemoryJobManager[Future]
+  val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+
   val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
   val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
 
