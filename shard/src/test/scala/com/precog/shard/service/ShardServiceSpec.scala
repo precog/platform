@@ -80,10 +80,9 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def nanoTime = sys.error("nanotime not available in the past")
 }
 
-trait TestShardService extends
-  BlueEyesServiceSpecification with
-  ShardService with
-  AkkaDefaults { self =>
+trait TestShardService extends BlueEyesServiceSpecification 
+    with ShardService 
+    with AkkaDefaults { self =>
 
   val config = """
     security {
@@ -128,7 +127,7 @@ trait TestShardService extends
   def configureShardState(config: Configuration) = Future {
     val accountFinder = new StaticAccountFinder[Future]("test", testAPIKey)
     val scheduler = NoopScheduler[Future]
-    val platform = new TestPlatform {
+    val platform = new TestPlatform with SecureVFSModule[Future, Slice] with InMemoryVFSModule[Future] {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
@@ -149,7 +148,7 @@ trait TestShardService extends
         Path("/inaccessible/foo") -> Set("other")
       )
 
-      val rawVFS = new InMemoryVFS[Future](Map(), clock)
+      val rawVFS = new InMemoryVFS(Map(), clock)
       val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder, clock.instant())
       val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, scheduler, clock)
     }

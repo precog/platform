@@ -57,7 +57,7 @@ import scalaz.syntax.std.list._
 import scalaz.effect.IO
 
 trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] {
-  type Projection = ProjectionLike[M, Slice]
+  //type Projection = ProjectionLike[M, Slice]
 
   object InMemoryVFS {
     sealed trait Record {
@@ -73,7 +73,7 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] {
     private def newVersion: UUID = new UUID(0L, vid.getAndIncrement())
   }
 
-  class InMemoryVFS(data0: Map[Path, (Array[Byte] \/ Vector[JValue], Authorities)], clock: Clock)(implicit M: Monad[M], IOT: IO ~> M) extends VFS {
+  class InMemoryVFS(data0: Map[Path, (Array[Byte] \/ Vector[JValue], Authorities)], clock: Clock)(implicit M: Monad[M]) extends VFS {
     import InMemoryVFS._
     def toJsonElements(block: Slice) = block.toJsonElements
 

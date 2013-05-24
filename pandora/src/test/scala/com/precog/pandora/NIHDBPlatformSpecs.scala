@@ -79,9 +79,10 @@ import org.streum.configrity.io.BlockFormat
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
+/*
 object NIHDBPlatformSpecsActor extends NIHDBPlatformSpecsActor(Option(System.getProperty("precog.storage.root")))
 
-class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
+class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends ActorVFSModule with Logging {
   abstract class YggConfig
       extends EvaluatorConfig
       with StandaloneShardSystemConfig
@@ -129,8 +130,8 @@ class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
+        val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
 
         Some(SystemState(projectionsActor, actorSystem))
       }
@@ -159,9 +160,12 @@ class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
     }
   }
 }
+*/
 
 trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
+    with SecureVFSModule[Future, Slice]
     with LongIdMemoryDatasetConsumer[Future]
+    with ActorVFSModule
     with NIHDBColumnarTableModule { self =>
 
   override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
@@ -198,11 +202,16 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storageTimeout = Timeout(300 * 1000)
 
-  val projectionsActor = NIHDBPlatformSpecsActor.actor
-  val apiKeyFinder = new DirectAPIKeyFinder(new InMemoryAPIKeyManager[Future](yggConfig.clock))
   val accountFinder = new StaticAccountFinder[Future](ParseEvalStackSpecs.testAccount, ParseEvalStackSpecs.testAPIKey, Some("/"))
+  val apiKeyFinder = new StaticAPIKeyFinder[Future](ParseEvalStackSpecs.testAPIKey)
+
   val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, yggConfig.clock.instant())
   val jobManager = new InMemoryJobManager[Future]
+
+  val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
+
+  val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout)
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, yggConfig.clock)))
 
   val actorVFS = new ActorVFS(projectionsActor, storageTimeout, storageTimeout)
   val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
@@ -218,7 +227,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   def startup() { }
 
   def shutdown() {
-    NIHDBPlatformSpecsActor.release
+    //NIHDBPlatformSpecsActor.release
   }
 }
 

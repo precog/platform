@@ -31,7 +31,7 @@ import com.precog.yggdrasil.util._
 import com.precog.yggdrasil.vfs._
 import com.precog.util._
 import SValue._
-import Resource._
+import ResourceError._
 
 import blueeyes.json._
 
@@ -106,9 +106,7 @@ trait RawJsonStorageModule[M[+_]] { self =>
   for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
   val vfs: VFSMetadata[M] = new VFSMetadata[M] {
-    implicit val M: Monad[M] = self.M
-
-    override def findDirectChildren(apiKey: APIKey, path: Path)(implicit F: Bind[M]): M[Set[Path]] = {
+    def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]] = {
       M.point(projections.keySet.filter(_.isDirectChildOf(path)))
     }
 

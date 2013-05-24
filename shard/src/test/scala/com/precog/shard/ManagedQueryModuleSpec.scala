@@ -25,6 +25,7 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.daze._
 import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.table.Slice
 
 import java.nio.CharBuffer
 
@@ -238,7 +239,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   }
 }
 
-trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, CharBuffer]]
+trait TestManagedQueryModule extends Platform[TestFuture, Slice, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
   def actorSystem: ActorSystem
