@@ -59,7 +59,7 @@ object NIHDBShardServer extends BlueEyesServer
       }
     }
 
-    val platform = nihdbPlatform(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val platform = nihdbPlatform(config, apiKeyFinder, accountFinder, jobManager)
 
     ShardState(platform, apiKeyFinder, accountFinder, platform.scheduler, jobManager, clock, Stoppable.fromFuture(platform.shutdown), asyncQueries)
   } recoverWith {

@@ -92,7 +92,7 @@ trait NIHDBQueryExecutorComponent  {
 
       type YggConfig = NIHDBQueryExecutorConfig
       val yggConfig = new NIHDBQueryExecutorConfig {
-        override val config = config0
+        override val config = config0.detach("queryExecutor")
         val sortWorkDir = scratchDir
         val memoizationBufferSize = sortBufferSize
         val memoizationWorkDir = scratchDir
@@ -101,7 +101,6 @@ trait NIHDBQueryExecutorComponent  {
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
         val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
         val schedulingTimeout = new Timeout(config[Int]("scheduling.timeout_ms", 10000))
-        val mongoStorageConfig = config.detach("scheduling")
 
         //TODO: Get a producer ID
         val idSource = new FreshAtomicIdSource
@@ -138,7 +137,7 @@ trait NIHDBQueryExecutorComponent  {
 
       private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 
 
-      private val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(yggConfig.mongoStorageConfig)
+      private val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config0.detach("scheduling"))
       private val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, actorVFS, scheduleStorage, platform, clock)))
       val scheduler = new ActorScheduler(scheduleActor, yggConfig.schedulingTimeout)
       val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, scheduler, clock)
