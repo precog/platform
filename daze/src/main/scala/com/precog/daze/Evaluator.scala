@@ -350,16 +350,20 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case class ValueJoin(id: Int) extends JoinKey
 
           val idMatch = IdentityMatch(left, right)
-
+          
           def joinSortToJoinKey(sort: JoinSort): JoinKey = sort match {
             case IdentitySort => IdentityJoin(idMatch.sharedIndices)
             case ValueSort(id) => ValueJoin(id)
           }
 
           def identityJoinSpec(ids: Vector[Int]): TransSpec1 = {
-            val components = for (i <- ids)
-              yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
-            components reduceLeft { trans.InnerArrayConcat(_, _) }
+            if (ids.isEmpty) {
+              trans.ConstLiteral(CEmptyArray, SourceKey.Single)   // join with undefined, probably 
+            } else {
+              val components = for (i <- ids)
+                yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
+              components reduceLeft { trans.InnerArrayConcat(_, _) }
+            }
           }
 
           val joinKey = joinSortToJoinKey(joinSort)
