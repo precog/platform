@@ -201,12 +201,27 @@ trait StdLibStaticInlinerModule[M[+_]] extends StaticInlinerModule[M] with StdLi
           
           graphM getOrElse Join(op, sort, left2, right2)(graph.loc)
         }
+        
+        case Filter(sort @ (IdentitySort | ValueSort(_)), left, right) => {
+          val left2 = recurse(left)
+          val right2 = recurse(right)
           
+          val back = (left2, right2) match {
+            case (_, Const(CUndefined)) => Some(Const(CUndefined)(graph.loc))
+            case (Const(CUndefined), _) => Some(Const(CUndefined)(graph.loc))
+            case _ => None
+          }
+          
+          back getOrElse Filter(sort, left2, right2)(graph.loc)
+        }
+        
         case graph @ Filter(sort @ Cross(_), left, right) => {
           val left2 = recurse(left)
           val right2 = recurse(right)
           
           val back = (left2, right2) match {
+            case (_, Const(CUndefined)) => Some(Const(CUndefined)(graph.loc))
+            case (Const(CUndefined), _) => Some(Const(CUndefined)(graph.loc))
             case (_, right2 @ Const(CTrue)) => Some(left2)
             case (_, right2 @ Const(_)) => Some(Const(CUndefined)(graph.loc))
             case _ => None
