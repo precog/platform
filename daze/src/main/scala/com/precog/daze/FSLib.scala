@@ -54,7 +54,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             m.group(1).trim match {
               case "*" => 
                 prefixes traverse { prefix =>
-                  vfs.findDirectChildren(apiKey, prefix) map { child =>
+                  vfs.findDirectChildren(apiKey, prefix).fold(_ => Set(), a => a) map { child =>
                     child map { prefix / _  }
                   }
                 } flatMap { paths =>

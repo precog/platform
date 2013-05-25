@@ -101,7 +101,13 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
     })
   }
 
-  object InMemoryVFS {
+  class VFSCompanion extends VFSCompanionLike {
+    def toJsonElements(slice: Slice) = slice.toJsonElements
+    def derefValue(slice: Slice) = slice.deref(TransSpecModule.paths.Value)
+    def blockSize(slice: Slice) = slice.size
+  }
+
+  object VFS extends VFSCompanion {
     sealed trait Record {
       def resource: Resource
       def versionId: UUID
@@ -123,12 +129,11 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
 
     private val vid = new java.util.concurrent.atomic.AtomicLong()
 
-    private def newVersion: UUID = new UUID(0L, vid.getAndIncrement())
+    private[InMemoryVFSModule] def newVersion: UUID = new UUID(0L, vid.getAndIncrement())
   }
 
   class InMemoryVFS(data0: Map[Path, ((Array[Byte], MimeType) \/ Vector[JValue], Authorities)], clock: Clock)(implicit M: Monad[M]) extends VFS {
-    import InMemoryVFS._
-    def toJsonElements(block: Slice) = block.toJsonElements
+    import VFS._
 
     private var data: Map[(Path, Version), Record] = data0 map { 
       case (p, (r, auth)) => 
@@ -211,8 +216,10 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
       }
     }
 
-    def findDirectChildren(path: Path): M[Set[Path]] = M point {
-      data.keySet.map(_._1) flatMap { _ - path }
+    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
+      M point {
+        data.keySet.map(_._1) flatMap { _ - path }
+      }
     }
 
     def currentVersion(path: Path): M[Option[VersionEntry]] = M point {

@@ -167,7 +167,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] {
         _ <- EitherT.right(queryReport.done)
       } yield {
         val (faults, table) = solutionResult
-        (faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(SourceValue.Single).slices))
+        (faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.slices))
       }
     }
 

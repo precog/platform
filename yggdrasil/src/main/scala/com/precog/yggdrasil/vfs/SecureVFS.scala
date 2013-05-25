@@ -53,7 +53,7 @@ import scalaz.effect.IO
 import scala.math.Ordered._
 
 trait VFSMetadata[M[+_]] {
-  def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]]
+  def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]]
   def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
   def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
 }
@@ -93,8 +93,11 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       vfs.pathStructure(path, selector, version)
     }
 
-    def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]] = {
-      ^(vfs.findDirectChildren(path), permissionsFinder.findBrowsableChildren(apiKey, path)) { (children, permitted) =>
+    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
+      for {
+        children  <- vfs.findDirectChildren(path)
+        permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
+      } yield { 
         children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
       }
     }
@@ -117,27 +120,21 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
           import EvaluationError._
 
           logger.debug("Found fresh cache entry (%s) for query on %s".format(timestamp, path))
-          if (recacheAfter.exists(ms => timestamp.plus(ms) < clock.instant())) {
+          val recacheAction = (recacheAfter.exists(ms => timestamp.plus(ms) < clock.instant())).whenM[({ type l[a] = EitherT[M, EvaluationError, a] })#l, UUID] {
             // if recacheAfter has expired since the head version was cached,
             // then return the cached version and refresh the cache
             for {
               queryResource <- readResource(apiKey, path, Version.Current) leftMap storageError
               basePath      <- EitherT((path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path))).point[M])
-              taskId     <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
-              projection <- readProjection(apiKey, cachePath, Version.Current) leftMap storageError
-            } yield {
-              // FIXME: because we're getting data back from
-              // NIHDBProjection, it contains the identities. Is there
-              // a better way/place to do this deref?
-              StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
-            }
-          } else {
-            // simply return the cached results
-            readProjection(apiKey, cachePath, Version.Current) map { proj =>
-              StoredQueryResult(proj.getBlockStream(None), Some(timestamp))
-            } leftMap { 
-              StorageError(_) 
-            }
+              taskId        <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
+            } yield taskId
+          } 
+
+          for {
+            _          <- recacheAction
+            projection <- readProjection(apiKey, cachePath, Version.Current) leftMap storageError
+          } yield {
+            StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
           }
            
         case Some(VersionEntry(_, _, timestamp)) =>
@@ -159,7 +156,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         query    <- VFSUtil.asQuery(path, Version.Current, resource) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
         basePath <- EitherT(M point { path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path)) })
-        raw      <- executor.execute(apiKey, query, basePath, queryOptions) 
+        raw      <- executor.execute(apiKey, query, basePath, queryOptions)
         caching  <- cacheAt match {
           case Some(cachePath) =>
             for {
@@ -168,7 +165,9 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
             } yield {
               logger.debug("Building caching stream for path %s writing to %s".format(path.path, cachePath.path))
               val allPerms = Map(apiKey -> perms.toSet[Permission])
-              vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw, clock) 
+              vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
+                VFS.derefValue
+              }
             }
 
           case None =>

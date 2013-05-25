@@ -26,6 +26,7 @@ import com.precog.common.ingest.FileContent
 
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.vfs._
@@ -120,7 +121,7 @@ class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, S
         platform.vfs.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
           HttpResponse(OK, 
             headers =  HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
-            content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data))))
+            content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data.map(_.deref(TransSpecModule.paths.Value))))))
         } valueOr { evaluationError =>
           logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
           HttpResponse(InternalServerError)
@@ -155,7 +156,7 @@ class SyncQueryServiceHandler(
     import SyncResultFormat._
 
     val (jobId, slices) = result
-    val charBuffers = ColumnarTableModule.toCharBuffers(outputType, slices)
+    val charBuffers = ColumnarTableModule.toCharBuffers(outputType, slices.map(_.deref(TransSpecModule.paths.Value)))
 
     val format = request.parameters get 'format map {
       case "simple" => Right(Simple)

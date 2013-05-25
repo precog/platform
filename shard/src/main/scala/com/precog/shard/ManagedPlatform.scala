@@ -45,12 +45,14 @@ import blueeyes.core.http.MimeTypes
 
 import scalaz._
 
+trait ManagedPlatform extends ManagedExecution with Platform[Future, Slice, StreamT[Future, Slice]] with ManagedQueryModule
+
 /**
  * A `ManagedPlatform` extends `Platform` by allowing the
  * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
  * managed) queries and asynchronous queries.
  */
-trait ManagedPlatform extends Platform[Future, Slice, StreamT[Future, Slice]] with ManagedQueryModule { self =>
+trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with ManagedQueryModule { self =>
   type AsyncExecution[M[+_]] = Execution[M, JobId]
   type SyncExecution[M[+_]]  = Execution[M, (Option[JobId], StreamT[Future, Slice])]
 

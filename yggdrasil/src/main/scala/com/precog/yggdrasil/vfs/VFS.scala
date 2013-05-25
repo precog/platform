@@ -134,12 +134,19 @@ trait VFSModule[M[+_], Block] extends Logging {
     }
   }
 
+  trait VFSCompanionLike {
+    def toJsonElements(block: Block): Vector[JValue]
+    def derefValue(block: Block): Block
+    def blockSize(block: Block): Int
+  }
+
+  type VFSCompanion <: VFSCompanionLike
+  def VFS: VFSCompanion
+
   /**
    * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
    */
   abstract class VFS(implicit M: Monad[M]) { 
-    protected[this] def toJsonElements(block: Block): Vector[JValue]
-
     def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
 
     def writeAllSync(data: Seq[(Long, EventMessage)]): EitherT[M, ResourceError, PrecogUnit]
@@ -169,7 +176,7 @@ trait VFSModule[M[+_], Block] extends Logging {
      * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
      * return (bar, baz).
      */
-    def findDirectChildren(path: Path): M[Set[Path]]
+    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]]
 
     def currentVersion(path: Path): M[Option[VersionEntry]]
 
@@ -182,7 +189,7 @@ trait VFSModule[M[+_], Block] extends Logging {
     }
     */
 
-    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock): StreamT[M, Block] = {
+    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock)(blockf: Block => Block): StreamT[M, Block] = {
       val streamId = java.util.UUID.randomUUID()
       val allPerms = Map(apiKey -> perms)
 
@@ -190,11 +197,11 @@ trait VFSModule[M[+_], Block] extends Logging {
         case (pseudoOffset, s) =>
           s.uncons flatMap {
             case Some((x, xs)) =>
-              val ingestRecords = toJsonElements(x).zipWithIndex map {
+              val ingestRecords = VFS.toJsonElements(blockf(x)).zipWithIndex map {
                 case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
               }
 
-              logger.debug("Persisting %d stream records to %s".format(ingestRecords.size, path))
+              logger.debug("Persisting %d stream records (from slice of size %d) to %s".format(ingestRecords.size, VFS.blockSize(x), path))
 
               for {
                 terminal <- xs.isEmpty
