@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package vfs
 
 import com.precog.common._
+import com.precog.common.accounts._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
@@ -30,6 +31,7 @@ import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.scheduling._
 import com.precog.util._
 import ResourceError._
+import Permission._
 
 import akka.dispatch.Future
 import akka.actor.ActorRef
@@ -48,6 +50,7 @@ import scalaz.std.string._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
 import scalaz.syntax.std.boolean._
+import scalaz.syntax.std.list._
 import scalaz.syntax.std.option._
 import scalaz.effect.IO
 import scala.math.Ordered._
@@ -64,8 +67,23 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
   class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
     final val unsecured = vfs
 
-    private def verifyResourceAccess(apiKey: APIKey, path: Path, accessMode: AccessMode): Resource => EitherT[M, ResourceError, Resource] = { resource =>
-      EitherT.right(resource.point[M])
+    private def verifyResourceAccess(apiKey: APIKey, path: Path, readMode: ReadMode): Resource => EitherT[M, ResourceError, Resource] = { resource =>
+      import AccessMode._
+      val permissions: Set[Permission] = resource.authorities.accountIds map { accountId =>
+        val writtenBy = WrittenBy(accountId)
+        readMode match {
+          case Read => ReadPermission(path, writtenBy)
+          case Execute => ExecutePermission(path, writtenBy)
+          case ReadMetadata => ReducePermission(path, writtenBy)
+        }
+      }
+
+      EitherT {
+        permissionsFinder.apiKeyFinder.hasCapability(apiKey, permissions, Some(clock.now())) map {
+          case true => \/.right(resource)
+          case false => \/.left(permissionsError("API key %s does not provide %s permission to resource at path %s.".format(apiKey, readMode.name, path.path)))
+        }
+      }
     }
 
     private def verifyPathAccess[A](apiKey: APIKey, path: Path, accessMode: AccessMode)(result: => EitherT[M, ResourceError, A]): EitherT[M, ResourceError, A] = { 

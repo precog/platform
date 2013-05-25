@@ -38,18 +38,18 @@ import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 import Permission._
 
-sealed trait AccessMode 
+sealed trait AccessMode { def name: String }
 sealed trait ReadMode extends AccessMode
 sealed trait WriteMode extends AccessMode
 
 object AccessMode {
-  case object Read extends AccessMode with ReadMode
-  case object Execute extends AccessMode with ReadMode
-  case object ReadMetadata extends AccessMode with ReadMode
+  case object Read extends AccessMode with ReadMode { val name = "read" }
+  case object Execute extends AccessMode with ReadMode { val name = "execute" }
+  case object ReadMetadata extends AccessMode with ReadMode { val name = "metadata" }
 
-  case object Create extends AccessMode with WriteMode 
-  case object Replace extends AccessMode with WriteMode
-  case object Append extends AccessMode with WriteMode
+  case object Create extends AccessMode with WriteMode { val name = "create" }
+  case object Replace extends AccessMode with WriteMode { val name = "replace" }
+  case object Append extends AccessMode with WriteMode { val name = "append" }
 }
 
 sealed trait Permission extends Logging {

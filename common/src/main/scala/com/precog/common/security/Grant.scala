@@ -98,7 +98,7 @@ object Grant extends Logging {
 
   def implies(grants: Set[Grant], perms: Set[Permission], at: Option[DateTime] = None) = {
     logger.trace("Checking implication of %s to %s".format(grants, perms))
-    perms.forall(perm => grants.exists(_.implies(perm, at)))
+    perms.nonEmpty && perms.forall(perm => grants.exists(_.implies(perm, at)))
   }
   
   /*
