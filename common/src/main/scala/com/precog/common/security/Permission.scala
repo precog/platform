@@ -19,6 +19,19 @@ import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 import Permission._
 
+sealed trait AccessMode 
+sealed trait ReadMode extends AccessMode
+sealed trait WriteMode extends AccessMode
+
+object AccessMode {
+  case object Read extends AccessMode with ReadMode
+  case object Execute extends AccessMode with ReadMode
+
+  case object Create extends AccessMode with WriteMode 
+  case object Replace extends AccessMode with WriteMode
+  case object Append extends AccessMode with WriteMode
+}
+
 sealed trait Permission extends Logging {
   def path: Path
 

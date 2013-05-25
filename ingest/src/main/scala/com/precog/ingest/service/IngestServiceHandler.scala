@@ -64,7 +64,7 @@ class IngestServiceHandler(
   ingestTimeout: Timeout,
   batchSize: Int,
   maxFields: Int,
-  postMode: StoreMode)(implicit M: Monad[Future], executor: ExecutionContext)
+  postMode: WriteMode)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
     with Logging {
 
@@ -94,7 +94,7 @@ class IngestServiceHandler(
     }
   }
 
-  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk], durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode): EitherT[Future, NonEmptyList[String], IngestResult] =
+  def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk], durability: Durability, errorHandling: ErrorHandling, storeMode: WriteMode): EitherT[Future, NonEmptyList[String], IngestResult] =
     right(chooseProcessing(apiKey, path, authorities, request)) flatMap {
       case Some(processing) =>
         EitherT {
@@ -155,9 +155,9 @@ class IngestServiceHandler(
 
             val durabilityM = request.method match {
               case HttpMethods.POST => createJob map { jobId => (GlobalDurability(jobId), postMode) }
-              case HttpMethods.PUT => createJob map { jobId => (GlobalDurability(jobId), StoreMode.Replace) }
-              case HttpMethods.PATCH => right[Future, String, (Durability, StoreMode)](Promise.successful((LocalDurability, StoreMode.Append)))
-              case _ => left[Future, String, (Durability, StoreMode)](Promise.successful("HTTP method " + request.method + " not supported for data ingest."))
+              case HttpMethods.PUT => createJob map { jobId => (GlobalDurability(jobId), AccessMode.Replace) }
+              case HttpMethods.PATCH => right[Future, String, (Durability, WriteMode)](Promise.successful((LocalDurability, AccessMode.Append)))
+              case _ => left[Future, String, (Durability, WriteMode)](Promise.successful("HTTP method " + request.method + " not supported for data ingest."))
             }
 
             durabilityM flatMap { case (durability, storeMode) =>

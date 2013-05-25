@@ -38,18 +38,18 @@ import com.weiglewilczek.slf4s._
 class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[Response], clock: Clock, eventStore: EventStore[Future], ingestTimeout: Timeout)(implicit M: Monad[Future], executor: ExecutionContext) extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
   private val baseURI = serviceLocation.toURI
 
-  private def validateStoreMode(contentType: MimeType, method: HttpMethod): Validation[String, StoreMode] = {
+  private def validateWriteMode(contentType: MimeType, method: HttpMethod): Validation[String, WriteMode] = {
     import FileContent._
     (contentType, method) match {
-      case (XQuirrelScript, HttpMethods.POST) => Success(StoreMode.Create)
-      case (XQuirrelScript, HttpMethods.PUT)  => Success(StoreMode.Replace)
+      case (XQuirrelScript, HttpMethods.POST) => Success(AccessMode.Create)
+      case (XQuirrelScript, HttpMethods.PUT)  => Success(AccessMode.Replace)
       case (otherType, otherMethod) => Failure("Content-Type %s is not supported for use with method %s.".format(otherType, otherMethod))
     }
   }
 
-  private def validateFileName(fileName: Option[String], storeMode: StoreMode): Validation[String, Path => Path] = {
+  private def validateFileName(fileName: Option[String], storeMode: WriteMode): Validation[String, Path => Path] = {
     (storeMode: @unchecked) match {
-      case StoreMode.Create => 
+      case AccessMode.Create => 
         for {
           fn0 <- fileName.toSuccess("X-File-Name header must be provided.")
           // if the filename after URL encoding is the same as before, accept it.
@@ -60,7 +60,7 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
           (dir: Path) => dir / Path(fn0)
         }
 
-      case StoreMode.Replace =>
+      case AccessMode.Replace =>
         fileName.toFailure(()).leftMap(_ => "X-File-Name header not respected for PUT requests; please specify the resource to update via the URL.") map { _ =>
           (resource: Path) => resource
         }
@@ -69,8 +69,8 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
 
   val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[JValue]]] = (request: HttpRequest[ByteChunk]) => {
     val contentType0 = request.headers.header[`Content-Type`].flatMap(_.mimeTypes.headOption).toSuccess("Unable to determine content type for file create.")
-    val storeMode0 = contentType0 flatMap { validateStoreMode(_: MimeType, request.method) }
-    val pathf0 = storeMode0 flatMap { validateFileName(request.headers.get("X-File-Name"), _: StoreMode) }
+    val storeMode0 = contentType0 flatMap { validateWriteMode(_: MimeType, request.method) }
+    val pathf0 = storeMode0 flatMap { validateFileName(request.headers.get("X-File-Name"), _: WriteMode) }
 
     (pathf0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (pathf, contentType, storeMode) => 
       (apiKey: APIKey, path: Path) => {
@@ -88,7 +88,7 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
           (for {
             jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
             bytes <- right(ByteChunk.forceByteArray(content))
-            storeFile = StoreFile(apiKey, fullPath, requestAuthorities, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, storeMode.createStreamRef(true))
+            storeFile = StoreFile(apiKey, fullPath, requestAuthorities, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, StreamRef.forWriteMode(storeMode, true))
             _ <- right(eventStore.save(storeFile, ingestTimeout))
           } yield {
             val resultsPath = (baseURI.path |+| Some("/data/fs/" + fullPath.path)).map(_.replaceAll("//", "/"))
