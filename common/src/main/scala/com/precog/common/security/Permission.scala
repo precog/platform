@@ -26,6 +26,7 @@ sealed trait WriteMode extends AccessMode
 object AccessMode {
   case object Read extends AccessMode with ReadMode
   case object Execute extends AccessMode with ReadMode
+  case object ReadMetadata extends AccessMode with ReadMode
 
   case object Create extends AccessMode with WriteMode 
   case object Replace extends AccessMode with WriteMode

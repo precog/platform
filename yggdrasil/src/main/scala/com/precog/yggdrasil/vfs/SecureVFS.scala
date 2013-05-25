@@ -43,44 +43,54 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
   case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant])
 
   class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
-    val unsecured = vfs
+    final val unsecured = vfs
 
-    def readResource(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Resource] = {
-      //FIXME: Unsecured for now
-      vfs.readResource(path, version)
+    private def verifyPathAccess[A](apiKey: APIKey, path: Path, accessMode: AccessMode)(f: => EitherT[M, ResourceError, A]): EitherT[M, ResourceError, A] = {
+      f
     }
 
-    def readQuery(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, String] = {
-      //FIXME: Unsecured for now
-      vfs.readQuery(path, version)
+    final def readResource(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Resource] = {
+      verifyPathAccess(apiKey, path, readMode) {
+        vfs.readResource(path, version)
+      }
     }
 
-    def readProjection(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Projection] = {
-      //FIXME: Unsecured for now
-      vfs.readProjection(path, version)
+    final def readQuery(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, String] = {
+      verifyPathAccess(apiKey, path, readMode) {
+        vfs.readQuery(path, version)
+      }
     }
 
-    def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
-      readResource(apiKey, path, version) flatMap { //need mapM
+    final def readProjection(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Projection] = {
+      verifyPathAccess(apiKey, path, readMode) {
+        vfs.readProjection(path, version)
+      }
+    }
+
+    final def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
+      readResource(apiKey, path, version, AccessMode.Read) flatMap { //need mapM
         _.fold(br => EitherT.right(br.byteLength.point[M]), pr => EitherT.right(pr.recordCount))
       }
     }
 
-    def pathStructure(apiKey: APIKey, path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
-      //FIXME: Unsecured for now
-      vfs.pathStructure(path, selector, version)
-    }
-
-    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
-      for {
-        children  <- vfs.findDirectChildren(path)
-        permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
-      } yield { 
-        children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
+    final def pathStructure(apiKey: APIKey, path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
+      verifyPathAccess(apiKey, path, AccessMode.ReadMetadata) {
+        vfs.pathStructure(path, selector, version)
       }
     }
 
-    def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
+      verifyPathAccess(apiKey, path, AccessMode.ReadMetadata) {
+        for {
+          children  <- vfs.findDirectChildren(path)
+          permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
+        } yield { 
+          children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
+        }
+      }
+    }
+
+    final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import queryOptions.cacheControl._
       val cachePath = path / Path(".cached")
       def fallBack = if (onlyIfCached) {
@@ -102,7 +112,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
             // if recacheAfter has expired since the head version was cached,
             // then return the cached version and refresh the cache
             for {
-              queryResource <- readResource(apiKey, path, Version.Current) leftMap storageError
+              queryResource <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap storageError
               basePath      <- EitherT((path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path))).point[M])
               taskId        <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
             } yield taskId
@@ -110,7 +120,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
 
           for {
             _          <- recacheAction
-            projection <- readProjection(apiKey, cachePath, Version.Current) leftMap storageError
+            projection <- readProjection(apiKey, cachePath, Version.Current, AccessMode.Read) leftMap storageError
           } yield {
             StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
           }
@@ -130,8 +140,8 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
       for { 
         executor <- platform.executorFor(apiKey) leftMap { err => systemError(new RuntimeException(err)) }
-        resource <- readResource(apiKey, path, Version.Current) leftMap { storageError _ }
-        query    <- VFSUtil.asQuery(path, Version.Current, resource) leftMap { storageError _ }
+        queryRes <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
+        query    <- VFSUtil.asQuery(path, Version.Current, queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
         basePath <- EitherT(M point { path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path)) })
         raw      <- executor.execute(apiKey, query, basePath, queryOptions)
@@ -143,7 +153,10 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
             } yield {
               logger.debug("Building caching stream for path %s writing to %s".format(path.path, cachePath.path))
               val allPerms = Map(apiKey -> perms.toSet[Permission])
-              vfs.persistingStream(apiKey, cachePath, resource.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
+              // FIXME: determination of authorities with which to write the cached data needs to be implemented;
+              // for right now, simply using the authorities with which the query itself was written is probably
+              // best.
+              vfs.persistingStream(apiKey, cachePath, queryRes.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
                 VFS.derefValue
               }
             }
