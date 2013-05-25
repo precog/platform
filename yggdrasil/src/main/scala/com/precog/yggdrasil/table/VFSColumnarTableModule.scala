@@ -54,7 +54,7 @@ trait VFSColumnarTableModule extends BlockStoreColumnarTableModule[Future] with 
         paths <- EitherT.right(pathsM(table))
         projections <- paths.toList.traverse[({ type l[a] = EitherT[Future, ResourceError, a] })#l, ProjectionLike[Future, Slice]] { path =>
           logger.debug("  Loading path: " + path)
-          vfs.readProjection(apiKey, path, Version.Current)
+          vfs.readProjection(apiKey, path, Version.Current, AccessMode.Read)
         }
       } yield {
         val length = projections.map(_.length).sum

@@ -52,7 +52,7 @@ class DataServiceHandler[A](platform: Platform[Future, Slice, StreamT[Future, Sl
   val service = (request: HttpRequest[A]) => Success {
     (apiKey: APIKey, path: Path) => {
       val mimeType = request.headers.header[Accept].flatMap(_.mimeTypes.headOption)
-      platform.vfs.readResource(apiKey, path, Version.Current).run flatMap {
+      platform.vfs.readResource(apiKey, path, Version.Current, AccessMode.Read).run flatMap {
         _.fold(
           error => {
             logger.error("Read failure: " + error.shows)
