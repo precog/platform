@@ -133,32 +133,6 @@ trait TestShardService extends BlueEyesServiceSpecification
         (\/.right(Vector(JObject("foo" -> JString("foov"), "bar" -> JNum(1)), JObject("foo" -> JString("foov2")))), authorities)
 
       val stubData = ownerMap mapValues { accounts => stubValue(Authorities.ifPresent(accounts).get) }
-/*
-  val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path) = Future { success(JNum(1)) }
-
-    def browse(apiKey: APIKey, path: Path) = Future {
-      if (path == Path("/errpath")) {
-        failure("Bad path; this is just used to stimulate an error response and not duplicate any genuine failure.")
-      } else {
-        success(JArray(List(JString("foo"), JString("bar"))))
-      }
-    }
-
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = Future {
-      success(
-        JObject(
-          "structure" -> JObject(
-            "foo" -> JNum(123)
-          )
-        )
-      )
-    }
-
-    def currentVersion(apiKey: APIKey, path: Path) = Future(None)
-    def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
-  }
-  */
 
       val rawVFS = new InMemoryVFS(stubData, clock)
       val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder, clock.instant())
@@ -347,9 +321,7 @@ class ShardServiceSpec extends TestShardService {
         JField("data", JArray(JNum(2) :: Nil)) ::
         Nil)
 
-      result.copoint must beLike {
-        case `expected` => ok
-      }
+      result.copoint must_== expected
     }
     "return just the results if format is 'simple'" in {
       val result = for {
@@ -358,9 +330,7 @@ class ShardServiceSpec extends TestShardService {
       } yield result
 
       val expected = JArray(JNum(2) :: Nil)
-      result.copoint must beLike {
-        case `expected` => ok
-      }
+      result.copoint must_== expected
     }
   }
 
@@ -453,11 +423,13 @@ trait TestPlatform extends ManagedPlatform { self =>
 
           EitherT[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
             shardQueryMonad.liftM[Future, EvaluationError \/ StreamT[JobQueryTF, Slice]] {
-              mu map { _ => \/.right(toSlice(JNum(2))) }
+              mu map { _ => \/.right(toSlice(JObject("value" -> JNum(2)))) }
             }
           }
         } else {
-          EitherT[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]](shardQueryMonad.point(\/.right(toSlice(JNum(2)))))
+          EitherT[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
+            shardQueryMonad.point(\/.right(toSlice(JObject("value" -> JNum(2)))))
+          }
         }
       }
     }

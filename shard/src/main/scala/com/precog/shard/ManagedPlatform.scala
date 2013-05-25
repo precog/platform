@@ -6,6 +6,7 @@ import com.precog.util._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table._
 import com.precog.util._
@@ -132,6 +133,7 @@ trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with Ma
     private lazy val JSON = MimeTypes.application / MimeTypes.json
 
     // Encode a stream of Slices using the specified charset.
+    //FIXME: replace with VFSModule.bufferOutput?
     private def encodeCharStream(stream: StreamT[Future, CharBuffer], charset: Charset)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {
       val encoder = charset.newEncoder
       stream map { chars =>
@@ -147,7 +149,8 @@ trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with Ma
     def complete(resultE: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, JobId] = {
       M.jobId map { jobId =>
         resultE map { result =>
-          val convertedStream: StreamT[JobQueryTF, CharBuffer] = ColumnarTableModule.toCharBuffers(outputType, result)
+          val derefed = result.map(_.deref(TransSpecModule.paths.Value))
+          val convertedStream: StreamT[JobQueryTF, CharBuffer] = ColumnarTableModule.toCharBuffers(outputType, derefed)
           //FIXME: Thread this through the EitherT
           jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>
