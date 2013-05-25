@@ -43,10 +43,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
   case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant])
 
   class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
-    def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
-      //FIXME: Unsecured for now
-      vfs.writeAll(data)
-    }
+    val unsecured = vfs
 
     def readResource(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Resource] = {
       //FIXME: Unsecured for now
