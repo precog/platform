@@ -306,7 +306,7 @@ object Console extends App {
         val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, Duration(300, "seconds"), yggConfig.clock)))
 
         val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
-        val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
+        val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)
 
         trait TableCompanion extends VFSColumnarTableCompanion
 

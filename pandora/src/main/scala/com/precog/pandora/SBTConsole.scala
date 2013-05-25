@@ -138,7 +138,7 @@ object SBTConsole {
 
     val jobManager = new InMemoryJobManager[Future]
     val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
-    val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], Clock.System)
+    val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) with IdSourceScannerModule {

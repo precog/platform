@@ -149,7 +149,7 @@ trait NIHDBTestStack extends TestStackLike[Future]
   }
 
   val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
-  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
+  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M

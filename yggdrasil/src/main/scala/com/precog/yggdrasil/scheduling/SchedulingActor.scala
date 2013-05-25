@@ -81,7 +81,7 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
   class SchedulingActor(
       jobManager: JobManager[Future], 
       permissionsFinder: PermissionsFinder[Future], 
-      vfs: VFS,
+      vfs: SecureVFS,
       storage: ScheduleStorage[Future], 
       platform: Platform[Future, Slice, StreamT[Future, Slice]], 
       clock: Clock, 
@@ -167,6 +167,8 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
     }
 
     def executeTask(task: ScheduledTask): Future[PrecogUnit] = {
+      import EvaluationError._
+
       if (running.contains((task.source, task.sink))) {
         // We don't allow for more than one concurrent instance of a given task
         Promise successful PrecogUnit
@@ -190,8 +192,8 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
           job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
           executionResult = 
             for {
-              executor <- platform.executorFor(task.apiKey) leftMap { EvaluationError.invalidState _ }
-              script <- vfs.readQuery(task.source, Version.Current) leftMap { EvaluationError.storageError }
+              executor <- platform.executorFor(task.apiKey) leftMap { invalidState }
+              script <- vfs.readQuery(task.apiKey, task.source, Version.Current, AccessMode.Execute) leftMap { storageError }
               perms <- EitherT.right(permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant())) 
               permSet = perms.toSet[Permission]
               allPerms = Map(task.apiKey -> permSet)

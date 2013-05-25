@@ -61,41 +61,41 @@ trait VFSMetadata[M[+_]] {
 trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
   case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant])
 
-  class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], scheduler: Scheduler[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
+  class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
     final val unsecured = vfs
 
-    private def verifyPathAccess[A](apiKey: APIKey, path: Path, accessMode: AccessMode)(f: => EitherT[M, ResourceError, A]): EitherT[M, ResourceError, A] = {
-      f
+    private def verifyResourceAccess(apiKey: APIKey, path: Path, accessMode: AccessMode): Resource => EitherT[M, ResourceError, Resource] = { resource =>
+      EitherT.right(resource.point[M])
+    }
+
+    private def verifyPathAccess[A](apiKey: APIKey, path: Path, accessMode: AccessMode)(result: => EitherT[M, ResourceError, A]): EitherT[M, ResourceError, A] = { 
+      result
     }
 
     final def readResource(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Resource] = {
-      verifyPathAccess(apiKey, path, readMode) {
-        vfs.readResource(path, version)
-      }
+      vfs.readResource(path, version) >>= 
+      verifyResourceAccess(apiKey, path, readMode)
     }
 
     final def readQuery(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, String] = {
-      verifyPathAccess(apiKey, path, readMode) {
-        vfs.readQuery(path, version)
-      }
+      readResource(apiKey, path, version, readMode) >>= 
+      Resource.asQuery(path, version)
     }
 
     final def readProjection(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Projection] = {
-      verifyPathAccess(apiKey, path, readMode) {
-        vfs.readProjection(path, version)
-      }
+      readResource(apiKey, path, version, readMode) >>= 
+      Resource.asProjection(path, version)
     }
 
     final def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
-      readResource(apiKey, path, version, AccessMode.Read) flatMap { //need mapM
+      readResource(apiKey, path, version, AccessMode.ReadMetadata) flatMap { //need mapM
         _.fold(br => EitherT.right(br.byteLength.point[M]), pr => EitherT.right(pr.recordCount))
       }
     }
 
     final def pathStructure(apiKey: APIKey, path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
-      verifyPathAccess(apiKey, path, AccessMode.ReadMetadata) {
-        vfs.pathStructure(path, selector, version)
-      }
+      readProjection(apiKey, path, version, AccessMode.ReadMetadata) >>=
+      VFS.pathStructure(selector)
     }
 
     final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
@@ -109,7 +109,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       }
     }
 
-    final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], scheduler: Scheduler[M], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import queryOptions.cacheControl._
       val cachePath = path / Path(".cached")
       def fallBack = if (onlyIfCached) {
@@ -160,7 +160,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       for { 
         executor <- platform.executorFor(apiKey) leftMap { err => systemError(new RuntimeException(err)) }
         queryRes <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
-        query    <- VFSUtil.asQuery(path, Version.Current, queryRes) leftMap { storageError _ }
+        query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
         basePath <- EitherT(M point { path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path)) })
         raw      <- executor.execute(apiKey, query, basePath, queryOptions)
@@ -175,7 +175,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
               // FIXME: determination of authorities with which to write the cached data needs to be implemented;
               // for right now, simply using the authorities with which the query itself was written is probably
               // best.
-              vfs.persistingStream(apiKey, cachePath, queryRes.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
+              persistingStream(apiKey, cachePath, queryRes.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
                 VFS.derefValue
               }
             }
@@ -186,6 +186,46 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         }
       } yield {
         StoredQueryResult(caching, None)
+      }
+    }
+
+    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock)(blockf: Block => Block): StreamT[M, Block] = {
+      val streamId = java.util.UUID.randomUUID()
+      val allPerms = Map(apiKey -> perms)
+
+      StreamT.unfoldM((0, stream)) {
+        case (pseudoOffset, s) =>
+          s.uncons flatMap {
+            case Some((x, xs)) =>
+              val ingestRecords = VFS.toJsonElements(blockf(x)).zipWithIndex map {
+                case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
+              }
+
+              logger.debug("Persisting %d stream records (from slice of size %d) to %s".format(ingestRecords.size, VFS.blockSize(x), path))
+
+              for {
+                terminal <- xs.isEmpty
+                par <- {
+                  // FIXME: is Replace always desired here? Any case
+                  // where we might want Create? AFAICT, this is only
+                  // used for caching queries right now.
+                  val streamRef = StreamRef.Replace(streamId, terminal)
+                  val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
+                  vfs.writeAllSync(Seq((pseudoOffset, msg))).run
+                }
+              } yield {
+                par.fold(
+                  errors => {
+                    logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
+                    None
+                  },
+                  _ => Some((x, (pseudoOffset + 1, xs)))
+                )
+              }
+
+            case None =>
+              None.point[M]
+          }
       }
     }
   }
