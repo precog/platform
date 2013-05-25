@@ -46,8 +46,6 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   val apiKey = "O.o"
   val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
 
-  def vfs = sys.error("do I really need this?")
-
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val executionResult = for {
@@ -150,7 +148,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   }
 }
 
-trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with SchedulableFuturesModule { self =>
+trait TestManagedPlatform extends ManagedExecution with ManagedQueryModule with SchedulableFuturesModule { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]

@@ -60,9 +60,11 @@ import scalaz.syntax.effect.id._
 sealed trait PathActionResponse 
 sealed trait ReadResult extends PathActionResponse
 sealed trait WriteResult extends PathActionResponse
+sealed trait MetadataResult extends PathActionResponse
 
 case class UpdateSuccess(path: Path) extends WriteResult
-case class PathOpFailure(path: Path, error: ResourceError) extends ReadResult with WriteResult
+case class PathChildren(path: Path, children: Set[Path]) extends MetadataResult
+case class PathOpFailure(path: Path, error: ResourceError) extends ReadResult with WriteResult with MetadataResult
 
 trait ActorVFSModule extends VFSModule[Future, Slice] {
   type Projection = NIHDBProjection
@@ -259,8 +261,15 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     override def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
 
-  class ActorVFS(projectionsActor: ActorRef, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS {
+  class VFSCompanion extends VFSCompanionLike {
     def toJsonElements(slice: Slice) = slice.toJsonElements
+    def derefValue(slice: Slice) = slice.deref(TransSpecModule.paths.Value)
+    def blockSize(slice: Slice) = slice.size
+  }
+
+  object VFS extends VFSCompanion
+
+  class ActorVFS(projectionsActor: ActorRef, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS {
 
     def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit] = {
       IO { projectionsActor ! IngestData(data) }
@@ -290,10 +299,14 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       }
     }
 
-    def findDirectChildren(path: Path): Future[Set[Path]] = {
+    def findDirectChildren(path: Path): EitherT[Future, ResourceError, Set[Path]] = {
       implicit val t = projectionReadTimeout
-      val paths = (projectionsActor ? FindChildren(path)).mapTo[Set[Path]]
-      paths map { _ flatMap { _ - path }}
+      EitherT {
+        (projectionsActor ? FindChildren(path)).mapTo[MetadataResult] map { 
+          case PathChildren(_, children) => \/.right(children flatMap { _ - path })
+          case PathOpFailure(_, error) => \/.left(error)
+        }
+      }
     }
 
     def pathStructure(path: Path, selector: CPath, version: Version): EitherT[Future, ResourceError, PathStructure] = {
@@ -348,7 +361,14 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
     def receive = {
       case FindChildren(path) =>
-        VFSPathUtils.findChildren(baseDir, path) map { sender ! _ } unsafePerformIO
+        logger.debug("Received request to find children of %s".format(path.path))
+        VFSPathUtils.findChildren(baseDir, path) map { children =>  
+          sender ! PathChildren(path, children)
+        } except {
+          case t: Throwable =>
+            logger.error("Error obtaining path children for " + path, t)
+            IO { sender ! PathOpFailure(path, IOError(t)) }
+        } unsafePerformIO
 
       case op: PathOp =>
         val requestor = sender

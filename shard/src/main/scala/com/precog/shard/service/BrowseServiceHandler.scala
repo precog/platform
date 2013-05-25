@@ -34,10 +34,8 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
     vfs.size(apiKey, path, Version.Current) map { JNum(_) }
 
   def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
-    EitherT.right {
-      vfs.findDirectChildren(apiKey, path) map { paths =>
-        JArray(paths.map(p => JString(p.toString.substring(1))).toSeq: _*)
-      }
+    vfs.findDirectChildren(apiKey, path) map { paths =>
+      JArray(paths.map(p => JString(p.toString.substring(1))).toSeq: _*)
     }
   }
 
@@ -65,7 +63,6 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
 
 class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Future])
     extends BrowseSupport[Future](vfs0) with CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
-  
 
   val service = (request: HttpRequest[A]) => success { (apiKey: APIKey, path: Path) =>
     request.parameters.get('type).map(_.toLowerCase) map {
@@ -79,6 +76,7 @@ class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Futur
         val cpath = request.parameters.get('property).map(CPath(_)).getOrElse(CPath.Identity)
         structure(apiKey, path, cpath) map { detail => JObject("structure" -> detail) }
     } getOrElse {
+      logger.debug("Retrieving all available metadata for %s as %s".format(path.path, apiKey))
       for {
         sz <- size(apiKey, path)
         children <- browse(apiKey, path)

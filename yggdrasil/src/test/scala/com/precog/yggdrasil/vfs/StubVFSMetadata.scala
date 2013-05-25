@@ -32,9 +32,11 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
 class StubVFSMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]])(implicit M: Monad[M]) extends VFSMetadata[M]{
-  def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]] = M point {
-    projectionMetadata.keySet collect {
-      case key if key.isChildOf(path) => Path(key.components(path.length))
+  def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
+    M point {
+      projectionMetadata.keySet collect {
+        case key if key.isChildOf(path) => Path(key.components(path.length))
+      }
     }
   }
 

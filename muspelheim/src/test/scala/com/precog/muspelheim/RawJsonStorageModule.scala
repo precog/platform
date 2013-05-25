@@ -87,7 +87,7 @@ trait RawJsonStorageModule[M[+_]] { self =>
   for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
   val vfs: VFSMetadata[M] = new VFSMetadata[M] {
-    def findDirectChildren(apiKey: APIKey, path: Path): M[Set[Path]] = {
+    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
       M.point(projections.keySet.filter(_.isDirectChildOf(path)))
     }
 

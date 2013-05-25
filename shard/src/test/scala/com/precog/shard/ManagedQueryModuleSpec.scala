@@ -57,7 +57,6 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
-  def vfs = sys.error("I guess this is necessary.")
 
   var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
 
@@ -220,7 +219,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   }
 }
 
-trait TestManagedQueryModule extends Platform[TestFuture, Slice, StreamT[TestFuture, CharBuffer]]
+trait TestManagedQueryModule extends Execution[TestFuture, StreamT[TestFuture, CharBuffer]]
     with ManagedQueryModule with SchedulableFuturesModule { self =>
 
   def actorSystem: ActorSystem

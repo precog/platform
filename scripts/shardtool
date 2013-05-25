@@ -75,10 +75,16 @@ class Service(object):
         call(args)
         print ""
 
-    def metadata(self, qpath):
+    def metadata(self, qpath, tpe):
         url = "http://localhost:%s/analytics/v2/meta/fs/%s/%s" % (self.shardport, self.account, qpath)
-        args = ['curl', '-s', '-G',
-                '--data-urlencode', 'apiKey=' + self.apikey, url]
+        if tpe:
+                args = ['curl', '-s', '-G',
+                        '--data-urlencode', 'apiKey=' + self.apikey,
+                        '--data-urlencode', 'type=' + tpe[0],
+                        url]
+        else:
+                args = ['curl', '-s', '-G',
+                        '--data-urlencode', 'apiKey=' + self.apikey, url]
         call(args)
         print ""
 
@@ -125,6 +131,6 @@ if __name__ == "__main__":
             q = args[1]
         service.query(q)
     elif args[0] == '-m':
-        service.metadata(args[1])
+        service.metadata(args[1], args[2:])
     else:
         usage()
