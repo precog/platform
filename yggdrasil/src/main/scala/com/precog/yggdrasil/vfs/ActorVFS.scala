@@ -265,6 +265,13 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     def toJsonElements(slice: Slice) = slice.toJsonElements
     def derefValue(slice: Slice) = slice.deref(TransSpecModule.paths.Value)
     def blockSize(slice: Slice) = slice.size
+    def pathStructure(selector: CPath)(implicit M: Monad[Future]) = { (projection: Projection) =>
+      right {
+        for (children <- projection.structure) yield {
+          PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
+        }
+      }
+    }
   }
 
   object VFS extends VFSCompanion
@@ -305,16 +312,6 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
         (projectionsActor ? FindChildren(path)).mapTo[MetadataResult] map { 
           case PathChildren(_, children) => \/.right(children flatMap { _ - path })
           case PathOpFailure(_, error) => \/.left(error)
-        }
-      }
-    }
-
-    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[Future, ResourceError, PathStructure] = {
-      readProjection(path, version) flatMap { projection => 
-        right {
-          for (children <- projection.structure) yield {
-            PathStructure(projection.reduce(Reductions.count, selector), children.map(_.selector))
-          }
         }
       }
     }

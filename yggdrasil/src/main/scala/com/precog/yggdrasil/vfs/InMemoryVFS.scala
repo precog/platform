@@ -86,6 +86,18 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
     def toJsonElements(slice: Slice) = slice.toJsonElements
     def derefValue(slice: Slice) = slice.deref(TransSpecModule.paths.Value)
     def blockSize(slice: Slice) = slice.size
+    def pathStructure(selector: CPath)(implicit M: Monad[M]) = { (projection: Projection) =>
+      EitherT.right(
+        for (columnRefs <- projection.structure) yield { 
+          val types : Map[CType, Long] = columnRefs.collect {
+            // FIXME: This should use real counts
+            case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+          }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+
+          PathStructure(types, columnRefs.map(_.selector))
+        }
+      )
+    }
   }
 
   object VFS extends VFSCompanion {
@@ -207,21 +219,6 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
       data.get((path, Version.Current)) map { 
         case BinaryRecord(_, id) => VersionEntry(id, PathData.BLOB, clock.instant)
         case JsonRecord(_, id) => VersionEntry(id, PathData.NIHDB, clock.instant)
-      }
-    }
-
-    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
-      readProjection(path, version) flatMap { projection =>
-        EitherT.right(
-          for (columnRefs <- projection.structure) yield { 
-            val types : Map[CType, Long] = columnRefs.collect {
-              // FIXME: This should use real counts
-              case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-            }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
-
-            PathStructure(types, columnRefs.map(_.selector))
-          }
-        )
       }
     }
   }

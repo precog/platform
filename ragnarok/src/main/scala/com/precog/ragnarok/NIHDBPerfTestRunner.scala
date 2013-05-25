@@ -87,7 +87,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
 
   val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
-  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, NoopScheduler[Future], yggConfig.clock)
+  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
     new Evaluator[N](N0) with IdSourceScannerModule {

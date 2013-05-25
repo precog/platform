@@ -88,6 +88,26 @@ trait VFSModule[M[+_], Block] extends Logging {
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
   }
 
+  object Resource {
+    def asQuery(path: Path, version: Version)(implicit M: Monad[M]): Resource => EitherT[M, ResourceError, String] = { resource =>
+      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
+      EitherT {
+        resource.fold(
+          br => br.asString.run.map(_.toRightDisjunction(notAQuery)),
+          _ => \/.left(notAQuery).point[M]
+        )
+      }
+    }
+
+    def asProjection(path: Path, version: Version)(implicit M: Monad[M]): Resource => EitherT[M, ResourceError, Projection] = { resource =>
+      def notAProjection = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel projection.".format(path.path, version))
+      resource.fold(
+        _ => EitherT.left(notAProjection.point[M]),
+        pr => EitherT.right(pr.projection)
+      )
+    }
+  }
+
   trait ProjectionResource extends Resource {
     def append(data: NIHDB.Batch): IO[PrecogUnit]
     def recordCount(implicit M: Monad[M]): M[Long]
@@ -103,22 +123,11 @@ trait VFSModule[M[+_], Block] extends Logging {
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
 
-  object VFSUtil {
-    def asQuery(path: Path, version: Version, resource: Resource)(implicit M: Monad[M]): EitherT[M, ResourceError, String] = {
-      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
-      EitherT {
-        resource.fold(
-          br => br.asString.run.map(_.toRightDisjunction(notAQuery)),
-          _ => \/.left(notAQuery).point[M]
-        )
-      }
-    }
-  }
-
   trait VFSCompanionLike {
     def toJsonElements(block: Block): Vector[JValue]
     def derefValue(block: Block): Block
     def blockSize(block: Block): Int
+    def pathStructure(selector: CPath)(implicit M: Monad[M]): Projection => EitherT[M, ResourceError, PathStructure]
   }
 
   type VFSCompanion <: VFSCompanionLike
@@ -134,22 +143,6 @@ trait VFSModule[M[+_], Block] extends Logging {
 
     def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
 
-    def readQuery(path: Path, version: Version): EitherT[M, ResourceError, String] = {
-      readResource(path, version) flatMap { VFSUtil.asQuery(path, version, _) }
-    }
-
-    def readProjection(path: Path, version: Version): EitherT[M, ResourceError, Projection] = {
-      def notAProjection = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel projection.".format(path.path, version))
-      readResource(path, version) flatMap {
-        _.fold(
-          _ => EitherT.left(notAProjection.point[M]),
-          pr => EitherT.right(pr.projection)
-        )
-      }
-    }
-
-    def pathStructure(path: Path, selector: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
-
     /**
      * Returns the direct children of path.
      *
@@ -160,55 +153,6 @@ trait VFSModule[M[+_], Block] extends Logging {
     def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]]
 
     def currentVersion(path: Path): M[Option[VersionEntry]]
-
-/*
-    // TODO: currentStructure has all this information, need to deduplicate
-    def currentSelectors(path: Path): EitherT[M, ResourceError, Set[CPath]] = {
-      readProjection(path, Version.Current) flatMap { proj =>
-        right(proj.structure.map(_.map(_.selector)))
-      }
-    }
-    */
-
-    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock)(blockf: Block => Block): StreamT[M, Block] = {
-      val streamId = java.util.UUID.randomUUID()
-      val allPerms = Map(apiKey -> perms)
-
-      StreamT.unfoldM((0, stream)) {
-        case (pseudoOffset, s) =>
-          s.uncons flatMap {
-            case Some((x, xs)) =>
-              val ingestRecords = VFS.toJsonElements(blockf(x)).zipWithIndex map {
-                case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
-              }
-
-              logger.debug("Persisting %d stream records (from slice of size %d) to %s".format(ingestRecords.size, VFS.blockSize(x), path))
-
-              for {
-                terminal <- xs.isEmpty
-                par <- {
-                  // FIXME: is Replace always desired here? Any case
-                  // where we might want Create? AFAICT, this is only
-                  // used for caching queries right now.
-                  val streamRef = StreamRef.Replace(streamId, terminal)
-                  val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
-                  writeAllSync(Seq((pseudoOffset, msg))).run
-                }
-              } yield {
-                par.fold(
-                  errors => {
-                    logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
-                    None
-                  },
-                  _ => Some((x, (pseudoOffset + 1, xs)))
-                )
-              }
-
-            case None =>
-              None.point[M]
-          }
-      }
-    }
   }
 }
 

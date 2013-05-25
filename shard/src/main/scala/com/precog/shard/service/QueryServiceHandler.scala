@@ -9,6 +9,7 @@ import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.vfs._
 import com.precog.util.InstantOrdering
@@ -87,7 +88,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   def metadata = DescriptionMetadata("""Takes a quirrel query and returns the result of evaluating the query.""")
 }
 
-class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, Slice]], clock: Clock)(implicit M: Monad[Future]) 
+class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, Slice]], scheduler: Scheduler[Future], clock: Clock)(implicit M: Monad[Future]) 
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
 
@@ -99,7 +100,7 @@ class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, S
 
         val cacheControl0 = CacheControl.fromCacheDirectives(cacheDirectives: _*)
         // Internally maxAge/maxStale are compared against ms times
-        platform.vfs.executeStoredQuery(platform, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
+        platform.vfs.executeStoredQuery(platform, scheduler, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
           HttpResponse(OK, 
             headers =  HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
             content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data.map(_.deref(TransSpecModule.paths.Value))))))

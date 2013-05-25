@@ -138,9 +138,11 @@ trait NIHDBQueryExecutorComponent  {
       private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 
 
       private val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config0.detach("scheduling"))
-      private val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, actorVFS, scheduleStorage, platform, clock)))
+
+      val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, clock)
+      private val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, vfs, scheduleStorage, platform, clock)))
+
       val scheduler = new ActorScheduler(scheduleActor, yggConfig.schedulingTimeout)
-      val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, scheduler, clock)
 
       trait TableCompanion extends VFSColumnarTableCompanion 
       object Table extends TableCompanion

@@ -136,7 +136,7 @@ trait TestShardService extends BlueEyesServiceSpecification
 
       val rawVFS = new InMemoryVFS(stubData, clock)
       val permissionsFinder = new PermissionsFinder(self.apiKeyFinder, accountFinder, clock.instant())
-      val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, scheduler, clock)
+      val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, clock)
     }
 
     ShardState(platform, self.apiKeyFinder, accountFinder, scheduler, jobManager, clock, Stoppable.Noop)
