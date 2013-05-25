@@ -103,6 +103,18 @@ trait VFSModule[M[+_], Block] extends Logging {
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
 
+  object VFSUtil {
+    def asQuery(path: Path, version: Version, resource: Resource)(implicit M: Monad[M]): EitherT[M, ResourceError, String] = {
+      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
+      EitherT {
+        resource.fold(
+          br => br.asString.run.map(_.toRightDisjunction(notAQuery)),
+          _ => \/.left(notAQuery).point[M]
+        )
+      }
+    }
+  }
+
   /**
    * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
    */
@@ -116,14 +128,7 @@ trait VFSModule[M[+_], Block] extends Logging {
     def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
 
     def readQuery(path: Path, version: Version): EitherT[M, ResourceError, String] = {
-      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
-
-      readResource(path, version) flatMap {
-        _.fold(
-          br => EitherT(br.asString.run.map(_.toRightDisjunction(notAQuery))),
-          _ => EitherT.left(notAQuery.point[M])
-        )
-      }
+      readResource(path, version) flatMap { VFSUtil.asQuery(path, version, _) }
     }
 
     def readProjection(path: Path, version: Version): EitherT[M, ResourceError, Projection] = {
