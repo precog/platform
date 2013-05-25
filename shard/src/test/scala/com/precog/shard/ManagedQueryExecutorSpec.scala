@@ -193,7 +193,7 @@ trait TestManagedPlatform extends ManagedExecution with ManagedQueryModule with 
             StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
               case i if i < numTicks =>
                 schedule(1) {
-                  Some((Slice.fromJValues(Stream(JString("."))), i + 1))
+                  Some((Slice.fromJValues(Stream(JObject("value" -> JString(".")))), i + 1))
                 }.liftM[JobQueryT]
 
               case _ =>
