@@ -49,6 +49,7 @@ import org.quartz.CronExpression
 import scala.collection.mutable.{ArrayBuffer, PriorityQueue}
 
 import scalaz.{Ordering => _, idInstance => _, _}
+import scalaz.std.option._
 import scalaz.syntax.id._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.either._
@@ -81,7 +82,6 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
   class SchedulingActor(
       jobManager: JobManager[Future], 
       permissionsFinder: PermissionsFinder[Future], 
-      vfs: SecureVFS,
       storage: ScheduleStorage[Future], 
       platform: Platform[Future, Slice, StreamT[Future, Slice]], 
       clock: Clock, 
@@ -188,45 +188,42 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
         // This cannot occur inside a Future, or we would be exposing Actor state outside of this thread
         running += ((task.source, task.sink) -> TaskInProgress(task, startedAt))
 
-        val execution = for {  
-          job <- jobManager.createJob(task.apiKey, task.taskName, "scheduled", None, Some(startedAt))
-          executionResult = 
-            for {
-              executor <- platform.executorFor(task.apiKey) leftMap { invalidState }
-              script <- vfs.readQuery(task.apiKey, task.source, Version.Current, AccessMode.Execute) leftMap { storageError }
-              perms <- EitherT.right(permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant())) 
-              permSet = perms.toSet[Permission]
-              allPerms = Map(task.apiKey -> permSet)
-              stream <- executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout))
-              persistingStream = vfs.persistingStream(task.apiKey, task.sink, task.authorities, permSet, Some(job.id), stream, clock)(VFS.derefValue)
-              totalSize <- EitherT.right(consumeStream(0, persistingStream))
-            } yield totalSize
+        
+        val execution = for {
+          basePath <- EitherT(M point { task.source.prefix \/> invalidState("Path %s cannot be relativized.".format(task.source.path)) })
+          cachingResult <- platform.vfs.executeAndCache(platform, task.apiKey, task.source, basePath, QueryOptions(timeout = task.timeout), Some(task.sink), Some(task.taskName))
 
-          errorHandling = executionResult.swap flatMap { error => 
-            EitherT.right {
-              jobManager.abort(job.id, error.toString) map {
-                _.disjunction.fold(
-                  jobAbortFailure => SystemError(new RuntimeException(jobAbortFailure)),
-                  jobAbortSuccess => error
-                )
-              }
+
+        } yield cachingResult
+        
+        execution.fold[Future[PrecogUnit]](
+          failure => M point {
+            logger.error("An error was encountered processing a scheduled query execution: " + failure)
+            ourself ! TaskComplete(task.id, clock.now(), 0, Some(failure.toString)) : PrecogUnit
+          },
+          storedQueryResult => {
+            consumeStream(0, storedQueryResult.data) map { totalSize =>
+              ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
+              PrecogUnit
+            } recoverWith {
+              case t: Throwable =>
+                for {
+                  _ <- storedQueryResult.cachingJob.traverse { jobId =>
+                    jobManager.abort(jobId, t.getMessage) map {
+                      case Right(jobAbortSuccess) => 
+                          ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString))   
+                      case Left(jobAbortFailure) => sys.error(jobAbortFailure.toString)
+                    }
+                  } 
+                } yield PrecogUnit
             }
           }
-
-          result <- errorHandling.swap.fold[PrecogUnit](
-            failure => {
-              logger.error("An error was encountered processing a scheduled query execution: " + failure)
-              ourself ! TaskComplete(task.id, clock.now(), 0, Some(failure.toString))   
-            },
-            totalSize => ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
-          )
-        } yield result
-        
-        execution.onFailure {
+        ) flatMap {
+          identity[Future[PrecogUnit]]
+        } onFailure {
           case t: Throwable =>
             logger.error("Scheduled query execution failed by thrown error.", t)
-            ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString))
-            PrecogUnit
+            ourself ! TaskComplete(task.id, clock.now(), 0, Option(t.getMessage) orElse Some(t.getClass.toString)) : PrecogUnit
         }
       }
     }
