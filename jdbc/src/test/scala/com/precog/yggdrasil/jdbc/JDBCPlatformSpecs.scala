@@ -208,8 +208,7 @@ object JDBCPlatformSpecEngine extends Logging {
 trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
     with JDBCColumnarTableModule
     with Logging
-    with StringIdMemoryDatasetConsumer[Future]
-{ self =>
+    with StringIdMemoryDatasetConsumer[Future] { self =>
 
   class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
@@ -270,7 +269,7 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
   override def map (fs: => Fragments): Fragments = Step { startup() } ^ fs ^ Step { shutdown() }
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
-    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+    new Evaluator[N](N0)(mn,nm) {
       val report = new LoggingQueryLogger[N, instructions.Line]
           with ExceptionQueryLogger[N, instructions.Line]
           with TimingQueryLogger[N, instructions.Line] {
@@ -282,6 +281,7 @@ trait JDBCPlatformSpecs extends ParseEvalStackSpecs[Future]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
+      def freshIdScanner = self.freshIdScanner
     }
 }
 

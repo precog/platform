@@ -30,8 +30,8 @@ import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.util.{ FileOps, FilesystemFileOps, XLightWebHttpClientModule }
 import com.precog.yggdrasil.vfs._
-import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
@@ -56,6 +56,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     with SecureVFSModule[Future, Slice]
     with ActorVFSModule
     with VFSColumnarTableModule
+    with XLightWebHttpClientModule[Future]
     with NIHDBIngestSupport { self =>
     // with StandaloneActorProjectionSystem
     // with SliceColumnarTableModule[Future, Array[Byte]] { self =>
@@ -109,10 +110,11 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
   val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] = {
-    new Evaluator[N](N0) with IdSourceScannerModule {
+    new Evaluator[N](N0) {
       type YggConfig = self.YggConfig
       val yggConfig = self.yggConfig
       val report = LoggingQueryLogger[N](N0)
+      def freshIdScanner = self.freshIdScanner
     }
   }
 

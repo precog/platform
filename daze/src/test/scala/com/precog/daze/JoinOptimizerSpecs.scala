@@ -28,6 +28,7 @@ import org.specs2.mutable.Specification
 
 import com.precog.bytecode.JType.JUniverseT
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
 
@@ -43,13 +44,19 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   import TableModule.CrossOrder._ // TODO: Move CrossOrder out somewhere else.
   import dag._
   import instructions._
-  import library._
+  import library.{ op1ForUnOp => _, _ }
 
   val testAPIKey = "testAPIKey"
   val ctx = defaultEvaluationContext
 
+  object joins extends JoinOptimizer with StdLibOpFinder {
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext = new MorphContext(ctx, null)
+  }
+
+  import joins._
+
   def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, Path.Root) match {
+    (consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) 

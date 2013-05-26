@@ -24,8 +24,10 @@ import annotation.tailrec
 
 import com.precog.common._
 import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.bytecode._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.TableModule._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.ColumnarTableModuleConfig
@@ -62,8 +64,6 @@ import scala.collection.immutable.Queue
 trait EvaluatorConfig extends IdSourceConfig {
   def maxSliceSize: Int
 }
-
-case class EvaluationContext(apiKey: APIKey, basePath: Path, startTime: DateTime)
 
 trait EvaluatorModule[M[+_]] extends CrossOrdering
     with Memoizer
@@ -106,13 +106,23 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
     private val monadState = stateTMonadState[EvaluatorState, N]
 
     def report: QueryLogger[N, instructions.Line]
+
+    private def MorphLogger(loc: instructions.Line): MorphLogger = new MorphLogger {
+      def info(msg: String): M[Unit] = nm(report.info(loc, msg))
+      def warn(msg: String): M[Unit] = nm(report.warn(loc, msg))
+      def error(msg: String): M[Unit] = nm(report.error(loc, msg))
+      def die(): M[Unit] = nm(report.die())
+    }
+
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext =
+      new MorphContext(ctx, MorphLogger(node.loc))
   
     def freshIdScanner: Scanner
     
     def Forall: Reduction { type Result = Option[Boolean] }
     def Exists: Reduction { type Result = Option[Boolean] }
-    def concatString(ctx: EvaluationContext): F2
-    def coerceToDouble(ctx: EvaluationContext): F1
+    def concatString(ctx: MorphContext): F2
+    def coerceToDouble(ctx: MorphContext): F1
 
     def composeOptimizations(optimize: Boolean, funcs: List[DepGraph => DepGraph]): DepGraph => DepGraph =
       if (optimize) funcs.reverse.map(Endo[DepGraph]).suml.run else identity
@@ -146,7 +156,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
      * and `prepareEval` (which has the primary eval loop).
      */
     def eval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean): N[Table] = {
-      evalLogger.debug("Eval for {} = {}", ctx.apiKey.toString, graph)
+      evalLogger.debug("Eval for {} = {}", ctx.account.apiKey.toString, graph)
 
       val rewrittenDAG = fullRewriteDAG(optimize, ctx)(graph)
 
@@ -351,16 +361,20 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case class ValueJoin(id: Int) extends JoinKey
 
           val idMatch = IdentityMatch(left, right)
-
+          
           def joinSortToJoinKey(sort: JoinSort): JoinKey = sort match {
             case IdentitySort => IdentityJoin(idMatch.sharedIndices)
             case ValueSort(id) => ValueJoin(id)
           }
 
           def identityJoinSpec(ids: Vector[Int]): TransSpec1 = {
-            val components = for (i <- ids)
-              yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
-            components reduceLeft { trans.InnerArrayConcat(_, _) }
+            if (ids.isEmpty) {
+              trans.ConstLiteral(CEmptyArray, SourceKey.Single)   // join with undefined, probably 
+            } else {
+              val components = for (i <- ids)
+                yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1
+              components reduceLeft { trans.InnerArrayConcat(_, _) }
+            }
           }
 
           val joinKey = joinSortToJoinKey(joinSort)
@@ -456,7 +470,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
           case Join(op, joinSort @ (IdentitySort | ValueSort(_)), left, right) =>
-            join(graph, left, right, joinSort)(transFromBinOp(op, ctx))
+            join(graph, left, right, joinSort)(transFromBinOp(op, MorphContext(ctx, graph)))
 
           case dag.Filter(joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => 
             join(graph, target, boolean, joinSort)(trans.Filter(_, _))
@@ -511,7 +525,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               Path(prefixStr) = ctx.basePath
-              f1 = concatString(ctx).applyl(CString(prefixStr.replaceAll("/$", "")))
+              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("/$", "")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
               loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
                 {
@@ -527,7 +541,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case dag.Morph1(mor, parent) => 
             for {
               pendingTable <- prepareEval(parent, splits)
-              back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), ctx))
+              back <- transState liftM mn(mor(pendingTable.table.transform(liftToValues(pendingTable.trans)), MorphContext(ctx, graph)))
             } yield {
               PendingTable(back, graph, TransSpec1.Id, findMorphOrder(mor.idPolicy, pendingTable.sort))
             }
@@ -575,7 +589,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
 
             joined flatMap { case (morph1, PendingTable(joinedTable, _, _, sort)) =>
-              transState liftM mn(morph1(joinedTable, ctx)) map { table =>
+              transState liftM mn(morph1(joinedTable, MorphContext(ctx, graph))) map { table =>
                 PendingTable(table, graph, TransSpec1.Id, findMorphOrder(mor.idPolicy, sort))
               }
             }
@@ -614,7 +628,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
                 .transform(liftedTrans)
                 .transform(DerefObjectStatic(Leaf(Source), paths.Value))
                 .transform(spec)
-                .reduce(reduction.reducer(ctx))(reduction.monoid))
+                .reduce(reduction.reducer(MorphContext(ctx, graph)))(reduction.monoid))
 
               table = result.map(reduction.extract)
 
@@ -645,7 +659,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             for {
               pendingTable <- prepareEval(parent, splits)
               liftedTrans = liftToValues(pendingTable.trans)
-              result <- transState liftM mn(red(pendingTable.table.transform(DerefObjectStatic(liftedTrans, paths.Value)), ctx))
+              result <- transState liftM mn(red(pendingTable.table.transform(DerefObjectStatic(liftedTrans, paths.Value)), MorphContext(ctx, graph)))
               wrapped = result transform buildConstantWrapSpec(Leaf(Source))
             } yield PendingTable(wrapped, graph, TransSpec1.Id, IdentityOrder(graph))
           
@@ -685,7 +699,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               liftedTrans = liftToValues(predPending.trans)
               predTable = predPending.table transform DerefObjectStatic(liftedTrans, paths.Value)
               
-              truthiness <- transState liftM mn(predTable.reduce(Forall reducer ctx)(Forall.monoid))
+              truthiness <- transState liftM mn(predTable.reduce(Forall reducer MorphContext(ctx, graph))(Forall.monoid))
             
               assertion = if (truthiness getOrElse false) {
                 N.point(())
@@ -753,7 +767,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             }
     
           case j @ Join(op, Cross(hint), left, right) => 
-            cross(graph, left, right, hint)(transFromBinOp(op, ctx))
+            cross(graph, left, right, hint)(transFromBinOp(op, MorphContext(ctx, graph)))
           
           case f @ dag.Filter(Cross(hint), target, boolean) => 
             cross(graph, target, boolean, hint)(trans.Filter(_, _))

@@ -26,6 +26,7 @@ import scala.collection.mutable
 import com.precog.common._
 import com.precog.util._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.TableModule.paths
 
 import scalaz.std.map._
@@ -38,9 +39,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
   import trans.constants._
 
   trait EvaluatorMethods extends OpFinder {
-    type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
-    type TableTransSpec1 = TableTransSpec[Source1]
-    type TableTransSpec2 = TableTransSpec[Source2]
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext
 
     def rValueToCValue(rvalue: RValue): Option[CValue] = rvalue match {
       case cvalue: CValue => Some(cvalue)
@@ -66,7 +65,7 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       }
     }
 
-    def transFromBinOp[A <: SourceType](op: BinaryOperation, ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
+    def transFromBinOp[A <: SourceType](op: BinaryOperation, ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
       case Eq => trans.Equal[A](left, right)
       case NotEq => op1ForUnOp(Comp).spec(ctx)(trans.Equal[A](left, right))
       case instructions.WrapObject => WrapObjectDynamic(left, right)
@@ -79,36 +78,9 @@ trait EvaluatorMethodsModule[M[+_]] extends DAG with TableModule[M] with TableLi
       case _ => op2ForBinOp(op).get.spec(ctx)(left, right)
     }
 
-    def makeTableTrans(tableTrans: TableTransSpec1): TransSpec1 = {
-      val wrapped = for ((key @ CPathField(fieldName), value) <- tableTrans) yield {
-        val mapped = TransSpec.deepMap(value) {
-          case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
-        }
-        
-        trans.WrapObject(mapped, fieldName)
-      }
-      
-      wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
-        trans.InnerObjectConcat(acc, ts)
-      }
-    }
-
-    def liftToValues(trans: TransSpec1): TransSpec1 =
-      makeTableTrans(Map(paths.Value -> trans))
-
     def combineTransSpecs(specs: List[TransSpec1]): TransSpec1 =
       specs map { trans.WrapArray(_): TransSpec1 } reduceLeftOption { trans.OuterArrayConcat(_, _) } get
 
-    //TODO don't use Map1, returns an empty array of type CNum
-    def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  
-      val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
-      trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
-    }
-
-    def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
-      trans.WrapObject(source, paths.Value.name)
-    }
-    
     def buildJoinKeySpec(sharedLength: Int): TransSpec1 = {
       val components = for (i <- 0 until sharedLength)
         yield trans.WrapArray(DerefArrayStatic(SourceKey.Single, CPathIndex(i))): TransSpec1

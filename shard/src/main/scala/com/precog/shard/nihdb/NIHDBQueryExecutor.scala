@@ -198,6 +198,7 @@ trait NIHDBQueryExecutorComponent  {
           type YggConfig = NIHDBQueryExecutorConfig
           val yggConfig = platform.yggConfig
           val queryReport = errorReport[Option[FaultPosition]](shardQueryMonad, implicitly)
+          override def freshIdScanner = platform.freshIdScanner
         } map { case (faults, result) =>
           result
         }

@@ -23,6 +23,7 @@ import com.precog.common._
 import com.precog.common.jobs._
 
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 import com.precog.daze._
 import com.precog.yggdrasil.table.Slice
@@ -63,13 +64,15 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
+  val account = AccountDetails("test", "test@test.test", clock.now(), apiKey, Path.Root, AccountPlan.Free)
   val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val executionResult = for {
       executor <- asyncExecutorFor(apiKey) leftMap { EvaluationError.invalidState }
-      result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
+      ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), clock.now())
+      result <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout))
     } yield result 
 
     executionResult.valueOr(err => sys.error(err.toString))
@@ -186,7 +189,7 @@ trait TestManagedPlatform extends ManagedExecution with ManagedQueryModule with 
 
       import UserQuery.Serialization._
 
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         val numTicks = query.toInt
         EitherT.right[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
           schedule(0) {

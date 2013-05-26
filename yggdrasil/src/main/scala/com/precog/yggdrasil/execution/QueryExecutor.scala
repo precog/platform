@@ -91,19 +91,11 @@ object CacheControl {
 
 
 trait QueryExecutor[M[+_], +A] { self =>
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, A]
+  def execute(query: String, context: EvaluationContext, opts: QueryOptions): EitherT[M, EvaluationError, A]
 
   def map[B](f: A => B)(implicit M: Functor[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
-    def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): EitherT[M, EvaluationError, B] = {
-      self.execute(apiKey, query, prefix, opts) map f
+    def execute(query: String, context: EvaluationContext, opts: QueryOptions): EitherT[M, EvaluationError, B] = {
+      self.execute(query, context, opts) map f
     }
   }
 }
-
-class NullQueryExecutor[M[+_]: Monad] extends QueryExecutor[M, Nothing] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-    EitherT.left(SystemError(new UnsupportedOperationException("Query service not avaialble")).point[M])
-  }
-}
-
-// vim: set ts=4 sw=4 et:

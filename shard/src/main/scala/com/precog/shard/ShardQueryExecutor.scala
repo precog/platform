@@ -42,6 +42,7 @@ import com.precog.yggdrasil.util._
 import com.precog.yggdrasil.vfs._
 
 import com.precog.util.FilesystemFileOps
+import com.precog.util.XLightWebHttpClientModule
 
 import org.slf4j.{ Logger, LoggerFactory }
 
@@ -89,7 +90,7 @@ object Fault {
   case class Error(pos: Option[FaultPosition], message: String) extends Fault
 }
 
-trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] {
+trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] with XLightWebHttpClientModule[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
@@ -113,11 +114,12 @@ trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] {
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): EitherT[N, EvaluationError, (Set[Fault], StreamT[N, Slice])] = {
+    def execute(query: String, evaluationContext: EvaluationContext, opts: QueryOptions): EitherT[N, EvaluationError, (Set[Fault], StreamT[N, Slice])] = {
       import trans.constants._
-      val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
+
       val qid = yggConfig.queryId.getAndIncrement()
-      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
+      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s" format 
+        (qid, evaluationContext.apiKey, query, evaluationContext.basePath))
 
       import EvaluationError._
 

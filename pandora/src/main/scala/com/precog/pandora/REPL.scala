@@ -41,6 +41,8 @@ import com.precog.common.security._
 import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 import com.precog.util.FilesystemFileOps
+import com.precog.util.XLightWebHttpClientModule
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.vfs._
 import com.precog.yggdrasil.scheduling._
 
@@ -66,6 +68,8 @@ import java.io.{File, PrintStream}
 
 import scalaz._
 import scalaz.effect.IO
+
+import org.joda.time.DateTime
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
@@ -107,9 +111,12 @@ trait REPL extends ParseEvalStack[Future]
     with ActorVFSModule
     with SecureVFSModule[Future, Slice]
     with VFSColumnarTableModule
+    with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] {
 
-  val dummyAPIKey = "dummyAPIKey"
+  val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
+    new DateTime, "dummyAPIKey", Path.Root, AccountPlan.Free)
+  def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, new DateTime)
 
   val Prompt = "quirrel> "
   val Follow = "       | "
@@ -152,7 +159,7 @@ trait REPL extends ParseEvalStack[Future]
 
           for (graph <- eitherGraph.right) {
             val result = {
-              consumeEval(dummyAPIKey, graph, Path.Root) fold (
+              consumeEval(graph, dummyEvaluationContext) fold (
                 error   => "An error occurred processing your query: " + error.getMessage,
                 results => JArray(results.toList.map(_._2.toJValue)).renderPretty
               )
@@ -313,10 +320,11 @@ object Console extends App {
         object Table extends TableCompanion
 
         def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
-          new Evaluator[N](N0) with IdSourceScannerModule {
+          new Evaluator[N](N0) {
             type YggConfig = REPLConfig
             val yggConfig = replConfig
             val report = LoggingQueryLogger[N](N0)
+            def freshIdScanner = self.freshIdScanner
           }
 
         def startup = IO { PrecogUnit }

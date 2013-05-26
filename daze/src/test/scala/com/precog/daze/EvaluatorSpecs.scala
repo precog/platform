@@ -21,8 +21,11 @@ package com.precog
 package daze
 
 import com.precog.common._
+import com.precog.common.accounts._
+import com.precog.util._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
@@ -58,11 +61,12 @@ import org.specs2.mutable._
 import blueeyes.json._
 
 trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
+    with EchoHttpClientModule[M]
     with BaseBlockStoreTestModule[M]
     with IdSourceScannerModule { outer =>
       
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) = 
-    new Evaluator[N](N0)(mn,nm) with IdSourceScannerModule {
+    new Evaluator[N](N0)(mn,nm) {
       val report = new LoggingQueryLogger[N, instructions.Line] with ExceptionQueryLogger[N, instructions.Line] with TimingQueryLogger[N, instructions.Line] {
         val M = N0
       }
@@ -71,12 +75,21 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
         val maxSliceSize = 10
       }
       val yggConfig = new YggConfig
+      def freshIdScanner = outer.freshIdScanner
     }
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
   def newGroupId = groupId.getAndIncrement
 
-  val defaultEvaluationContext = EvaluationContext("testAPIKey", Path.Root, new DateTime())
+  def testAccount = AccountDetails("00001", "test@email.com",
+    new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  val defaultEvaluationContext = EvaluationContext("testAPIKey", testAccount, Path.Root, new DateTime)
+  val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
+    def info(msg: String): M[Unit] = M.point(())
+    def warn(msg: String): M[Unit] = M.point(())
+    def error(msg: String): M[Unit] = M.point(())
+    def die(): M[Unit] = M.point(sys.error("MorphContext#die()"))
+  })
 
   val projections = Map.empty[Path, Projection]
   def vfs = sys.error("VFS metadata not supported in test.")
@@ -156,7 +169,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph, path: Path = Path.Root, optimize: Boolean = true)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, path, optimize) match {
+    val ctx = defaultEvaluationContext.copy(basePath = path)
+    (consumeEval(graph, ctx, optimize) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })/* and 

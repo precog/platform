@@ -26,6 +26,7 @@ import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
 import yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.test._
 
 trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {
@@ -33,6 +34,11 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
   import library._
 
   val ctx = defaultEvaluationContext
+
+  object pullups extends PredicatePullups with StdLibOpFinder {
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext = new MorphContext(ctx, null)
+  }
+  import pullups._
   
   "Predicate pullups optimization" should {
     "pull a predicate out of a solve with a single ticvar" in {

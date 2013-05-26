@@ -121,7 +121,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       }
     }
 
-    final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], scheduler: Scheduler[M], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], scheduler: Scheduler[M], ctx: EvaluationContext, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import queryOptions.cacheControl._
       import EvaluationError._
 
@@ -136,7 +136,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         // version does not exist, then run synchronously and cache (if cacheable)
         for {
           basePath <- pathPrefix
-          caching  <- executeAndCache(platform, apiKey, path, basePath, queryOptions, cacheable.option(cachePath))
+          caching  <- executeAndCache(platform, path, ctx, queryOptions, cacheable.option(cachePath))
         } yield caching
       }
 
@@ -149,14 +149,14 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
             // then return the cached version and refresh the cache
             for {
               basePath      <- pathPrefix
-              queryResource <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap storageError
-              taskId        <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
+              queryResource <- readResource(ctx.apiKey, path, Version.Current, AccessMode.Execute) leftMap storageError
+              taskId        <- scheduler.addTask(None, ctx.apiKey, queryResource.authorities, ctx, path, cachePath, None) leftMap invalidState
             } yield taskId
           } 
 
           for {
             _          <- recacheAction
-            projection <- readProjection(apiKey, cachePath, Version.Current, AccessMode.Read) leftMap storageError
+            projection <- readProjection(ctx.apiKey, cachePath, Version.Current, AccessMode.Read) leftMap storageError
           } yield {
             StoredQueryResult(projection.getBlockStream(None), Some(timestamp), None)
           }
@@ -171,36 +171,36 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       }
     }
 
-    def executeAndCache(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, basePath: Path, queryOptions: QueryOptions, cacheAt: Option[Path], jobName: Option[String] = None)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    def executeAndCache(platform: Platform[M, Block, StreamT[M, Block]], path: Path, ctx: EvaluationContext, queryOptions: QueryOptions, cacheAt: Option[Path], jobName: Option[String] = None)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import EvaluationError._
       logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
       for { 
-        executor <- platform.executorFor(apiKey) leftMap { err => systemError(new RuntimeException(err)) }
-        queryRes <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
+        executor <- platform.executorFor(ctx.apiKey) leftMap { err => systemError(new RuntimeException(err)) }
+        queryRes <- readResource(ctx.apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
         query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
-        raw      <- executor.execute(apiKey, query, basePath, queryOptions)
+        raw      <- executor.execute(query, ctx, queryOptions)
         result  <- cacheAt match {
           case Some(cachePath) =>
             for {
               _ <- EitherT { 
-                permissionsFinder.writePermissions(apiKey, cachePath, clock.instant()) map { pset =>
+                permissionsFinder.writePermissions(ctx.apiKey, cachePath, clock.instant()) map { pset =>
                   /// here, we just terminate the computation early if no write permissions are available.
                   if (pset.nonEmpty) \/.right(PrecogUnit) 
                   else \/.left(
-                    storageError(PermissionsError("API key %s has no permission to write to the caching path %s.".format(apiKey, cachePath)))
+                    storageError(PermissionsError("API key %s has no permission to write to the caching path %s.".format(ctx.apiKey, cachePath)))
                   )
                 }
               }
               job <- EitherT.right(
-                jobManager.createJob(apiKey, jobName getOrElse "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now()))
+                jobManager.createJob(ctx.apiKey, jobName getOrElse "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now()))
               )
             } yield {
               logger.debug("Building caching stream for path %s writing to %s".format(path.path, cachePath.path))
               // FIXME: determination of authorities with which to write the cached data needs to be implemented;
               // for right now, simply using the authorities with which the query itself was written is probably
               // best.
-              val stream = persistingStream(apiKey, cachePath, queryRes.authorities, Some(job.id), raw, clock) {
+              val stream = persistingStream(ctx.apiKey, cachePath, queryRes.authorities, Some(job.id), raw, clock) {
                 VFS.derefValue
               }
 
