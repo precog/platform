@@ -74,7 +74,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       private def build(c: StrColumn) = new StrFrom.S(c, _ != null, f)
-      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::op1ss::" + name) {
+      def f1(ctx: MorphContext): F1 = CF1P("builtin::str::op1ss::" + name) {
         case c: StrColumn => build(c)
         case c: DateColumn => build(dateToStrCol(c))
       }
@@ -91,7 +91,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object isEmpty extends Op1F1(StringNamespace, "isEmpty") {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JBooleanT)
-      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::isEmpty") {
+      def f1(ctx: MorphContext): F1 = CF1P("builtin::str::isEmpty") {
         case c: StrColumn => new BoolFrom.S(c, _ != null, _.isEmpty)
         case c: DateColumn => new BoolFrom.S(dateToStrCol(c), _ != null, _ => false)
       }
@@ -103,7 +103,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = UnaryOperationType(StrAndDateT, JNumberT)
       private def build(c: StrColumn) = new LongFrom.S(c, _ != null, _.length)
-      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::length") {
+      def f1(ctx: MorphContext): F1 = CF1P("builtin::str::length") {
         case c: StrColumn => build(c)
         case c: DateColumn => build(dateToStrCol(c))
       }
@@ -114,7 +114,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JBooleanT)
       private def build(c1: StrColumn, c2: StrColumn) = new BoolFrom.SS(c1, c2, neitherNull, f)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ss" + name) {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::op2ss" + name) {
         case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
         case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
         case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
@@ -140,7 +140,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
         trans.Scan(
           trans.InnerArrayConcat(
             trans.WrapArray(left),
@@ -231,7 +231,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object concat extends Op2F2(StringNamespace, "concat") {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JTextT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::concat") {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::concat") {
         case (c1: StrColumn, c2: StrColumn) =>
           new StrFrom.SS(c1, c2, neitherNull, _ concat _)
         case (c1: DateColumn, c2: StrColumn) =>
@@ -248,7 +248,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       f: (String, Long) => Long) extends Op2F2(StringNamespace, name) {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, JNumberT, JNumberT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2sll::" + name) {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::op2sll::" + name) {
         case (c1: StrColumn, c2: DoubleColumn) =>
           new LongFrom.SD(c1, c2,
             (s, n) => (n % 1 == 0) && defined(s, n.toLong),
@@ -288,7 +288,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     class Substring(name: String)(f: (String, Int) => String) extends Op2F2(StringNamespace, name) {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, JNumberT, JTextT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::substring::" + name) {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::substring::" + name) {
         case (c1: StrColumn, c2: LongColumn) =>
           new StrFrom.SL(c1, c2, (s, n) => n >= 0, { (s, n) => f(s, n.toInt) })
         case (c1: StrColumn, c2: DoubleColumn) =>
@@ -325,7 +325,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     extends Op2F2(StringNamespace, name) {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JNumberT)
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::op2ssl::" + name) {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::op2ssl::" + name) {
         case (c1: StrColumn, c2: StrColumn) =>
           new LongFrom.SS(c1, c2, neitherNull, f)
         case (c1: DateColumn, c2: StrColumn) =>
@@ -374,7 +374,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         def apply(row: Int) = BigDecimal(c(row))
       }
 
-      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::parseNum") {
+      def f1(ctx: MorphContext): F1 = CF1P("builtin::str::parseNum") {
         case c: StrColumn => build(c)
         case c: DateColumn => build(dateToStrCol(c))
       }
@@ -382,7 +382,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     object numToString extends Op1F1(StringNamespace, "numToString") {
       val tpe = UnaryOperationType(JNumberT, JTextT)
-      def f1(ctx: EvaluationContext): F1 = CF1P("builtin::str::numToString") {
+      def f1(ctx: MorphContext): F1 = CF1P("builtin::str::numToString") {
         case c: LongColumn => new StrFrom.L(c, _ => true, _.toString)
         case c: DoubleColumn => {
           new StrFrom.D(c, _ => true, { d =>
@@ -412,7 +412,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           Pattern.compile(Pattern.quote(c2(row))).split(c1(row), -1)
       }
 
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::split") {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::split") {
         case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
         case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
         case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
@@ -429,7 +429,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           def apply(row: Int): Long = Levenshtein.distance(c1(row), c2(row))
         }
 
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::parseNum") {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::parseNum") {
         case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
         case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
         case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))
@@ -462,7 +462,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
           Pattern.compile(c2(row)).split(c1(row), -1)
       }
 
-      def f2(ctx: EvaluationContext): F2 = CF2P("builtin::str::splitRegex") {
+      def f2(ctx: MorphContext): F2 = CF2P("builtin::str::splitRegex") {
         case (c1: StrColumn, c2: StrColumn) => build(c1, c2)
         case (c1: DateColumn, c2: StrColumn) => build(dateToStrCol(c1), c2)
         case (c1: StrColumn, c2: DateColumn) => build(c1, dateToStrCol(c2))

@@ -23,6 +23,7 @@ import com.precog.common._
 import com.precog.common.jobs._
 
 import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.daze._
 import com.precog.muspelheim._
 
@@ -75,6 +76,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
 
   lazy val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   def apiKey = "O.o"
+  val account = AccountDetails("test", "test@test.test", clock.now(),
+    apiKey, Path.Root, AccountPlan.Free)
 
   def dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
@@ -100,7 +103,8 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val result = for {
       executor <- executorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
-      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)) mapValue {
+      ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), clock.now())
+      result0 <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout)) mapValue {
         case (w, s) => (w, (w: Option[(JobId, AtomicInteger)], s))
       }
     } yield {
@@ -256,11 +260,11 @@ trait TestManagedQueryModule extends Platform[TestFuture, StreamT[TestFuture, Ch
     Applicative[TestFuture].point(Success(new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
       import UserQuery.Serialization._
 
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-        val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
+        val userQuery = UserQuery(query, ctx.basePath, opts.sortOn, opts.sortOrder)
         val numTicks = query.toInt
 
-        WriterT(createJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
+        WriterT(createJob(ctx.account.apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
           val ticks = new AtomicInteger()
           val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
             case i if i < numTicks =>

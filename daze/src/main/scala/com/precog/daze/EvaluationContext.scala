@@ -19,30 +19,26 @@
  */
 package com.precog.daze
 
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.table.cf
-import scalaz._
+import org.joda.time.DateTime
 
-trait StdLibEvaluatorStack[M[+_]] 
-    extends EvaluatorModule[M]
-    with StdLibModule[M] 
-    with StdLibOpFinderModule[M] 
-    with StdLibStaticInlinerModule[M] 
-    with ReductionFinderModule[M]
-    with JoinOptimizerModule[M]
-    with PredicatePullupsModule[M] {
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Versioned._
+import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
 
-  trait Lib extends StdLib with StdLibOpFinder
-  object library extends Lib
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.common.accounts._
 
-  abstract class Evaluator[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M) 
-      extends EvaluatorLike[N](N0)(mn, nm)
-      with StdLibOpFinder 
-      with StdLibStaticInliner {
+import shapeless._
 
-    val Exists = library.Exists
-    val Forall = library.Forall
-    def concatString(ctx: MorphContext) = library.Infix.concatString.f2(ctx)
-    def coerceToDouble(ctx: MorphContext) = cf.util.CoerceToDouble
-  }
+case class EvaluationContext(apiKey: APIKey, account: AccountDetails, basePath: Path, startTime: DateTime)
+
+object EvaluationContext {
+  implicit val iso = Iso.hlist(EvaluationContext.apply _, EvaluationContext.unapply _)
+
+  val schemaV1 = "apiKey" :: "account" :: "basePath" :: "startTime" :: HNil
+
+  implicit val decomposer: Decomposer[EvaluationContext] = decomposerV(schemaV1, Some("1.0".v))
+  implicit val extractor:  Extractor[EvaluationContext]  = extractorV(schemaV1, Some("1.0".v))
 }

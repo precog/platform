@@ -32,6 +32,11 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
   import dag._
   import instructions._
   import library._
+
+  object inliner extends StdLibStaticInliner with StdLibOpFinder {
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext = new MorphContext(ctx, null)
+  }
+  import inliner._
   
   "static inlining of Root computation" should {
     "detect and resolve addition" in {

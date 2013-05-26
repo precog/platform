@@ -257,7 +257,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           }
         }
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           val scanners: Seq[TransSpec1] = models map { model =>
             WrapArray(Scan(TransSpec1.Id, scanner(model)))
           }

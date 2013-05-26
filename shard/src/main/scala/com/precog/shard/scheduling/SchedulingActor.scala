@@ -32,7 +32,7 @@ import com.precog.common.Path
 import com.precog.common.accounts.AccountFinder
 import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.daze.QueryOptions
+import com.precog.daze.{ QueryOptions, EvaluationContext }
 import com.precog.muspelheim.Platform
 import com.precog.util.PrecogUnit
 import com.precog.yggdrasil.table.Slice
@@ -57,7 +57,7 @@ import scalaz.effect.IO
 
 sealed trait SchedulingMessage
 
-case class AddTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long])
+case class AddTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, context: EvaluationContext, source: Path, sink: Path, timeoutMillis: Option[Long])
 
 case class DeleteTask(id: UUID)
 
@@ -196,7 +196,7 @@ class SchedulingActor(
           permissionsFinder.writePermissions(task.apiKey, task.sink, clock.instant()) flatMap { perms =>
             val allPerms = Map(task.apiKey -> perms.toSet[Permission])
 
-            executor.execute(task.apiKey, script, task.prefix, QueryOptions(timeout = task.timeout)).flatMap {
+            executor.execute(script, task.context, QueryOptions(timeout = task.timeout)).flatMap {
               _ traverse { stream =>
                 consumeStream(0, vfs.persistingStream(task.apiKey, task.sink, task.authorities, perms.toSet[Permission], Some(job.id), stream)) map { totalSize =>
                   ourself ! TaskComplete(task.id, clock.now(), totalSize, None)
@@ -219,10 +219,10 @@ class SchedulingActor(
   }
 
   def receive = {
-    case AddTask(repeat, apiKey, authorities, prefix, source, sink, timeout) =>
+    case AddTask(repeat, apiKey, authorities, context, source, sink, timeout) =>
       val ourself = self
       val taskId = UUID.randomUUID()
-      val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
+      val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, context, source, sink, timeout)
       val addResult: Future[Validation[String, UUID]] = (repeat match {
         case None =>
           executeTask(newTask) map { _ => Success(taskId) }
