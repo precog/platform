@@ -94,6 +94,24 @@ trait ArrayLibSpecs[M[+_]] extends Specification
         case _ => ko
       }
     }
+    
+    "flatten a non-array without exploding" in {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Flatten,
+        Const(CString("/het/arrays"))(line))(line)
+        
+      testEval(input) must haveSize(0)
+    }
+    
+    "flatten an empty set without exploding" in {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Flatten,
+        Undefined(line))(line)
+        
+      testEval(input) must haveSize(0)
+    }
   }
 }
 
