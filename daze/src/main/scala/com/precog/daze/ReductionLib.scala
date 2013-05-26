@@ -66,7 +66,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JType.JUniverseT, JNumberT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range) = {
           val cx = schema.columns(JType.JUniverseT).toArray
           var count = 0L
@@ -101,7 +101,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JDateT, JDateT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val maxs = schema.columns(JDateT) map {
             case col: DateColumn =>
@@ -149,7 +149,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JDateT, JDateT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val maxs = schema.columns(JDateT) map {
             case col: DateColumn =>
@@ -190,7 +190,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val maxs = schema.columns(JNumberT) map {
             case col: LongColumn =>
@@ -249,7 +249,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val mins = schema.columns(JNumberT) map {
             case col: LongColumn =>
@@ -304,7 +304,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range) = {
 
           val sum = schema.columns(JNumberT) map {
@@ -347,7 +347,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val results = schema.columns(JNumberT) map {
 
@@ -410,7 +410,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Option[(BigDecimal, Long)]] {
         def reduce(schema: CSchema, range: Range): Result = {
           val results = schema.columns(JNumberT) map {
             case col: LongColumn =>
@@ -468,7 +468,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val result = schema.columns(JNumberT) map {
 
@@ -566,7 +566,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
+      def reducer(ctx: MorphContext): Reducer[Result] = new CountSumSumSqReducer()
 
       def perform(res: Result) = res flatMap {
         case (count, sum, sumsq) if count > 0 =>
@@ -592,7 +592,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CountSumSumSqReducer()
+      def reducer(ctx: MorphContext): Reducer[Result] = new CountSumSumSqReducer()
 
       def perform(res: Result) = res flatMap {
         case (count, sum, sumsq) if count > 0 =>
@@ -624,7 +624,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range) = {
           if (range.isEmpty) {
             None
@@ -677,7 +677,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new CReducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range) = {
           if (range.isEmpty) {
             None

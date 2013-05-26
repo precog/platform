@@ -7,6 +7,7 @@ import com.precog.common.ingest.FileContent
 
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.common.accounts._
 import com.precog.muspelheim._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
@@ -28,7 +29,10 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.CharBuffer
 import java.io.{ StringWriter, PrintWriter }
 
+import org.joda.time.DateTime
+
 import scala.math.Ordered._
+
 import scalaz._
 import scalaz.NonEmptyList.nels
 import scalaz.Validation.{ success, failure }
@@ -42,9 +46,8 @@ import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
-
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
-    extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+    extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def platform: Platform[Future, A]
   def extractResponse(request: HttpRequest[_], a: A, outputType: MimeType): Future[HttpResponse[QueryResult]]
@@ -72,10 +75,11 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   }
 
   val service = (request: HttpRequest[ByteChunk]) => {
-    success { (apiKey: APIKey, path: Path, query: String, opts: QueryOptions) =>
+    success { (apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) =>
       platform.executorFor(apiKey) flatMap {
         case Success(executor) =>
-          executor.execute(apiKey, query, path, opts) flatMap {
+          val ctx = EvaluationContext(apiKey, account, path, new DateTime)
+          executor.execute(query, ctx, opts) flatMap {
             case Success(result) =>
               extractResponse(request, result, opts.output) map (appendHeaders(opts))
             case Failure(error) =>
@@ -93,13 +97,15 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 }
 
 class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)(implicit M: Monad[Future])
-    extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
+    extends CustomHttpService[ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
   import blueeyes.core.http.CacheDirectives.{ `max-age`, `no-cache`, `only-if-cached`, `max-stale` }
 
   val service = (request: HttpRequest[ByteChunk]) => {
     ShardServiceCombinators.queryOpts(request) map { queryOptions =>
-      { (apiKey: APIKey, path: Path) =>
+      { (details: (APIKey, AccountDetails), path: Path) =>
+        val (apiKey, accountDetails) = details
+        val context = EvaluationContext(apiKey, accountDetails, path, clock.now())
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
         logger.debug("Received analysis request with cache directives: " + cacheDirectives)
         // Internally maxAge/maxStale are compared against ms times
@@ -107,7 +113,7 @@ class AnalysisServiceHandler(storedQueries: StoredQueries[Future], clock: Clock)
         val maxStale = cacheDirectives.collectFirst { case `max-stale`(Some(n)) => n.number * 1000 }
         val cacheable = cacheDirectives exists { _ != `no-cache`}
         val onlyIfCached = cacheDirectives exists { _ == `only-if-cached`}
-        storedQueries.executeStoredQuery(apiKey, path, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
+        storedQueries.executeStoredQuery(context, queryOptions, maxAge |+| maxStale, maxAge, cacheable, onlyIfCached) map {
           case Success(StoredQueryResult(stream, cachedAt)) =>
             val headers = cachedAt map { lastTime =>
               HttpHeaders(`Last-Modified`(HttpDateTimes.StandardDateTime(lastTime.toDateTime)))

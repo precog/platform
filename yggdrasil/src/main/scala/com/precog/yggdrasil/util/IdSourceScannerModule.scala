@@ -9,6 +9,8 @@ import com.precog.yggdrasil.table._
 import com.precog.util.{BitSet, BitSetUtil, Loop}
 import com.precog.util.BitSetUtil.Implicits._
 
+import scalaz._
+
 trait IdSourceConfig {
   def idSource: IdSource
 }
