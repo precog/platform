@@ -12,6 +12,8 @@ import com.precog.common.Path
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.niflheim._
+import com.precog.util.XLightWebHttpClientModule
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.vfs._
 import com.precog.yggdrasil.scheduling._
 
@@ -44,6 +46,8 @@ import com.codecommit.gll.LineStream
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.comonad._
@@ -63,6 +67,7 @@ trait SBTConsolePlatform extends muspelheim.ParseEvalStack[Future]
     with IdSourceScannerModule
     with VFSColumnarTableModule
     with StandaloneActorProjectionSystem
+    with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
@@ -109,6 +114,10 @@ object SBTConsole {
     val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
+    val rootAccount = AccountDetails("root", "nobody@precog.com",
+      new DateTime, rootAPIKey, Path.Root, AccountPlan.Root)
+    def evaluationContext = EvaluationContext(rootAPIKey, rootAccount, Path.Root, new DateTime)
+
 
     val storageTimeout = yggConfig.storageTimeout
 
@@ -122,10 +131,11 @@ object SBTConsole {
     val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
-      new Evaluator[N](N0) with IdSourceScannerModule {
+      new Evaluator[N](N0) {
         type YggConfig = PlatformConfig
         val yggConfig = console.yggConfig
         val report = LoggingQueryLogger[N](N0)
+        def freshIdScanner = console.freshIdScanner
       }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
@@ -135,7 +145,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      consumeEval(rootAPIKey, dag, Path.Root)
+      consumeEval(dag, evaluationContext)
     }
 
     def produceDAG(str: String) = {

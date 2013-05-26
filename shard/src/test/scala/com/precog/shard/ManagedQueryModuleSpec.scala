@@ -4,6 +4,7 @@ import com.precog.common._
 import com.precog.common.jobs._
 
 import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.daze._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table.Slice
@@ -59,6 +60,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   val apiKey = "O.o"
 
   var ticker: ActorRef = actorSystem.actorOf(Props(new Ticker(ticks)))
+  val account = AccountDetails("test", "test@test.test", clock.now(), apiKey, Path.Root, AccountPlan.Free)
 
   def dropStreamToFuture = implicitly[Hoist[StreamT]].hoist[TestFuture, Future](new (TestFuture ~> Future) {
     def apply[A](fa: TestFuture[A]): Future[A] = fa.value
@@ -82,10 +84,12 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   // Performs an incredibly intense compuation that requires numTicks ticks.
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
+    val ctx = EvaluationContext(apiKey, account, Path.Root, clock.now())
+
     val result = for {
       // TODO: No idea how to work with EitherT[TestFuture, so sys.error it is]
       executor <- executorFor(apiKey) valueOr { err => sys.error(err.toString) }
-      result0 <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout)).valueOr(err => sys.error(err.toString)) mapValue { 
+      result0 <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout)).valueOr(err => sys.error(err.toString)) mapValue { 
         case (w, s) => (w, (w: Option[(JobId, AtomicInteger)], s)) 
       }
     } yield {
@@ -241,13 +245,13 @@ trait TestManagedQueryModule extends Execution[TestFuture, StreamT[TestFuture, C
         new QueryExecutor[TestFuture, StreamT[TestFuture, CharBuffer]] {
           import UserQuery.Serialization._
 
-          def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-            val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+          def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
+            val userQuery = UserQuery(query, ctx.basePath, opts.sortOn, opts.sortOrder)
             val numTicks = query.toInt
 
             EitherT.right[TestFuture, EvaluationError, StreamT[TestFuture, CharBuffer]] {
               WriterT {
-                createQueryJob(apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
+                createQueryJob(ctx.apiKey, Some(userQuery.serialize), opts.timeout) map { implicit M0 =>
                   val ticks = new AtomicInteger()
                   val result = StreamT.unfoldM[JobQueryTF, CharBuffer, Int](0) {
                     case i if i < numTicks =>

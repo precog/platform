@@ -11,6 +11,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import com.precog.common.Path
 import com.precog.common.ingest.JavaSerialization._
 import com.precog.common.security.{APIKey, Authorities}
+import com.precog.yggdrasil.execution.{ QueryOptions, EvaluationContext }
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -34,7 +35,7 @@ object CronExpressionSerialization {
   }
 }
 
-case class ScheduledTask(id: UUID, repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long]) {
+case class ScheduledTask(id: UUID, repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, context: EvaluationContext, source: Path, sink: Path, timeoutMillis: Option[Long]) {
   def taskName = "Scheduled %s -> %s".format(source, sink)
   def timeout = timeoutMillis map { to => Duration(to, TimeUnit.MILLISECONDS) }
 }

@@ -5,11 +5,14 @@ import com.precog.common._
 import com.precog.yggdrasil.test._
 import com.precog.yggdrasil.table._
 
-
 import org.specs2.mutable._
+
+import scalaz._
 
 trait IdSourceScannerModuleSpec[M[+_]] extends IdSourceScannerModule with TableModuleTestSupport[M] with Specification {
   private val blockSize = 10000
+  
+  implicit def M: Monad[M] with Comonad[M]
 
   private val cols = Map(ColumnRef(CPath.Identity, CBoolean) -> Column.const(true))
 

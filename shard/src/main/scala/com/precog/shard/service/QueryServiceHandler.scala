@@ -11,6 +11,8 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table._
+import com.precog.common.accounts._
+import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 import com.precog.util.InstantOrdering
 
@@ -30,7 +32,10 @@ import com.weiglewilczek.slf4s.Logging
 import java.nio.CharBuffer
 import java.io.{ StringWriter, PrintWriter }
 
+import org.joda.time.DateTime
+
 import scala.math.Ordered._
+
 import scalaz._
 import scalaz.NonEmptyList.nels
 import scalaz.Validation.{ success, failure }
@@ -44,9 +49,8 @@ import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.option._
 
-
 abstract class QueryServiceHandler[A](implicit M: Monad[Future])
-    extends CustomHttpService[ByteChunk, (APIKey, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
+    extends CustomHttpService[ByteChunk, (APIKey, AccountDetails, Path, String, QueryOptions) => Future[HttpResponse[QueryResult]]] with Logging {
 
   def execution: Execution[Future, A]
   def extractResponse(request: HttpRequest[_], a: A, outputType: MimeType): Future[HttpResponse[QueryResult]]
@@ -74,12 +78,15 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
   }
 
   val service = (request: HttpRequest[ByteChunk]) => {
-    success { (apiKey: APIKey, path: Path, query: String, opts: QueryOptions) =>
+    success { (apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) =>
       val responseEither = for {
         executor <- execution.executorFor(apiKey) leftMap { EvaluationError.invalidState } 
-        result <- executor.execute(apiKey, query, path, opts) 
-        httpResponse <- EitherT.right(extractResponse(request, result, opts.output) map (appendHeaders(opts)))
-      } yield httpResponse
+        ctx = EvaluationContext(apiKey, account, path, new DateTime) //CLOCK!!!!!!
+        result <- executor.execute(query, ctx, opts) 
+        httpResponse <- EitherT.right(extractResponse(request, result, opts.output))
+      } yield {
+        appendHeaders(opts) { httpResponse }
+      }
 
       responseEither valueOr { handleErrors(query, _) }
     }
@@ -89,18 +96,20 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
 }
 
 class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, Slice]], scheduler: Scheduler[Future], clock: Clock)(implicit M: Monad[Future]) 
-    extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[QueryResult]]] with Logging {
+    extends CustomHttpService[ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[QueryResult]]] with Logging {
   import blueeyes.core.http.HttpHeaders._
 
   val service = (request: HttpRequest[ByteChunk]) => {
     ShardServiceCombinators.queryOpts(request) map { queryOptions =>
-      { (apiKey: APIKey, path: Path) =>
+      { (details: (APIKey, AccountDetails), path: Path) =>
+        val (apiKey, accountDetails) = details
+        val context = EvaluationContext(apiKey, accountDetails, path, clock.now())
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
         logger.debug("Received analysis request with cache directives: " + cacheDirectives)
 
         val cacheControl0 = CacheControl.fromCacheDirectives(cacheDirectives: _*)
         // Internally maxAge/maxStale are compared against ms times
-        platform.vfs.executeStoredQuery(platform, scheduler, apiKey, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
+        platform.vfs.executeStoredQuery(platform, scheduler, context, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
           HttpResponse(OK, 
             headers =  HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
             content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data.map(_.deref(TransSpecModule.paths.Value))))))

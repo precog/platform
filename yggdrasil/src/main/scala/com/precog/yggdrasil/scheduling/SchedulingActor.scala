@@ -39,7 +39,7 @@ import scalaz.effect.IO
 
 sealed trait SchedulingMessage
 
-case class AddTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, prefix: Path, source: Path, sink: Path, timeoutMillis: Option[Long])
+case class AddTask(repeat: Option[CronExpression], apiKey: APIKey, authorities: Authorities, context: EvaluationContext, source: Path, sink: Path, timeoutMillis: Option[Long])
 
 case class DeleteTask(id: UUID)
 
@@ -172,7 +172,7 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
         
         val execution = for {
           basePath <- EitherT(M point { task.source.prefix \/> invalidState("Path %s cannot be relativized.".format(task.source.path)) })
-          cachingResult <- platform.vfs.executeAndCache(platform, task.apiKey, task.source, basePath, QueryOptions(timeout = task.timeout), Some(task.sink), Some(task.taskName))
+          cachingResult <- platform.vfs.executeAndCache(platform, basePath, task.context, QueryOptions(timeout = task.timeout), Some(task.sink), Some(task.taskName))
 
 
         } yield cachingResult
@@ -210,10 +210,10 @@ trait SchedulingActorModule extends SecureVFSModule[Future, Slice] {
     }
 
     def receive = {
-      case AddTask(repeat, apiKey, authorities, prefix, source, sink, timeout) =>
+      case AddTask(repeat, apiKey, authorities, context, source, sink, timeout) =>
         val ourself = self
         val taskId = UUID.randomUUID()
-        val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, prefix, source, sink, timeout)
+        val newTask = ScheduledTask(taskId, repeat, apiKey, authorities, context, source, sink, timeout)
         val addResult: EitherT[Future, String, PrecogUnit] = repeat match {
           case None =>
             EitherT.right(executeTask(newTask))

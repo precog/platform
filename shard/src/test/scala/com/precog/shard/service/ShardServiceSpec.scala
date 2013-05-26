@@ -86,6 +86,7 @@ trait TestShardService extends BlueEyesServiceSpecification
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
+  private val accountFinder = new StaticAccountFinder[Future]("test", "who-cares")
 
   val rootAPIKey = apiKeyManager.rootAPIKey.copoint
 
@@ -139,7 +140,7 @@ trait TestShardService extends BlueEyesServiceSpecification
       val vfs = new SecureVFS(rawVFS, permissionsFinder, jobManager, clock)
     }
 
-    ShardState(platform, self.apiKeyFinder, accountFinder, scheduler, jobManager, clock, Stoppable.Noop)
+    ShardState(platform, self.apiKeyFinder, self.accountFinder, scheduler, jobManager, clock, Stoppable.Noop)
   }
 
   val utf8 = Charset.forName("UTF-8")
@@ -415,7 +416,7 @@ trait TestPlatform extends ManagedPlatform { self =>
 
   protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
     new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         if (query == "bad query") {
           val mu = shardQueryMonad.jobId traverse { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))

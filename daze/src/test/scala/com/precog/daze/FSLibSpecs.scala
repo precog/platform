@@ -3,9 +3,11 @@ package com.precog.daze
 import com.precog.common._
 import com.precog.bytecode._
 import com.precog.common.Path
+import com.precog.common.accounts._
 
 import com.precog.common.security._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
@@ -48,8 +50,19 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
     Table.constString(Set(path)).transform(WrapObject(Leaf(Source), TransSpecModule.paths.Value.name))
   }
 
+  val testAPIKey = "testAPIKey"
+  def testAccount = AccountDetails("00001", "test@email.com",
+    new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  val defaultEvaluationContext = EvaluationContext(testAPIKey, testAccount, Path.Root, new DateTime)
+  val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
+    def info(msg: String): M[Unit] = M.point(())
+    def warn(msg: String): M[Unit] = M.point(())
+    def error(msg: String): M[Unit] = M.point(())
+    def die(): M[Unit] = M.point(sys.error("MorphContext#die()"))
+  })
+
   def runExpansion(table: Table): List[JValue] = {
-    expandGlob(table, EvaluationContext("", Path.Root, new DateTime())).map(_.transform(SourceValue.Single)).flatMap(_.toJson).copoint.toList
+    expandGlob(table, defaultMorphContext).map(_.transform(SourceValue.Single)).flatMap(_.toJson).copoint.toList
   }
 
   "path globbing" should {

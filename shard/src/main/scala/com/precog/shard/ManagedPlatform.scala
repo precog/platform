@@ -89,8 +89,8 @@ trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with Ma
     import scalaz.syntax.monad._
     for (queryExec <- syncExecutorFor(apiKey)) yield {
       new QueryExecutor[Future, StreamT[Future, Slice]] {
-        def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
-          queryExec.execute(apiKey, query, prefix, opts) map { _._2 }
+        def execute(query: String, context: EvaluationContext, opts: QueryOptions) = {
+          queryExec.execute(query, context, opts) map { _._2 }
         }
       }
     }
@@ -108,14 +108,14 @@ trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with Ma
 
     def complete(results: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, A]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): EitherT[Future, EvaluationError, A] = {
-      val userQuery = UserQuery(query, prefix, opts.sortOn, opts.sortOrder)
+    def execute(query: String, context: EvaluationContext, opts: QueryOptions): EitherT[Future, EvaluationError, A] = {
+      val userQuery = UserQuery(query, context.basePath, opts.sortOn, opts.sortOrder)
 
       //TODO: this is craziness
-      EitherT.right(createQueryJob(apiKey, Some(userQuery.serialize), opts.timeout)(executionContext)) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
+      EitherT.right(createQueryJob(context.apiKey, Some(userQuery.serialize), opts.timeout)(executionContext)) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
         import JobQueryState._
 
-        complete(EitherT.eitherTHoist[EvaluationError].hoist(sink).apply(executor.execute(apiKey, query, prefix, opts)), opts.output)
+        complete(EitherT.eitherTHoist[EvaluationError].hoist(sink).apply(executor.execute(query, context, opts)), opts.output)
       }
     }
   }

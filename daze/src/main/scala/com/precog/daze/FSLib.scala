@@ -4,6 +4,7 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.bytecode._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.vfs._
 
@@ -53,13 +54,13 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         walk(pattern.matcher(pathString), Stream(pathRoot))
       }
   
-      def apply(input: Table, ctx: EvaluationContext): M[Table] = M.point {
+      def apply(input: Table, ctx: MorphContext): M[Table] = M.point {
         val result = Table(
           input.transform(SourceValue.Single).slices flatMap { slice =>
             slice.columns.get(ColumnRef.identity(CString)) collect { 
               case col: StrColumn => 
                 val expanded: Stream[M[Stream[Path]]] = Stream.tabulate(slice.size) { i =>
-                  expand_*(ctx.apiKey, col(i), ctx.basePath)
+                  expand_*(ctx.evalContext.apiKey, col(i), ctx.evalContext.basePath)
                 }
   
                 StreamT wrapEffect {
@@ -67,7 +68,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
                     val unprefixed: Stream[String] = for {
                       paths <- pathSets
                       path <- paths
-                      suffix <- (path - ctx.basePath)
+                      suffix <- (path - ctx.evalContext.basePath)
                     } yield suffix.toString
   
                     Table.constString(unprefixed.toSet).slices 

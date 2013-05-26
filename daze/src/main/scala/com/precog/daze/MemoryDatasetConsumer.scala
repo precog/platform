@@ -5,6 +5,7 @@ import com.precog.util.VectorCase
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
 
 import akka.dispatch.Await
@@ -34,8 +35,7 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   
   def extractIds(jv: JValue): Seq[IdType]
 
-  def consumeEval(apiKey: APIKey, graph: DepGraph, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
-    val ctx = EvaluationContext(apiKey, prefix, new DateTime())
+  def consumeEval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     Validation.fromTryCatch {
       implicit val nt = NaturalTransformation.refl[M]
       val evaluator = Evaluator(M)
