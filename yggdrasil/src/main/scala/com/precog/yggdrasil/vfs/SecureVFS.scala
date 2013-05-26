@@ -151,6 +151,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
               basePath      <- pathPrefix
               queryResource <- readResource(ctx.apiKey, path, Version.Current, AccessMode.Execute) leftMap storageError
               taskId        <- scheduler.addTask(None, ctx.apiKey, queryResource.authorities, ctx, path, cachePath, None) leftMap invalidState
+              _              = logger.debug("Cache refresh scheduled for query %s, as id %s.".format(path.path, taskId))
             } yield taskId
           } 
 
@@ -180,7 +181,8 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
         raw      <- executor.execute(query, ctx, queryOptions)
-        result  <- cacheAt match {
+        _        <- EitherT(raw.isEmpty map { if (_) \/.left(invalidState("Raw query result stream for %s is empty!".format(path.path))) else \/.right(PrecogUnit) })
+        result   <- cacheAt match {
           case Some(cachePath) =>
             for {
               _ <- EitherT { 
@@ -250,6 +252,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
               }
 
             case None =>
+              logger.debug("Persist stream for query by %s writing to %s complete.".format(apiKey, path.path))
               None.point[M]
           }
       }

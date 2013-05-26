@@ -130,7 +130,7 @@ class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, S
         // Internally maxAge/maxStale are compared against ms times
         platform.vfs.executeStoredQuery(platform, scheduler, context, path, queryOptions.copy(cacheControl = cacheControl0)) map { sqr =>
           HttpResponse(OK, 
-            headers =  HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
+            headers = HttpHeaders(sqr.cachedAt.toSeq map { lmod => `Last-Modified`(HttpDateTimes.StandardDateTime(lmod.toDateTime)) }: _*),
             content = Some(Right(ColumnarTableModule.toCharBuffers(queryOptions.output, sqr.data.map(_.deref(TransSpecModule.paths.Value))))))
         } valueOr { evaluationError =>
           logger.error("Evaluation errors prevented returning results from stored query: " + evaluationError)
