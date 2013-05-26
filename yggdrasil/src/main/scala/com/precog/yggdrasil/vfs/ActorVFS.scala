@@ -46,6 +46,8 @@ import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.std.stream._
 import scalaz.std.option._
+import scalaz.std.map._
+import scalaz.std.set._
 import scalaz.std.tuple._
 
 import scalaz.syntax.monad._
@@ -322,7 +324,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     }
   }
 
-  case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[Permission]])
+  case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[WritePermission]])
 
   class PathRoutingActor(baseDir: File, shutdownTimeout: Duration, clock: Clock) extends Actor with Logging {
     private implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
@@ -384,17 +386,16 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
           case (path, pathMessages) =>
             targetActor(path) map { pathActor =>
               pathMessages.map(_._2.apiKey).distinct.toStream traverse { apiKey =>
-                permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { perms =>
-                  apiKey -> perms.toSet[Permission]
-                }
-              } map { allPerms =>
+                permissionsFinder.writePermissions(apiKey, path, clock.instant()) map { apiKey -> _ }
+              } map { perms =>
+                val allPerms: Map[APIKey, Set[WritePermission]] = perms.map(Map(_)).suml
                 val (totalArchives, totalEvents, totalStoreFiles) = pathMessages.foldLeft((0, 0, 0)) {
                   case ((archived, events, storeFiles), (_, IngestMessage(_, _, _, data, _, _, _))) => (archived, events + data.size, storeFiles)
                   case ((archived, events, storeFiles), (_, am: ArchiveMessage)) => (archived + 1, events, storeFiles)
                   case ((archived, events, storeFiles), (_, sf: StoreFileMessage)) => (archived, events, storeFiles + 1)
                 }
                 logger.debug("Sending %d archives, %d storeFiles, and %d events to %s".format(totalArchives, totalStoreFiles, totalEvents, path))
-                pathActor.tell(IngestBundle(pathMessages, allPerms.toMap), requestor)
+                pathActor.tell(IngestBundle(pathMessages, allPerms), requestor)
               }
             } except {
               case t: Throwable => IO(logger.error("Failure during version log open on " + path, t))
@@ -430,9 +431,9 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
     private def versionDir(version: UUID) = new File(baseDir, version.toString)
 
-    private def canCreate(path: Path, permissions: Set[Permission], authorities: Authorities): Boolean = {
+    private def canCreate(path: Path, permissions: Set[WritePermission], authorities: Authorities): Boolean = {
       logger.trace("Checking write permission for " + path + " as " + authorities + " among " + permissions)
-      PermissionsFinder.canWriteAs(permissions collect { case perm @ WritePermission(p, _) if p.isEqualOrParentOf(path) => perm }, authorities)
+      PermissionsFinder.canWriteAs(permissions filter { _.path.isEqualOrParentOf(path) }, authorities)
     }
 
     private def promoteVersion(version: UUID): IO[PrecogUnit] = {
@@ -505,7 +506,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       (response == UpdateSuccess(msg.path) && terminal).option(msg.jobId).join traverse { jobManager.finish(_, clock.now()) } map { _ => response }
     }
 
-    def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[Permission]], requestor: ActorRef): IO[PrecogUnit] = {
+    def processEventMessages(msgs: Stream[(Long, EventMessage)], permissions: Map[APIKey, Set[WritePermission]], requestor: ActorRef): IO[PrecogUnit] = {
       logger.debug("About to persist %d messages; replying to %s".format(msgs.size, requestor.toString))
 
       def openNIHDB(version: UUID): EitherT[IO, ResourceError, ProjectionResource] = {

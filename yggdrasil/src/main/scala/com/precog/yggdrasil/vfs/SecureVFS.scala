@@ -43,7 +43,7 @@ trait VFSMetadata[M[+_]] {
 }
 
 trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
-  case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant])
+  case class StoredQueryResult(data: StreamT[M, Block], cachedAt: Option[Instant], cachingJob: Option[JobId])
 
   class SecureVFS(vfs: VFS, permissionsFinder: PermissionsFinder[M], jobManager: JobManager[M], clock: Clock)(implicit M: Monad[M]) extends VFSMetadata[M] with Logging {
     final val unsecured = vfs
@@ -65,10 +65,6 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
           case false => \/.left(permissionsError("API key %s does not provide %s permission to resource at path %s.".format(apiKey, readMode.name, path.path)))
         }
       }
-    }
-
-    private def verifyPathAccess[A](apiKey: APIKey, path: Path, accessMode: AccessMode)(result: => EitherT[M, ResourceError, A]): EitherT[M, ResourceError, A] = { 
-      result
     }
 
     final def readResource(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Resource] = {
@@ -98,18 +94,20 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
     }
 
     final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
-      verifyPathAccess(apiKey, path, AccessMode.ReadMetadata) {
-        for {
-          children  <- vfs.findDirectChildren(path)
-          permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
-        } yield { 
-          children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
-        }
+      for {
+        children  <- vfs.findDirectChildren(path)
+        permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
+      } yield { 
+        children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
       }
     }
 
     final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], scheduler: Scheduler[M], apiKey: APIKey, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import queryOptions.cacheControl._
+      import EvaluationError._
+
+      val pathPrefix = EitherT((path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path))).point[M])
+
       val cachePath = path / Path(".cached")
       def fallBack = if (onlyIfCached) {
         // Return a 202 and schedule a caching run of the query
@@ -117,21 +115,22 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       } else {
         // if current cached version is older than the max age or cached
         // version does not exist, then run synchronously and cache (if cacheable)
-        executeUncached(platform, apiKey, path, queryOptions, cacheable.option(cachePath))
+        for {
+          basePath <- pathPrefix
+          caching  <- executeAndCache(platform, apiKey, path, basePath, queryOptions, cacheable.option(cachePath))
+        } yield caching
       }
 
       logger.debug("Checking on cached result for %s with maxAge = %s and recacheAfter = %s and cacheable = %s".format(path, maxAge, recacheAfter, cacheable))
       EitherT.right(vfs.currentVersion(cachePath)) flatMap {
         case Some(VersionEntry(id, _, timestamp)) if maxAge.forall(ms => timestamp.plus(ms) >= clock.instant()) =>
-          import EvaluationError._
-
           logger.debug("Found fresh cache entry (%s) for query on %s".format(timestamp, path))
           val recacheAction = (recacheAfter.exists(ms => timestamp.plus(ms) < clock.instant())).whenM[({ type l[a] = EitherT[M, EvaluationError, a] })#l, UUID] {
             // if recacheAfter has expired since the head version was cached,
             // then return the cached version and refresh the cache
             for {
+              basePath      <- pathPrefix
               queryResource <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap storageError
-              basePath      <- EitherT((path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path))).point[M])
               taskId        <- scheduler.addTask(None, apiKey, queryResource.authorities, basePath, path, cachePath, None) leftMap invalidState
             } yield taskId
           } 
@@ -140,7 +139,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
             _          <- recacheAction
             projection <- readProjection(apiKey, cachePath, Version.Current, AccessMode.Read) leftMap storageError
           } yield {
-            StoredQueryResult(projection.getBlockStream(None), Some(timestamp))
+            StoredQueryResult(projection.getBlockStream(None), Some(timestamp), None)
           }
            
         case Some(VersionEntry(_, _, timestamp)) =>
@@ -153,7 +152,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       }
     }
 
-    private def executeUncached(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, queryOptions: QueryOptions, cacheAt: Option[Path])(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
+    def executeAndCache(platform: Platform[M, Block, StreamT[M, Block]], apiKey: APIKey, path: Path, basePath: Path, queryOptions: QueryOptions, cacheAt: Option[Path], jobName: Option[String] = None)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import EvaluationError._
       logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
       for { 
@@ -161,36 +160,45 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         queryRes <- readResource(apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
         query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
-        basePath <- EitherT(M point { path.prefix \/> invalidState("Path %s cannot be relativized.".format(path.path)) })
         raw      <- executor.execute(apiKey, query, basePath, queryOptions)
-        caching  <- cacheAt match {
+        result  <- cacheAt match {
           case Some(cachePath) =>
             for {
-              perms <- EitherT.right(permissionsFinder.writePermissions(apiKey, cachePath, clock.instant()))
-              job <- EitherT.right(jobManager.createJob(apiKey, "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now())))
+              _ <- EitherT { 
+                permissionsFinder.writePermissions(apiKey, cachePath, clock.instant()) map { pset =>
+                  /// here, we just terminate the computation early if no write permissions are available.
+                  if (pset.nonEmpty) \/.right(PrecogUnit) 
+                  else \/.left(
+                    storageError(PermissionsError("API key %s has no permission to write to the caching path %s.".format(apiKey, cachePath)))
+                  )
+                }
+              }
+              job <- EitherT.right(
+                jobManager.createJob(apiKey, jobName getOrElse "Cache run for path %s".format(path.path), "Cached query run.", None, Some(clock.now()))
+              )
             } yield {
               logger.debug("Building caching stream for path %s writing to %s".format(path.path, cachePath.path))
-              val allPerms = Map(apiKey -> perms.toSet[Permission])
               // FIXME: determination of authorities with which to write the cached data needs to be implemented;
               // for right now, simply using the authorities with which the query itself was written is probably
               // best.
-              persistingStream(apiKey, cachePath, queryRes.authorities, perms.toSet[Permission], Some(job.id), raw, clock) {
+              val stream = persistingStream(apiKey, cachePath, queryRes.authorities, Some(job.id), raw, clock) {
                 VFS.derefValue
               }
+
+              StoredQueryResult(stream, None, Some(job.id))
             }
 
           case None =>
             logger.debug("No caching to be performed for query results of query at path  %s".format(path.path))
-            EitherT.right(raw.point[M])
+            EitherT.right(StoredQueryResult(raw, None, None).point[M])
         }
-      } yield {
-        StoredQueryResult(caching, None)
-      }
+      } yield result
     }
 
-    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock)(blockf: Block => Block): StreamT[M, Block] = {
+    // No permissions checks are being done here because the underlying routing layer, which serves both
+    // VFS persistence and the KafkaShardManagerActor, must perform those checks.
+    def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, jobId: Option[JobId], stream: StreamT[M, Block], clock: Clock)(blockf: Block => Block): StreamT[M, Block] = {
       val streamId = java.util.UUID.randomUUID()
-      val allPerms = Map(apiKey -> perms)
 
       StreamT.unfoldM((0, stream)) {
         case (pseudoOffset, s) =>
