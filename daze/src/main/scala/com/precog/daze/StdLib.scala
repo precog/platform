@@ -118,6 +118,22 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
 
       def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2(this)
     }
+    
+    trait Op2Array extends Op2 {
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+        trans.MapWith(
+          trans.InnerArrayConcat(
+            trans.WrapArray(
+              trans.Map1(left, prepare)),
+            trans.WrapArray(
+              trans.Map1(right, prepare))),
+          mapper)
+      }
+      
+      def prepare: F1
+      
+      def mapper: Mapper
+    }
 
     abstract class Op2F2(namespace: Vector[String], name: String) extends Op2(namespace, name) {
       def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
