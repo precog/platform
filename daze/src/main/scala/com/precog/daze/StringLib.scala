@@ -136,23 +136,15 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
 
     object matches extends Op2SSB("matches", _ matches _)
     
-    object regexMatch extends Op2(StringNamespace, "regexMatch") {
+    object regexMatch extends Op2(StringNamespace, "regexMatch") with Op2Array {
       import trans._
       
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.MapWith(
-          trans.InnerArrayConcat(
-            trans.WrapArray(
-              trans.Map1(left, UnifyStrDate)),
-            trans.WrapArray(
-              trans.Map1(right, UnifyStrDate))),
-          MatchMapper)
-      }
+      lazy val prepare = UnifyStrDate
       
-      val MatchMapper = CF2Array[String, M]("std::string::regexMatch") {
+      val mapper = CF2Array[String, M]("std::string::regexMatch") {
         case (target: StrColumn, regex: StrColumn, range) => {
           val table = new Array[Array[String]](range.length)
           val defined = new BitSet(range.length)
@@ -357,19 +349,13 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    object split extends Op2(StringNamespace, "split") {
+    object split extends Op2(StringNamespace, "split") with Op2Array {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.MapWith(
-          trans.InnerArrayConcat(
-            trans.WrapArray(
-              trans.Map1(left, UnifyStrDate)),
-            trans.WrapArray(
-              trans.Map1(right, UnifyStrDate))),
-          splitMapper(true))
-      }
+      lazy val prepare = UnifyStrDate
+      
+      lazy val mapper = splitMapper(true)
     }
 
     object editDistance extends Op2F2(StringNamespace, "editDistance") {
@@ -389,19 +375,13 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
     }
 
-    object splitRegex extends Op2(StringNamespace, "splitRegex") {
+    object splitRegex extends Op2(StringNamespace, "splitRegex") with Op2Array {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.MapWith(
-          trans.InnerArrayConcat(
-            trans.WrapArray(
-              trans.Map1(left, UnifyStrDate)),
-            trans.WrapArray(
-              trans.Map1(right, UnifyStrDate))),
-          splitMapper(false))
-      }
+      lazy val prepare = UnifyStrDate
+      
+      lazy val mapper = splitMapper(false)
     }
     
     def splitMapper(quote: Boolean) = CF2Array[String, M]("std::string::split(%s)".format(quote)) {
