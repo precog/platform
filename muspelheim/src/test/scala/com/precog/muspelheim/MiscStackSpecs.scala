@@ -3,6 +3,8 @@ package muspelheim
 
 import com.precog.yggdrasil._
 
+import java.util.regex.Pattern
+
 trait MiscStackSpecs extends EvalStackSpecs {
   import stack._
 
@@ -2784,6 +2786,22 @@ trait MiscStackSpecs extends EvalStackSpecs {
         | """.stripMargin
         
       evalE(input) must beEmpty
+    }
+    
+    "split a constant string along a constant delimiter" in {
+      val input = """std::string::split("abc # def", "#")"""
+      eval(input) mustEqual Set(SArray(Vector(SString("abc "), SString(" def"))))
+    }
+    
+    "split strings along a constant delimiter" in {
+      val input = """std::string::split((//clicks).userId, "1")"""
+      
+      val expected = eval("(//clicks).userId") collect {
+        case SString(str) =>
+          SArray(Vector(Pattern.compile("1").split(str, -1) map SString: _*))
+      }
+      
+      eval(input) must containTheSameElementsAs(expected.toSeq)
     }
   }
 }
