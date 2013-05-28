@@ -62,7 +62,7 @@ object CF1P {
 }
 
 object CF1Array {
-  def apply[A](name: String)(pf: PartialFunction[(Column, Range), (CType, Array[Array[A]], BitSet)]): CScanner = new ArrayScanner {
+  def apply[A, M[+_]](name: String)(pf: PartialFunction[(Column, Range), (CType, Array[Array[A]], BitSet)]): CMapper[M] = new ArrayMapperS[M] {
     def apply(columns0: Map[ColumnRef, Column], range: Range) = {
       columns0 collect {
         case (ColumnRef(CPath.Identity, _), col) if pf isDefinedAt (col, range) => {
@@ -111,7 +111,7 @@ object CF2P {
 }
 
 object CF2Array {
-  def apply[A](name: String)(pf: PartialFunction[(Column, Column, Range), (CType, Array[Array[A]], BitSet)]): CScanner = new ArrayScanner {
+  def apply[A, M[+_]](name: String)(pf: PartialFunction[(Column, Column, Range), (CType, Array[Array[A]], BitSet)]): CMapper[M] = new ArrayMapperS[M] {
     def apply(columns0: Map[ColumnRef, Column], range: Range) = {
       for {
         (ColumnRef(CPath(CPathIndex(0)), _), col1) <- columns0
@@ -156,14 +156,10 @@ trait CReducer[A] {
   def reduce(schema: CSchema, range: Range): A
 }
 
-trait ArrayScanner extends CScanner {
+trait ArrayMapperS[M[+_]] extends CMapperS[M] {
   import org.joda.time.{DateTime, Period}
   
-  type A = Unit
-  
-  def init = ()
-  
-  def scan(a: Unit, columns0: Map[ColumnRef, Column], range: Range): (Unit, Map[ColumnRef, Column]) = {
+  def map(columns0: Map[ColumnRef, Column], range: Range): Map[ColumnRef, Column] = {
     val results = this(columns0, range)
     
     val columns = results flatMap {
@@ -307,7 +303,7 @@ trait ArrayScanner extends CScanner {
       case (tpe, _) => sys.error("Unsupported CFArray type: " + tpe)
     }
     
-    ((), columns)
+    columns
   }
   
   def apply(columns0: Map[ColumnRef, Column], range: Range): Map[CType, (Array[Array[_]], BitSet)]
