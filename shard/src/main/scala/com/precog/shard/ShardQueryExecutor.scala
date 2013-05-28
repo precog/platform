@@ -5,19 +5,24 @@ import blueeyes.json.serialization._
 import blueeyes.util.Clock
 
 import com.precog.common._
-
-import com.precog.common.security._
 import com.precog.common.accounts._
+import com.precog.common.ingest._
+import com.precog.common.jobs.JobId
+import com.precog.common.security._
+
 import com.precog.daze._
 import com.precog.muspelheim._
-
+import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
+
 import com.precog.util.FilesystemFileOps
+import com.precog.util.XLightWebHttpClientModule
 
 import org.slf4j.{ Logger, LoggerFactory }
 
@@ -25,9 +30,14 @@ import java.nio.CharBuffer
 
 import scalaz._
 import scalaz.Validation._
+import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.std.either._
+import scalaz.syntax.traverse._
+
+trait Blah {
+}
 
 trait ShardQueryExecutorConfig
     extends BaseConfig
@@ -60,12 +70,11 @@ object Fault {
   case class Error(pos: Option[FaultPosition], message: String) extends Fault
 }
 
-
-trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffer]] with ParseEvalStack[M] {
+trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] with XLightWebHttpClientModule[M] {
   case class StackException(error: StackError) extends Exception(error.toString)
 
   abstract class ShardQueryExecutor[N[+_]](N0: Monad[N])(implicit mn: M ~> N, nm: N ~> M)
-      extends Evaluator[N](N0) with QueryExecutor[N, (Set[Fault], StreamT[N, CharBuffer])] {
+      extends Evaluator[N](N0) with QueryExecutor[N, (Set[Fault], StreamT[N, Slice])] {
 
     type YggConfig <: ShardQueryExecutorConfig
     protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
@@ -85,17 +94,19 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
 
     def queryReport: QueryLogger[N, Option[FaultPosition]]
 
-    def execute(apiKey: String, query: String, prefix: Path, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = {
-      val evaluationContext = EvaluationContext(apiKey, prefix, yggConfig.clock.now())
+    def execute(query: String, evaluationContext: EvaluationContext, opts: QueryOptions): N[Validation[EvaluationError, (Set[Fault], StreamT[N, Slice])]] = {
+      import trans.constants._
+
       val qid = yggConfig.queryId.getAndIncrement()
-      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s".format(qid, apiKey, query, prefix))
+      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s" format 
+        (qid, evaluationContext.apiKey, query, evaluationContext.basePath))
 
       import EvaluationError._
 
       // This should be executed within the outer N returned above, so keep
       // this as a def, and use within an N.point.
 
-      def solution: Validation[Throwable, Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]] = Validation.fromTryCatch {
+      def solution: Validation[Throwable, Validation[EvaluationError, (Set[Fault], N[Table])]] = Validation.fromTryCatch {
         val (faults, bytecode) = asBytecode(query)
 
         val resultVN: Validation[EvaluationError, N[Table]] = bytecode map { instrs =>
@@ -120,30 +131,25 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           success(N.point(Table.empty))
         }
 
-        resultVN map { nt =>
-          (faults, StreamT.wrapEffect {
-            faults map {
+        resultVN.map { nt =>
+          faults -> {
+            faults.toStream traverse {
               case Fault.Error(pos, msg) => queryReport.error(pos, msg) map { _ => true }
               case Fault.Warning(pos, msg) => queryReport.warn(pos, msg) map { _ => false }
-            } reduceOption { (a, b) =>
-              (a |@| b)(_ || _)
-            } getOrElse (N point false) map {
-              case true =>
-                //FIXME: we should die here, maybe?
-                //queryReport.die() map { _ => StreamT.empty[N, CharBuffer] }
-                outputChunks(opts.output)(N point Table.empty)
-
-              case false =>
-                val chunks = outputChunks(opts.output) { nt }
-                chunks ++ StreamT.wrapEffect(queryReport.done map { _ => StreamT.empty[N, CharBuffer] })
+            } flatMap { errors =>
+              if (errors.exists(_ == true)) N.point(Table.empty) else nt
             }
-          })
+          }
         }
-      }
+      } 
 
-      N point {
-        ((systemError _) <-: solution) flatMap {
-          identity[Validation[EvaluationError, (Set[Fault], StreamT[N, CharBuffer])]]
+      N.point(solution).flatMap {
+        case Failure(e) => N.point(Failure(SystemError(e)))
+        case Success(Failure(err)) => N.point(Failure(err))
+        case Success(Success((faults, nt))) => queryReport.done.flatMap { _ =>
+          nt.map { table =>
+            Success(faults -> implicitly[Hoist[StreamT]].hoist(mn).apply(table.transform(SourceValue.Single).slices))
+          }
         }
       }
     }
@@ -214,31 +220,6 @@ trait ShardQueryExecutorPlatform[M[+_]] extends Platform[M, StreamT[M, CharBuffe
           (Set(fault), None)
       }
     }
-
-    private def outputChunks(output: QueryOutput)(tableM: N[Table]): StreamT[N, CharBuffer] =
-      output match {
-        case JSONOutput => jsonChunks(tableM)
-        case CSVOutput => csvChunks(tableM)
-      }
-
-    private def csvChunks(tableM: N[Table]): StreamT[N, CharBuffer] = {
-      import trans._
-      val spec = DerefObjectStatic(Leaf(Source), TableModule.paths.Value)
-      StreamT.wrapEffect(tableM.map(_.transform(spec).renderCsv.trans(mn)))
-    }
-
-    private def jsonChunks(tableM: N[Table]): StreamT[N, CharBuffer] = {
-      import trans._
-
-      StreamT.wrapEffect(
-        tableM flatMap { table =>
-          renderStream(table.transform(DerefObjectStatic(Leaf(Source), TableModule.paths.Value)))
-        }
-      )
-    }
-
-    private def renderStream(table: Table): N[StreamT[N, CharBuffer]] =
-      N.point((CharBuffer.wrap("[") :: (table.renderJson(',').trans(mn))) ++ (CharBuffer.wrap("]") :: StreamT.empty[N, CharBuffer]))
   }
 }
 // vim: set ts=4 sw=4 et:

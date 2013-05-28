@@ -32,12 +32,12 @@ import scalaz.syntax.std.boolean._
 
 import TableModule._
 
-trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] with ReductionLibModule[M] {
-  import library._
+trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] {
+  //import library._
   import trans._
   import constants._
 
-  trait StatsLib extends ColumnarTableLib with EvaluatorMethods with ReductionLib {
+  trait StatsLib extends ColumnarTableLib with ReductionLib {
     import BigDecimalOperations._
     import TableModule.paths
     
@@ -45,14 +45,14 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
     val EmptyNamespace = Vector()
 
     override def _libMorphism1 = super._libMorphism1 ++ Set(Median, Mode, Rank, DenseRank, IndexedRank, Dummy)
-    override def _libMorphism2 = super._libMorphism2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
+    override def _libMorphism2 = super._libMorphism2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression, SimpleExponentialSmoothing, DoubleExponentialSmoothing)
     
     object Median extends Morphism1(EmptyNamespace, "median") {
       import Mean._
       
       val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-      def apply(table: Table, ctx: EvaluationContext) = {  //TODO write tests for the empty table case
+      def apply(table: Table, ctx: MorphContext) = {  //TODO write tests for the empty table case
         val compactedTable = table.compact(WrapObject(Typed(DerefObjectStatic(Leaf(Source), paths.Value), JNumberT), paths.Value.name))
 
         val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
@@ -93,7 +93,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
         def append(left: Set[A], right: => Set[A]) = left ++ right
       }
 
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
         def reduce(schema: CSchema, range: Range): Result = {
           schema.columns(JNumberT) flatMap {
             case col: LongColumn =>
@@ -131,14 +131,240 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       def extract(res: Result): Table = Table.constDecimal(res)
 
-      def apply(table: Table, ctx: EvaluationContext) = {
+      def apply(table: Table, ctx: MorphContext) = {
         val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
         val sortedTable: M[Table] = table.sort(sortKey, SortAscending)
 
         sortedTable.flatMap(_.reduce(reducer(ctx)).map(extract))
       }
     }
-    
+
+    private def unifyNumColumns(cols: Iterable[Column]): NumColumn = {
+      val cols0: Array[NumColumn] = cols.collect({
+        case (col: LongColumn) =>
+          new Map1Column(col) with NumColumn {
+            def apply(row: Int) = BigDecimal(col(row))
+          }
+        case (col: DoubleColumn) =>
+          new Map1Column(col) with NumColumn {
+            def apply(row: Int) = BigDecimal(col(row))
+          }
+        case (col: NumColumn) => col
+      })(collection.breakOut)
+
+      new UnionLotsColumn[NumColumn](cols0) with NumColumn {
+        def apply(row: Int): BigDecimal = {
+          var i = 0
+          while (i < cols0.length) {
+            if (cols0(i).isDefinedAt(row))
+              return cols0(i)(row)
+            i += 1
+          }
+          return null
+        }
+      }
+    }
+
+    abstract class Smoothing(name: String) extends Morphism2(StatsNamespace, name) {
+      protected val smoother = "by"
+      protected val smoothee = "smooth"
+
+      def alignment = MorphismAlignment.Match(M.point(morph1))
+
+      val keySpec = DerefObjectStatic(TransSpec1.Id, paths.Key)
+      val sortSpec = DerefObjectStatic(
+        DerefArrayStatic(
+          DerefObjectStatic(TransSpec1.Id, paths.Value), CPathIndex(0)),
+        CPathField(smoother))
+      val valueSpec = DerefObjectStatic(
+        DerefArrayStatic(
+          DerefObjectStatic(TransSpec1.Id, paths.Value), CPathIndex(0)),
+        CPathField(smoothee))
+
+      def smoothSpec: TransSpec1
+      def spec = InnerObjectConcat(
+        WrapObject(keySpec, paths.Key.name),
+        WrapObject(smoothSpec, paths.Value.name))
+
+      private val morph1 = new Morph1Apply {
+        def apply(table: Table, ctx: MorphContext): M[Table] = for {
+          sorted <- table.sort(sortSpec)
+          smoothed <- sorted.transform(spec).sort(keySpec)
+        } yield smoothed
+      }
+    }
+
+    object SimpleExponentialSmoothing extends Smoothing("simpleExpSmoothing") {
+      private val ValuePath = CPath(CPathIndex(0))
+      private val AlphaPath = CPath(CPathIndex(1))
+
+      val tpe = BinaryOperationType(
+        JObjectFixedT(Map(smoother -> JType.JUniverseT, smoothee -> JNumberT)),
+        JNumberT,
+        JNumberT)
+
+      object ExpSmoothingScanner extends CScanner {
+        type A = Option[BigDecimal]
+        def init = None
+
+        @tailrec def findFirst(col: NumColumn, row: Int, end: Int): Option[BigDecimal] = {
+          if (row < end) {
+            if (col.isDefinedAt(row)) Some(col(row)) else findFirst(col, row + 1, end)
+          } else {
+            None
+          }
+        }
+
+        def scan(init: Option[BigDecimal], cols: Map[ColumnRef, Column], range: Range): (Option[BigDecimal], Map[ColumnRef, Column]) = {
+          val values = unifyNumColumns(cols.collect { case (ColumnRef(ValuePath, _), col) => col })
+          val alphas = unifyNumColumns(cols.collect { case (ColumnRef(AlphaPath, _), col) => col })
+
+          init orElse findFirst(values, range.start, range.end) map { init0 =>
+            val smoothed = new Array[BigDecimal](range.end)
+            val defined = BitSetUtil.create()
+            var row = range.start
+            var s = init0
+            while (row < smoothed.length) {
+              if (values.isDefinedAt(row) && alphas.isDefinedAt(row)) {
+                defined.set(row)
+                val x = values(row)
+                val a = alphas(row)
+                s = a * x + (BigDecimal(1) - a) * s
+                smoothed(row) = s
+              }
+              row += 1
+            }
+
+            (Some(s), Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(defined, smoothed)))
+          } getOrElse {
+            (None, Map.empty)
+          }
+        }
+      }
+
+      val alphaSpec = DerefArrayStatic(DerefObjectStatic(TransSpec1.Id, paths.Value), CPathIndex(1))
+      def smoothSpec = Scan(
+        InnerArrayConcat(WrapArray(valueSpec), WrapArray(alphaSpec)),
+        ExpSmoothingScanner)
+    }
+
+    object DoubleExponentialSmoothing extends Smoothing("doubleExpSmoothing") {
+      private val ValuePath = CPath(CPathIndex(0))
+      private val AlphaPath = CPath(CPathIndex(1))
+      private val BetaPath = CPath(CPathIndex(2))
+      private val alpha = "alpha"
+      private val beta = "beta"
+
+      val tpe = BinaryOperationType(
+        JObjectFixedT(Map(smoother -> JType.JUniverseT, smoothee -> JNumberT)),
+        JObjectFixedT(Map(alpha -> JNumberT, beta -> JNumberT)),
+        JNumberT)
+
+      private sealed trait ScannerState
+      private case object FindFirst extends ScannerState
+      private case class FindSecond(x0: BigDecimal) extends ScannerState
+      private case class Continue(s0: BigDecimal, b0: BigDecimal, first: Boolean = false) extends ScannerState
+
+      private object DoubleExpSmoothingScanner extends CScanner {
+        type A = ScannerState
+        def init = FindFirst
+
+        @tailrec def findFirst(col: NumColumn, row: Int, end: Int): Option[(Int, BigDecimal)] = {
+          if (row < end) {
+            if (col.isDefinedAt(row)) Some(row -> col(row)) else findFirst(col, row + 1, end)
+          } else {
+            None
+          }
+        }
+
+        def scan(state0: ScannerState, cols: Map[ColumnRef, Column], range: Range): (ScannerState, Map[ColumnRef, Column]) = {
+          val values = unifyNumColumns(cols.collect { case (ColumnRef(ValuePath, _), col) => col })
+          val alphas = unifyNumColumns(cols.collect { case (ColumnRef(AlphaPath, _), col) => col })
+          val betas = unifyNumColumns(cols.collect { case (ColumnRef(BetaPath, _), col) => col })
+
+          // This is a bit messy, but it's because we need the first 2 values
+          // in order to initialize s_1 and b_1. Since a slice may have 0 or
+          // only 1 value, we need to account for those states. Moreover, the
+          // single value case is really funky, as we still need to output the
+          // smoothed value in that case, continue looking for the second value
+          // in the next slice, but make sure we don't output the first value
+          // in any subsequent slices.
+
+          @tailrec def loop(state: ScannerState, rowM: Option[Int]): (ScannerState, Map[ColumnRef, Column]) = state match {
+            case FindFirst =>
+              findFirst(values, range.start, range.end) match {
+                case Some((row, x0)) => loop(FindSecond(x0), Some(row + 1))
+                case None => (FindFirst, Map.empty)
+              }
+
+            case FindSecond(x0) =>
+              findFirst(values, rowM.getOrElse(range.start), range.end) match {
+                case Some((_, x1)) => loop(Continue(x0, x1 - x0, true), None)
+                case None =>
+                  rowM map { row =>
+
+                    // In this case, we found a single value in this slice, but
+                    // failed to find a second one. So, we still need to output
+                    // this value in this slice, due to the contract of Scanner.
+
+                    val defined = BitSetUtil.create()
+                    val smoothed = new Array[BigDecimal](range.end)
+                    defined.set(row)
+                    smoothed(row) = x0
+                    (FindSecond(x0), Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(defined, smoothed)))
+                  } getOrElse {
+                    (FindSecond(x0), Map.empty)
+                  }
+              }
+
+            case Continue(s00, b00, first0) =>
+              val smoothed = new Array[BigDecimal](range.end)
+              val defined = BitSetUtil.create()
+              var row = range.start
+              var s0 = s00
+              var b0 = b00
+              var first = first0
+
+              while (row < smoothed.length) {
+                if (values.isDefinedAt(row) && alphas.isDefinedAt(row) && betas.isDefinedAt(row)) {
+                  defined.set(row)
+                  if (first) {
+                    // I hope we can do better here eventually.
+                    smoothed(row) = s0
+                    first = false
+                  } else {
+                    val x = values(row)
+                    val a = alphas(row)
+                    val b = betas(row)
+                    val s1 = a * x + (BigDecimal(1) - a) * (s0 + b0)
+                    b0 = b * (s1 - s0) + (BigDecimal(1) - b) * b0
+                    s0 = s1
+                    smoothed(row) = s0
+                  }
+                }
+                row += 1
+              }
+              (Continue(s0, b0), Map(ColumnRef(CPath.Identity, CNum) -> ArrayNumColumn(defined, smoothed)))
+          }
+
+          loop(state0, None)
+        }
+      }
+
+
+      val alphaSpec = DerefObjectStatic(
+        DerefArrayStatic(
+          DerefObjectStatic(TransSpec1.Id, paths.Value), CPathIndex(1)),
+          CPathField(alpha))
+      val betaSpec = DerefObjectStatic(
+        DerefArrayStatic(
+          DerefObjectStatic(TransSpec1.Id, paths.Value), CPathIndex(1)),
+          CPathField(beta))
+      def smoothSpec = Scan(
+        InnerArrayConcat(WrapArray(valueSpec), WrapArray(alphaSpec), WrapArray(betaSpec)),
+        DoubleExpSmoothingScanner)
+    }
+
     object LinearCorrelation extends Morphism2(StatsNamespace, "corr") {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
       
@@ -149,7 +375,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
           val right = schema.columns(JArrayFixedT(Map(1 -> JNumberT)))
@@ -286,7 +512,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
+        def apply(table: Table, ctx: MorphContext) = {
           val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
           table.transform(valueSpec).reduce(reducer(ctx)) map extract
         }
@@ -303,7 +529,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -439,7 +665,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
+        def apply(table: Table, ctx: MorphContext) = {
           val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
           table.transform(valueSpec).reduce(reducer(ctx)) map extract
         }
@@ -456,7 +682,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -602,7 +828,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
+        def apply(table: Table, ctx: MorphContext) = {
           val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
           table.transform(valueSpec).reduce(reducer(ctx)) map extract
         }
@@ -619,7 +845,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
 
       implicit def monoid = implicitly[Monoid[Result]]
       
-      def reducer(ctx: EvaluationContext): Reducer[Result] = new Reducer[Result] {
+      def reducer(ctx: MorphContext): Reducer[Result] = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
 
           val left = schema.columns(JArrayFixedT(Map(0 -> JNumberT)))
@@ -810,7 +1036,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table: Table, ctx: EvaluationContext) = {
+        def apply(table: Table, ctx: MorphContext) = {
           val valueSpec = DerefObjectStatic(TransSpec1.Id, paths.Value)
           table.transform(valueSpec).reduce(reducer(ctx)) map extract
         }
@@ -822,7 +1048,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
      *
      * This provides scaffolding that is useful in all cases.
      */
-    trait BaseRankScanner extends CScanner[M] {
+    trait BaseRankScanner extends CScanner {
       import scala.collection.mutable
 
       // collapses number columns into one decimal column.
@@ -965,7 +1191,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
 
         val m = decimalize(_m, range)
 
@@ -1002,7 +1228,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           (ctxt2, data)
         }
         
-        M point back
+        back
       }
     }
 
@@ -1102,7 +1328,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       /**
        *
        */
-      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): M[(RankContext, Map[ColumnRef, Column])] = {
+      def scan(ctxt: RankContext, _m: Map[ColumnRef, Column], range: Range): (RankContext, Map[ColumnRef, Column]) = {
         val m = decimalize(_m, range)
 
         val start = range.start
@@ -1141,7 +1367,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           (ctxt2, data)
         }
         
-        M point back
+        back
       }
     }
 
@@ -1191,11 +1417,11 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       }
     }
 
-    final class DummyScanner(length: Long) extends CScanner[M] {
+    final class DummyScanner(length: Long) extends CScanner {
       type A = Long
       def init: A = 0L
 
-      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+      def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         val defined = cols.values.foldLeft(BitSetUtil.create()) { (bitset, col) =>
           bitset.or(col.definedAt(range.start, range.end))
           bitset
@@ -1223,7 +1449,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
           ColumnRef(CPath(CPathIndex(idx)), CLong) -> makeColumn(idx)
         })(collection.breakOut)
 
-        M point (n, cols0)
+        (n, cols0)
       }
     }
 
@@ -1231,7 +1457,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       val tpe = UnaryOperationType(JType.JUniverseT, retType)
       override val idPolicy = IdentityPolicy.Retain.Merge
       
-      def rankScanner(size: Long): CScanner[M]
+      def rankScanner(size: Long): CScanner
       
       private val sortByValue = DerefObjectStatic(Leaf(Source), paths.Value)
       private val sortByKey = DerefObjectStatic(Leaf(Source), paths.Key)
@@ -1241,7 +1467,7 @@ trait StatsLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMeth
       // it would be better to let our consumers worry about whether the table is
       // sorted on paths.SortKey.
 
-      def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+      def apply(table: Table, ctx: MorphContext): M[Table] = {
         def count(tbl: Table): M[Long] = tbl.size match {
           case ExactSize(n) => M.point(n)
           case _ => table.reduce(Count.reducer(ctx))

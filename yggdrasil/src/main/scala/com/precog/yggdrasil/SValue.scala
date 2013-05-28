@@ -225,6 +225,8 @@ trait SValueInstances {
     )
   }
 
+  implicit def scalaOrder: scala.math.Ordering[SValue] = order.toScalaOrdering
+
   implicit val StructureOrdering: scala.math.Ordering[(JPath, CType)] = implicitly[Order[(JPath, CType)]].toScalaOrdering
 }
 

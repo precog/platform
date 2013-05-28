@@ -30,4 +30,7 @@ class JDBCStorageMetadata(dbMap: Map[String, String])(implicit asyncContext: Exe
   def findSelectors(path: Path): Future[Set[CPath]] = Promise.successful(Set())
 
   def findStructure(path: Path, selector: CPath) = Promise.successful(PathStructure.Empty)
+
+  def currentVersion(path: Path) = Promise.successful(None)
+  def currentAuthorities(path: Path) = Promise.successful(None)
 }

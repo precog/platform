@@ -3,6 +3,7 @@ package com.precog.pandora
 import com.precog.common.Path
 import com.precog.util.VectorCase
 import com.precog.common.accounts._
+import com.precog.common.jobs._
 import com.precog.common.kafka._
 import com.precog.common.security._
 
@@ -22,6 +23,7 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 import com.precog.yggdrasil.test.YId
 
 import com.precog.muspelheim._
@@ -57,14 +59,16 @@ import org.streum.configrity.io.BlockFormat
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
-object NIHDBPlatformActor extends Logging {
+object NIHDBPlatformSpecsActor extends NIHDBPlatformSpecsActor(Option(System.getProperty("precog.storage.root")))
+
+class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
   abstract class YggConfig
       extends EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
       with BlockStoreColumnarTableModuleConfig {
     val config = Configuration parse {
-      Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
+      rootPath map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
     // None of this is used, but is required to satisfy the cake
@@ -73,6 +77,8 @@ object NIHDBPlatformActor extends Logging {
     val smallSliceSize = 2
     val ingestConfig = None
     val idSource = new FreshAtomicIdSource
+    val clock = blueeyes.util.Clock.System
+    val storageTimeout = Timeout(Duration(120, "seconds"))
   }
 
   object yggConfig extends YggConfig
@@ -82,24 +88,29 @@ object NIHDBPlatformActor extends Logging {
   private[this] var state: Option[SystemState] = None
   private[this] val users = new AtomicInteger
 
+  def actorSystem = users.synchronized {
+    state.map(_.actorSystem)
+  }
+
   def actor = users.synchronized {
     users.getAndIncrement
 
     if (state.isEmpty) {
       logger.info("Allocating new projections actor in " + this.hashCode)
       state = {
-        val actorSystem = ActorSystem("NIHDBPlatformActor")
+        val actorSystem = ActorSystem("NIHDBPlatformSpecsActor")
         val storageTimeout = Timeout(300 * 1000)
 
         implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
 
-        val accountFinder = new StaticAccountFinder[Future]("", "", Some("/"))
-        val accessControl = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](blueeyes.util.Clock.System))
+        val accountFinder = new StaticAccountFinder[Future](ParseEvalStackSpecs.testAccount, ParseEvalStackSpecs.testAPIKey, Some("/"))
+        val accessControl = new StaticAPIKeyFinder[Future](ParseEvalStackSpecs.testAPIKey)
         val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)))
+        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
         Some(SystemState(projectionsActor, actorSystem))
       }
@@ -171,7 +182,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
 
   val storageTimeout = Timeout(300 * 1000)
 
-  val projectionsActor = NIHDBPlatformActor.actor
+  val projectionsActor = NIHDBPlatformSpecsActor.actor
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M
@@ -184,7 +195,7 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
   def startup() { }
 
   def shutdown() {
-    NIHDBPlatformActor.release
+    NIHDBPlatformSpecsActor.release
   }
 }
 
@@ -195,6 +206,8 @@ class NIHDBHelloQuirrelSpecs extends HelloQuirrelSpecs with NIHDBPlatformSpecs
 class NIHDBLogisticRegressionSpecs extends LogisticRegressionSpecs with NIHDBPlatformSpecs
 
 class NIHDBLinearRegressionSpecs extends LinearRegressionSpecs with NIHDBPlatformSpecs
+
+class NIHDBEnrichmentSpecs extends EnrichmentSpecs with NIHDBPlatformSpecs
 
 class NIHDBClusteringSpecs extends ClusteringSpecs with NIHDBPlatformSpecs
 

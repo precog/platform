@@ -35,7 +35,14 @@ object WrittenByPermission {
 
 case class WritePermission(path: Path, writeAs: WriteAs) extends Permission {
   def implies(other: Permission): Boolean = other match {
-    case WritePermission(p0, w0) => path.isEqualOrParent(p0) && (writeAs == WriteAsAny || writeAs == w0)
+    case WritePermission(p0, w0) => path.isEqualOrParentOf(p0) && (writeAs == WriteAsAny || writeAs == w0)
+    case _ => false
+  }
+}
+
+case class ExecutePermission(path: Path) extends Permission {
+  def implies(other: Permission): Boolean = other match {
+    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
     case _ => false
   }
 }
@@ -44,6 +51,7 @@ case class ReadPermission(path: Path, writtenBy: WrittenBy) extends Permission w
   def implies(other: Permission): Boolean = other match {
     case p : ReadPermission => WrittenBy.implies(this, p)
     case p : ReducePermission => WrittenBy.implies(this, p)
+    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
     case _ => false
   }
 }
@@ -64,8 +72,8 @@ case class DeletePermission(path: Path, writtenBy: WrittenBy) extends Permission
 }
 
 object Permission {
-  sealed trait WriteAs 
-  case object WriteAsAny extends WriteAs 
+  sealed trait WriteAs
+  case object WriteAsAny extends WriteAs
   case class WriteAsAll private[Permission] (accountIds: Set[AccountId]) extends WriteAs
 
   object WriteAs {
@@ -83,7 +91,7 @@ object Permission {
 
   object WrittenBy {
     def implies(permission: WrittenByPermission, candidate: WrittenByPermission): Boolean = {
-      permission.path.isEqualOrParent(candidate.path) &&
+      permission.path.isEqualOrParentOf(candidate.path) &&
       (permission.writtenBy match {
         case WrittenByAny => true
         case WrittenByAccount(accountId) => candidate.writtenBy match {
@@ -95,6 +103,7 @@ object Permission {
   }
 
   def accessType(p: Permission) = p match {
+    case _ : ExecutePermission => "execute"
     case _ : ReadPermission =>   "read"
     case _ : ReducePermission => "reduce"
     case _ : WritePermission =>  "write"
@@ -120,7 +129,7 @@ object Permission {
 
   val extractorV1Base: Extractor[Permission] = new Extractor[Permission] {
     private def writtenByPermission(obj: JValue, pathV: Validation[Error, Path])(f: (Path, WrittenBy) => Permission): Validation[Error, Permission] = {
-      (obj \? "ownerAccountIds") map { ids => 
+      (obj \? "ownerAccountIds") map { ids =>
         Apply[({type l[a] = Validation[Error, a]})#l].zip.zip(pathV, ids.validated[Set[AccountId]]) flatMap {
           case (path, accountIds) =>
             if (accountIds.isEmpty) success(f(path, WrittenByAny))
@@ -135,8 +144,8 @@ object Permission {
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
       obj.validated[String]("accessType").map(_.toLowerCase.trim) flatMap {
-        case "write" =>  
-          (obj \? "ownerAccountIds") map { ids => 
+        case "write" =>
+          (obj \? "ownerAccountIds") map { ids =>
             (pathV |@| ids.validated[Set[AccountId]]) { (path, accountIds) => WritePermission(path, WriteAs(accountIds)) }
           } getOrElse {
             pathV map  { WritePermission(_: Path, WriteAsAny) }
@@ -153,7 +162,7 @@ object Permission {
   val extractorV0: Extractor[Permission] = new Extractor[Permission] {
     private def writtenByPermission(obj: JValue, pathV: Validation[Error, Path])(f: (Path, WrittenBy) => Permission): Validation[Error, Permission] = {
       obj.validated[Option[String]]("ownerAccountId") flatMap { opt =>
-        opt map {id => 
+        opt map {id =>
           pathV map { f(_:Path, WrittenByAccount(id)) }
         } getOrElse {
           pathV map { f(_:Path, WrittenByAny) }
@@ -164,8 +173,8 @@ object Permission {
     override def validated(obj: JValue) = {
       val pathV = obj.validated[Path]("path")
       obj.validated[String]("type").map(_.toLowerCase.trim) flatMap {
-        case "write" =>  
-          obj.validated[Option[String]]("ownerAccountId") flatMap { opt => 
+        case "write" =>
+          obj.validated[Option[String]]("ownerAccountId") flatMap { opt =>
             opt map { id =>
               pathV map { WritePermission(_: Path, WriteAs(Set(id))) }
             } getOrElse {

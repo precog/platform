@@ -4,9 +4,11 @@ import com.precog.common._
 import com.precog.common.jobs._
 
 import com.precog.common.security._
+import com.precog.common.accounts._
 
 import com.precog.daze._
 import com.precog.muspelheim._
+import com.precog.yggdrasil.table.Slice
 
 import java.nio.CharBuffer
 
@@ -43,12 +45,15 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
+  val account = AccountDetails("test", "test@test.test", clock.now(),
+    apiKey, Path.Root, AccountPlan.Free)
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     for {
       executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
-      result <- executor.execute(apiKey, numTicks.toString, Path("/\\\\/\\///\\/"), QueryOptions(timeout = timeout))
+      ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), clock.now())
+      result <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout))
     } yield {
       result getOrElse sys.error("Jellybean Sunday")
     }
@@ -105,7 +110,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
         result <- poll(jobId)
       } yield result
 
-      result.copoint must_== Some((Some(JSON), "..."))
+      result.copoint must_== Some((Some(JSON), """[".",".","."]"""))
     }
 
     "not return results if the job is still running" in {
@@ -162,18 +167,18 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     val clock = self.clock
   }
 
-  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-    new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
+  protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
+    new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
 
       import UserQuery.Serialization._
 
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         val numTicks = query.toInt
         schedule(0) {
-          Success(StreamT.unfoldM[ShardQuery, CharBuffer, Int](0) {
+          Success(StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
             case i if i < numTicks =>
               schedule(1) {
-                Some((CharBuffer.wrap("."), i + 1))
+                Some((Slice.fromJValues(Stream(JString("."))), i + 1))
               }.liftM[JobQueryT]
 
             case _ =>
@@ -190,7 +195,7 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
     Future(Success(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
@@ -200,6 +205,8 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
     def size(userUID: String, path: Path) = sys.error("todo")
     def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
     def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
+    def currentVersion(apiKey: APIKey, path: Path) = M.point(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = M.point(None)
   }
 
   def startup = Future { true }

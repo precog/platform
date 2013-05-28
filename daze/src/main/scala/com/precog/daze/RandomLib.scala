@@ -18,8 +18,8 @@ import scalaz.std.set._
 import scalaz.syntax.monad._
 import scalaz.syntax.foldable._
 
-trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
-  trait RandomLib extends ColumnarTableLib with EvaluatorMethods {
+trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] {
+  trait RandomLib extends ColumnarTableLib {
     import trans._
 
     val RandomNamespace = Vector("std", "random")
@@ -33,7 +33,7 @@ trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMet
 
       type Result = Option[Long]
       
-      def reducer(ctx: EvaluationContext) = new Reducer[Result] {
+      def reducer(ctx: MorphContext) = new Reducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           val cols = schema.columns(JObjectFixedT(Map(paths.Value.name -> JNumberT)))
 
@@ -56,7 +56,7 @@ trait RandomLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMet
         } getOrElse Table.empty
       }
 
-      def apply(table: Table, ctx: EvaluationContext): M[Table] =
+      def apply(table: Table, ctx: MorphContext): M[Table] =
         table.reduce(reducer(ctx)) map extract
     }
   }

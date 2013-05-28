@@ -1,6 +1,7 @@
 package com.precog.shard
 
 import com.precog.common._
+import com.precog.common.security.APIKey
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
@@ -17,11 +18,11 @@ import scalaz.syntax.monad._
 import scalaz.syntax.foldable._
 
 class StorageMetadataClient[M[+_]: Monad](metadata: StorageMetadataSource[M]) extends MetadataClient[M] {
-  def size(userUID: String, path: Path): M[Validation[String, JNum]] =
-    metadata.userMetadataView(userUID).findSize(path) map { s => success(JNum(s)) }
+  def size(apiKey: APIKey, path: Path): M[Validation[String, JNum]] =
+    metadata.userMetadataView(apiKey).findSize(path) map { s => success(JNum(s)) }
 
-  def browse(userUID: String, path: Path): M[Validation[String, JArray]] = {
-    metadata.userMetadataView(userUID).findDirectChildren(path) map {
+  def browse(apiKey: APIKey, path: Path): M[Validation[String, JArray]] = {
+    metadata.userMetadataView(apiKey).findDirectChildren(path) map {
       case paths =>
         success(JArray(paths.map { p =>
           JString(p.toString.substring(1))
@@ -42,11 +43,15 @@ class StorageMetadataClient[M[+_]: Monad](metadata: StorageMetadataSource[M]) ex
     } mapValues (_.serialize)
   }
 
-  def structure(userUID: String, path: Path, property: CPath): M[Validation[String, JObject]] = {
-    metadata.userMetadataView(userUID).findStructure(path, property) map {
+  def structure(apiKey: APIKey, path: Path, property: CPath): M[Validation[String, JObject]] = {
+    metadata.userMetadataView(apiKey).findStructure(path, property) map {
       case PathStructure(types, children) =>
         success(JObject(Map("children" -> children.serialize,
                             "types" -> JObject(normalizeTypes(types)))))
     }
   }
+
+  def currentVersion(apiKey: APIKey, path: Path) = metadata.userMetadataView(apiKey).currentVersion(path)
+
+  def currentAuthorities(apiKey: APIKey, path: Path) = metadata.userMetadataView(apiKey).currentAuthorities(path)
 }

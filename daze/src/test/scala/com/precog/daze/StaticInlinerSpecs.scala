@@ -13,6 +13,11 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
   import dag._
   import instructions._
   import library._
+
+  object inliner extends StdLibStaticInliner with StdLibOpFinder {
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext = new MorphContext(ctx, null)
+  }
+  import inliner._
   
   "static inlining of Root computation" should {
     "detect and resolve addition" in {
@@ -203,6 +208,22 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       val input = IUI(false, side, side)(line)
       
       inlineStatics(input, defaultEvaluationContext) mustEqual side
+    }
+    
+    "rewrite a filter with undefined to undefined" >> {
+      "target" >> {
+        val line = Line(1, 1, "")
+        val input = Filter(IdentitySort, Const(CUndefined)(line), Const(CString("j"))(line))(line)
+        
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CUndefined)(line)
+      }
+      
+      "predicate" >> {
+        val line = Line(1, 1, "")
+        val input = Filter(IdentitySort, Const(CString("j"))(line), Const(CUndefined)(line))(line)
+        
+        inlineStatics(input, defaultEvaluationContext) mustEqual Const(CUndefined)(line)
+      }
     }
   }
 }

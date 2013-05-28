@@ -22,7 +22,7 @@ trait JValueByteChunkTranscoders {
   implicit def JValueByteChunkTranscoder(implicit M: Monad[Future]) = new AsyncHttpTranscoder[JValue, ByteChunk] {
     def apply(req: HttpRequest[JValue]): HttpRequest[ByteChunk] =
       req.copy(content = req.content.map { (j: JValue) =>
-        Left(ByteBuffer.wrap(j.renderCompact.getBytes("UTF-8")))
+        Left(j.renderCompact.getBytes("UTF-8"))
       })
 
     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[JValue]] = {

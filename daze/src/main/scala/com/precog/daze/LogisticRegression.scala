@@ -36,8 +36,8 @@ trait ReductionHelper {
   def reduceDouble(seq: Seq[ColumnValues]): Result
 }
 
-trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] with EvaluatorMethodsModule[M] with PredictionLibModule[M] {
-  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with PredictionSupport with RegressionSupport with EvaluatorMethods {
+trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] with PredictionLibModule[M] {
+  trait LogisticRegressionLib extends ColumnarTableLib with ReductionLib with PredictionSupport with RegressionSupport {
     import trans._
 
     override def _libMorphism2 = super._libMorphism2 ++ Set(LogisticRegression, LogisticPrediction)
@@ -219,7 +219,7 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
       }
 
       private val morph1 = new Morph1Apply {
-        def apply(table0: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table0: Table, ctx: MorphContext): M[Table] = {
           val ySpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(0))
           val xsSpec0 = DerefArrayStatic(TransSpec1.Id, CPathIndex(1))
 
@@ -279,8 +279,9 @@ trait LogisticRegressionLibModule[M[+_]] extends ColumnarTableLibModule[M] with 
       def alignCustom(t1: Table, t2: Table): M[(Table, Morph1Apply)] = {
         val spec = liftToValues(trans.DeepMap1(TransSpec1.Id, cf.util.CoerceToDouble))
         def sigmoid(d: Double): Double = 1.0 / (1.0 + math.exp(d))
-
-        t2.transform(spec).reduce(reducer) map { models => (t1.transform(spec), morph1Apply(models, sigmoid _)) }
+        t2.transform(spec).reduce(reducer) map { models =>
+          (t1.transform(spec), morph1Apply(models, sigmoid _))
+        }
       }
     }
   }

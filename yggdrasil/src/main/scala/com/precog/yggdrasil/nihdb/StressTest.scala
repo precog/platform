@@ -29,6 +29,8 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class StressTest {
+  import AsyncParser._
+
   val actorSystem = ActorSystem("NIHDBActorSystem")
 
   def makechef = new Chef(
@@ -42,28 +44,28 @@ class StressTest {
 
   val owner: AccountId = "account999"
 
+  val authorities = Authorities(NonEmptyList(owner))
+
   val txLogScheduler = new ScheduledThreadPoolExecutor(10, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
 
-  def newNihProjection(workDir: File, threshold: Int = 1000) =
-    NIHDB.create(chef, Authorities(NonEmptyList(owner)), workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.map {
-      db => new NIHDBActorProjection(db)(actorSystem.dispatcher)
-    }.valueOr { e => throw new Exception(e.message) }
+  def newNihdb(workDir: File, threshold: Int = 1000): NIHDB =
+    NIHDB.create(chef, authorities, workDir, threshold, Duration(60, "seconds"), txLogScheduler)(actorSystem).unsafePerformIO.valueOr { e => throw new Exception(e.message) }
 
   implicit val M = new FutureMonad(actorSystem.dispatcher)
 
   def shutdown() = actorSystem.shutdown()
 
   class TempContext {
-    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
-    var projection = newNihProjection(workDir)
-
     def fromFuture[A](f: Future[A]): A = Await.result(f, Duration(60, "seconds"))
 
-    def close(proj: NIHDBProjection) = fromFuture(proj.close(actorSystem))
+    val workDir = IOUtils.createTmpDir("nihdbspecs").unsafePerformIO
+    val nihdb = newNihdb(workDir)
+
+    def close(proj: NIHDB) = fromFuture(proj.close(actorSystem))
 
     def finish() = {
         (for {
-          _ <- IO { close(projection) }
+          _ <- IO { close(nihdb) }
           _ <- IOUtils.recursiveDelete(workDir)
         } yield ()).unsafePerformIO
     }
@@ -96,12 +98,12 @@ class StressTest {
         val n = ch.read(bb)
         bb.flip()
 
-        val input = if (n >= 0) Some(bb) else None
+        val input = if (n >= 0) More(bb) else Done
         val (AsyncParse(errors, results), parser) = p(input)
         if (!errors.isEmpty) sys.error("errors: %s" format errors)
         //projection.insert(Array(eventid), results)
         val eventidobj = EventId.fromLong(eventid)
-        projection.insert(Seq((eventid, results.map(v => IngestRecord(eventidobj, v)))))
+        nihdb.insert(Seq(NIHDB.Batch(eventid, results)))
 
 
         eventid += 1L
@@ -110,21 +112,24 @@ class StressTest {
       }
 
       try {
-        loop(AsyncParser(false))
+        loop(AsyncParser.stream())
       } finally {
         ch.close()
       }
       timeit("  finished ingesting")
 
-      while (fromFuture(projection.status).pending > 0) Thread.sleep(100)
+      while (fromFuture(nihdb.status).pending > 0) Thread.sleep(100)
       timeit("  finished cooking")
 
       import scalaz._
-      val stream = StreamT.unfoldM[Future, Unit, Option[Long]](None) { key =>
-        projection.getBlockAfter(key, None).map(_.map { case BlockProjectionData(_, maxKey, _) => ((), Some(maxKey)) })
+      val length = NIHDBProjection.wrap(nihdb, authorities).flatMap { projection =>
+        val stream = StreamT.unfoldM[Future, Unit, Option[Long]](None) { key =>
+          projection.getBlockAfter(key, None).map(_.map { case BlockProjectionData(_, maxKey, _) => ((), Some(maxKey)) })
+        }
+        stream.length
       }
 
-      Await.result(stream.length, Duration(300, "seconds"))
+      Await.result(length, Duration(300, "seconds"))
       timeit2("  evaluated")
 
       eventid

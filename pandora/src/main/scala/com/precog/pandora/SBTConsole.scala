@@ -10,7 +10,10 @@ import pandora._
 
 import com.precog.common.Path
 import com.precog.common.accounts._
+import com.precog.common.jobs._
 import com.precog.niflheim._
+import com.precog.util.XLightWebHttpClientModule
+import com.precog.yggdrasil.vfs._
 
 import quirrel._
 import quirrel.emitter._
@@ -41,6 +44,8 @@ import com.codecommit.gll.LineStream
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import org.joda.time.DateTime
+
 import scalaz._
 import scalaz.effect.IO
 import scalaz.syntax.comonad._
@@ -55,10 +60,11 @@ trait PlatformConfig extends BaseConfig
     with BlockStoreColumnarTableModuleConfig
 
 trait Platform extends muspelheim.ParseEvalStack[Future]
-    with IdSourceScannerModule[Future]
+    with IdSourceScannerModule
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with StandaloneActorProjectionSystem
+    with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
@@ -99,18 +105,23 @@ object SBTConsole {
       val idSource = new FreshAtomicIdSource
     }
 
-    val storageTimeout = yggConfig.storageTimeout
-
     val accountFinder = new StaticAccountFinder[Future]("", "")
-    val rawAPIKeyFinder = new UnrestrictedAPIKeyManager[Future](Clock.System)
+    val rawAPIKeyFinder = new InMemoryAPIKeyManager[Future](Clock.System)
     val accessControl = new DirectAPIKeyFinder(rawAPIKeyFinder)
     val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
 
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
+    val rootAccount = AccountDetails("root", "nobody@precog.com",
+      new DateTime, rootAPIKey, Path.Root, AccountPlan.Root)
+    def evaluationContext = EvaluationContext(rootAPIKey, rootAccount, Path.Root, new DateTime)
+
+
+    val storageTimeout = yggConfig.storageTimeout
 
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-    val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
+    val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) {
@@ -127,7 +138,7 @@ object SBTConsole {
 
     def evalE(str: String) = {
       val dag = produceDAG(str)
-      consumeEval(rootAPIKey, dag, Path.Root)
+      consumeEval(dag, evaluationContext)
     }
 
     def produceDAG(str: String) = {
