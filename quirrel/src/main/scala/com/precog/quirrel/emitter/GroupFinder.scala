@@ -30,11 +30,12 @@ trait GroupFinder extends parser.AST with Tracer {
    * Any groups with a dtrace which is disjoint with `dispatches` (or even just
    * a strict subset) will be filtered out.  Supersetting is allowed.
    */
-  def findGroups(solve: Solve, dispatches: Set[Dispatch]): Set[(Map[Formal, Expr], Where, List[Dispatch])] = {
+  def findGroups(solve: Solve, dispatches: Set[Dispatch]): Set[(Sigma, Where, List[Dispatch])] = {
     val vars = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
     
     // TODO minimize by sigma subsetting
-    vars flatMap buildBacktrace(solve.trace) flatMap { btrace =>
+    val btraces = vars flatMap buildBacktrace(solve.trace)
+    btraces flatMap { btrace =>
       val result = codrill(btrace)
       
       val mapped = result map {
@@ -65,9 +66,9 @@ trait GroupFinder extends parser.AST with Tracer {
     }
   }
   
-  private def codrill(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = {
+  private def codrill(btrace: List[(Sigma, Expr)]): Option[(Sigma, Where)] = {
     @tailrec
-    def state1(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
+    def state1(btrace: List[(Sigma, Expr)]): Option[(Sigma, Where)] = btrace match {
       case (_, _: Add | _: Sub | _: Mul | _: Div | _: Neg | _: Paren) :: tail => state1(tail)
       case (_, _: ComparisonOp) :: tail => state2(tail)
       case (_, _: Dispatch) :: tail => state1(tail)
@@ -75,7 +76,7 @@ trait GroupFinder extends parser.AST with Tracer {
     }
     
     @tailrec
-    def state2(btrace: List[(Map[Formal, Expr], Expr)]): Option[(Map[Formal, Expr], Where)] = btrace match {
+    def state2(btrace: List[(Sigma, Expr)]): Option[(Sigma, Where)] = btrace match {
       case (_, _: Comp | _: And | _: Or) :: tail => state2(tail)
       case (sigma, where: Where) :: _ => Some((sigma, where))
       case (_, _: Dispatch) :: tail => state2(tail)

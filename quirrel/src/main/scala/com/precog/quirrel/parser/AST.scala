@@ -22,6 +22,7 @@ package quirrel
 package parser
 
 import util.Atom
+import util.BitSet
 
 import com.codecommit.gll.LineStream
 import com.codecommit.gll.ast._
@@ -414,6 +415,7 @@ trait AST extends Phases {
 
     override def children: List[Expr]
 
+    //todo consider another data structure besides `scalaz.Tree`
     private lazy val subForest: Stream[Tree[Expr]] = {
       def subForest0(l: List[Expr]): Stream[Tree[Expr]] = l match {
         case Nil => Stream.empty
@@ -424,6 +426,7 @@ trait AST extends Phases {
       subForest0(children)
     }
 
+    //todo consider another data structure besides `scalaz.Tree`
     def tree: Tree[Expr] = Tree.node(this, subForest)
     
     /**
@@ -435,7 +438,7 @@ trait AST extends Phases {
      * problematic though as sub-expressions may appear multiple times in a
      * single root trace.
      */
-    lazy val trace: Tree[(Map[Formal, Expr], Expr)] = {
+    lazy val trace: Trace = {
       if (this eq root) {
         buildTrace(Map())(root)
       } else {

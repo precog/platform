@@ -329,7 +329,7 @@ trait Emitter extends AST
       if (!(candidates forall { _.isEmpty })) {
         candidates map { _.reverse } find { c =>
           (c zip dtracePrefix takeWhile { case (a, b) => a == b } map { _._2 }) == dtracePrefix
-        } get
+        } getOrElse Nil
       } else {
         Nil
       }
@@ -411,7 +411,7 @@ trait Emitter extends AST
         case expr @ ast.Solve(loc, _, body) =>
           val spec = expr.buckets(dispatches)
         
-          val btraces: Map[Expr, List[List[(Map[Formal, Expr], Expr)]]] =
+          val btraces: Map[Expr, List[List[(Sigma, Expr)]]] =
             spec.exprs.map({ expr =>
               val btrace = buildBacktrace(trace)(expr)
               (expr -> btrace)

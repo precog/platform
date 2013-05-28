@@ -70,7 +70,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
         // below when we use loopSpec
         val childErrors = loop(dispatches)(child)
         
-        val sigma: Map[Formal, Expr] = dispatches flatMap { dispatch =>
+        val sigma: Sigma = dispatches flatMap { dispatch =>
           val (subs, letM) = dispatch.binding match {
             case LetBinding(let) => (let.substitutions, Some(let))
             case _ => (Map[Dispatch, Map[String, Expr]](), None)
@@ -155,7 +155,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     loop(Set())(tree)
   }
   
-  private def solveForest(solve: Solve, forest: Set[(Map[Formal, Expr], Where, List[Dispatch])]): (Option[BucketSpec], Set[Error]) = {
+  private def solveForest(solve: Solve, forest: Set[(Sigma, Where, List[Dispatch])]): (Option[BucketSpec], Set[Error]) = {
     val results = forest map {
       case (sigma, where, dtrace) => {
         val leftProv = where.left.provenance
@@ -197,7 +197,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     mergeSpecs(results)
   }
   
-  private def resolveExpr(sigma: Map[Formal, Expr], expr: Expr): Expr = expr match {
+  private def resolveExpr(sigma: Sigma, expr: Expr): Expr = expr match {
     case expr @ Dispatch(_, id, _) => {
       expr.binding match {
         case FormalBinding(let) => resolveExpr(sigma, sigma((id, let)))
@@ -208,7 +208,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case _ => expr
   }
   
-  private def solveConstraint(b: Solve, constraint: Expr, sigma: Map[Formal, Expr], dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = {
+  private def solveConstraint(b: Solve, constraint: Expr, sigma: Sigma, dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = {
     val (result, errors) = solveGroupCondition(b, constraint, true, sigma, dtrace)
     
     val orderedSigma = orderTopologically(sigma)
@@ -233,7 +233,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     (back, errors ++ contribErrors)
   }
   
-  private def orderTopologically(sigma: Map[Formal, Expr]): List[Formal] = {
+  private def orderTopologically(sigma: Sigma): List[Formal] = {
     val edges: Map[Formal, Set[Formal]] = sigma mapValues { expr =>
       expr.provenance.possibilities collect {
         case ParamProvenance(id, let) => (id, let)
@@ -258,7 +258,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     bfs(leaves).reverse
   }
   
-  private def solveGroupCondition(b: Solve, expr: Expr, free: Boolean, sigma: Map[Formal, Expr], dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = expr match {
+  private def solveGroupCondition(b: Solve, expr: Expr, free: Boolean, sigma: Sigma, dtrace: List[Dispatch]): (Option[BucketSpec], Set[Error]) = expr match {
     case And(_, left, right) => {
       val (leftSpec, leftErrors) = solveGroupCondition(b, left, free, sigma, dtrace)
       val (rightSpec, rightErrors) = solveGroupCondition(b, right, free, sigma, dtrace)
@@ -355,7 +355,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   }
   
   // my appologies to humanity...
-  private def pred(b: Solve, tv: TicId, free: Boolean, sigma: Map[Formal, Expr]): PartialFunction[Node, Boolean] = {
+  private def pred(b: Solve, tv: TicId, free: Boolean, sigma: Sigma): PartialFunction[Node, Boolean] = {
     case d @ Dispatch(_, id, actuals) => {
       d.binding match {
         case FormalBinding(let) => {
@@ -373,7 +373,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case t @ TicVar(_, `tv`) => !free && t.binding == SolveBinding(b) || free && t.binding == FreeBinding(b)
   }
   
-  private def enterLet(sigma: Map[Formal, Expr], let: Let, actuals: Vector[Expr]): Map[Formal, Expr] = {
+  private def enterLet(sigma: Sigma, let: Let, actuals: Vector[Expr]): Sigma = {
     val ids = let.params map { Identifier(Vector(), _) }
     sigma ++ (ids zip Stream.continually(let) zip actuals)
   }
@@ -394,7 +394,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
       (back, errors)
   }
   
-  private def isTranspecable(to: Expr, from: Expr, sigma: Map[Formal, Expr]): Boolean = {
+  private def isTranspecable(to: Expr, from: Expr, sigma: Sigma): Boolean = {
     to match {
       case _ if to equalsIgnoreLoc from => true
       
@@ -521,7 +521,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
   }
   
-  private def isPrimitive(expr: Expr, sigma: Map[Formal, Expr]): Boolean = expr match {
+  private def isPrimitive(expr: Expr, sigma: Sigma): Boolean = expr match {
     case Literal(_) => true
     
     case expr @ Dispatch(_, id, actuals) => {
@@ -562,7 +562,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
   
   //if b is Some: finds all tic vars in the Expr that have the given Solve as their binding
   //if b is None: finds all tic vars in the Expr
-  private def listTicVars(b: Option[Solve], expr: Expr, sigma: Map[Formal, Expr]): Set[(Option[Solve], TicId)] = expr match {
+  private def listTicVars(b: Option[Solve], expr: Expr, sigma: Sigma): Set[(Option[Solve], TicId)] = expr match {
     case Let(_, _, _, left, right) => listTicVars(b, right, sigma)
     
     case b2 @ Solve(_, constraints, child) => {
@@ -628,8 +628,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     case Extra(expr, _) => Set(expr)
   }
   
-  private def findCommonality(solve: Solve, nodes: Set[Expr], sigma: Map[Formal, Expr]): Option[Expr] = {
-    case class Kernel(nodes: Set[ExprWrapper], sigma: Map[Formal, Expr], seen: Set[ExprWrapper])
+  private def findCommonality(solve: Solve, nodes: Set[Expr], sigma: Sigma): Option[Expr] = {
+    case class Kernel(nodes: Set[ExprWrapper], sigma: Sigma, seen: Set[ExprWrapper])
     
     @tailrec
     def bfs(kernels: Set[Kernel]): Set[ExprWrapper] = {
@@ -652,7 +652,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           val (nodes2Unflatten, sigma2Unflatten) = k.nodes map { _.expr } map enumerateParents(k.sigma) unzip
           
           val nodes2 = nodes2Unflatten.flatten map ExprWrapper
-          val sigma2: Map[Formal, Expr] = Map(sigma2Unflatten.flatten.toSeq: _*)
+          val sigma2: Sigma = Map(sigma2Unflatten.flatten.toSeq: _*)
           val nodes3 = nodes2 &~ k.seen
           
           Kernel(nodes3, sigma2, k.seen ++ nodes3)
@@ -681,7 +681,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
     }
   }
   
-  private def enumerateParents(sigma: Map[Formal, Expr])(expr: Expr): (Set[Expr], Map[Formal, Expr]) = expr match {
+  private def enumerateParents(sigma: Sigma)(expr: Expr): (Set[Expr], Sigma) = expr match {
     case Let(_, _, _, _, right) => (Set(right), sigma)
     
     case _: Solve => (Set(), sigma)      // TODO will this do the right thing?

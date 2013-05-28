@@ -22,13 +22,13 @@ package quirrel
 
 import com.codecommit.gll.LineStream
 
+import util.BitSet
+
 import com.precog.quirrel._
 import bytecode._
 import emitter._
 import parser._
 import typer._
-
-import scalaz.Tree
 
 object QuirrelConsole {
   val compiler = new Parser
@@ -73,7 +73,6 @@ object QuirrelConsole {
     def checkProvenance(tree: Expr) = Set()
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
     def inferBuckets(expr: Expr) = Set()
-    def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)] =
-      Tree.node((sigma, expr), Stream.empty)
+    def buildTrace(sigma: Sigma)(expr: Expr): Trace = Trace.empty
   }
 }

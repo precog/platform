@@ -32,7 +32,7 @@ trait Solver extends parser.AST with typer.Binder {
   
   private[this] val enableTrace = false
   
-  def solve(tree: Expr, sigma: Map[Formal, Expr])(partialPred: PartialFunction[Node, Boolean]): Expr => Option[Expr] = {
+  def solve(tree: Expr, sigma: Sigma)(partialPred: PartialFunction[Node, Boolean]): Expr => Option[Expr] = {
     val predicate = partialPred.lift andThen { _ getOrElse false }
     
     def sigmaFormal(d: Dispatch): Option[Expr] = d.binding match {
@@ -177,7 +177,7 @@ trait Solver extends parser.AST with typer.Binder {
       Rules filter { _ isDefinedAt expr } flatMap { _(expr) }
     
     def isSubtree(tree: Node): Boolean = {
-      def inner(tree: Node, sigma: Map[Formal, Expr]): Boolean = tree match {
+      def inner(tree: Node, sigma: Sigma): Boolean = tree match {
         case tree if predicate(tree) => true
         
         case tree @ Dispatch(_, id, actuals) => {
@@ -211,7 +211,7 @@ trait Solver extends parser.AST with typer.Binder {
    * Note that this really only works for `Eq` at present.  Will improve things
    * further in future.
    */
-  def solveRelation(re: ComparisonOp, sigma: Map[Formal, Expr])(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
+  def solveRelation(re: ComparisonOp, sigma: Sigma)(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
     val leftRight: Option[(LineStream, Expr, Expr)] = re match {
       case Lt(_, _, _) => None
       case LtEq(_, _, _) => None
@@ -247,7 +247,7 @@ trait Solver extends parser.AST with typer.Binder {
     result
   }
   
-  def solveComplement(c: Comp, sigma: Map[Formal, Expr]): PartialFunction[Node, Boolean] => Option[Expr] = c.child match {
+  def solveComplement(c: Comp, sigma: Sigma): PartialFunction[Node, Boolean] => Option[Expr] = c.child match {
     case Lt(loc, left, right) => solveRelation(GtEq(loc, left, right), sigma)
     case LtEq(loc, left, right) => solveRelation(Gt(loc, left, right), sigma)
     case Gt(loc, left, right) => solveRelation(LtEq(loc, left, right), sigma)
