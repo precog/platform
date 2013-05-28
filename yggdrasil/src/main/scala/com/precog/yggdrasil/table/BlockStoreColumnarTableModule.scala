@@ -952,6 +952,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
 
   class SingletonTable(slices0: StreamT[M, Slice]) extends Table(slices0, ExactSize(1)) {
     import TableModule._
+    import TransSpecModule._
     
     // TODO assert that this table only has one row
 
@@ -980,7 +981,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
     
     def load(apiKey: APIKey, tpe: JType) = Table.load(this, apiKey, tpe)
     
-    override def compact(spec: TransSpec1): Table = this
+    override def compact(spec: TransSpec1, definedness: Definedness = AnyDefined): Table = this
 
     override def force: M[Table] = M.point(this)
     

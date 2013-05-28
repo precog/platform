@@ -128,6 +128,22 @@ object Schema {
     case _ => None
   }
 
+  /**
+  * replaces all leaves in `jtype` with `leaf`
+  */
+  def replaceLeaf(jtype: JType)(leaf: JType): JType = {
+    def inner(jtype: JType): JType = jtype match {
+      case JNumberT | JTextT | JBooleanT | JNullT | JDateT | JPeriodT => leaf
+      case JArrayFixedT(elements) => JArrayFixedT(elements.mapValues(inner))
+      case JObjectFixedT(fields) => JObjectFixedT(fields.mapValues(inner))
+      case JUnionT(left, right) => JUnionT(inner(left), inner(right))
+      case JArrayHomogeneousT(tpe) => JArrayHomogeneousT(inner(tpe))
+      case arr @ JArrayUnfixedT => arr
+      case obj @ JObjectUnfixedT => obj
+    }
+
+    inner(jtype)
+  }
   
   /**
   * returns a function that, for a given (row: Int), produces a Boolean

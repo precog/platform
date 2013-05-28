@@ -159,6 +159,7 @@ trait TableModule[M[+_]] extends TransSpecModule {
 
   trait TableLike { this: Table =>
     import trans._
+    import TransSpecModule._
 
     /**
      * Return an indication of table size, if known
@@ -177,10 +178,10 @@ trait TableModule[M[+_]] extends TransSpecModule {
     def reduce[A: Monoid](reducer: Reducer[A]): M[A]
 
     /**
-     * Removes all rows in the table for which all values are undefined. 
+     * Removes all rows in the table for which definedness is satisfied
      * Remaps the indicies.
      */
-    def compact(spec: TransSpec1): Table
+    def compact(spec: TransSpec1, definedness: Definedness = AnyDefined): Table
 
     /**
      * Performs a one-pass transformation of the keys and values in the table.

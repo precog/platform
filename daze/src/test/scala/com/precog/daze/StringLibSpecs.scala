@@ -26,8 +26,6 @@ trait StringLibSpecs[M[+_]] extends Specification
   private def homStrings(line: Line) = dag.LoadLocal(Const(CString("/hom/strings"))(line))(line)
   private def hetStrings(line: Line) = dag.LoadLocal(Const(CString("/het/strings"))(line))(line)
 
-  val testAPIKey = "testAPIKey"
-
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results

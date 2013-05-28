@@ -183,7 +183,6 @@ trait ReductionFinderSpecs[M[+_]] extends Specification
       }
     }
 
-
     "where two different sets are being reduced" in {
       val line = Line(1, 1, "")
 
