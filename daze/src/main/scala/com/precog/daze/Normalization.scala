@@ -84,7 +84,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M] with Re
           def getColumns(reduction: Reduction): List[(CPath, NumColumn)] = {
             commonPaths map { path =>
               val augPath = path \ CPathField(reduction.name)
-              val jtype = Schema.mkType(List(augPath -> CNum))
+              val jtype = Schema.mkType(List(ColumnRef(augPath, CNum)))
 
               val cols = jtype map { schema.columns } getOrElse Set.empty[Column] 
               val unifiedCol = unifyNumColumns(cols.toList)

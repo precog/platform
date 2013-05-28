@@ -53,9 +53,9 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] {
 
       def makeReduction(jtpe: JType): Reduction = {
         val jtypes: List[Option[JType]] = {
-          val grouped = Schema.flatten(jtpe, List.empty[ColumnRef]).groupBy(_._1)
-          val numerics = grouped filter { case (cpath, pairs) =>
-            pairs.map(_._2).exists(_.isNumeric)
+          val grouped = Schema.flatten(jtpe, List.empty[ColumnRef]).groupBy(_.selector)
+          val numerics = grouped filter { case (cpath, refs) =>
+            refs.map(_.ctype).exists(_.isNumeric)
           }
 
           // handles case when we have multiple numeric columns at same path
@@ -63,7 +63,7 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] {
           val sortedNumerics = singleNumerics.distinct.sortBy(_._1).reverse
 
           sortedNumerics map { case (cpath, ctype) =>
-            Schema.mkType(Seq(cpath -> ctype))
+            Schema.mkType(Seq(ColumnRef(cpath, ctype)))
           }
         }
 
@@ -99,11 +99,11 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] {
           schemas.toSeq map { jtype =>
             val flattened = Schema.flatten(jtype, List.empty[ColumnRef])
 
-            val values = flattened filter { case (cpath, ctype) =>
-              cpath.hasPrefix(paths.Value) && ctype.isNumeric
+            val values = flattened filter { case ref =>
+              ref.selector.hasPrefix(paths.Value) && ref.ctype.isNumeric
             }
 
-            Schema.mkType(values)
+            Schema.mkType(values.toSeq)
           }
         }
 
