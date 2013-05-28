@@ -38,13 +38,16 @@ import scalaz.syntax.show._
 
 trait PathServiceCombinators extends HttpRequestHandlerCombinators with Logging {
   def dataPath[A, B, C](prefix: String)(next: HttpService[A, (B, Path) => Future[C]]) = {
-    path("""%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n])*)/?)?)""".format(prefix)) { 
+    // FIXME: We need documentation *right here* about what this regex
+    // is trying to do, because it's unclear that this is 100%
+    // correct.
+    path("""%s/(?:(?<prefixPath>(?:[^\n.](?:[^\n/]|/[^\n])*)/?)?)""".format(prefix)) {
       new DelegatingService[A, B => Future[C], A, (B, Path) => Future[C]] {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
           logger.debug("Handling dataPath request " + request.shows)
-        
-          val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
+
+          val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null)
           next.service(request) map { f => (b: B) => f(b, Path(path.getOrElse(""))) }
         }
 
