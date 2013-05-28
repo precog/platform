@@ -25,6 +25,7 @@ import metadata.ColumnMetadata._
 import vfs.UpdateSuccess
 import com.precog.util._
 import com.precog.common._
+import com.precog.yggdrasil.vfs._
 
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -34,7 +35,7 @@ import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.syntax.monoid._
 
 case class BatchComplete(requestor: ActorRef, checkpoint: YggCheckpoint)
@@ -80,6 +81,21 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       logger.trace("Update complete for " + path)
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
+
+      // These next two cases are errors that should not terminate the batch
+    case UpdateFailure(path, NEL(ResourceError.PermissionsError(msg))) =>
+      logger.warn("Permissions failure on %s: %s".format(path, msg))
+      remaining -= 1
+      if (remaining == 0) self ! PoisonPill
+
+    case UpdateFailure(path, NEL(ResourceError.IllegalWriteRequestError(msg))) =>
+      logger.warn("Illegal write failure on %s: %s".format(path, msg))
+      remaining -= 1
+      if (remaining == 0) self ! PoisonPill
+
+    case UpdateFailure(path, errors) =>
+      logger.error("Failure during batch update on %s:\n  %s".format(path, errors.list.mkString("\n  ")))
+      self ! PoisonPill
 
     case ArchiveComplete(path) =>
       logger.info("Archive complete for " + path)

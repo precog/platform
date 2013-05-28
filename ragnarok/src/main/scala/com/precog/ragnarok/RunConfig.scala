@@ -38,7 +38,8 @@ case class RunConfig(
     baseline: Option[File] = None,
     rootDir: Option[File] = None,
     ingest: List[(String, File)] = Nil,
-    queryTimeout: Int = 5 * 60) {
+    queryTimeout: Int = 5 * 60,
+    output: Option[File] = None) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }
 
@@ -83,6 +84,14 @@ object RunConfig {
         fromCommandLine(args, config map (_. copy(baseline = Some(f))))
       } else {
         fromCommandLine(args, config *> "The baseline file must be regular and readable.".failureNel)
+      }
+
+    case "--output" :: file :: args =>
+      val f = new File(file)
+      if (f.canWrite || !f.exists) {
+        fromCommandLine(args, config map (_. copy(output = Some(f))))
+      } else {
+        fromCommandLine(args, config *> "The output file must be regular and writable.".failureNel)
       }
 
     case "--json" :: args =>

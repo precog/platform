@@ -37,7 +37,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
   
   def testEval(graph: DepGraph): Set[SEvent] = {
-    consumeEval(testAPIKey, graph, Path.Root) match {
+    consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results
       case Failure(error) => throw error
     }

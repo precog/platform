@@ -49,6 +49,7 @@ trait TransSpecModule extends FNModule {
 
   type GroupId
   type Scanner
+  type Mapper
 
   object trans {
     sealed trait TransSpec[+A <: SourceType]
@@ -70,7 +71,9 @@ trait TransSpecModule extends FNModule {
     
     // Adds a column to the output in the manner of scanLeft
     case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A] //done
-    
+
+    case class MapWith[+A <: SourceType](source: TransSpec[A], mapper: Mapper) extends TransSpec[A]
+
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
 
     case class DeepMap1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
@@ -177,6 +180,7 @@ trait TransSpecModule extends FNModule {
             trans.FilterDefined(mapSources(source)(f), mapSources(definedFor)(f), definedness)
           
           case Scan(source, scanner) => Scan(mapSources(source)(f), scanner)
+          case MapWith(source, mapper) => MapWith(mapSources(source)(f), mapper)
           
           case trans.Map1(source, f1) => trans.Map1(mapSources(source)(f), f1)
           case trans.DeepMap1(source, f1) => trans.DeepMap1(mapSources(source)(f), f1)
@@ -223,6 +227,7 @@ trait TransSpecModule extends FNModule {
           trans.FilterDefined(deepMap(source)(f), deepMap(definedFor)(f), definedness)
         
         case Scan(source, scanner) => Scan(deepMap(source)(f), scanner)
+        case MapWith(source, mapper) => MapWith(deepMap(source)(f), mapper)
         
         case trans.Map1(source, f1) => trans.Map1(deepMap(source)(f), f1)
         case trans.DeepMap1(source, f1) => trans.DeepMap1(deepMap(source)(f), f1)
@@ -365,5 +370,37 @@ trait TransSpecModule extends FNModule {
         val Right = DerefObjectStatic(Leaf(SourceRight), SortKey)
       }
     }
+  }
+
+  import trans._
+
+  type TableTransSpec[+A <: SourceType] = Map[CPathField, TransSpec[A]]
+  type TableTransSpec1 = TableTransSpec[Source1]
+  type TableTransSpec2 = TableTransSpec[Source2]
+
+  def makeTableTrans(tableTrans: TableTransSpec1): TransSpec1 = {
+    val wrapped = for ((key @ CPathField(fieldName), value) <- tableTrans) yield {
+      val mapped = TransSpec.deepMap(value) {
+        case Leaf(_) => DerefObjectStatic(Leaf(Source), key)
+      }
+      
+      trans.WrapObject(mapped, fieldName)
+    }
+    
+    wrapped.foldLeft[TransSpec1](ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*))) { (acc, ts) =>
+      trans.InnerObjectConcat(acc, ts)
+    }
+  }
+
+  def liftToValues(trans: TransSpec1): TransSpec1 =
+    makeTableTrans(Map(paths.Value -> trans))
+
+  def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  
+    val bottomWrapped = trans.WrapObject(trans.ConstLiteral(CEmptyArray, source), paths.Key.name)
+    trans.InnerObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
+  }
+
+  def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+    trans.WrapObject(source, paths.Value.name)
   }
 }

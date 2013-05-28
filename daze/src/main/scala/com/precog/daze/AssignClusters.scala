@@ -42,15 +42,14 @@ import scalaz.syntax.traverse._
 
 import spire.implicits._
 
-trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
+trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLibModule[M] {
   import trans._
 
-  trait AssignClusterSupport extends ColumnarTableLib { 
-    trait AssignClusterBase { self: Morphism2 =>
+  trait AssignClusterSupport extends ColumnarTableLib with ModelSupport { 
+    trait AssignClusterBase extends ModelBase { self: Morphism2 =>
       case class ModelCluster(name: ClusterId, featureValues: Map[CPath, Double])
       case class Model(name: ModelId, clusters: Array[ModelCluster])
-      case class ModelSet(identity: Seq[Option[Long]], models: Set[Model])
-      type Models = List[ModelSet]
+      object Model extends ModelCompanion
 
       private type ClusterId = String
       private type ModelId = String
@@ -61,20 +60,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
 
         def reduce(schema: CSchema, range: Range): Models = {
 
-          val rowIdentities: Int => Seq[Option[Long]] = {
-            val indexedCols: Set[(Int, LongColumn)] = schema.columnRefs collect { 
-              case ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype) => 
-                val idxCols = schema.columns(JObjectFixedT(Map("key" -> JArrayFixedT(Map(idx -> JNumberT)))))  
-                assert(idxCols.size == 1)
-                (idx, idxCols.head match { 
-                  case (col: LongColumn) => col
-                  case _ => sys.error("key column must be a LongColumn")
-                })
-            }
-
-            val deref = indexedCols.toList.sortBy(_._1).map(_._2)
-            (i: Int) => deref.map(c => c.isDefinedAt(i).option(c.apply(i)))
-          }
+          val rowIdentities = Model.createRowIdentities(schema)
 
           val rowModels: Int => Set[Model] = {
             val modelTuples: Map[ModelId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = {
@@ -127,11 +113,11 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
       }
 
       protected def morph1Apply(models: Models): Morph1Apply = new Morph1Apply {
-        def scanner(modelSet: ModelSet): CScanner[M] = new CScanner[M] {
+        def scanner(modelSet: ModelSet): CScanner = new CScanner {
           type A = Unit
           def init: A = ()
 
-          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+          def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
             def included(model: Model): Map[ColumnRef, Column] = {
               val featurePaths = (model.clusters).flatMap { _.featureValues.keys }.toSet
 
@@ -259,25 +245,7 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
                 centers ++ centerId
               }
               
-              val identitiesResult: Map[ColumnRef, Column] = {
-                val featureCols = cols collect {
-                  case (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx)), ctype), col) =>
-                    val path = Seq(TableModule.paths.Key, CPathIndex(idx))
-                    (ColumnRef(CPath(path: _*), ctype), col)
-                  case c @ (ColumnRef(CPath(TableModule.paths.Key), _), _) => c
-                }
-
-                val shift = featureCols.size
-                val modelIds = modelSet.identity collect { case id if id.isDefined => id.get } toArray
-
-                val modelCols: Map[ColumnRef, Column] = modelIds.zipWithIndex map { case (id, idx) =>
-                  (ColumnRef(CPath(TableModule.paths.Key, CPathIndex(idx + shift)), CLong), Column.const(id))
-                } toMap
-
-                featureCols ++ modelCols
-              }
-
-              modelsResult ++ Set(identitiesResult)
+              modelsResult ++ Set(Model.idRes(cols, modelSet))
             }
 
             implicit val semigroup = Column.unionRightSemigroup
@@ -285,11 +253,11 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] {
 
             val reduced: Map[ColumnRef, Column] = result.toSet.suml(monoidCols)
 
-            M point ((), reduced)
+            ((), reduced)
           }
         }
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           val scanners: Seq[TransSpec1] = models map { model =>
             WrapArray(Scan(TransSpec1.Id, scanner(model)))
           }

@@ -23,6 +23,9 @@ package muspelheim
 import common._
 import common.kafka._
 
+import com.precog.util._
+import com.precog.common.accounts._
+
 import daze._
 
 import quirrel._
@@ -40,6 +43,8 @@ import yggdrasil.util._
 import muspelheim._
 
 import org.specs2.mutable._
+
+import org.joda.time.DateTime
 
 import akka.dispatch.Future
 import akka.dispatch.Await
@@ -66,8 +71,9 @@ object ParseEvalStackSpecs {
 
 trait ParseEvalStackSpecs[M[+_]] extends Specification
     with ParseEvalStack[M]
+    with EchoHttpClientModule[M]
     with MemoryDatasetConsumer[M]
-    with IdSourceScannerModule[M] { self =>
+    with IdSourceScannerModule { self =>
   import ParseEvalStackSpecs._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
@@ -100,6 +106,10 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val idSource = new FreshAtomicIdSource
   }
 
+  private val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
+    new DateTime, "dummyAPIKey", Path.Root, AccountPlan.Free)
+  private def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, new DateTime)
+
   def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
 
   def evalE(str: String, debug: Boolean = false): Set[SEvent] = {
@@ -117,7 +127,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val tree = forest.head
 
     val Right(dag) = decorate(emit(tree))
-    consumeEval(testAPIKey, dag, Path.Root) match {
+    consumeEval(dag, dummyEvaluationContext) match {
       case Success(result) =>
         parseEvalLogger.debug("Evaluation complete for query: " + str)
         result

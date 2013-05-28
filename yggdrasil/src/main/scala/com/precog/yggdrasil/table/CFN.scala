@@ -115,10 +115,26 @@ object CF2P {
   }
 }
 
-trait CScanner[M[+_]] {
+trait CScanner {
   type A
   def init: A
-  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])]
+  def scan(a: A, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column])
+}
+
+sealed trait CMapper[M[+_]] {
+  def fold[A](f: CMapperS[M] => A, g: CMapperM[M] => A): A
+}
+
+trait CMapperS[M[+_]] extends CMapper[M] {
+  final def fold[A](f: CMapperS[M] => A, g: CMapperM[M] => A): A = f(this)
+
+  def map(cols: Map[ColumnRef, Column], range: Range): Map[ColumnRef, Column]
+}
+
+trait CMapperM[M[+_]] extends CMapper[M] {
+  final def fold[A](f: CMapperS[M] => A, g: CMapperM[M] => A): A = g(this)
+
+  def map(cols: Map[ColumnRef, Column], range: Range): M[Map[ColumnRef, Column]]
 }
 
 trait CSchema {

@@ -26,6 +26,8 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.std.option._
 
+import java.io.PrintStream
+
 import akka.util.Duration
 
 import com.weiglewilczek.slf4s.Logging
@@ -125,6 +127,17 @@ trait PerfTestSuite extends Logging {
             (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
         }
 
+        def withPrinter[A](f: PrintStream => A): A = {
+          config.output map { file =>
+            val out = new PrintStream(file)
+            val result = f(out)
+            out.close()
+            result
+          } getOrElse {
+            f(System.out)
+          }
+        }
+
         config.baseline match {
           case Some(file) =>
             import java.io._
@@ -135,23 +148,23 @@ trait PerfTestSuite extends Logging {
               val baseline = BaselineComparisons.readBaseline(reader)
               val delta = BaselineComparisons.compareWithBaseline(result, baseline)
 
-              println(config.format match {
+              withPrinter(_.println(config.format match {
                 case OutputFormat.Legible =>
                   delta.toPrettyString
 
                 case OutputFormat.Json =>
-                  delta.toJson.toString
-              })
+                  delta.toJson.renderCompact
+              }))
             }
 
           case None =>
-            println(config.format match {
+            withPrinter(_.println(config.format match {
               case OutputFormat.Legible =>
                 result.toPrettyString
 
               case OutputFormat.Json =>
-                result.toJson.toString
-            })
+                result.toJson.renderCompact
+            }))
         }
       }
       runner.shutdown()

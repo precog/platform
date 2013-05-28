@@ -304,12 +304,12 @@ trait BlockStoreColumnarTableModule[M[+_]]
 
     private[BlockStoreColumnarTableModule] object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
 
-    object addGlobalIdScanner extends CScanner[M] {
+    object addGlobalIdScanner extends CScanner {
       type A = Long
       val init = 0l
-      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+      def scan(a: Long, cols: Map[ColumnRef, Column], range: Range): (A, Map[ColumnRef, Column]) = {
         val globalIdColumn = new RangeColumn(range) with LongColumn { def apply(row: Int) = a + row }
-        M point (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
+        (a + range.end + 1, cols + (ColumnRef(CPath(CPathIndex(1)), CLong) -> globalIdColumn))
       }
     }
     
@@ -893,12 +893,12 @@ trait BlockStoreColumnarTableModule[M[+_]]
                 loop(0)
 
                 val (index0, head0) = (index.remap(indexBuf), head.remap(headBuf))
-                val resultM = if (flip) {
+                val advancedM = if (flip) {
                   joinTrans.advance(head0, index0)
                 } else {
                   joinTrans.advance(index0, head0)
                 }
-                resultM map { case (joinTrans0, slice) =>
+                advancedM map { case (joinTrans0, slice) =>
                   StreamT.Yield(slice, joinWithHash(tail, keyTrans0, joinTrans0, hashed))
                 }
               }
@@ -908,14 +908,21 @@ trait BlockStoreColumnarTableModule[M[+_]]
           })
         }
 
+        
         composeSliceTransform(indexKeySpec).advance(index) map { case (_, indexKey) =>
           val hashed = HashedSlice(indexKey)
           Table(joinWithHash(table.slices, initKeyTrans, initJoinTrans, hashed), UnknownSize)
         }
       }
 
+      // TODO: Let ColumnarTableModule do this for super.join and have toInternalTable
+      // take a transpec to compact by.
+
+      val left1 = left0.compact(leftKeySpec)
+      val right1 = right0.compact(rightKeySpec)
+
       if (yggConfig.hashJoins) {
-        (left0.toInternalTable().toEither |@| right0.toInternalTable().toEither).tupled flatMap {
+        (left1.toInternalTable().toEither |@| right1.toInternalTable().toEither).tupled flatMap {
           case (Right(left), Right(right)) =>
             orderHint match {
               case Some(JoinOrder.LeftOrder) =>
@@ -938,7 +945,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
             super.join(left, right, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
         }
       } else {
-        super.join(left0, right0, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
+        super.join(left1, right1, orderHint)(leftKeySpec, rightKeySpec, joinSpec)
       }
     }
 

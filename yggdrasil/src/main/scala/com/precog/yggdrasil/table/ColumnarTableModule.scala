@@ -73,7 +73,8 @@ import java.nio.CharBuffer
 trait ColumnarTableTypes[M[+_]] {
   type F1 = CF1
   type F2 = CF2
-  type Scanner = CScanner[M]
+  type Scanner = CScanner
+  type Mapper = CMapper[M]
   type Reducer[α] = CReducer[α]
   type RowId = Int
 }
@@ -362,7 +363,7 @@ object ColumnarTableModule {
 trait ColumnarTableModule[M[+_]]
     extends TableModule[M]
     with ColumnarTableTypes[M]
-    with IdSourceScannerModule[M]
+    with IdSourceScannerModule
     with SliceTransforms[M]
     with SamplableColumnarTableModule[M]
     with IndicesModule[M]
@@ -1456,6 +1457,7 @@ trait ColumnarTableModule[M[+_]]
         def stream(state: (Option[Slice], T), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
           for {
             head <- slices.uncons
+            
             back <- {
               head map {
                 case (s, sx) => {

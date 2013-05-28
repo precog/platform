@@ -29,8 +29,8 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.util.{ FileOps, FilesystemFileOps, XLightWebHttpClientModule }
 import com.precog.yggdrasil.vfs._
-import com.precog.util.{ FileOps, FilesystemFileOps }
 
 import java.io.File
 
@@ -52,6 +52,7 @@ import scalaz.syntax.traverse._
 
 final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val optimize: Boolean, _rootDir: Option[File], testTimeout: Duration = Duration(120, "seconds"))
     extends EvaluatingPerfTestRunner[Future, T]
+    with XLightWebHttpClientModule[Future]
     with NIHDBColumnarTableModule
     with NIHDBStorageMetadataSource
     with NIHDBIngestSupport { self =>
