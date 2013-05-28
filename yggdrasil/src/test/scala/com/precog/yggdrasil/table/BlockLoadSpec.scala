@@ -87,10 +87,10 @@ trait BlockLoadSpec[M[+_]] extends BlockStoreTestSupport[M] with Specification w
       (back \ "value" != JUndefined).option(back)
     }
 
-    val cschema = module.schema map { case (jpath, ctype) => (CPath(jpath), ctype) }
+    val cschema = module.schema map { case (jpath, ctype) => ColumnRef(CPath(jpath), ctype) }
 
-    val result = module.Table.constString(Set("/test")).load("dummyAPIKey", Schema.mkType(cschema).get).flatMap(_.toJson).copoint.toList
-    result must_== expected.toList
+    val result = module.Table.constString(Set("/test")).load("dummyAPIKey", Schema.mkType(cschema).get).flatMap(t => EitherT.right(t.toJson)).run.copoint
+    result.map(_.toList) must_== \/.right(expected.toList)
   }
 
   def checkLoadDense = {

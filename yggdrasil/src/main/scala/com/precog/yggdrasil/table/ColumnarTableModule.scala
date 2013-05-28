@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common._
+import com.precog.common.ingest.FileContent
 import com.precog.bytecode._
 import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.util._
@@ -13,12 +14,14 @@ import TransSpecModule._
 
 import blueeyes.bkka._
 import blueeyes.json._
+import blueeyes.core.http.{MimeType, MimeTypes}
 
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 import com.google.common.io.Files
 
 import org.slf4j.Logger
+import com.weiglewilczek.slf4s.Logging
 
 import org.apache.jdbm.DBMaker
 import java.io.File
@@ -73,41 +76,7 @@ trait ColumnarTableModuleConfig {
   def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
 }
 
-object ColumnarTableModule {
-  /*
-//  def renderJson[M[+_]](slices: StreamT[M, Slice], delimiter: Char = '\n')(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
-//    def delimiterBuffer = {
-//      val back = CharBuffer.allocate(1)
-//      back.put(delimiter)
-//      back.flip()
-//      back
-//    }
-//
-//    def delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
-//
-//    def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
-//      StreamT[M, CharBuffer](slices.step map {
-//        case StreamT.Yield(slice, tail) => {
-//          val (stream, rendered2) = slice.renderJson[M](delimiter)
-//
-//          val stream2 = if (rendered && rendered2)
-//            delimitStream ++ stream
-//          else
-//            stream
-//
-//          StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
-//        }
-//
-//        case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
-//
-//        case StreamT.Done => StreamT.Done
-//      })
-//    }
-
-    foldFlatMap(slices, false)
-  }
-  */
-
+object ColumnarTableModule extends Logging {
   def renderJson[M[+_]](slices: StreamT[M, Slice], prefix: String, delimiter: String, suffix: String)(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
     import scalaz.\/._
     def wrap(stream: StreamT[M, CharBuffer]) = {
@@ -337,6 +306,42 @@ object ColumnarTableModule {
         case None =>
           None
       }
+    }
+  }
+
+  def toCharBuffers[N[+_]: Monad](output: MimeType, slices: StreamT[N, Slice]): StreamT[N, CharBuffer] = {
+    import FileContent._
+    import MimeTypes._
+
+    val AnyMimeType = anymaintype/anysubtype
+
+    output match {
+      case ApplicationJson | AnyMimeType =>
+        ColumnarTableModule.renderJson(slices, "[", ",", "]")
+
+      case XJsonStream =>
+        ColumnarTableModule.renderJson(slices, "", "\n", "")
+
+      case TextCSV => 
+        ColumnarTableModule.renderCsv(slices)
+
+      case other => 
+        logger.warn("Unrecognized output type requested for conversion of slice stream to char buffers: %s".format(output))
+        StreamT.empty[N, CharBuffer]
+    }
+  }
+
+  def byteStream[M[+_]](blockStream: StreamT[M, Slice], mimeType: Option[MimeType])(implicit M: Monad[M]): Option[StreamT[M, Array[Byte]]] = {
+    import vfs.VFSModule.bufferOutput
+    import FileContent._
+
+    mimeType match {
+      case Some(ApplicationJson) | None => Some(bufferOutput(toCharBuffers(ApplicationJson, blockStream)))
+      case Some(XJsonStream) => Some(bufferOutput(toCharBuffers(XJsonStream, blockStream)))
+      case Some(TextCSV) => Some(bufferOutput(toCharBuffers(TextCSV, blockStream)))
+      case Some(other) => 
+        logger.warn("NIHDB resource cannot be rendered to a byte stream of type %s".format(other.value))
+        None
     }
   }
 }

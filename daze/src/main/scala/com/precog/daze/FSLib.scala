@@ -1,10 +1,12 @@
 package com.precog.daze
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.bytecode._
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.metadata.StorageMetadata
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
+import com.precog.yggdrasil.vfs._
 
 import java.util.regex._
 import scalaz.StreamT
@@ -12,7 +14,9 @@ import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
 
-trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataSource[M] {
+trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
+  def vfs: VFSMetadata[M]
+
   import trans._
 
   trait FSLib extends ColumnarTableLib {
@@ -26,38 +30,37 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
   
       val pattern = Pattern.compile("""/+((?:[a-zA-Z0-9\-\._~:?#@!$&'+=]+)|\*)""")
   
-      def expand_*(pathString: String, pathRoot: Path, metadata: StorageMetadata[M]): M[Stream[Path]] = {
-        def traverse(m: Matcher, prefixes: Stream[Path]): M[Stream[Path]] = {
+      def expand_*(apiKey: APIKey, pathString: String, pathRoot: Path): M[Stream[Path]] = {
+        def walk(m: Matcher, prefixes: Stream[Path]): M[Stream[Path]] = {
           if (m.find) {
             m.group(1).trim match {
               case "*" => 
-                prefixes.map { prefix =>
-                  metadata.findDirectChildren(prefix) map { child =>
+                prefixes traverse { prefix =>
+                  vfs.findDirectChildren(apiKey, prefix).fold(_ => Set(), a => a) map { child =>
                     child map { prefix / _  }
                   }
-                }.sequence flatMap { paths =>
-                  traverse(m, paths.flatten)
+                } flatMap { paths =>
+                  walk(m, paths.flatten)
                 }
   
               case token =>
-                traverse(m, prefixes.map(_ / Path(token)))
+                walk(m, prefixes.map(_ / Path(token)))
             }
           } else {
             M.point(prefixes)
           }
         }
   
-        traverse(pattern.matcher(pathString), Stream(pathRoot))
+        walk(pattern.matcher(pathString), Stream(pathRoot))
       }
   
       def apply(input: Table, ctx: MorphContext): M[Table] = M.point {
-        val storageMetadata = userMetadataView(ctx.evalContext.account.apiKey)
         val result = Table(
           input.transform(SourceValue.Single).slices flatMap { slice =>
             slice.columns.get(ColumnRef.identity(CString)) collect { 
               case col: StrColumn => 
                 val expanded: Stream[M[Stream[Path]]] = Stream.tabulate(slice.size) { i =>
-                  expand_*(col(i), ctx.evalContext.basePath, storageMetadata)
+                  expand_*(ctx.evalContext.apiKey, col(i), ctx.evalContext.basePath)
                 }
   
                 StreamT wrapEffect {

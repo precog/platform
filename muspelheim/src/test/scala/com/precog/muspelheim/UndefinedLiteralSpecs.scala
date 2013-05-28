@@ -2,6 +2,7 @@ package com.precog
 package muspelheim
 
 trait UndefinedLiteralSpecs extends EvalStackSpecs {
+  import stack._
   "undefined literals be handled properly in" >> {
     "binary operation on load with undefined" >> {
       val input = """

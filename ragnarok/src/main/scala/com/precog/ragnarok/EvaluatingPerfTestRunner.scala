@@ -6,9 +6,10 @@ import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.util._
 
-import daze.{ EvaluatorModule, EvaluationContext }
+import daze.EvaluatorModule
 
 import yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.table.ColumnarTableModuleConfig
 import yggdrasil.util._
 import yggdrasil.serialization._

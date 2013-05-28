@@ -3,12 +3,15 @@ package com.precog
 import scalaz.Order
 import scalaz.Monoid
 
+import akka.dispatch.Future
+
 import java.util.Comparator
 import java.nio.ByteBuffer
 
 import org.joda.time.Instant
 
 import scala.collection.mutable
+import scalaz.Bind
 
 package object util {
   type RawBitSet = Array[Int]
@@ -99,6 +102,11 @@ package object util {
   }
 
   implicit val InstantOrdering: Ordering[Instant] = Ordering.Long.on[Instant](_.getMillis)
+
+  implicit val FutureBind: Bind[Future] = new Bind[Future] {
+    def map[A, B](fut: Future[A])(f: A => B) = fut.map(f)
+    def bind[A, B](fut: Future[A])(f: A => Future[B]) = fut.flatMap(f)
+  }
 }
 
 // vim: set ts=4 sw=4 et:

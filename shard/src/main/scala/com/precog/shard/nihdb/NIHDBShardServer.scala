@@ -6,7 +6,7 @@ import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.client._
-import com.precog.shard.scheduling._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.vfs._
 
 import blueeyes.BlueEyesServer
@@ -29,8 +29,7 @@ import scalaz._
 
 object NIHDBShardServer extends BlueEyesServer
     with ShardService
-    with NIHDBQueryExecutorComponent
-    with GracefulStopSupport {
+    with NIHDBQueryExecutorComponent {
   import WebJobManager._
 
   val clock = Clock.System
@@ -60,23 +59,9 @@ object NIHDBShardServer extends BlueEyesServer
       }
     }
 
-    val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config.detach("scheduling"))
+    val platform = nihdbPlatform(config, apiKeyFinder, accountFinder, jobManager)
 
-    val schedulingTimeout = new Timeout(config[Int]("scheduling.timeout_ms", 10000))
-    val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
-    val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, timestampRequiredAfter)
-
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
-    val vfs = new ActorVFS(platform.projectionsActor, clock, platform.yggConfig.storageTimeout, platform.yggConfig.storageTimeout) //FIXME: good timeout???
-
-    val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, vfs, scheduleStorage, platform, clock)))
-    val scheduleActorStoppable = Stoppable.fromFuture(gracefulStop(scheduleActor, schedulingTimeout.duration)(actorSystem))
-    val scheduler = new ActorScheduler(scheduleActor, schedulingTimeout)
-
-    val stoppable = scheduleActorStoppable.append(Stoppable.fromFuture(platform.shutdown)).append(scheduleStorageStoppable)
-    val storedQueries = new VFSStoredQueries(platform, vfs, scheduler, jobManager, permissionsFinder, clock)
-
-    ShardState(platform, apiKeyFinder, accountFinder, vfs, storedQueries, scheduler, jobManager, clock, stoppable, asyncQueries)
+    ShardState(platform, apiKeyFinder, accountFinder, platform.scheduler, jobManager, clock, Stoppable.fromFuture(platform.shutdown), asyncQueries)
   } recoverWith {
     case ex: Throwable =>
       System.err.println("Could not start NIHDB Shard server!!!")

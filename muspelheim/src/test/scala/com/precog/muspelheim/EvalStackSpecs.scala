@@ -7,6 +7,11 @@ import com.precog.common._
 import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
+  type TestStack <: EvalStackLike
+  val stack: TestStack
+}
+
+trait EvalStackLike {
   type IdType
 
   def eval(str: String, debug: Boolean = false): Set[SValue]
