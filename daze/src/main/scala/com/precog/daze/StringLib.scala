@@ -382,7 +382,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
         trans.Scan(
           trans.InnerArrayConcat(
             trans.WrapArray(
@@ -414,7 +414,7 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       //@deprecated, see the DEPRECATED comment in StringLib
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
         trans.Scan(
           trans.InnerArrayConcat(
             trans.WrapArray(
