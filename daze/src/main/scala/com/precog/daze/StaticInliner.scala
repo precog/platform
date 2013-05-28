@@ -22,6 +22,7 @@ package daze
 
 import com.precog.common._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.util.Timing
 
 import Function._

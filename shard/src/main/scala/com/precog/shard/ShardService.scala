@@ -29,8 +29,8 @@ import com.precog.common.jobs.JobManager
 import com.precog.common.security._
 import com.precog.common.services._
 import com.precog.daze._
-import com.precog.shard.scheduling._
 import com.precog.shard.service._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
 
@@ -78,8 +78,6 @@ case class ShardState(
     platform: ManagedPlatform,
     apiKeyFinder: APIKeyFinder[Future],
     accountFinder: AccountFinder[Future],
-    vfs: VFS[Future], 
-    storedQueries: StoredQueries[Future],
     scheduler: Scheduler[Future],
     jobManager: JobManager[Future],
     clock: Clock,
@@ -116,7 +114,7 @@ trait ShardService extends
     val utf8 = Charset.forName("UTF-8")
     (qr: QueryResult) => qr match {
       case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
-      case Right(stream) => Right(Resource.bufferOutput(stream))
+      case Right(stream) => Right(VFSModule.bufferOutput(stream))
     }
   }
 
@@ -168,7 +166,7 @@ trait ShardService extends
         dataPath("/meta/fs") {
           get {
             produce(application/json)(
-              new BrowseServiceHandler[ByteChunk](state.platform.metadataClient, state.apiKeyFinder) map { _ map { _ map { _ map { jvalueToChunk } } } }
+              new BrowseServiceHandler[ByteChunk](state.platform.vfs) map { _ map { _ map { _ map { jvalueToChunk } } } }
             )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
           } ~
           options {
@@ -203,7 +201,7 @@ trait ShardService extends
         dataPath("/analysis/fs") {
           get {
             shardService[({ type λ[+α] = ((APIKey, AccountDetails), Path) => α })#λ] {
-              new AnalysisServiceHandler(state.storedQueries, state.clock)
+              new AnalysisServiceHandler(state.platform, state.scheduler, state.clock)
             }
           }
         }
@@ -214,7 +212,7 @@ trait ShardService extends
   private def dataHandler[A](state: ShardState) = {
     dataPath("/data/fs") {
       get {
-        new DataServiceHandler[A](state.vfs)
+        new DataServiceHandler[A](state.platform)
       }
     }
   }

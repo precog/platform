@@ -23,6 +23,7 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait HelloQuirrelSpecs extends EvalStackSpecs {
+  import stack._
     "evaluate the 'hello, quirrel' examples" >> {
       "json" >> {
         "object" >> {

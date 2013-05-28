@@ -26,8 +26,8 @@ import com.precog.common.security._
 import com.precog.common.accounts._
 
 import com.precog.daze._
-import com.precog.muspelheim._
 import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.execution._
 
 import java.nio.CharBuffer
 
@@ -64,18 +64,18 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
 
   val jobManager: JobManager[Future] = new InMemoryJobManager[Future]
   val apiKey = "O.o"
-  val account = AccountDetails("test", "test@test.test", clock.now(),
-    apiKey, Path.Root, AccountPlan.Free)
+  val account = AccountDetails("test", "test@test.test", clock.now(), apiKey, Path.Root, AccountPlan.Free)
+  val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[JobId] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
-    for {
-      executor <- asyncExecutorFor(apiKey) map (_ getOrElse sys.error("Barrel of monkeys."))
+    val executionResult = for {
+      executor <- asyncExecutorFor(apiKey) leftMap { EvaluationError.invalidState }
       ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), clock.now())
       result <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout))
-    } yield {
-      result getOrElse sys.error("Jellybean Sunday")
-    }
+    } yield result 
+
+    executionResult.valueOr(err => sys.error(err.toString))
   }
 
   def cancel(jobId: JobId, ticks: Int): Future[Boolean] = schedule(ticks) {
@@ -105,8 +105,6 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
       }
     } yield finalJob
   }
-
-  val ticker = actorSystem.actorOf(Props(new Ticker(ticks)))
 
   step {
     actorSystem.scheduler.schedule(Duration(0, "milliseconds"), Duration(clock.duration, "milliseconds")) {
@@ -172,7 +170,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
   }
 }
 
-trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with SchedulableFuturesModule { self =>
+trait TestManagedPlatform extends ManagedExecution with ManagedQueryModule with SchedulableFuturesModule { self =>
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
   implicit def M: Monad[Future]
@@ -193,39 +191,33 @@ trait TestManagedPlatform extends ManagedPlatform with ManagedQueryModule with S
 
       def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         val numTicks = query.toInt
-        schedule(0) {
-          Success(StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
-            case i if i < numTicks =>
-              schedule(1) {
-                Some((Slice.fromJValues(Stream(JString("."))), i + 1))
-              }.liftM[JobQueryT]
+        EitherT.right[JobQueryTF, EvaluationError, StreamT[JobQueryTF, Slice]] {
+          schedule(0) {
+            StreamT.unfoldM[JobQueryTF, Slice, Int](0) {
+              case i if i < numTicks =>
+                schedule(1) {
+                  Some((Slice.fromJValues(Stream(JObject("value" -> JString(".")))), i + 1))
+                }.liftM[JobQueryT]
 
-            case _ =>
-              shardQueryMonad.point { None }
-          })
-        }.liftM[JobQueryT]
+              case _ =>
+                shardQueryMonad.point { None }
+            }
+          }.liftM[JobQueryT]
+        }
       }
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-    Future(Success(new AsyncQueryExecutor {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
+    EitherT.right(Future(new AsyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-    Future(Success(new SyncQueryExecutor {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
+    EitherT.right(Future(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
-  }
-
-  val metadataClient = new MetadataClient[Future] {
-    def size(userUID: String, path: Path) = sys.error("todo")
-    def browse(apiKey: APIKey, path: Path) = sys.error("No loitering, move along.")
-    def structure(apiKey: APIKey, path: Path, cpath: CPath) = sys.error("I'm an amorphous blob you insensitive clod!")
-    def currentVersion(apiKey: APIKey, path: Path) = M.point(None)
-    def currentAuthorities(apiKey: APIKey, path: Path) = M.point(None)
   }
 
   def startup = Future { true }

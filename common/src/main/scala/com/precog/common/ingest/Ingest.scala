@@ -149,31 +149,19 @@ object Archive {
   implicit val extractor: Extractor[Archive] = extractorV1 <+> extractorV0
 }
 
-sealed trait StoreMode {
-  def createStreamRef(terminal: Boolean): StreamRef
-}
-object StoreMode {
-  case object Create extends StoreMode {
-    def createStreamRef(terminal: Boolean) = StreamRef.Create(UUID.randomUUID, terminal)
-  }
-
-  case object Replace extends StoreMode {
-    def createStreamRef(terminal: Boolean) = StreamRef.Create(UUID.randomUUID, terminal)
-  }
-
-  case object Append extends StoreMode {
-    def createStreamRef(terminal: Boolean) = StreamRef.Append
-  }
-}
-
 sealed trait StreamRef {
   def terminal: Boolean
   def terminate: StreamRef
   def split(n: Int): Seq[StreamRef]
 }
 
-
 object StreamRef {
+  def forWriteMode(mode: WriteMode, terminal: Boolean): StreamRef = mode match {
+    case AccessMode.Create  => StreamRef.Create(UUID.randomUUID, terminal)
+    case AccessMode.Replace => StreamRef.Replace(UUID.randomUUID, terminal)
+    case AccessMode.Append  => StreamRef.Append
+  }
+
   object NewVersion {
     def unapply(ref: StreamRef): Option[(UUID, Boolean, Boolean)] = {
       ref match {

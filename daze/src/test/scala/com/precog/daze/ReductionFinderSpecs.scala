@@ -25,6 +25,7 @@ import com.precog.util.Identifier
 import bytecode._
 import org.specs2.mutable._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 
 
 import scala.collection.mutable

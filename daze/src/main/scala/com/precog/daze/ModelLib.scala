@@ -83,7 +83,7 @@ trait ModelLibModule[M[+_]] {
           def build(acc: Map[Int, List[(ColumnRef, Column)]], refs: List[ColumnRef]): Map[Int, List[(ColumnRef, Column)]] = refs match {
             case ColumnRef(cpath @ CPath(paths.Key, CPathIndex(idx), rest @ _*), ctype) :: tail =>
               val cols = for {
-                jType <- Schema.mkType((cpath, ctype) :: Nil).toSet
+                jType <- Schema.mkType(ColumnRef(cpath, ctype) :: Nil).toSet
                 col <- schema.columns(jType)
               } yield (ColumnRef(CPath(rest: _*), ctype) -> col)
               build(acc + (idx -> (acc.getOrElse(idx, Nil) ++ cols)), tail)
@@ -175,7 +175,7 @@ trait ModelLibModule[M[+_]] {
 
     def determineColumns(schema: CSchema, cpaths: Set[CPath]): Map[CPath, DoubleColumn] = {
       cpaths.map { cpath =>
-        val jtpe = Schema.mkType(Seq((cpath, CDouble)))
+        val jtpe = Schema.mkType(Seq(ColumnRef(cpath, CDouble)))
 
         val col = jtpe flatMap { tpe =>
           val res = schema.columns(tpe)

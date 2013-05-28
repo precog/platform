@@ -78,35 +78,20 @@ object VFSPathUtils extends Logging {
 
   def versionsSubdir(pathDir: File): File = new File(pathDir, versionsSubdir)
 
-  def findChildren(baseDir: File, path: Path, apiKey: APIKey, permissionsFinder: PermissionsFinder[Future]): Future[Set[Path]] = {
-    for {
-      allowedPaths <- permissionsFinder.findBrowsableChildren(apiKey, path)
-    } yield {
-      val pathRoot = pathDir(baseDir, path)
+  def findChildren(baseDir: File, path: Path): IO[Set[Path]] = {
+    val pathRoot = pathDir(baseDir, path)
 
-      logger.debug("Checking for children of path %s in dir %s among %s".format(path, pathRoot, allowedPaths))
-      Option(pathRoot.listFiles(pathFileFilter)).map { files =>
-        logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
-
-        (files.toList.flatMap { f =>
-          // First pass filtering checks perms against the path
-          val fPath = unescapePath(path / Path(f.getName))
-          allowedPaths.exists(_.isEqualOrParentOf(fPath)).option(fPath -> f)
-        } traverse {
-          // Second pass filtering ensures that the child has current data somewhere under it
-          case (path, dir) =>
-            hasCurrentData(dir) map {
-              path -> _
-            }
-        }).map {
-          _.collect {
-            case (path, true) => path
-          }.toSet
-        }.unsafePerformIO
-      } getOrElse {
-        logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
-        Set.empty
-      }
+    logger.debug("Checking for children of path %s in dir %s".format(path, pathRoot))
+    Option(pathRoot.listFiles(pathFileFilter)).map { files =>
+      logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
+      val io = files.toList traverse { f => 
+        hasCurrentData(f) map { unescapePath(path / Path(f.getName)) -> _ }
+      } 
+      
+      io.map(_.collect({ case (path, true) => path }).toSet)
+    } getOrElse {
+      logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
+      IO(Set.empty)
     }
   }
 

@@ -46,6 +46,9 @@ object ServiceHandlerUtil {
 
   def noContent: HttpResponse[JValue] =
     HttpResponse[JValue](HttpStatus(NoContent))
+
+  def serverError(message: String, details: Option[String] = None): HttpResponse[JValue] = 
+    HttpResponse(HttpStatus(InternalServerError, message), content = Some(jobject(jfield("error", details getOrElse message))))
 }
 
 // vim: set ts=4 sw=4 et:

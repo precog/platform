@@ -23,6 +23,7 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait RankSpecs extends EvalStackSpecs {
+  import stack._
   "Rank processing" should {
     "perform filter based on rank" >> {
       val input = """

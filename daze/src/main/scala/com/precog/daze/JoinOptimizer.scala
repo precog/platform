@@ -23,6 +23,7 @@ package daze
 import scala.collection.mutable
 
 import com.precog.yggdrasil.TableModule
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.util.IdGen
 import com.precog.util.Timing
 import com.precog.common._

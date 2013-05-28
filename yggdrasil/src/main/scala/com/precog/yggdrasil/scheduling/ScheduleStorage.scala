@@ -17,45 +17,27 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.yggdrasil
 package scheduling
 
-import akka.dispatch.{ExecutionContext, Future, Promise}
-
+import com.precog.common.Path
+import com.precog.common.security._
 import com.precog.util.PrecogUnit
 
 import java.util.UUID
 
-import scalaz.Success
+import org.quartz.CronExpression
 
-class InMemoryScheduleStorage(implicit executor: ExecutionContext) extends ScheduleStorage[Future] {
-  private[this] var tasks = Map.empty[UUID, ScheduledTask]
-  private[this] var history = Map.empty[UUID, Seq[ScheduledRunReport]]
+import scalaz.EitherT
 
-  def addTask(task: ScheduledTask) = Promise successful {
-    tasks += (task.id -> task)
-    Success(task)
-  }
+trait ScheduleStorage[M[+_]] {
+  def addTask(task: ScheduledTask): EitherT[M, String, ScheduledTask]
 
-  def deleteTask(id: UUID) = Promise successful {
-    val found = tasks.get(id)
-    tasks -= id
-    Success(found)
-  }
+  def deleteTask(id: UUID): EitherT[M, String, Option[ScheduledTask]]
 
-  def reportRun(report: ScheduledRunReport) = Promise successful {
-    history += (report.id -> (history.getOrElse(report.id, Seq.empty[ScheduledRunReport]) :+ report))
-    PrecogUnit
-  }
+  def reportRun(report: ScheduledRunReport): M[PrecogUnit]
 
-  def statusFor(id: UUID, limit: Option[Int]) = Promise successful {
-    tasks.get(id) map { task =>
-      val reports = history.getOrElse(id, Seq.empty[ScheduledRunReport])
-      (task, limit map(reports.take) getOrElse reports)
-    }
-  }
+  def statusFor(id: UUID, lastLimit: Option[Int]): M[Option[(ScheduledTask, Seq[ScheduledRunReport])]]
 
-  def listTasks = Promise successful {
-    tasks.values.toSeq
-  }
+  def listTasks: M[Seq[ScheduledTask]]
 }

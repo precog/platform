@@ -23,6 +23,8 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait MiscStackSpecs extends EvalStackSpecs {
+  import stack._
+
   implicit def add_~=(d: Double) = new AlmostEqual(d)
   implicit val precision = Precision(0.000000001)
 
