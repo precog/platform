@@ -30,7 +30,7 @@ trait DAGTransform extends DAG {
 
   def transformBottomUp(graph: DepGraph)(f: DepGraph => DepGraph): DepGraph = {
 
-    val memotable = mutable.Map[DepGraph, DepGraph]()
+    val memotable = mutable.Map[DepGraphWrapper, DepGraph]()
 
     def transformSpec(spec: BucketSpec): BucketSpec = spec match {
       case UnionBucketSpec(left, right) =>
@@ -49,7 +49,7 @@ trait DAGTransform extends DAG {
         Extra(transformAux(target))
     }
 
-    def transformAux(graph: DepGraph) : DepGraph = {
+    def transformAux(graph: DepGraph): DepGraph = {
       def inner(graph: DepGraph): DepGraph = graph match {
         case r: Root => f(r)
   
@@ -103,9 +103,9 @@ trait DAGTransform extends DAG {
           f(SplitParam(s.id, s.parentId)(s.loc))
       }
 
-      memotable.get(graph) getOrElse {
+      memotable.get(new DepGraphWrapper(graph)) getOrElse {
         val result = inner(graph)
-        memotable += (graph -> result)
+        memotable += (new DepGraphWrapper(graph) -> result)
         result
       }
     }
