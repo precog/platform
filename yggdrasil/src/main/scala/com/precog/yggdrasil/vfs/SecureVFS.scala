@@ -49,6 +49,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
     final val unsecured = vfs
 
     private def verifyResourceAccess(apiKey: APIKey, path: Path, readMode: ReadMode): Resource => EitherT[M, ResourceError, Resource] = { resource =>
+      logger.debug("Verifying access to %s as %s on %s (mode %s)".format(resource, apiKey, path, readMode))
       import AccessMode._
       val permissions: Set[Permission] = resource.authorities.accountIds map { accountId =>
         val writtenBy = WrittenBy(accountId)
