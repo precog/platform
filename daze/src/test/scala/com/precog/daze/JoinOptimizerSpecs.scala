@@ -43,13 +43,19 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   import TableModule.CrossOrder._ // TODO: Move CrossOrder out somewhere else.
   import dag._
   import instructions._
-  import library._
+  import library.{ op1ForUnOp => _, _ }
 
   val testAPIKey = "testAPIKey"
   val ctx = defaultEvaluationContext
 
+  object joins extends JoinOptimizer with StdLibOpFinder {
+    def MorphContext(ctx: EvaluationContext, node: DepGraph): MorphContext = new MorphContext(ctx, null)
+  }
+
+  import joins._
+
   def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = {
-    (consumeEval(testAPIKey, graph, Path.Root) match {
+    (consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) 

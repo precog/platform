@@ -34,6 +34,7 @@ import akka.dispatch.ExecutionContext
 import blueeyes.bkka._
 
 import java.util.Properties
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import _root_.kafka.common._
@@ -47,6 +48,7 @@ import scala.annotation.tailrec
 
 import scalaz._
 import scalaz.{ NonEmptyList => NEL }
+import scalaz.\/._
 import scalaz.syntax.std.option._
 
 object KafkaEventStore {
@@ -76,33 +78,41 @@ object KafkaEventStore {
 class LocalKafkaEventStore(producer: Producer[String, Message], topic: String, maxMessageSize: Int, messagePadding: Int)(implicit executor: ExecutionContext) extends EventStore[Future] with Logging {
   logger.info("Creating LocalKafkaEventStore for %s with max message size = %d".format(topic, maxMessageSize))
   private[this] val codec = new KafkaEventCodec
+  private implicit val M = new blueeyes.bkka.FutureMonad(executor)
 
-  def save(event: Event, timeout: Timeout) = Future {
-    val toSend: List[Message] = event.fold({ ingest =>
-      @tailrec
-      def genEvents(ev: List[Event]): List[Message] = {
-        val messages = ev.map(codec.toMessage)
-
-        if (messages.forall(_.size + messagePadding <= maxMessageSize)) {
-          messages
-        } else {
-          if (ev.size == event.length) {
-            logger.error("Failed to reach reasonable message size after splitting JValues to individual inserts!")
-            throw new Exception("Failed insertion of excessively large event(s)!")
+  def save(event: Event, timeout: Timeout) = {
+    @tailrec def encodeAll(toEncode: List[Event], messages: Vector[Message]): StoreFailure \/ Vector[Message] = {
+      toEncode match {
+        case x :: xs =>
+          val message = codec.toMessage(x)
+          if (message.size + messagePadding <= maxMessageSize) {
+            encodeAll(xs, messages :+ message)
+          } else {
+            val postSplit = x.split(2) 
+            if (postSplit.length == 1) {
+              logger.error("Failed to reach reasonable message size for event: %s".format(event))
+              left(StoreFailure("Failed insertion due to excessively large event(s)!"))
+            } else {
+              encodeAll(postSplit ::: xs, messages)
+            }
           }
 
-          logger.debug("Breaking %d events into %d messages still too large, splitting.".format(ingest.length, messages.size))
-          genEvents(ev.flatMap(_.split(2)))
-        }
+        case Nil => right(messages)
       }
-
-      genEvents(List(event))
-    }, a => List(codec.toMessage(a)))
-
-    producer send {
-      new ProducerData[String, Message](topic, toSend)
     }
-    PrecogUnit
+
+    val toSend = event.fold(
+      ingest => encodeAll(List(event), Vector.empty),
+      archive => right(List(codec.toMessage(archive))),
+      storeFile => encodeAll(List(event), Vector.empty)
+    )
+
+    toSend traverse { kafkaMessages =>
+      Future {
+        producer send { new ProducerData[String, Message](topic, kafkaMessages) }
+        PrecogUnit
+      }
+    }
   }
 }
 

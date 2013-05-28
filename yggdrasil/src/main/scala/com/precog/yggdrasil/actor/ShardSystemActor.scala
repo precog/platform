@@ -64,9 +64,9 @@ trait ShardConfig extends BaseConfig {
 }
 
 // The ingest system consists of the ingest supervisor and ingest actor(s)
-case class ShardActors(ingestSystem: ActorRef, stoppable: Stoppable)
+case class IngestSystem(ingestActor: ActorRef, stoppable: Stoppable)
 
-object ShardActors extends Logging {
+object IngestSystem extends Logging {
   def actorStop(config: ShardConfig, actor: ActorRef, name: String)(implicit system: ActorSystem, executor: ExecutionContext): Future[Unit] = {
     for {
       _ <- Future(logger.debug(config.logPrefix + " Stopping " + name + " actor within " + config.stopTimeout.duration))
@@ -84,10 +84,9 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  protected def initIngestActor(actorSystem: ActorSystem, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]): Option[ActorRef]
+  protected def initIngestActor(actorSystem: ActorSystem, routingActor: ActorRef, checkpoint: YggCheckpoint, checkpointCoordination: CheckpointCoordination, permissionsFinder: PermissionsFinder[Future]): Option[ActorRef]
 
-  def initShardActors(permissionsFinder: PermissionsFinder[Future], projectionsActor: ActorRef): ShardActors = {
-    //FIXME: move outside
+  def initShardActors(permissionsFinder: PermissionsFinder[Future], routingActor: ActorRef): Option[IngestSystem] = {
     val ingestActorSystem: ActorSystem = ActorSystem("Ingest")
 
     def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestConfig flatMap { _ =>
@@ -103,27 +102,19 @@ trait ShardSystemActorModule extends YggConfigComponent with Logging {
 
     val initialCheckpoint = loadCheckpoint()
 
-    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, checkpoint, checkpointCoordination, permissionsFinder)) yield init
-
-    logger.debug("Initializing ingest system")
-    val ingestSystem = ingestActorSystem.actorOf(Props(
-      new IngestSupervisor(ingestActor, projectionsActor, ingestActorSystem.scheduler, yggConfig.batchStoreDelay, yggConfig.batchShutdownCheckInterval)
-      ),
-      "ingestRouter"
-    )
+    val ingestActor = for (checkpoint <- initialCheckpoint; init <- initIngestActor(ingestActorSystem, routingActor, checkpoint, checkpointCoordination, permissionsFinder)) yield init
 
     val stoppable = Stoppable.fromFuture({
-      import ShardActors.actorStop
+      import IngestSystem.actorStop
       logger.info("Stopping shard system")
       for {
         _ <- ingestActor map { actorStop(yggConfig, _, "ingestActor")(ingestActorSystem, ingestActorSystem.dispatcher) } getOrElse { Future(())(ingestActorSystem.dispatcher) }
-        _ <- actorStop(yggConfig, ingestSystem, "ingestSupervisor")(ingestActorSystem, ingestActorSystem.dispatcher)
       } yield {
         ingestActorSystem.shutdown()
         logger.info("Shard system stopped.")
       }
     })
 
-    ShardActors(ingestSystem, stoppable)
+    ingestActor map { IngestSystem(_, stoppable) }
   }
 }

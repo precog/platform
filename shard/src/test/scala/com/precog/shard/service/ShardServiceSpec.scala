@@ -29,6 +29,9 @@ import com.precog.common.accounts._
 import com.precog.common.security._
 import com.precog.common.jobs._
 import com.precog.muspelheim._
+import com.precog.shard.scheduling.NoopScheduler
+import com.precog.yggdrasil.table.Slice
+import com.precog.yggdrasil.vfs._
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
@@ -70,6 +73,7 @@ import scalaz._
 import scalaz.syntax.comonad._
 
 import java.nio.CharBuffer
+import java.nio.charset.Charset
 
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
@@ -103,11 +107,12 @@ trait TestShardService extends
   private val apiKeyFinder = new DirectAPIKeyFinder[Future](apiKeyManager)
   protected val jobManager = new InMemoryJobManager[Future] //TODO: should be private?
   private val clock = Clock.System
+  private val accountFinder = new StaticAccountFinder[Future]("test", "who-cares")
 
   val rootAPIKey = apiKeyManager.rootAPIKey.copoint
 
   val testPath = Path("/test")
-  val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test", testPath).map(_.apiKey).copoint
+  val testAPIKey = apiKeyManager.newStandardAPIKeyRecord("test").map(_.apiKey).copoint
 
   import Permission._
   val testPermissions = Set[Permission](
@@ -118,12 +123,12 @@ trait TestShardService extends
 
   val expiredPath = Path("expired")
 
-  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired", expiredPath).map(_.apiKey).flatMap { expiredAPIKey =>
+  val expiredAPIKey = apiKeyManager.newStandardAPIKeyRecord("expired").map(_.apiKey).flatMap { expiredAPIKey =>
     apiKeyManager.deriveAndAddGrant(None, None, testAPIKey, testPermissions, expiredAPIKey, Some(new DateTime().minusYears(1000))).map(_ => expiredAPIKey)
   } copoint
 
   def configureShardState(config: Configuration) = Future {
-    val queryExecutorFactory = new TestPlatform {
+    val platform = new TestPlatform {
       override val jobActorSystem = self.actorSystem
       override val actorSystem = self.actorSystem
       override val executionContext = self.executionContext
@@ -143,14 +148,29 @@ trait TestShardService extends
       )
     }
 
-    ManagedQueryShardState(queryExecutorFactory, self.apiKeyFinder, jobManager, clock, Stoppable.Noop)
+    val vfs = NoopVFS
+
+    val scheduler = NoopScheduler[Future]
+
+    val storedQueries = new VFSStoredQueries(platform, vfs, scheduler, jobManager, null /** FIXME **/, clock)
+
+    ShardState(platform, self.apiKeyFinder, self.accountFinder, vfs, storedQueries, scheduler, jobManager, clock, Stoppable.Noop)
+  }
+
+  val utf8 = Charset.forName("UTF-8")
+
+  def charBufferToBytes(cb: CharBuffer): Array[Byte] = {
+    val bb = utf8.encode(cb)
+    val arr = new Array[Byte](bb.remaining)
+    bb.get(arr)
+    arr
   }
 
   implicit val queryResultByteChunkTranscoder = new AsyncHttpTranscoder[QueryResult, ByteChunk] {
     def apply(req: HttpRequest[QueryResult]): HttpRequest[ByteChunk] =
       req map {
-        case Left(jv) => Left(ByteBuffer.wrap(jv.renderCompact.getBytes(utf8)))
-        case Right(stream) => Right(stream.map(utf8.encode))
+        case Left(jv) => Left(jv.renderCompact.getBytes(utf8))
+        case Right(stream) => Right(stream.map(charBufferToBytes))
       }
 
     def unapply(fres: Future[HttpResponse[ByteChunk]]): Future[HttpResponse[QueryResult]] =
@@ -159,15 +179,15 @@ trait TestShardService extends
         response.status.code match {
           case OK | Accepted => //assume application/json
             response map {
-              case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _)) 
-              case Right(stream) => Right(stream.map(utf8.decode))
+              case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _)) 
+              case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
             }
 
           case error =>
             if (contentType.exists(_ == MimeTypes.application/json)) {
               response map {
-                case Left(bb) => Left(JParser.parseFromByteBuffer(bb).valueOr(throw _))
-                case Right(stream) => Right(stream.map(utf8.decode))
+                case Left(bytes) => Left(JParser.parseFromByteBuffer(ByteBuffer.wrap(bytes)).valueOr(throw _))
+                case Right(stream) => Right(stream.map(bytes => utf8.decode(ByteBuffer.wrap(bytes))))
               }
             } else {
               response map { 
@@ -275,9 +295,7 @@ class ShardServiceSpec extends TestShardService {
         JField("data", JArray(JNum(2) :: Nil)) ::
         Nil)
 
-      res.copoint must beLike {
-        case `expected` => ok
-      }
+      res.copoint must_== expected
     }
     "handle relative query from accessible non-root path" in {
       query(relativeQuery, path = "/test").copoint must beLike {
@@ -363,8 +381,11 @@ class ShardServiceSpec extends TestShardService {
     }
     "return error response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
-        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(JArray(JString(err) :: Nil))), _) =>
-          err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
+        case HttpResponse(HttpStatus(InternalServerError, _), _, Some(Left(response)), _) =>
+          (response \ "errors") must beLike {
+            case JArray(JString(err) :: Nil) =>
+              err must_== "Bad path; this is just used to stimulate an error response and not duplicate any genuine failure."
+          }
       }
     }
   }
@@ -383,13 +404,8 @@ trait TestPlatform extends ManagedPlatform { self =>
   val accessControl: AccessControl[Future]
   val ownerMap: Map[Path, Set[AccountId]]
 
-  private def wrap[M[+_]: Monad](a: JArray): StreamT[M, CharBuffer] = {
-    val str = a.renderCompact
-    val buffer = CharBuffer.allocate(str.length)
-    buffer.put(str)
-    buffer.flip()
-
-    StreamT.fromStream(Stream(buffer).point[M])
+  private def toSlice[M[+_]: Monad](a: JValue): StreamT[M, Slice] = {
+    Slice.fromJValues(Stream(a)) :: StreamT.empty[M, Slice]
   }
 
   type YggConfig = ManagedQueryModuleConfig
@@ -404,24 +420,25 @@ trait TestPlatform extends ManagedPlatform { self =>
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, CharBuffer])]]] = {
+  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
     Future(Success(new SyncQueryExecutor {
       val executionContext = self.executionContext
     }))
   }
 
-  protected def executor(implicit shardQueryMonad: ShardQueryMonad): QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] = {
-    new QueryExecutor[ShardQuery, StreamT[ShardQuery, CharBuffer]] {
-      def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+  protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
+    new QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] {
+      def execute(query: String, ctx: EvaluationContext, opts: QueryOptions) = {
         if (query == "bad query") {
-          val mu: Future[Any] = shardQueryMonad.jobId map { jobId =>
+          val mu = shardQueryMonad.jobId traverse { jobId =>
             jobManager.addMessage(jobId, JobManager.channels.Error, JString("ERROR!"))
-          } getOrElse ().point[Future]
-          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[ShardQuery, CharBuffer]]] {
-            mu map { _ => success(wrap(JArray(List(JNum(2))))) }
+          } 
+
+          shardQueryMonad.liftM[Future, Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] {
+            mu map { _ => success(toSlice(JNum(2))) }
           }
         } else {
-          shardQueryMonad.point(success(wrap(JArray(List(JNum(2))))))
+          shardQueryMonad.point(success(toSlice(JNum(2))))
         }
       }
     }
@@ -447,6 +464,9 @@ trait TestPlatform extends ManagedPlatform { self =>
         )
       )
     }
+    
+    def currentVersion(apiKey: APIKey, path: Path) = Future(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Future(None)
   }
 
   def status() = Future(Success(JArray(List(JString("status")))))

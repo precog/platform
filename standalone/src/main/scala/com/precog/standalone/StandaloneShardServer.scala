@@ -43,9 +43,14 @@ import org.streum.configrity.Configuration
 import scalaz.Monad
 
 import com.precog.accounts._
+import com.precog.common.Path
+import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.common.accounts._
 import com.precog.shard._
+import com.precog.shard.scheduling.NoopScheduler
+import com.precog.yggdrasil.vfs.NoopVFS
 import java.awt.Desktop
 import java.net.URI
 
@@ -61,10 +66,11 @@ trait StandaloneShardServer
 
   def platformFor(config: Configuration, apiKeyManager: APIKeyFinder[Future], jobManager: JobManager[Future]): (ManagedPlatform, Stoppable)
 
-  def apiKeyFinderFor(config: Configuration): APIKeyFinder[Future] = new StaticAPIKeyFinder[Future](config[String]("security.masterAccount.apiKey"))
-
   def configureShardState(config: Configuration) = M.point {
-    val apiKeyFinder = apiKeyFinderFor(config)
+    val apiKey = config[String]("security.masterAccount.apiKey")
+    val apiKeyFinder = new StaticAPIKeyFinder[Future](apiKey)
+    val accountFinder = new StaticAccountFinder[Future]("root", apiKey, Some("/"))
+
     val jobManager = config.get[String]("jobs.jobdir").map { jobdir =>
       val dir = new File(jobdir)
 
@@ -77,12 +83,22 @@ trait StandaloneShardServer
       }
 
       FileJobManager(dir, M)
-    }.getOrElse {
+    } getOrElse {
       new ExpiringJobManager(Duration(config[Int]("jobs.ttl", 300), TimeUnit.SECONDS))
     }
+
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
+
     // We always want a managed shard now, for better error reporting and Labcoat compatibility
-    ManagedQueryShardState(platform, apiKeyFinder, jobManager, Clock.System, stoppable)
+    ShardState(platform,
+               apiKeyFinder,
+               accountFinder,
+               NoopVFS,
+               NoopStoredQueries[Future],
+               NoopScheduler[Future],
+               jobManager,
+               Clock.System,
+               stoppable)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>

@@ -522,6 +522,18 @@ trait ProvenanceChecker extends parser.AST with Binder {
               (errors, constr)
             }
             
+            /* There are some subtle issues here regarding consistency between the compiler's
+             * notion of `cardinality` and the evaluators's notion of `identities`. If a morphism
+             * (of 1 or 2 parameters) has IdentityPolicy.Product(_, _), then we correctly unify
+             * the provenances of the LHS and RHS, and the notions of identities will be equivalent.
+             * But if a morphism has IdentityPolicy.Cross, were the LHS and RHS share some provenances,
+             * then we have no notion of provenance that will capture this information. Just for the 
+             * sake of understanding the problem, we *could* have `CrossProvenance(_, _)`, but this
+             * type would only serve to alert us to the fact that there are definitely identities
+             * coming from both sides. And this is not the correct thing to do. Once we have record-
+             * based identities, we will no longer need to do cardinality checking in the compiler,
+             * and this problem will go away.
+             */
             case Morphism1Binding(morph1) => {
               val (errors, constr) = loop(actuals.head, relations, constraints)
               expr.provenance = {
@@ -535,7 +547,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
                       unifyProvenance(relations)(recLeft, recRight) getOrElse ProductProvenance(recLeft, recRight)
                     }
 
-                    case _: IdentityPolicy.Retain => actuals.head.provenance
+                    case (_: IdentityPolicy.Retain) => actuals.head.provenance
                     
                     case IdentityPolicy.Synthesize => {
                       if (actuals.head.provenance.isParametric)
@@ -575,15 +587,30 @@ trait ProvenanceChecker extends parser.AST with Binder {
                     (Set(Error(expr, OperationOnUnrelatedSets)), Set(), NullProvenance)
                 }
               }
-              
+
               def rec(policy: IdentityPolicy): (Set[Error], Set[ProvConstraint], Provenance) = policy match {
-                case IdentityPolicy.Product(left, right) =>
-                  val (leftErrors, leftConst, leftProv) = rec(left)
-                  val (rightErrors, rightConst, rightProv) = rec(right)
+                case IdentityPolicy.Product(left0, right0) =>
+                  val (leftErrors, leftConst, leftProv) = rec(left0)
+                  val (rightErrors, rightConst, rightProv) = rec(right0)
                     
                   val prov = unifyProvenance(relations)(leftProv, rightProv) getOrElse ProductProvenance(leftProv, rightProv)
                   val (err, const, finalProv) = compute(prov, prov)
                   (leftErrors ++ rightErrors ++ err, leftConst ++ rightConst ++ const, finalProv)
+
+                /* TODO The `Cross` case is not currently correct! 
+                 * When we call `cardinality` on a morphism with this IdentityPolicy
+                 * if left.provenance and right.provenance contain equivalent provenances,
+                 * incorrect cardinality will be returned. For example, if we have Cross
+                 * where LHS=//foo and RHS=//foo, the `cardinality` will be size 1,
+                 * when it should be size 2. (See above comment. This bug will be able to be
+                 * smoothly resolved with the addition of record-based ids.)
+                 */
+                case IdentityPolicy.Retain.Cross => {
+                  val product = ProductProvenance(left.provenance, right.provenance)
+                  val prov = unifyProvenance(relations)(left.provenance, right.provenance) getOrElse product
+
+                  compute(prov, prov)
+                }
                 
                 case IdentityPolicy.Retain.Left =>
                   compute(left.provenance, left.provenance)
@@ -594,7 +621,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
                 case IdentityPolicy.Retain.Merge => {
                   val paramProv = UnifiedProvenance(left.provenance, right.provenance)
                   val prov = unified getOrElse NullProvenance
-
                   compute(paramProv, prov)
                 }
                 

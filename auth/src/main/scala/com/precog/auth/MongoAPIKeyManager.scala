@@ -144,14 +144,14 @@ class MongoAPIKeyManager(mongo: Mongo, database: Database, settings: MongoAPIKey
   def rootAPIKey: Future[APIKey] = rootAPIKeyRecord.map(_.apiKey)
   def rootGrantId: Future[GrantId] = rootAPIKeyRecord.map(_.grants.head)
 
-  def newAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): Future[APIKeyRecord] = {
+  def createAPIKey(name: Option[String], description: Option[String], issuerKey: APIKey, grants: Set[GrantId]): Future[APIKeyRecord] = {
     val apiKey = APIKeyRecord(APIKeyManager.newAPIKey(), name, description, issuerKey, grants, false)
     database(insert(apiKey.serialize.asInstanceOf[JObject]).into(settings.apiKeys)) map {
       _ => apiKey
     }
   }
 
-  def newGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
+  def createGrant(name: Option[String], description: Option[String], issuerKey: APIKey, parentIds: Set[GrantId], perms: Set[Permission], expiration: Option[DateTime]): Future[Grant] = {
     val ng = Grant(APIKeyManager.newGrantId(), name, description, issuerKey, parentIds, perms, clock.instant(), expiration)
     logger.debug("Adding grant: " + ng)
     database(insert(ng.serialize.asInstanceOf[JObject]).into(settings.grants)) map {

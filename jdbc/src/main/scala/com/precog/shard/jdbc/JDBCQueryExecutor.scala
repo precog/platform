@@ -53,7 +53,6 @@ import org.streum.configrity.Configuration
 import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
-import java.nio.CharBuffer
 import java.sql.DriverManager
 
 import scalaz._
@@ -177,6 +176,9 @@ class JDBCQueryExecutor(val yggConfig: JDBCQueryExecutorConfig, val jobManager: 
     def structure(userUID: String, path: Path, cpath: CPath): Future[Validation[String, JObject]] = Promise.successful (
       Success(JObject(Map("children" -> JArray.empty, "types" -> JObject.empty))) // TODO: Implement from table metadata
     )
+
+    def currentVersion(apiKey: APIKey, path: Path) = Promise.successful(None)
+    def currentAuthorities(apiKey: APIKey, path: Path) = Promise.successful(None)
   }
 }
 

@@ -67,13 +67,14 @@ import scalaz.syntax.show._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.applicative._
-      
+
 import java.nio.CharBuffer
 
 trait ColumnarTableTypes[M[+_]] {
   type F1 = CF1
   type F2 = CF2
-  type Scanner = CScanner[M]
+  type Scanner = CScanner
+  type Mapper = CMapper[M]
   type Reducer[α] = CReducer[α]
   type RowId = Int
 }
@@ -87,23 +88,291 @@ trait ColumnarTableModuleConfig {
   // This is what we consider a "small" slice. This may affect points where
   // we take proactive measures to prevent problems caused by small slices.
   def smallSliceSize: Int
-  
+
   def maxSaneCrossSize: Long = 2400000000L    // 2.4 billion
+}
+
+object ColumnarTableModule {
+  /*
+//  def renderJson[M[+_]](slices: StreamT[M, Slice], delimiter: Char = '\n')(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
+//    def delimiterBuffer = {
+//      val back = CharBuffer.allocate(1)
+//      back.put(delimiter)
+//      back.flip()
+//      back
+//    }
+//
+//    def delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
+//
+//    def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
+//      StreamT[M, CharBuffer](slices.step map {
+//        case StreamT.Yield(slice, tail) => {
+//          val (stream, rendered2) = slice.renderJson[M](delimiter)
+//
+//          val stream2 = if (rendered && rendered2)
+//            delimitStream ++ stream
+//          else
+//            stream
+//
+//          StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
+//        }
+//
+//        case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
+//
+//        case StreamT.Done => StreamT.Done
+//      })
+//    }
+
+    foldFlatMap(slices, false)
+  }
+  */
+
+  def renderJson[M[+_]](slices: StreamT[M, Slice], prefix: String, delimiter: String, suffix: String)(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
+    import scalaz.\/._
+    def wrap(stream: StreamT[M, CharBuffer]) = {
+      if (prefix == "" && suffix == "") stream
+      else if (suffix == "") CharBuffer.wrap(prefix) :: stream
+      else if (prefix == "") stream ++ (CharBuffer.wrap(suffix) :: StreamT.empty[M, CharBuffer])
+      else CharBuffer.wrap(prefix) :: (stream ++ (CharBuffer.wrap(suffix) :: StreamT.empty[M, CharBuffer]))
+    }
+
+    def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
+      StreamT[M, CharBuffer](slices.step map {
+        case StreamT.Yield(slice, tail) => 
+          val (stream, rendered2) = slice.renderJson[M](delimiter)
+          val stream2 = if (rendered && rendered2) CharBuffer.wrap(delimiter) :: stream else stream
+
+          StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
+
+        case StreamT.Skip(tail) => 
+          StreamT.Skip(foldFlatMap(tail(), rendered))
+
+        case StreamT.Done => 
+          StreamT.Done
+      })
+    }
+
+    wrap(foldFlatMap(slices, false))
+  }
+
+  /**
+    * This method renders the entire table into a single string,
+    * encoded as CSV.
+    *
+    * In the future we may want something Stream-based, but for now
+    * the method seems to be "fast enough" for our purposes.
+    *
+    * The column headers are currently stringified CPaths. These are
+    * introduced introduced slice-by-slice in alphabetical order. So
+    * if there is one slice, the headers will be totally
+    * alphabetical. If two slices, the alphabetized headers from the
+    * first slice are first, and then the other headers (also
+    * alphabetized). And so on.
+    *
+    * The escaping here should match Microsoft's:
+    *
+    * If a value contains commas, double-quotes, or CR/LF, it will be
+    * escaped. To escape a value, it is wrapped in double quotes. Any
+    * double-quotes in the value are themselves doubled. So:
+    *
+    * the fox said: "hello, my name is fred."
+    *
+    * becomes:
+    *
+    * "the fox said: ""hello, my name is fred."""
+    */
+  def renderCsv[M[+_]](slices: StreamT[M, Slice])(implicit M: Monad[M]): StreamT[M, CharBuffer] = {
+    import scala.collection.{Map => GenMap}
+    import scala.util.Sorting
+
+    /**
+      * Represents the column headers we have. We track three things:
+      *
+      *  1. n: the number of headers so far.
+      *  2. m: a map from path strings to header position
+      *  3. a: an array of path strings used.
+      *
+      * The class is immutable so as we find new headers we'll create
+      * new instances. If this proves to be a problem we could easily
+      * make a mutable version.
+      */
+    class Indices(n: Int, m: GenMap[String, Int], a: Array[String]) {
+      def size = n
+      def getPaths: Array[String] = a
+      def columnForPath(path: String) = m(path)
+      def pathForColumn(col: Int) = a(col)
+      def combine(that: Indices): Indices = {
+        val buf = new mutable.ArrayBuffer[String](a.length)
+        buf ++= a
+        that.getPaths.foreach(p => if (!m.contains(p)) buf.append(p))
+        Indices.fromPaths(buf.toArray)
+      }
+      override def equals(that: Any): Boolean = that match {
+        case that: Indices =>
+          val len = n
+          if (len != that.size) return false
+          var i = 0
+          val paths = that.getPaths
+          while (i < len) {
+            if (a(i) != paths(i)) return false
+            i += 1
+          }
+          true
+        case _ =>
+          false
+      }
+      def writeToBuilder(sb: StringBuilder): Unit = {
+        if (n == 0) return ()
+        sb.append(a(0))
+        var i = 1
+        val len = n
+        while (i < len) { sb.append(','); sb.append(a(i)); i += 1 }
+        sb.append("\r\n")
+      }
+    }
+
+    object Indices {
+      def empty: Indices = new Indices(0, Map.empty[String, Int], new Array[String](0))
+
+      def fromPaths(ps: Array[String]): Indices = {
+        val paths = ps.sorted
+        val m = mutable.Map.empty[String, Int]
+        var i = 0
+        val len = paths.length
+        while (i < len) { m(paths(i)) = i; i += 1 }
+        new Indices(len, m, paths)
+      }
+    }
+
+    // these methods will quote CSV values for us
+    // they could probably be a bit faster but are OK so far.
+    def quoteIfNeeded(s: String): String = if (needsQuoting(s)) quote(s) else s
+    def quote(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+    def needsQuoting(s: String): Boolean = {
+      var i = 0
+      while (i < s.length) {
+        val c = s.charAt(i)
+        if (c == ',' || c == '"' || c == '\r' || c == '\n') return true
+        i += 1
+      }
+      false
+    }
+
+    /**
+      * Render a particular column of a slice into an array of
+      * Strings, handling any escaping that is needed.
+      */
+    def renderColumn(col: Column, rows: Int): Array[String] = {
+      val arr = new Array[String](rows)
+      var row = 0
+      while (row < rows) {
+        arr(row) = if (col.isDefinedAt(row))
+          quoteIfNeeded(col.strValue(row))
+        else
+          ""
+        row += 1
+      }
+      arr
+    }
+
+    /**
+      * Generate indices for this slice.
+      */
+    def indicesForSlice(slice: Slice): Indices =
+      Indices.fromPaths(slice.columns.keys.map(_.selector.toString).toArray)
+
+    /**
+      * Renders a slice into an array of lines, as well as updating
+      * our Indices with any previous unseen paths.
+      *
+      * Since slice's underlying data is column-oriented, we evaluate
+      * each column individually, building an array of values. Then
+      * we stride across these arrays building our rows (Line
+      * objects).
+      *
+      * Since we know in advance how many rows we have, we can return
+      * an array of lines.
+      */
+    def renderSlice(pastIndices: Option[Indices], slice: Slice): (Indices, CharBuffer) = {
+
+      val indices = indicesForSlice(slice)
+      val height = slice.size
+      val width = indices.size
+
+      if (width == 0) return (indices, CharBuffer.allocate(0))
+
+      val items = slice.columns.toArray
+      val ncols = items.length
+
+      // load each column into strings
+      val columns = items.map { case (_, col) =>
+        renderColumn(col, height)
+      }
+      val positions = items.map { case (ColumnRef(path, _), _) =>
+        indices.columnForPath(path.toString)
+      }
+
+      val sb = new StringBuilder()
+
+      pastIndices match {
+        case None => indices.writeToBuilder(sb)
+        case Some(ind) => if (ind != indices) {
+          sb.append("\r\n")
+          indices.writeToBuilder(sb)
+        }
+      }
+
+      var row = 0
+      while (row < height) {
+        // fill in all the buckets for this particular row
+        val buckets = Array.fill(width)("")
+        var i = 0
+        while (i < ncols) {
+          val s = columns(i)(row)
+          if (s != "") buckets(positions(i)) = s
+          i += 1
+        }
+
+        // having filled the buckets, add them to the string builder
+        sb.append(buckets(0))
+        i = 1
+        while (i < width) {
+          sb.append(',')
+          sb.append(buckets(i))
+          i += 1
+        }
+        sb.append("\r\n")
+
+        row += 1
+      }
+      (indices, CharBuffer.wrap(sb))
+    }
+
+    StreamT.unfoldM((slices, none[Indices])) {
+      case (stream, pastIndices) => stream.uncons.map {
+        case Some((slice, tail)) =>
+          val (indices, cb) = renderSlice(pastIndices, slice)
+          Some((cb, (tail, Some(indices))))
+        case None =>
+          None
+      }
+    }
+  }
 }
 
 trait ColumnarTableModule[M[+_]]
     extends TableModule[M]
     with ColumnarTableTypes[M]
-    with IdSourceScannerModule[M]
+    with IdSourceScannerModule
     with SliceTransforms[M]
     with SamplableColumnarTableModule[M]
     with IndicesModule[M]
     with YggConfigComponent {
-      
+
   import TableModule._
   import trans._
   import trans.constants._
-  
+
   type YggConfig <: IdSourceConfig with ColumnarTableModuleConfig
 
   type Table <: ColumnarTable
@@ -121,7 +390,7 @@ trait ColumnarTableModule[M[+_]]
   }
 
   implicit def liftF2(f: F2) = new F2Like {
-    def applyl(cv: CValue) = CF1("builtin::liftF2::applyl") { f(Column.const(cv), _) } 
+    def applyl(cv: CValue) = CF1("builtin::liftF2::applyl") { f(Column.const(cv), _) }
     def applyr(cv: CValue) = CF1("builtin::liftF2::applyl") { f(_, Column.const(cv)) }
 
     def andThen(f1: F1) = CF2("builtin::liftF2::andThen") { (c1, c2) => f(c1, c2) flatMap f1.apply }
@@ -129,7 +398,7 @@ trait ColumnarTableModule[M[+_]]
 
   trait ColumnarTableCompanion extends TableCompanionLike {
     def apply(slices: StreamT[M, Slice], size: TableSize): Table
-    
+
     def singleton(slice: Slice): Table
 
     implicit def groupIdShow: Show[GroupId] = Show.showFromToString[GroupId]
@@ -144,7 +413,7 @@ trait ColumnarTableModule[M[+_]]
 
       Table(gen, InfiniteSize)
     }
-    
+
     def constBoolean(v: collection.Set[Boolean]): Table = {
       val column = ArrayBoolColumn(v.toArray)
       Table(Slice(Map(ColumnRef(CPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
@@ -175,13 +444,13 @@ trait ColumnarTableModule[M[+_]]
       Table(Slice(Map(ColumnRef(CPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice], ExactSize(v.size))
     }
 
-    def constNull: Table = 
+    def constNull: Table =
       Table(Slice(Map(ColumnRef(CPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
-    def constEmptyObject: Table = 
+    def constEmptyObject: Table =
       Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
-    def constEmptyArray: Table = 
+    def constEmptyArray: Table =
       Table(Slice(Map(ColumnRef(CPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice], ExactSize(1))
 
     def transformStream[A](sliceTransform: SliceTransform1[A], slices: StreamT[M, Slice]): StreamT[M, Slice] = {
@@ -208,14 +477,14 @@ trait ColumnarTableModule[M[+_]]
     }
 
     /**
-     * Merge controls the iteration over the table of group key values. 
+     * Merge controls the iteration over the table of group key values.
      */
     def merge[N[+_]](grouping: GroupingSpec)(body: (RValue, GroupId => M[Table]) => N[Table])(implicit nt: N ~> M): M[Table] = {
       import GroupKeySpec.{ dnf, toVector }
-      
+
       type Key = Seq[RValue]
       type KeySchema = Seq[CPathField]
-      
+
       def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
         case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
         case src: GroupKeySpecSource => Vector(src)
@@ -223,9 +492,9 @@ trait ColumnarTableModule[M[+_]]
 
       def mkProjections(spec: GroupKeySpec) =
         toVector(dnf(spec)).map(sources(_).map { s => (s.key, s.spec) })
-      
-      case class IndexedSource(groupId: GroupId, index: TableIndex, keySchema: KeySchema) 
-      
+
+      case class IndexedSource(groupId: GroupId, index: TableIndex, keySchema: KeySchema)
+
       (for {
         source <- grouping.sources
         groupKeyProjections <- mkProjections(source.groupKeySpec)
@@ -236,9 +505,9 @@ trait ColumnarTableModule[M[+_]]
         }
       }).sequence.flatMap { sourceKeys =>
         val fullSchema = sourceKeys.flatMap(_.keySchema).distinct
-        
+
         val indicesGroupedBySource = sourceKeys.groupBy(_.groupId).mapValues(_.map(y => (y.index, y.keySchema)).toSeq).values.toSeq
-        
+
         def unionOfIntersections(indicesGroupedBySource: Seq[Seq[(TableIndex, KeySchema)]]): Set[Key] = {
           def allSourceDNF[T](l : Seq[Seq[T]]): Seq[Seq[T]] = {
             l match {
@@ -252,25 +521,25 @@ trait ColumnarTableModule[M[+_]]
               case empty => empty
             }
           }
-          
+
           def normalizedKeys(index: TableIndex, keySchema: KeySchema): collection.Set[Key] = {
             val schemaMap = for(k <- fullSchema) yield keySchema.indexOf(k)
             for(key <- index.getUniqueKeys)
-              yield for(k <- schemaMap) yield if (k == -1) CUndefined else key(k) 
+              yield for(k <- schemaMap) yield if (k == -1) CUndefined else key(k)
           }
 
           def intersect(keys0: collection.Set[Key], keys1: collection.Set[Key]): collection.Set[Key] = {
             def consistent(key0: Key, key1: Key): Boolean =
               (key0 zip key1).forall {
-                case (k0, k1) => k0 == k1 || k0 == CUndefined || k1 == CUndefined 
+                case (k0, k1) => k0 == k1 || k0 == CUndefined || k1 == CUndefined
               }
-            
+
             def merge(key0: Key, key1: Key): Key =
               (key0 zip key1).map {
-                case (k0, CUndefined) => k0 
-                case (_,  k1        ) => k1 
+                case (k0, CUndefined) => k0
+                case (_,  k1        ) => k1
               }
-  
+
             // TODO: This "mini-cross" is much better than the
             // previous mega-cross. However in many situations we
             // could do even less work. Consider further optimization
@@ -356,7 +625,7 @@ trait ColumnarTableModule[M[+_]]
 
     def fromRValues(values: Stream[RValue], maxSliceSize: Option[Int] = None): Table = {
       val sliceSize = maxSliceSize.getOrElse(yggConfig.maxSliceSize)
-      
+
       def makeSlice(data: Stream[RValue]): (Slice, Stream[RValue]) = {
         val (prefix, suffix) = data.splitAt(sliceSize)
 
@@ -414,23 +683,23 @@ trait ColumnarTableModule[M[+_]]
      * Folds over the table to produce a single value (stored in a singleton table).
      */
 
-    def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {  
+    def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {
       def rec(stream: StreamT[M, A], acc: A): M[A] = {
         stream.uncons flatMap {
-          case Some((head, tail)) => rec(tail, head |+| acc) 
+          case Some((head, tail)) => rec(tail, head |+| acc)
           case None => M.point(acc)
         }
       }
 
       rec(
-        slices map { s => 
+        slices map { s =>
           val schema = new CSchema {
             val columnRefs = s.columns.keySet
-            def columns(jtype: JType) = s.logicalColumns(jtype) 
+            def columns(jtype: JType) = s.logicalColumns(jtype)
           }
 
-          reducer.reduce(schema, 0 until s.size) 
-        }, 
+          reducer.reduce(schema, 0 until s.size)
+        },
         monoid.zero
       )
     }
@@ -449,7 +718,7 @@ trait ColumnarTableModule[M[+_]]
     def transform(spec: TransSpec1): Table = {
       Table(Table.transformStream(composeSliceTransform(spec), slices), this.size)
     }
-    
+
     def force: M[Table] = {
       def loop(slices: StreamT[M, Slice], acc: List[Slice], size: Long): M[(List[Slice], Long)] = slices.uncons flatMap {
         case Some((slice, tail)) if slice.size > 0 =>
@@ -464,7 +733,7 @@ trait ColumnarTableModule[M[+_]]
         Table(StreamT.fromIterable(stream).trans(former), ExactSize(size))
       }
     }
-    
+
     def paged(limit: Int): Table = {
       val slices2 = slices flatMap { slice =>
         StreamT.unfoldM(0) { idx =>
@@ -472,11 +741,11 @@ trait ColumnarTableModule[M[+_]]
             None
           else
             Some((slice.takeRange(idx, limit), idx + limit))
-          
+
           M.point(back)
         }
       }
-      
+
       Table(slices2, size)
     }
 
@@ -490,7 +759,7 @@ trait ColumnarTableModule[M[+_]]
      * Zips two tables together in their current sorted order.
      * If the tables are not normalized first and thus have different slices sizes,
      * then since the zipping is done per slice, this can produce a result that is
-     * different than if the tables were normalized. 
+     * different than if the tables were normalized.
      */
     def zip(t2: Table): M[Table] = {
       def rec(slices1: StreamT[M, Slice], slices2: StreamT[M, Slice]): StreamT[M, Slice] = {
@@ -648,8 +917,8 @@ trait ColumnarTableModule[M[+_]]
         }
 
         override def toString = {
-          "left: " + lbuf.toArray.mkString("[", ",", "]") + "\n" + 
-          "right: " + rbuf.toArray.mkString("[", ",", "]") + "\n" + 
+          "left: " + lbuf.toArray.mkString("[", ",", "]") + "\n" +
+          "right: " + rbuf.toArray.mkString("[", ",", "]") + "\n" +
           "both: " + (leqbuf.toArray zip reqbuf.toArray).mkString("[", ",", "]")
         }
       }
@@ -688,7 +957,7 @@ trait ColumnarTableModule[M[+_]]
         case object CogroupDone extends CogroupState
 
         val Reset = -1
-        
+
         // step is the continuation function fed to uncons. It is called once for each emitted slice
         def step(state: CogroupState): M[Option[(Slice, CogroupState)]] = {
 
@@ -816,7 +1085,7 @@ trait ColumnarTableModule[M[+_]]
                   }
                 }
 
-              case SplitRight(rpos) => 
+              case SplitRight(rpos) =>
                 val (rpref, rsuf) = rhead.split(rpos)
                 val (_, rksuf) = rkey.split(rpos)
                 
@@ -919,7 +1188,7 @@ trait ColumnarTableModule[M[+_]]
 
               case SkipRight(left, rightEnd) =>
                 step0(lr, rr, br, left, rightEnd, None, None)()
-                
+
               case RestartRight(left, rightStart, rightEnd) =>
                 ibufs.cogrouped(left.data, rightPosition.data,
                                 SliceTransform1[LR](lr, stlr.f),
@@ -937,7 +1206,7 @@ trait ColumnarTableModule[M[+_]]
             }
 
             continue(buildRemappings(lpos0, rpos0, rightStart0, rightEnd0, false))
-          } // end of step0 
+          } // end of step0
 
           state match {
             case EndLeft(lr, data, tail) =>
@@ -1097,7 +1366,7 @@ trait ColumnarTableModule[M[+_]]
 
           StreamT.unfoldM(CrossState(a0, 0, right))(step _)
         }
-        
+
         def crossRightSingle(left: StreamT[M, Slice], rhead: Slice)(a0: A): StreamT[M, Slice] = {
           StreamT(left.uncons flatMap {
             case Some((lhead, ltail0)) =>
@@ -1151,7 +1420,7 @@ trait ColumnarTableModule[M[+_]]
           case None => M.point(StreamT.empty[M, Slice])
         }
       }
-      
+
       // TODO: We should be able to fully compute the size of the result above.
       val newSize = (size, that.size) match {
         case (ExactSize(l), ExactSize(r))         => TableSize(l max r, l * r)
@@ -1159,7 +1428,7 @@ trait ColumnarTableModule[M[+_]]
         case (ExactSize(l), EstimateSize(rn, rx)) => TableSize(l max rn, l * rx)
         case _ => UnknownSize // Bail on anything else for now (see above TODO)
       }
-      
+
       val newSizeM = newSize match {
         case ExactSize(s) => Some(s)
         case EstimateSize(_, s) => Some(s)
@@ -1175,7 +1444,7 @@ trait ColumnarTableModule[M[+_]]
         throw EnormousCartesianException(this.size, that.size)
       }
     }
-    
+
     /**
      * Yields a new table with distinct rows. Assumes this table is sorted.
      */
@@ -1217,7 +1486,7 @@ trait ColumnarTableModule[M[+_]]
 
       distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
-    
+
     def takeRange(startIndex: Long, numberToTake: Long): Table = {
       def loop(stream: StreamT[M, Slice], readSoFar: Long): M[StreamT[M, Slice]] = stream.uncons flatMap {
         // Prior to first needed slice, so skip
@@ -1227,7 +1496,7 @@ trait ColumnarTableModule[M[+_]]
         // Read off the end (we took nothing)
         case _ => M.point(StreamT.empty[M, Slice])
       }
-          
+
       def inner(stream: StreamT[M, Slice], takenSoFar: Long, sliceStartIndex: Int): M[StreamT[M, Slice]] = stream.uncons flatMap {
         case Some((head, tail)) if takenSoFar < numberToTake => {
           val needed = head.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
@@ -1235,7 +1504,7 @@ trait ColumnarTableModule[M[+_]]
         }
         case _ => M.point(StreamT.empty[M, Slice])
       }
-      
+
       def calcNewSize(current: Long): Long = ((current-startIndex) max 0) min numberToTake
 
       val newSize = size match {
@@ -1249,7 +1518,7 @@ trait ColumnarTableModule[M[+_]]
     }
 
     /**
-     * In order to call partitionMerge, the table must be sorted according to 
+     * In order to call partitionMerge, the table must be sorted according to
      * the values specified by the partitionBy transspec.
      */
     def partitionMerge(partitionBy: TransSpec1)(f: Table => M[Table]): M[Table] = {
@@ -1257,7 +1526,7 @@ trait ColumnarTableModule[M[+_]]
       @tailrec def findEnd(compare: Int => Ordering, imin: Int, imax: Int): Int = {
         val minOrd = compare(imin)
         if (minOrd eq EQ) {
-          val maxOrd = compare(imax) 
+          val maxOrd = compare(imax)
           if (maxOrd eq EQ) {
             imax + 1
           } else if (maxOrd eq LT) {
@@ -1291,12 +1560,12 @@ trait ColumnarTableModule[M[+_]]
               } else {
                 subTable0(tail, subSlices ++ (head :: StreamT.empty[M, Slice]), size+head.size)
               }
-              
+
             case None =>
               M.point(Table(subSlices, ExactSize(size)))
           }
         }
-        
+
         subTable0(slices, StreamT.empty[M, Slice], 0)
       }
 
@@ -1310,7 +1579,7 @@ trait ColumnarTableModule[M[+_]]
             } else {
               dropAndSplit(comparatorGen, tail, 0)
             }
-            
+
           case None =>
             StreamT.empty[M, Slice]
         }
@@ -1326,7 +1595,7 @@ trait ColumnarTableModule[M[+_]]
 
           (i: Int) => rowComparator.compare(spanStart, i)
         }
-        
+
         val groupTable = subTable(comparatorGen, head.drop(spanStart) :: tail)
         val groupedM = groupTable.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1")))).flatMap(f)
         val groupedStream: StreamT[M, Slice] = StreamT.wrapEffect(groupedM.map(_.slices))
@@ -1434,7 +1703,7 @@ trait ColumnarTableModule[M[+_]]
       def collectSchemas(schemas: Set[JType], slices: StreamT[M, Slice]): M[Set[JType]] = {
         def buildMasks(cols: Array[Column], sliceSize: Int): List[Array[Int]] = {
           import java.util.Arrays.copyOf
-          val mask = RawBitSet.create(cols.length) 
+          val mask = RawBitSet.create(cols.length)
 
           @tailrec def build0(row: Int, masks: List[Array[Int]]): List[Array[Int]] = {
             if (row < sliceSize) {
@@ -1456,7 +1725,7 @@ trait ColumnarTableModule[M[+_]]
         slices.uncons flatMap {
           case Some((slice, slices)) =>
             val (refs0, cols0) = slice.columns.unzip
-            
+
             val masks = buildMasks(cols0.toArray, slice.size)
             val refs: List[(ColumnRef, Int)] = refs0.zipWithIndex.toList
             val next = masks flatMap { schemaMask =>
@@ -1473,241 +1742,11 @@ trait ColumnarTableModule[M[+_]]
       collectSchemas(Set.empty, slices)
     }
 
-    /**
-     * This method renders the entire table into a single string,
-     * encoded as CSV.
-     * 
-     * In the future we may want something Stream-based, but for now
-     * the method seems to be "fast enough" for our purposes.
-     *
-     * The column headers are currently stringified CPaths. These are
-     * introduced introduced slice-by-slice in alphabetical order. So
-     * if there is one slice, the headers will be totally
-     * alphabetical. If two slices, the alphabetized headers from the
-     * first slice are first, and then the other headers (also
-     * alphabetized). And so on.
-     *
-     * The escaping here should match Microsoft's:
-     *
-     * If a value contains commas, double-quotes, or CR/LF, it will be
-     * escaped. To escape a value, it is wrapped in double quotes. Any
-     * double-quotes in the value are themselves doubled. So:
-     * 
-     * the fox said: "hello, my name is fred."
-     * 
-     * becomes:
-     * 
-     * "the fox said: ""hello, my name is fred."""
-     */
-    def renderCsv(): StreamT[M, CharBuffer] = {
-      import scala.collection.{Map => GenMap}
-      import scala.util.Sorting
+    def renderJson(prefix: String = "", delimiter: String = "\n", suffix: String = ""): StreamT[M, CharBuffer] =
+      ColumnarTableModule.renderJson(slices, prefix, delimiter, suffix)
 
-      /**
-       * Represents the column headers we have. We track three things:
-       * 
-       *  1. n: the number of headers so far.
-       *  2. m: a map from path strings to header position
-       *  3. a: an array of path strings used.
-       * 
-       * The class is immutable so as we find new headers we'll create
-       * new instances. If this proves to be a problem we could easily
-       * make a mutable version.
-       */
-      class Indices(n: Int, m: GenMap[String, Int], a: Array[String]) {
-        def size = n
-        def getPaths: Array[String] = a
-        def columnForPath(path: String) = m(path)
-        def pathForColumn(col: Int) = a(col)
-        def combine(that: Indices): Indices = {
-          val buf = new mutable.ArrayBuffer[String](a.length)
-          buf ++= a
-          that.getPaths.foreach(p => if (!m.contains(p)) buf.append(p))
-          Indices.fromPaths(buf.toArray)
-        }
-        override def equals(that: Any): Boolean = that match {
-          case that: Indices =>
-            val len = n
-            if (len != that.size) return false
-            var i = 0
-            val paths = that.getPaths
-            while (i < len) {
-              if (a(i) != paths(i)) return false
-              i += 1
-            }
-            true
-          case _ =>
-            false
-        }
-        def writeToBuilder(sb: StringBuilder): Unit = {
-          if (n == 0) return ()
-          sb.append(a(0))
-          var i = 1
-          val len = n
-          while (i < len) { sb.append(','); sb.append(a(i)); i += 1 }
-          sb.append("\r\n")
-        }
-      }
-
-      object Indices {
-        def empty: Indices = new Indices(0, Map.empty[String, Int], new Array[String](0))
-
-        def fromPaths(ps: Array[String]): Indices = {
-          val paths = ps.sorted
-          val m = mutable.Map.empty[String, Int]
-          var i = 0
-          val len = paths.length
-          while (i < len) { m(paths(i)) = i; i += 1 }
-          new Indices(len, m, paths)
-        }
-      }
-
-      // these methods will quote CSV values for us
-      // they could probably be a bit faster but are OK so far.
-      def quoteIfNeeded(s: String): String = if (needsQuoting(s)) quote(s) else s
-      def quote(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
-      def needsQuoting(s: String): Boolean = {
-        var i = 0
-        while (i < s.length) {
-          val c = s.charAt(i)
-          if (c == ',' || c == '"' || c == '\r' || c == '\n') return true
-          i += 1
-        }
-        false
-      }
-
-      /**
-       * Render a particular column of a slice into an array of
-       * Strings, handling any escaping that is needed.
-       */
-      def renderColumn(col: Column, rows: Int): Array[String] = {
-        val arr = new Array[String](rows)
-        var row = 0
-        while (row < rows) {
-          arr(row) = if (col.isDefinedAt(row))
-            quoteIfNeeded(col.strValue(row))
-          else
-            ""
-          row += 1
-        }
-        arr
-      }
-
-      /**
-       * Generate indices for this slice.
-       */
-      def indicesForSlice(slice: Slice): Indices =
-        Indices.fromPaths(slice.columns.keys.map(_.selector.toString).toArray)
-
-      /**
-       * Renders a slice into an array of lines, as well as updating
-       * our Indices with any previous unseen paths.
-       * 
-       * Since slice's underlying data is column-oriented, we evaluate
-       * each column individually, building an array of values. Then
-       * we stride across these arrays building our rows (Line
-       * objects).
-       * 
-       * Since we know in advance how many rows we have, we can return
-       * an array of lines.
-       */
-      def renderSlice(pastIndices: Option[Indices], slice: Slice): (Indices, CharBuffer) = {
-
-        val indices = indicesForSlice(slice)
-        val height = slice.size
-        val width = indices.size
-
-        if (width == 0) return (indices, CharBuffer.allocate(0))
-
-        val items = slice.columns.toArray
-        val ncols = items.length
-
-        // load each column into strings
-        val columns = items.map { case (_, col) =>
-          renderColumn(col, height)
-        }
-        val positions = items.map { case (ColumnRef(path, _), _) =>
-          indices.columnForPath(path.toString)
-        }
-
-        val sb = new StringBuilder()
-
-        pastIndices match {
-          case None => indices.writeToBuilder(sb)
-          case Some(ind) => if (ind != indices) {
-            sb.append("\r\n")
-            indices.writeToBuilder(sb)
-          }
-        }
-
-        var row = 0
-        while (row < height) {
-          // fill in all the buckets for this particular row
-          val buckets = Array.fill(width)("")
-          var i = 0
-          while (i < ncols) {
-            val s = columns(i)(row)
-            if (s != "") buckets(positions(i)) = s
-            i += 1
-          }
-
-          // having filled the buckets, add them to the string builder
-          sb.append(buckets(0))
-          i = 1
-          while (i < width) {
-            sb.append(',')
-            sb.append(buckets(i))
-            i += 1
-          }
-          sb.append("\r\n")
-
-          row += 1
-        }
-        (indices, CharBuffer.wrap(sb))
-      }
-
-      StreamT.unfoldM((slices, none[Indices])) {
-        case (stream, pastIndices) => stream.uncons.map {
-          case Some((slice, tail)) =>
-            val (indices, cb) = renderSlice(pastIndices, slice)
-            Some((cb, (tail, Some(indices))))
-          case None =>
-            None
-        }
-      }
-    }
-
-    def renderJson(delimiter: Char = '\n'): StreamT[M, CharBuffer] = {
-      def delimiterBuffer = {
-        val back = CharBuffer.allocate(1)
-        back.put(delimiter)
-        back.flip()
-        back
-      }
-      
-      def delimitStream = delimiterBuffer :: StreamT.empty[M, CharBuffer]
-      
-      def foldFlatMap(slices: StreamT[M, Slice], rendered: Boolean): StreamT[M, CharBuffer] = {
-        StreamT[M, CharBuffer](slices.step map {
-          case StreamT.Yield(slice, tail) => {
-            val (stream, rendered2) = slice.renderJson[M](delimiter)
-            
-            val stream2 = if (rendered && rendered2)
-              delimitStream ++ stream
-            else
-              stream
-            
-            StreamT.Skip(stream2 ++ foldFlatMap(tail(), rendered || rendered2))
-          }
-          
-          case StreamT.Skip(tail) => StreamT.Skip(foldFlatMap(tail(), rendered))
-          
-          case StreamT.Done => StreamT.Done
-        })
-      }
-      
-      foldFlatMap(slices, false)
-    }
+    def renderCsv(): StreamT[M, CharBuffer] =
+      ColumnarTableModule.renderCsv(slices)
 
     def slicePrinter(prelude: String)(f: Slice => String): Table = {
       Table(StreamT(StreamT.Skip({println(prelude); slices map { s => println(f(s)); s }}).point[M]), size)
@@ -1725,7 +1764,7 @@ trait ColumnarTableModule[M[+_]]
     def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }
     }
-    
+
     def toJson: M[Iterable[JValue]] = {
       toEvents { (slice, row) => slice.toJson(row) }
     }

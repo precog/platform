@@ -42,7 +42,7 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
 
   def findAllAPIKeys(fromRoot: APIKey): M[Set[v1.APIKeyDetails]]
 
-  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
+  def createAPIKey(accountId: AccountId, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails]
 
   def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean]
 
@@ -53,8 +53,8 @@ trait APIKeyFinder[M[+_]] extends AccessControl[M] with Logging { self =>
     def findAllAPIKeys(fromRoot: APIKey) =
       t(self.findAllAPIKeys(fromRoot))
 
-    def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None) =
-      t(self.newAPIKey(accountId, path, keyName, keyDesc))
+    def createAPIKey(accountId: AccountId, keyName: Option[String] = None, keyDesc: Option[String] = None) =
+      t(self.createAPIKey(accountId, keyName, keyDesc))
 
     def addGrant(accountKey: APIKey, grantId: GrantId) =
       t(self.addGrant(accountKey, grantId))
@@ -105,8 +105,8 @@ class DirectAPIKeyFinder[M[+_]](underlying: APIKeyManager[M])(implicit val M: Mo
     }
   }
 
-  def newAPIKey(accountId: AccountId, path: Path, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = {
-    underlying.newStandardAPIKeyRecord(accountId, path, keyName, keyDesc) flatMap recordDetails
+  def createAPIKey(accountId: AccountId, keyName: Option[String] = None, keyDesc: Option[String] = None): M[v1.APIKeyDetails] = {
+    underlying.newStandardAPIKeyRecord(accountId, keyName, keyDesc) flatMap recordDetails
   }
 
   def addGrant(accountKey: APIKey, grantId: GrantId): M[Boolean] = {

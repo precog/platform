@@ -53,15 +53,17 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
   
   def extractIds(jv: JValue): Seq[IdType]
 
-  def consumeEval(apiKey: APIKey, graph: DepGraph, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
-    val ctx = EvaluationContext(apiKey, prefix, new DateTime())
+  def consumeEval(graph: DepGraph, ctx: EvaluationContext, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     Validation.fromTryCatch {
       implicit val nt = NaturalTransformation.refl[M]
       val evaluator = Evaluator(M)
       val result = evaluator.eval(graph, ctx, optimize)
-      val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
+      val json = result.flatMap(_.toJson).copoint filterNot { jvalue =>
         (jvalue \ "value") == JUndefined
-      }}
+      }
+
+      var extractIdTime: Long = 0L
+      var jvalueToSValueTime: Long = 0L
 
       val events = json map { jvalue =>
         (Vector(extractIds(jvalue \ "key"): _*), jvalueToSValue(jvalue \ "value"))
@@ -73,7 +75,7 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
     }
   }
   
-  private def jvalueToSValue(value: JValue): SValue = value match {
+  protected def jvalueToSValue(value: JValue): SValue = value match {
     case JUndefined => sys.error("don't use jnothing; doh!")
     case JNull => SNull
     case JBool(value) => SBoolean(value)
@@ -94,8 +96,8 @@ trait MemoryDatasetConsumer[M[+_]] extends EvaluatorModule[M] {
 }
 
 trait LongIdMemoryDatasetConsumer[M[+_]] extends MemoryDatasetConsumer[M] {
-  type IdType = Long
-  def extractIds(jv: JValue): Seq[Long] = (jv --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }
+  type IdType = SValue
+  def extractIds(jv: JValue): Seq[SValue] = (jv --> classOf[JArray]).elements map jvalueToSValue
 }
 
 /**

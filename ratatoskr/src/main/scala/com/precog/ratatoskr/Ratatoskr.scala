@@ -21,18 +21,20 @@ package com.precog.ratatoskr
 
 import com.precog.common._
 
+import com.precog.accounts._
+import com.precog.auth._
 import com.precog.common.accounts._
 import com.precog.common.ingest._
+import com.precog.common.jobs._
 import com.precog.common.kafka._
 import com.precog.common.security._
-import com.precog.auth._
-import com.precog.accounts._
+import com.precog.niflheim._
+import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.nihdb._
-import com.precog.niflheim._
 import com.precog.yggdrasil.metadata._
-import com.precog.util._
+import com.precog.yggdrasil.nihdb._
+import com.precog.yggdrasil.vfs._
 
 import blueeyes.bkka._
 import blueeyes.json._
@@ -76,8 +78,13 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scalaz._
 import scalaz.effect.IO
-import scalaz.syntax.std.boolean._
+import scalaz.std.list._
+import scalaz.std.stream._
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.id._
+import scalaz.syntax.traverse._
+import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.option._
 
 import scala.collection.SortedSet
@@ -265,7 +272,7 @@ object KafkaTools extends Command {
 
         val timestamp = lastTimestamp match {
           case ts @ ExactTime(_, `index`) => ts
-          case _ => Interpolated(index).tap { temp =>
+          case _ => Interpolated(index).unsafeTap { temp =>
             //println("Adding %s to pending timestamps".format(temp))
             pendingTimes ::= temp
           }
@@ -373,7 +380,7 @@ object KafkaTools extends Command {
 
                   if (path.length > 0) {
                     //println("Deleting from path " + path)
-                    ReportState(index + 1, currentPathSize + (path -> 0L)).tap { newState =>
+                    ReportState(index + 1, currentPathSize + (path -> 0L)).unsafeTap { newState =>
                       trackState(newState)
                     }
                   } else {
@@ -511,7 +518,7 @@ object KafkaTools extends Command {
   case object LocalFormat extends Format {
     def dump(i: Int, msg: MessageAndOffset) {
       EventEncoding.read(msg.message.payload) match {
-        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _)) =>
+        case Success(Ingest(apiKey, path, ownerAccountId, data, _, _, _)) =>
           println("Ingest-%06d Offset: %d Path: %s APIKey: %s Owner: %s --".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.renderPretty))
 
@@ -526,7 +533,7 @@ object KafkaTools extends Command {
       val parsed = parseEventMessage(msg)
 
       parsed.foreach {
-        case IngestMessage(apiKey, path, ownerAccountId, data, _, _) =>
+        case IngestMessage(apiKey, path, ownerAccountId, data, _, _, _) =>
           println("IngestMessage-%06d Offset: %d, Path: %s APIKey: %s Owner: %s".format(i+1, msg.offset, path, apiKey, ownerAccountId))
           data.foreach(v => println(v.serialize.renderPretty))
       }
@@ -747,8 +754,8 @@ object ImportTools extends Command with Logging {
   class Config(
     var input: Vector[(String, String)] = Vector.empty,
     val batchSize: Int = 10000,
-    var apiKey: APIKey = "root",     // FIXME
-    var accountId: AccountId = "",
+    var apiKey: APIKey = "not-a-real-key",
+    var accountId: AccountId = "not-a-real-account",
     var verbose: Boolean = false ,
     var storageRoot: File = new File("./data"),
     var archiveRoot: File = new File("./archive")
@@ -788,6 +795,8 @@ object ImportTools extends Command with Logging {
     object shardModule { self =>
       class YggConfig(val config: Configuration) extends BaseConfig {
         val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
+        val clock = blueeyes.util.Clock.System
+        val storageTimeout = Timeout(Duration(120, "seconds"))
       }
 
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
@@ -802,62 +811,106 @@ object ImportTools extends Command with Logging {
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
       val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
-      val apiKeyFinder = new DirectAPIKeyFinder(new UnrestrictedAPIKeyManager[Future](Clock.System))
+
+      logger.info("Starting APIKeyFinder")
+      //// ****** WARNING ****** ////
+      // IF YOU EVER CHANGE THE FOLLOWING LINE TO USE ANYTHING BUT THE IN-MEMORY SYSTEM,
+      // YOU MUST FIX grantWrite OR YOU'LL GIVE ROOT PERMISSIONS TO THE API KEY BEING
+      // USED FOR THE WRITE
+      val apiKeyManager = new InMemoryAPIKeyManager[Future](Clock.System)
+      //// ****** END WARNING ****** ////
+
+      val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
+      logger.info("Starting PermissionsFinder")
       val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
 
-      val projectionsActor = actorSystem.actorOf(Props(new NIHDBProjectionsActor(yggConfig.dataDir, yggConfig.archiveDir, FilesystemFileOps, masterChef, yggConfig.cookThreshold, Timeout(Duration(300, "seconds")), permissionsFinder)))
+      val authorities = Authorities(config.accountId)
+
+      logger.info("Starting ResourceBuilder")
+      val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+
+      logger.info("Starting Projections Actor")
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
+
+      logger.info("Shard module complete")
     }
 
     import shardModule._
+    import AsyncParser._
 
     val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
-    config.input.foreach {
-      case (db, input) =>
 
+    def grantWrite(key: APIKey) = 
+      for { 
+        rootKey <- apiKeyManager.rootAPIKey 
+        rootGrantId <- apiKeyManager.rootGrantId 
+        _ <- apiKeyManager.populateAPIKey(None, None, rootKey, key, Set(rootGrantId)) onComplete {
+          case Left(error) => logger.error("Could not add grant " + rootGrantId + " to apiKey " + key, error)
+          case Right(success) => logger.info("Updated API key record: " + success)
+        }
+      } yield key
+
+    def logGrants(key: APIKey) = shardModule.apiKeyManager.validGrants(key, None) onComplete {
+      case Left(error) => logger.error("Could not retrieve grants for api key " + key, error)
+      case Right(success) => logger.info("Grants for " + key + ": " + success)
+    }
+
+    def runIngest(apiKey: APIKey) = config.input.toStream traverse {
+      case (db, input) =>
+        val path = Path(db)
         logger.info("Inserting batch: %s:%s".format(db, input))
-        import scala.annotation.tailrec
+
         val bufSize = 8 * 1024 * 1024
         val f = new File(input)
         val ch = new FileInputStream(f).getChannel
         val bb = ByteBuffer.allocate(bufSize)
 
-        @tailrec def loop(p: AsyncParser) {
+        def loop(offset: Long, p: AsyncParser): Future[Unit] = {
           val n = ch.read(bb)
           bb.flip()
 
-          val input = if (n >= 0) Some(bb) else None
+          val input = if (n >= 0) More(bb) else Done
           val (AsyncParse(errors, results), parser) = p(input)
+
           if (!errors.isEmpty) {
             sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
+          } else if (results.size > 0) {
+            val eventidobj = EventId(pid, sid.getAndIncrement)
+            logger.info("Sending %d events".format(results.size))
+            val records = results map { IngestRecord(eventidobj, _) }
+            val update = IngestData(
+              Seq((offset, IngestMessage(apiKey, path, authorities, records, None, yggConfig.clock.instant, StreamRef.Append)))
+            )
+
+            (projectionsActor ? update) flatMap { _ =>
+              logger.info("Batch saved")
+              bb.flip()
+              if (n >= 0) loop(offset + 1, parser) else Future(())
+            }
+          } else {
+            if (n >= 0) loop(offset + 1, parser) else Future(())
           }
-          val eventidobj = EventId(pid, sid.getAndIncrement)
-          val records = results.map(v => IngestRecord(eventidobj, v))
-          val update = ProjectionInsert(Path(db), Seq((eventidobj.uid, records)), Authorities(config.accountId))
-          Await.result(projectionsActor ? update, Duration(300, "seconds"))
-          logger.info("Batch saved")
-          bb.flip()
-          if (n >= 0) loop(parser)
         }
-
-        try {
-          loop(AsyncParser(true))
-        } finally {
-          ch.close()
+        
+        loop(0L, AsyncParser.stream()) onComplete { 
+          case _ => ch.close()
         }
     }
 
-    logger.info("Finalizing chef work-in-progress")
-    chefs.foreach { chef =>
-      Await.result(gracefulStop(chef, stopTimeout), stopTimeout)
-    }
+    val complete = 
+      grantWrite(config.apiKey) >>
+      logGrants(config.apiKey) >> 
+      runIngest(config.apiKey) >>
+      Future(logger.info("Finalizing chef work-in-progress")) >>
+      chefs.toList.traverse(gracefulStop(_, stopTimeout)) >>
+      gracefulStop(masterChef, stopTimeout) >>
+      Future(logger.info("Completed chef shutdown")) >>
+      Future(logger.info("Waiting for shard shutdown")) >>
+      gracefulStop(projectionsActor, stopTimeout)
 
-    Await.result(gracefulStop(masterChef, stopTimeout), stopTimeout)
-    logger.info("Completed chef shutdown")
-
-    logger.info("Waiting for shard shutdown")
-    Await.result(gracefulStop(projectionsActor, stopTimeout), stopTimeout)
+    Await.result(complete, stopTimeout)
     actorSystem.shutdown()
 
     logger.info("Shutdown")
@@ -1008,7 +1061,7 @@ object APIKeyTools extends Command with AkkaDefaults with Logging {
   }
 
   def create(accountId: String, apiKeyName: String, apiKeyManager: APIKeyManager[Future]) = {
-    apiKeyManager.newStandardAPIKeyRecord(accountId, Path(accountId), Some(apiKeyName))
+    apiKeyManager.newStandardAPIKeyRecord(accountId, Some(apiKeyName))
   }
 
   def delete(t: String, apiKeyManager: APIKeyManager[Future]) = sys.error("todo")

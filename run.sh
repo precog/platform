@@ -130,7 +130,75 @@ SHARD_PORT:        $SHARD_PORT
 EOF
 
 function query {
-    curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID"
+    if [ -n "$2" ]; then
+        curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID" > $2
+    else
+        curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID"
+    fi
+}
+
+function queryCache {
+    SCRIPTNAME=$(basename $1)
+
+    # Store query file
+    echo "Storing $1 as $SCRIPTNAME" 1>&2
+    scripts/shardtool -q $1 $SCRIPTNAME 1>&2
+
+    # Wait for the script to become available in shard
+    TRIES_LEFT=10
+    SCRIPT_FOUND=0
+
+    while [[ $TRIES_LEFT -gt 0 && $SCRIPT_FOUND -eq 0 ]]; do
+        if scripts/shardtool -m / | grep $SCRIPTNAME > /dev/null; then
+            [ -n "$DEBUG" ] && echo "$SCRIPTNAME stored successfully"
+            SCRIPT_FOUND=1
+            break
+        else
+            [ -n "$DEBUG" ] && echo "$SCRIPTNAME not found, polling"
+        fi
+        TRIES_LEFT=$(( $TRIES_LEFT - 1 ))
+        sleep 1
+    done
+
+    if [[ $SCRIPT_FOUND -eq 0 ]]; then
+        echo "Failed to store script $1" 1>&2
+        EXIT_CODE=1
+    else
+        echo "Successfuly stored script $1" 1>&2
+    fi
+
+    # Run the query thrice, ensuring that on the second run we get a Last-Modified header
+    scripts/shardtool -c $SCRIPTNAME 600 > tmp-result.json
+
+    [ -n "$DEBUG" ] && {
+        echo "First run result ="
+        cat tmp-result.json
+    }
+
+    CACHERUNRESULT=$(curl -G -D - -o /dev/null -H 'Cache-Control: max-age=600' --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analysis/fs/$ACCOUNTID/$SCRIPTNAME" 2>/dev/null)
+
+    [ -n "$DEBUG" ] && {
+        echo -e "Cache run result:\n$CACHERUNRESULT"
+    }
+
+    if [[ "$CACHERUNRESULT" != *Last-Modified* ]]; then
+        echo "Stored script $1 failed to cache" 1>&2
+        EXIT_CODE=1
+    else
+        echo "Good cached result on $1" 1>&2
+    fi
+
+    scripts/shardtool -c $SCRIPTNAME 600 > tmp-result2.json
+
+    if ! diff tmp-result.json tmp-result2.json; then
+        echo "Cached result differs from original" 1>&2
+        EXIT_CODE=1
+    fi
+
+    rm tmp-result*
+
+    # kludgey, but at this point we just need to return the results
+    scripts/shardtool -c $SCRIPTNAME 600 > $2
 }
 
 function repl {
@@ -189,28 +257,60 @@ done
 
 EXIT_CODE=0
 
+QUERY_TYPE=0
+
 if [ "$QUERYDIR" = "" ]; then
     echo "TOKEN=$TOKEN"
     echo "WORKDIR=$WORKDIR"
     repl
 else
     for f in $(find $QUERYDIR -type f ! -name '*.pending'); do
-        query "$(cat $f)" > results.json
+        case $QUERY_TYPE in
+            0)
+                QUERY_TYPE=1
+                echo "Executing sync query for $f" 1>&2
+                query "$(cat $f)" results.json
+                ;;
+            1)
+                QUERY_TYPE=0
+                queryCache "$f" results.json
+                ;;
+        esac
         RESULT="$(cat results.json)"
 
-        if [ -n "$DEBUG" ]; then
+        [ -n "$DEBUG" ] && {
             echo -e "Result for $f:"
             cat results.json
             echo ""
+        }
+
+        if ! python -m json.tool results.json 1>/dev/null 2>/dev/null; then
+            echo "Query $f returned a bad result (could not convert)" 1>&2
+            EXIT_CODE=1
         fi
 
-        if ! python -m json.tool results.json 1>/dev/null 2>/dev/null || [ "${RESULT:0:1}" != "[" ] || [ "${RESULT:0:2}" = "[]" ]; then
-            echo "Query $f returned a bad result" 1>&2
+        if [ "${RESULT:0:1}" != "[" ]; then
+            echo "Query $f returned a bad result (unexpected first character ${RESULT:0:1})" 1>&2
+            EXIT_CODE=1
+        fi
+
+        if [ "${RESULT:0:2}" = "[]" ]; then
+            echo "Query $f returned a bad result (empty result)" 1>&2
             EXIT_CODE=1
         fi
     done
 
-    [ "$EXIT_CODE" != "0" ] && echo "Queries failed!" || echo "Queries succeeded"
+    [ "$EXIT_CODE" != "0" ] && {
+        echo "Queries failed!"
+        [ -n "$DEBUG" ] && {
+            echo "Pausing for triage"
+            sleep 3600
+        }
+    } || {
+        echo "Queries succeeded"
+        # Clean up if queries worked
+        rm results.json
+    }
 
     # Test archive to make sure it works by actually removing all of our ingested data
     echo "Deleting ingested data"

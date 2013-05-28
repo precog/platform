@@ -44,7 +44,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
   "API key finders" should {
     "create and find API keys" in {
       withAPIKeyFinder(emptyAPIKeyManager) { keyFinder =>
-        val v1.APIKeyDetails(apiKey0, _, _, _, _) = keyFinder.newAPIKey("Anything works.", Path("/some-path")).copoint
+        val v1.APIKeyDetails(apiKey0, _, _, _, _) = keyFinder.createAPIKey("Anything works.").copoint
         val Some(v1.APIKeyDetails(apiKey1, _, _, _, _)) = keyFinder.findAPIKey(apiKey0, None).copoint
         apiKey0 must_== apiKey1
       }
@@ -53,7 +53,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
     "find existing API key" in {
       val (key, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
-        key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
+        key0 <- mgr.newStandardAPIKeyRecord("user1", None, None)
       } yield (key0.apiKey -> mgr)).copoint
       withAPIKeyFinder(mgr) { keyFinder =>
         keyFinder.findAPIKey(key, None).copoint map (_.apiKey) must_== Some(key)
@@ -64,7 +64,7 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       withAPIKeyFinder(emptyAPIKeyManager) { keyFinder =>
         val accountId = "user1"
         val path = Path("/user1/")
-        val key = keyFinder.newAPIKey(accountId, path, None, None).copoint
+        val key = keyFinder.createAPIKey(accountId, None, None).copoint
         val permissions: Set[Permission] = Set(
           ReadPermission(path, WrittenByAccount(accountId)), 
           DeletePermission(path, WrittenByAccount(accountId)), 
@@ -85,9 +85,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
       val (key0, key1, grantId, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
-        key0 <- mgr.newStandardAPIKeyRecord("user1", path, None, None)
-        key1 <- mgr.newStandardAPIKeyRecord("user2", Path("/user2/"), None, None)
-        grant <- mgr.newAccountGrant("user1", None, None, key0.apiKey, Set.empty, None)
+        key0 <- mgr.newStandardAPIKeyRecord("user1", None, None)
+        key1 <- mgr.newStandardAPIKeyRecord("user2", None, None)
+        grant <- mgr.createGrant(None, None, key0.apiKey, Set.empty, permissions, None)
       } yield (key0.apiKey, key1.apiKey, grant.grantId, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -99,9 +99,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
     "find all child API Keys" in {
       val (parent, keys, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
-        key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
-        key1 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
-        key2 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
+        key0 <- mgr.newStandardAPIKeyRecord("user1", None, None)
+        key1 <- mgr.createAPIKey(None, None, key0.apiKey, Set.empty)
+        key2 <- mgr.createAPIKey(None, None, key0.apiKey, Set.empty)
       } yield ((key0.apiKey, Set(key1, key2) map (_.apiKey), mgr))).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -113,9 +113,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
     "not return grand-child API keys or self API key when finding children" in {
       val (parent, child, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
-        key0 <- mgr.newStandardAPIKeyRecord("user1", Path("/user1/"), None, None)
-        key1 <- mgr.newAPIKey(None, None, key0.apiKey, Set.empty)
-        key2 <- mgr.newAPIKey(None, None, key1.apiKey, Set.empty)
+        key0 <- mgr.newStandardAPIKeyRecord("user1", None, None)
+        key1 <- mgr.createAPIKey(None, None, key0.apiKey, Set.empty)
+        key2 <- mgr.createAPIKey(None, None, key1.apiKey, Set.empty)
       } yield ((key0.apiKey, key1.apiKey, mgr))).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -138,9 +138,9 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
 
       val (key0, key1, grantId, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
-        key0 <- mgr.newStandardAPIKeyRecord("user1", path, None, None)
-        key1 <- mgr.newStandardAPIKeyRecord("user2", Path("/user2/"), None, None)
-        grant <- mgr.newAccountGrant("user1", None, None, key0.apiKey, Set.empty, Some(expiration))
+        key0 <- mgr.newStandardAPIKeyRecord("user1", None, None)
+        key1 <- mgr.newStandardAPIKeyRecord("user2", None, None)
+        grant <- mgr.createGrant(None, None, key0.apiKey, Set.empty, permissions, Some(expiration))
       } yield (key0.apiKey, key1.apiKey, grant.grantId, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -154,8 +154,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       val (rootKey, key0, key1, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
         rootKey <- mgr.rootAPIKey
-        key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
-        key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
+        key0 <- mgr.createAPIKey(Some("key0"), None, rootKey, Set.empty)
+        key1 <- mgr.createAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
       } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>
@@ -168,8 +168,8 @@ trait APIKeyFinderSpec[M[+_]] extends Specification {
       val (rootKey, key0, key1, mgr) = (for {
         mgr <- M.point(emptyAPIKeyManager)
         rootKey <- mgr.rootAPIKey
-        key0 <- mgr.newAPIKey(Some("key0"), None, rootKey, Set.empty)
-        key1 <- mgr.newAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
+        key0 <- mgr.createAPIKey(Some("key0"), None, rootKey, Set.empty)
+        key1 <- mgr.createAPIKey(Some("key1"), None, key0.apiKey, Set.empty)
       } yield (rootKey, key0.apiKey, key1.apiKey, mgr)).copoint
 
       withAPIKeyFinder(mgr) { keyFinder =>

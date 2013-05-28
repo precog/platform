@@ -75,17 +75,15 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
   val JSON_STREAM = MimeType("application", "x-json-stream")
   val CSV = MimeTypes.text/MimeTypes.csv
 
-  def bb(s: String) = ByteBuffer.wrap(s.getBytes("UTF-8"))
-
   def chunk(strs: String*): ByteChunk =
-    Right(strs.map(bb).foldRight(StreamT.empty[Future, ByteBuffer])(_ :: _))
+    Right(strs.map(_.getBytes("UTF-8")).foldRight(StreamT.empty[Future, Array[Byte]])(_ :: _))
 
   "Ingest service" should {
     "track event with valid API key" in {
       val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), batch = false)(testValue)
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must contain(testValue).only
       }
     }
@@ -100,7 +98,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must containAllOf(t1 :: t2 :: t3 :: Nil).only
       }
     }
@@ -116,35 +114,38 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
 
       result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _) :: Nil) =>
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
           values must contain(arr).only
       }
     }
-    "track asynchronous event with valid API key" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
-        chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
-      }
 
-      result.copoint must beLike {
-        case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
-      }
-    }
+    // TODO: this test should be rewritten to address global durability
+    // "track asynchronous event with valid API key" in {
+    //   val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = false, batch = true) {
+    //     chunk("""{ "testing": 123 }""" + "\n", """{ "testing": 321 }""")
+    //   }
 
-    "track synchronous batch event with bad row" in {
-      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
-        chunk("178234#!!@#$\n", """{ "testing": 321 }""")
-      }
+    //   result.copoint must beLike {
+    //     case (HttpResponse(HttpStatus(Accepted, _), _, Some(content), _), _) => (content.asInstanceOf[JObject] \? "ingestId") must not beEmpty
+    //   }
+    // }
 
-      result.copoint must beLike {
-        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
-          msg \ "total" mustEqual JNum(3)
-          msg \ "ingested" mustEqual JNum(2)
-          msg \ "failed" mustEqual JNum(1)
-          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
-
-          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
-      }
-    }
+// We no longer have "ingest all possible" semantics.
+//    "track synchronous batch event with bad row" in {
+//      val result = track(JSON, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
+//        chunk("178234#!!@#$\n", """{ "testing": 321 }""")
+//      }
+//
+//      result.copoint must beLike {
+//        case (HttpResponse(HttpStatus(OK, _), _, Some(msg), _), events) =>
+//          msg \ "total" mustEqual JNum(3)
+//          msg \ "ingested" mustEqual JNum(2)
+//          msg \ "failed" mustEqual JNum(1)
+//          msg \ "errors" mustEqual JArray(JObject(JField("line", JNum(1)), JField("reason", JString("expected json value got # (line 1, column 7)"))))
+//
+//          events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
+//      }
+//    }
 
     "track CSV batch ingest with valid API key" in {
       val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {
@@ -223,11 +224,16 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
       result.copoint must beLike {
         case (HttpResponse(HttpStatus(BadRequest, _), _, Some(JObject(fields)), _), _) =>
-          val JArray(errors) = fields("errors")
-          forall(errors) {
-            case JString(msg) => msg must contain("cannot ingest values with more than 1024 primitive fields.")
-            case _ => ko
-          } 
+          fields("errors") must beLike {
+            case JArray(errors) =>
+              atLeastOnce(errors) {
+                case JObject(fields) => 
+                  fields("reason") must beLike {
+                    case JString(s) => s must startWith("Cannot ingest values with more than 1024 primitive fields.") 
+                  }
+                case _ => ko
+              }
+          }
       }
     }
 
