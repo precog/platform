@@ -85,8 +85,6 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
   import instructions._
   import library._
 
-  def testAPIKey = "testAPIKey"
-
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results

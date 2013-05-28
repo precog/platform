@@ -50,7 +50,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       }
     }
 
-    "return count of empty set as 0 in body of solve" in {
+    "return count of empty set as 0 in body of solve (2)" in {
       val input = """
         | data := new {a: "down", b: 13}
         |

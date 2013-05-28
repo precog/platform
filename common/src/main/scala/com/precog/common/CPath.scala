@@ -59,6 +59,7 @@ sealed trait CPath { self =>
   def \: (that: Int):    CPath = CPath(CPathIndex(that) +: self.nodes)
 
   def hasPrefix(p: CPath): Boolean = nodes.startsWith(p.nodes)
+  def hasSuffix(p: CPath): Boolean = nodes.endsWith(p.nodes)
 
   def take(length: Int): Option[CPath] = {
     (nodes.length >= length).option(CPath(nodes.take(length)))
@@ -253,42 +254,43 @@ object CPath {
   case class PathWithLeaf[A](path: Seq[CPathNode], value: A) {
     val size: Int = path.length
   }
+
+  def makeStructuredTree[A](pathsAndValues: Seq[(CPath, A)]) = {
+    def inner[A](paths: Seq[PathWithLeaf[A]]): Seq[CPathTree[A]] = {
+      if (paths.size == 1 && paths.head.size == 0) {
+        List(LeafNode(paths.head.value))
+      } else {
+        val filtered = paths filterNot { case PathWithLeaf(path, _) => path.isEmpty }
+        val grouped = filtered groupBy { case PathWithLeaf(path, _) => path.head }
+
+        def recurse[A](paths: Seq[PathWithLeaf[A]]) = 
+          inner(paths map { case PathWithLeaf(path, v) => PathWithLeaf(path.tail, v) })
+
+        val result = grouped.toSeq.sortBy(_._1) map { case (node, paths) =>
+          node match {
+            case (field: CPathField) => FieldNode(field, recurse(paths))
+            case (index: CPathIndex) => IndexNode(index, recurse(paths))
+            case _ => sys.error("CPathArray and CPathMeta not supported")
+          }
+        }
+        result
+      }
+    }
+
+    val leaves = pathsAndValues.sortBy(_._1) map { case (path, value) =>
+      PathWithLeaf[A](path.nodes, value)
+    }
+
+    RootNode(inner(leaves))
+  }
   
   def makeTree[A](cpaths0: Seq[CPath], values: Seq[A]): CPathTree[A] = {
-    if (cpaths0.isEmpty) {
-      values.headOption match {
-        case Some(a) => RootNode(Seq(LeafNode(a)))
-        case None => RootNode(Seq.empty[CPathTree[A]])
-      }
-    } else {
-      assert(values.length == cpaths0.length)
-
-      val cpathNodes = cpaths0.sorted map { _.nodes }
-      val cpathWithValue = cpathNodes.zip(values) map { case (path, value) => PathWithLeaf[A](path, value) }
-
-      def inner[A](paths: Seq[PathWithLeaf[A]]): Seq[CPathTree[A]] = {
-        if (paths.size == 1 && paths.head.size == 0) {
-          List(LeafNode(paths.head.value))
-        } else {
-          val filtered = paths filterNot { case PathWithLeaf(path, _) => path.isEmpty }
-          val grouped = filtered groupBy { case PathWithLeaf(path, _) => path.head }
-
-          def recurse[A](paths: Seq[PathWithLeaf[A]]) = 
-            inner(paths map { case PathWithLeaf(path, v) => PathWithLeaf(path.tail, v) })
-
-          val result = grouped.toSeq.sortBy(_._1) map { case (node, paths) =>
-            node match {
-              case (field: CPathField) => FieldNode(field, recurse(paths))
-              case (index: CPathIndex) => IndexNode(index, recurse(paths))
-              case _ => sys.error("CPathArray and CPathMeta not supported")
-            }
-          }
-          result
-        }
-      }
-
-      RootNode(inner(cpathWithValue))
-    }
+    if (cpaths0.isEmpty && values.length == 1)
+      RootNode(Seq(LeafNode(values.head)))
+    else if (cpaths0.length == values.length)
+      makeStructuredTree(cpaths0.sorted zip values)
+    else
+      RootNode(Seq.empty[CPathTree[A]])
   }
 
   implicit def singleNodePath(node: CPathNode) = CPath(node)

@@ -197,6 +197,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def extractValue(res: Result) = res map { CDate(_) }
     }
 
+    val MaxMonoid = implicitly[Monoid[Max.Result]]
     object Max extends Reduction(ReductionNamespace, "max") {
       type Result = Option[BigDecimal]
 
@@ -256,6 +257,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       def extractValue(res: Result) = res map { CNum(_) }
     }
 
+    val MinMonoid = implicitly[Monoid[Min.Result]]
     object Min extends Reduction(ReductionNamespace, "min") {
       type Result = Option[BigDecimal]
 
@@ -404,7 +406,7 @@ trait ReductionLibModule[M[+_]] extends ColumnarTableLibModule[M] {
         }
       }
 
-      def perform(res: Result) = res map {
+      def perform(res: Result): Option[BigDecimal] = res map {
         case (sum, count) => sum / count
       }
 
