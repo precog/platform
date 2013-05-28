@@ -597,7 +597,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               case (_, reductions) => coalesce(reductions.map((_, None)))
             }
 
-            val reduction = coalesce(firstCoalesce.zipWithIndex map { case (r, j) => (r, Some(j)) })
+            def makeJArray(idx: Int)(tpe: JType): JType = JArrayFixedT(Map(idx -> tpe))
+
+            val original = firstCoalesce.zipWithIndex map { case (red, idx) =>
+              (red, Some(makeJArray(idx) _))
+            }
+            val reduction = coalesce(original)
 
             val spec = combineTransSpecs(reds.map(_._1))
 

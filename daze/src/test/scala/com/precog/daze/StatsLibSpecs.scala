@@ -4,7 +4,6 @@ import org.specs2.mutable._
 
 import com.precog.common._
 import com.precog.yggdrasil._
-import com.precog.common.Path
 
 import blueeyes.json._
 
@@ -28,8 +27,6 @@ trait StatsLibSpecs[M[+_]] extends Specification
   import dag._
   import instructions._
   import library._
-
-  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {

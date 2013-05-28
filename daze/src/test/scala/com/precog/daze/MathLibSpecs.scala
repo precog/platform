@@ -21,7 +21,6 @@ trait MathLibSpecs[M[+_]] extends Specification
   import library._
 
   val line = Line(1, 1, "")
-  val testAPIKey = "testAPIKey"
   val homn4 = "/hom/numbers4"
 
   def inputOp2(op: Op2, loadFrom: String, const: RValue) = {
@@ -2085,5 +2084,3 @@ trait MathLibSpecs[M[+_]] extends Specification
 }
 
 object MathLibSpecs extends MathLibSpecs[test.YId] with test.YIdInstances
-
-// vim: set ts=4 sw=4 et:

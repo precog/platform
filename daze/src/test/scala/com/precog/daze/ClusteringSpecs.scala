@@ -23,7 +23,6 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
   import instructions._
   import library._
 
-  val testAPIKey = "testAPIKey"
   val line = Line(0, 0, "")
 
   def testEval(graph: DepGraph): Set[SEvent] = {

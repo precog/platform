@@ -543,21 +543,37 @@ trait Slice { source =>
 
   def compact(filter: Slice, definedness: Definedness): Slice = {
     new Slice {
-      private val cols = filter.columns.values.toArray
-      lazy val retained = definedness match {
-        case AnyDefined =>
-          val acc = new ArrayIntList
-          Loop.range(0, filter.size) {
-            i => if (cols.exists(_.isDefinedAt(i))) acc.add(i)
-          }
-          acc
+      private val cols = filter.columns
 
-        case AllDefined =>
+      lazy val retained = definedness match {
+        case AnyDefined => {
           val acc = new ArrayIntList
-          Loop.range(0, filter.size) {
-            i => if (cols.forall(_.isDefinedAt(i))) acc.add(i)
+          Loop.range(0, filter.size) { i =>
+            if (cols.values.toArray.exists(_.isDefinedAt(i))) acc.add(i)
           }
           acc
+        }
+
+        case AllDefined => {
+          val acc = new ArrayIntList
+          val (numCols, otherCols) = cols partition { case (ColumnRef(_, ctype), _) => 
+            ctype.isNumeric
+          }
+
+          val grouped = numCols groupBy { case (ColumnRef(cpath, _), _) => cpath }
+
+          Loop.range(0, filter.size) { i =>
+            val numBools = grouped.values map { case refs =>
+              refs.values.toArray.exists(_.isDefinedAt(i))
+            }
+
+            val numBool = numBools reduce { _ && _ }
+            val otherBool = otherCols.values.toArray.forall(_.isDefinedAt(i))
+
+            if (otherBool && numBool) acc.add(i)
+          }
+          acc
+        }
       }
 
       lazy val size = retained.size

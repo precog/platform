@@ -150,6 +150,8 @@ class NIHDBLogisticRegressionSpecs extends LogisticRegressionSpecs with NIHDBPla
 
 class NIHDBLinearRegressionSpecs extends LinearRegressionSpecs with NIHDBPlatformSpecs
 
+class NIHDNormalizationSpecs extends NormalizationSpecs with NIHDBPlatformSpecs
+
 class NIHDBEnrichmentSpecs extends EnrichmentSpecs with NIHDBPlatformSpecs
 
 class NIHDBClusteringSpecs extends ClusteringSpecs with NIHDBPlatformSpecs

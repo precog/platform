@@ -24,8 +24,6 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
   import TableModule.CrossOrder._
 
-  val testAPIKey = "testAPIKey"
-
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results
