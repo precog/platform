@@ -118,8 +118,8 @@ trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] with XLightWeb
       import trans.constants._
 
       val qid = yggConfig.queryId.getAndIncrement()
-      queryLogger.info("[QID:%d] Executing query for %s: %s, prefix: %s" format 
-        (qid, evaluationContext.apiKey, query, evaluationContext.basePath))
+      queryLogger.info("[QID:%d] Executing query for %s: %s, context: %s" format 
+        (qid, evaluationContext.apiKey, query, evaluationContext))
 
       import EvaluationError._
 

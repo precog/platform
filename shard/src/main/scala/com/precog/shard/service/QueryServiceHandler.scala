@@ -122,7 +122,8 @@ class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, S
     ShardServiceCombinators.queryOpts(request) map { queryOptions =>
       { (details: (APIKey, AccountDetails), path: Path) =>
         val (apiKey, accountDetails) = details
-        val context = EvaluationContext(apiKey, accountDetails, path, clock.now())
+        // The context needs to use the prefix of the requested script, not th script path
+        val context = EvaluationContext(apiKey, accountDetails, path.prefix getOrElse Path.Root, clock.now())
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
         logger.debug("Received analysis request with cache directives: " + cacheDirectives)
 
