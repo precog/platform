@@ -50,14 +50,14 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
         traverse(pattern.matcher(pathString), Stream(pathRoot))
       }
   
-      def apply(input: Table, ctx: EvaluationContext): M[Table] = M.point {
-        val storageMetadata = userMetadataView(ctx.apiKey)
+      def apply(input: Table, ctx: MorphContext): M[Table] = M.point {
+        val storageMetadata = userMetadataView(ctx.evalContext.account.apiKey)
         val result = Table(
           input.transform(SourceValue.Single).slices flatMap { slice =>
             slice.columns.get(ColumnRef.identity(CString)) collect { 
               case col: StrColumn => 
                 val expanded: Stream[M[Stream[Path]]] = Stream.tabulate(slice.size) { i =>
-                  expand_*(col(i), ctx.basePath, storageMetadata)
+                  expand_*(col(i), ctx.evalContext.basePath, storageMetadata)
                 }
   
                 StreamT wrapEffect {
@@ -65,7 +65,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] with StorageMetadataS
                     val unprefixed: Stream[String] = for {
                       paths <- pathSets
                       path <- paths
-                      suffix <- (path - ctx.basePath)
+                      suffix <- (path - ctx.evalContext.basePath)
                     } yield suffix.toString
   
                     Table.constString(unprefixed.toSet).slices 
