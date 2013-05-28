@@ -12,7 +12,7 @@ import AsyncParser._
 import com.precog.common.Path
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
-import com.precog.common.security.{APIKey, Authorities}
+import com.precog.common.security.{APIKey, Authorities, WriteMode}
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -48,7 +48,7 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
   }
 
   final class IngestProcessor extends IngestProcessorLike {
-    def ingestJSONChunk(errorHandling: ErrorHandling, storeMode: StoreMode, jobId: Option[JobId], stream: StreamT[Future, Array[Byte]]): Future[IngestReport] = {
+    def ingestJSONChunk(errorHandling: ErrorHandling, storeMode: WriteMode, jobId: Option[JobId], stream: StreamT[Future, Array[Byte]]): Future[IngestReport] = {
       val overLargeMsg = "Cannot ingest values with more than %d primitive fields. This limitiation may be lifted in a future release. Thank you for your patience.".format(maxFields)
 
       @inline def expandArraysAtRoot(values: Seq[JValue]) = recordStyle match {
@@ -181,15 +181,15 @@ final class JSONIngestProcessing(apiKey: APIKey, path: Path, authorities: Author
 
       errorHandling match {
         case StopOnFirstError => 
-          ingestUnbuffered(JSONParseState.empty(true), stream, storeMode.createStreamRef(false)) map { _.report }
+          ingestUnbuffered(JSONParseState.empty(true), stream, StreamRef.forWriteMode(storeMode, false)) map { _.report }
         case IngestAllPossible => 
-          ingestUnbuffered(JSONParseState.empty(false), stream, storeMode.createStreamRef(false)) map { _.report }
+          ingestUnbuffered(JSONParseState.empty(false), stream, StreamRef.forWriteMode(storeMode, false)) map { _.report }
         case AllOrNothing => 
-          ingestAllOrNothing(JSONParseState.empty(true), stream, storeMode.createStreamRef(false))
+          ingestAllOrNothing(JSONParseState.empty(true), stream, StreamRef.forWriteMode(storeMode, false))
       }
     }
 
-    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult] = {
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: WriteMode, data: ByteChunk): Future[IngestResult] = {
       val dataStream = data.fold(_ :: StreamT.empty[Future, Array[Byte]], identity)
 
       durability match {

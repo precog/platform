@@ -23,7 +23,9 @@ import com.precog.niflheim._
 import com.precog.util.PrecogUnit
 import com.precog.util.FilesystemFileOps
 import com.precog.util.XLightWebHttpClientModule
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.scheduling._
 
 import yggdrasil._
 import yggdrasil.actor._
@@ -87,8 +89,9 @@ class REPLConfig(dataDir: Option[String]) extends BaseConfig
 }
 
 trait REPL extends ParseEvalStack[Future]
-    with NIHDBColumnarTableModule
-    with NIHDBStorageMetadataSource
+    with ActorVFSModule
+    with SecureVFSModule[Future, Slice]
+    with VFSColumnarTableModule
     with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] {
 
@@ -281,14 +284,19 @@ object Console extends App {
         val apiKeyManager = new InMemoryAPIKeyManager[Future](yggConfig.clock)
 
         val accessControl = new DirectAPIKeyFinder(apiKeyManager)
-        val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
 
         val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, Duration(300, "seconds"), new InMemoryJobManager[Future], yggConfig.clock)))
+        val jobManager = new InMemoryJobManager[Future]
+        val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
+        val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout)
 
-        trait TableCompanion extends NIHDBColumnarTableCompanion
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, Duration(300, "seconds"), yggConfig.clock)))
+
+        val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
+        val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)
+
+        trait TableCompanion extends VFSColumnarTableCompanion
 
         object Table extends TableCompanion
 

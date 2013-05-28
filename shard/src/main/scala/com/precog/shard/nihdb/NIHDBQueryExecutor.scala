@@ -11,12 +11,13 @@ import com.precog.common.ingest._
 import com.precog.common.jobs._
 
 import com.precog.daze._
-import com.precog.muspelheim._
 import com.precog.niflheim._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.nihdb._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
@@ -31,6 +32,7 @@ import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _
 import akka.actor.{ActorSystem, Props}
 import akka.dispatch._
 import akka.pattern.ask
+import akka.pattern.GracefulStopSupport
 import akka.routing.RoundRobinRouter
 import akka.util.{Duration, Timeout}
 import akka.util.duration._
@@ -55,6 +57,8 @@ import scalaz.std.list._
 
 import org.streum.configrity.Configuration
 
+// type NIHDBQueryExecutor
+
 trait NIHDBQueryExecutorConfig
     extends ShardQueryExecutorConfig
     with BlockStoreColumnarTableModuleConfig
@@ -76,16 +80,19 @@ trait NIHDBQueryExecutorConfig
 trait NIHDBQueryExecutorComponent  {
   import blueeyes.json.serialization.Extractor
 
-  def platformFactory(config0: Configuration, extApiKeyFinder: APIKeyFinder[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
+  def nihdbPlatform(config0: Configuration, extApiKeyFinder: APIKeyFinder[Future], extAccountFinder: AccountFinder[Future], extJobManager: JobManager[Future]) = {
     new ManagedPlatform
+        with SecureVFSModule[Future, Slice]
+        with ActorVFSModule
+        with SchedulingActorModule
         with ShardQueryExecutorPlatform[Future]
-        with NIHDBColumnarTableModule
-        with NIHDBStorageMetadataSource
-        with KafkaIngestActorProjectionSystem { platform =>
+        with VFSColumnarTableModule
+        with KafkaIngestActorProjectionSystem 
+        with GracefulStopSupport { platform =>
 
       type YggConfig = NIHDBQueryExecutorConfig
       val yggConfig = new NIHDBQueryExecutorConfig {
-        override val config = config0
+        override val config = config0.detach("queryExecutor")
         val sortWorkDir = scratchDir
         val memoizationBufferSize = sortBufferSize
         val memoizationWorkDir = scratchDir
@@ -93,6 +100,7 @@ trait NIHDBQueryExecutorComponent  {
         val clock = blueeyes.util.Clock.System
         val smallSliceSize = config[Int]("jdbm.small_slice_size", 8)
         val timestampRequiredAfter = new Instant(config[Long]("ingest.timestamp_required_after", 1363327426906L))
+        val schedulingTimeout = new Timeout(config[Int]("scheduling.timeout_ms", 10000))
 
         //TODO: Get a producer ID
         val idSource = new FreshAtomicIdSource
@@ -117,43 +125,48 @@ trait NIHDBQueryExecutorComponent  {
       }
       val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
 
-      val accessControl = extApiKeyFinder
+      //val accessControl = extApiKeyFinder
       val storageTimeout = yggConfig.storageTimeout
-      val jobManager = extJobManager
-      val metadataClient = new StorageMetadataClient[Future](this)
 
+      val jobManager = extJobManager
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
-      val resourceBuilder = new DefaultResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout, permissionsFinder)
-      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, storageTimeout.duration, jobManager, clock)))
+      val resourceBuilder = new ResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout)
+
+      private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, clock)))
       val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
-      trait TableCompanion extends NIHDBColumnarTableCompanion //{
-//        import scalaz.std.anyVal._
-//        implicit val geq: scalaz.Equal[Int] = scalaz.Equal[Int]
-//      }
+      private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 
+      val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, clock)
 
+      private val (scheduleStorage, scheduleStorageStoppable) = MongoScheduleStorage(config0.detach("scheduling"))
+
+      private val scheduleActor = actorSystem.actorOf(Props(new SchedulingActor(jobManager, permissionsFinder, scheduleStorage, platform, clock)))
+
+      val scheduler = new ActorScheduler(scheduleActor, yggConfig.schedulingTimeout)
+
+      trait TableCompanion extends VFSColumnarTableCompanion 
       object Table extends TableCompanion
 
       def ingestFailureLog(checkpoint: YggCheckpoint, logRoot: File): IngestFailureLog = FilesystemIngestFailureLog(logRoot, checkpoint)
 
-      def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
-        (for {
+      def asyncExecutorFor(apiKey: APIKey) = {
+        for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new AsyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
           }
-        }).validation
+        }
       }
 
-      def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
-        (for {
+      def syncExecutorFor(apiKey: APIKey) = {
+        for {
           executionContext0 <- threadPooling.getAccountExecutionContext(apiKey)
         } yield {
           new SyncQueryExecutor {
             val executionContext: ExecutionContext = executionContext0
           }
-        }).validation
+        }
       }
 
       override def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]] = {
@@ -173,9 +186,11 @@ trait NIHDBQueryExecutorComponent  {
       }
 
       def shutdown() = for {
+        _ <- Stoppable.stop(Stoppable.fromFuture(gracefulStop(scheduleActor, yggConfig.schedulingTimeout.duration)(actorSystem)))
         _ <- Stoppable.stop(ingestSystem.map(_.stoppable).getOrElse(Stoppable.fromFuture(Future(()))))
         _ <- IngestSystem.actorStop(yggConfig, projectionsActor, "projections")
         _ <- IngestSystem.actorStop(yggConfig, masterChef, "masterChef")
+        _ <- Stoppable.stop(scheduleStorageStoppable)
         _ <- chefs.map(IngestSystem.actorStop(yggConfig, _, "masterChef")).sequence
       } yield {
         queryLogger.info("Actor ecossytem shutdown complete.")

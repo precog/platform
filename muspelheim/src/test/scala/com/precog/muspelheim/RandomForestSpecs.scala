@@ -4,6 +4,7 @@ package muspelheim
 import yggdrasil._
 
 trait RandomForestSpecs extends EvalStackSpecs {
+  import stack._
 
   "random forest" should {
     "return correctly structured classification results" in {

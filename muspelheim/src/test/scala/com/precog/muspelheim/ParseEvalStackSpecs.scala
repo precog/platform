@@ -18,6 +18,7 @@ import bytecode.JType
 
 import yggdrasil._
 import yggdrasil.actor._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.serialization._
 import yggdrasil.table._
 import yggdrasil.util._
@@ -45,27 +46,28 @@ import org.slf4j.LoggerFactory
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
-object ParseEvalStackSpecs {
+trait ParseEvalStackSpecs[M[+_]] extends Specification {
+  type TestStack <: TestStackLike[M]
+}
+
+object TestStack {
   val testAPIKey = "dummyAPIKey"
   val testAccount = "dummyAccount"
 }
 
-trait ParseEvalStackSpecs[M[+_]] extends Specification
-    with ParseEvalStack[M]
+trait ActorPlatformSpecs {
+  implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
+  implicit val executor = ExecutionContext.defaultExecutionContext(actorSystem)
+}
+
+trait TestStackLike[M[+_]] extends ParseEvalStack[M]
     with EchoHttpClientModule[M]
     with MemoryDatasetConsumer[M]
-    with IdSourceScannerModule { self =>
-  import ParseEvalStackSpecs._
+    with IdSourceScannerModule 
+    with EvalStackLike { self =>
+  import TestStack._
 
   protected lazy val parseEvalLogger = LoggerFactory.getLogger("com.precog.muspelheim.ParseEvalStackSpecs")
-
-  val sliceSize = 10
-
-  def controlTimeout = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
-
-  implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
-
-  implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   class ParseEvalStackSpecConfig extends BaseConfig with IdSourceConfig {
     parseEvalLogger.trace("Init yggConfig")
@@ -78,10 +80,10 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val memoizationWorkDir = scratchDir
 
     val flatMapTimeout = Duration(100, "seconds")
-    val maxEvalDuration = controlTimeout
+    val maxEvalDuration = Duration(5, "minutes")      // it's just unreasonable to run tests longer than this
     val clock = blueeyes.util.Clock.System
 
-    val maxSliceSize = self.sliceSize
+    val maxSliceSize = 10
     val smallSliceSize = 3
 
     val idSource = new FreshAtomicIdSource
@@ -99,12 +101,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
     val preForest = compile(str)
     val forest = preForest filter { _.errors filterNot isWarning isEmpty }
 
-    forest must haveSize(1) or {
-      forall(preForest) { tree =>
-        tree.errors filterNot isWarning must beEmpty
-      }
-    }
-
+    assert(forest.size == 1 || preForest.forall(_.errors filterNot isWarning isEmpty))
     val tree = forest.head
 
     val Right(dag) = decorate(emit(tree))

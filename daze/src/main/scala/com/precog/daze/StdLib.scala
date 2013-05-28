@@ -13,6 +13,7 @@ import bytecode.ReductionLike
 
 import com.precog.common._
 import yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.table._
 
 import blueeyes.json._

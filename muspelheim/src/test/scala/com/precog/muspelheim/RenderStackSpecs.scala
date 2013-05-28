@@ -7,6 +7,7 @@ import com.precog.common._
 import com.precog.common.accounts._
 
 import com.precog.daze._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table.ColumnarTableModule
 
 import com.weiglewilczek.slf4s.Logging
@@ -16,13 +17,10 @@ import org.joda.time.DateTime
 import scalaz._
 import scalaz.syntax.comonad._
 
-trait RenderStackSpecs extends EvalStackSpecs 
-    with ParseEvalStack[Future]
-    with ColumnarTableModule[Future]
-    with MemoryDatasetConsumer[Future]
-    with Logging {
+trait RenderStackSpecs extends EvalStackSpecs with Logging {
+  type TestStack <: EvalStackLike with ParseEvalStack[Future] with ColumnarTableModule[Future] with MemoryDatasetConsumer[Future]
 
-  implicit val M: Monad[Future] with Comonad[Future]
+  import stack._
 
   implicit val ntFuture = NaturalTransformation.refl[Future]
 

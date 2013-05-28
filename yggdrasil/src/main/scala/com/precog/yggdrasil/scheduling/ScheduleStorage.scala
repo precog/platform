@@ -1,4 +1,4 @@
-package com.precog.shard
+package com.precog.yggdrasil
 package scheduling
 
 import com.precog.common.Path
@@ -9,12 +9,12 @@ import java.util.UUID
 
 import org.quartz.CronExpression
 
-import scalaz.Validation
+import scalaz.EitherT
 
 trait ScheduleStorage[M[+_]] {
-  def addTask(task: ScheduledTask): M[Validation[String, ScheduledTask]]
+  def addTask(task: ScheduledTask): EitherT[M, String, ScheduledTask]
 
-  def deleteTask(id: UUID): M[Validation[String, Option[ScheduledTask]]]
+  def deleteTask(id: UUID): EitherT[M, String, Option[ScheduledTask]]
 
   def reportRun(report: ScheduledRunReport): M[PrecogUnit]
 

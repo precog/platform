@@ -26,13 +26,14 @@ import scalaz.syntax.comonad._
 
 import akka.dispatch._
 import akka.actor.{ IO => _, _ }
+import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
 
 /**
  * Provides a simple interface for ingesting bulk JSON data.
  */
-trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
+trait NIHDBIngestSupport extends VFSColumnarTableModule with ActorVFSModule with Logging {
   implicit def M: Monad[Future] with Comonad[Future]
   def actorSystem: ActorSystem
 
@@ -82,21 +83,28 @@ trait NIHDBIngestSupport extends NIHDBColumnarTableModule with Logging {
   def ingest(db: String, data: File, apiKey: String = "root", accountId: String = "root", clock: Clock = Clock.System): IO[PrecogUnit] = IO {
     logger.debug("Ingesting %s to '//%s'." format (data, db))
 
-    implicit val to = storageTimeout
+    implicit val to = Timeout(300 * 1000)
 
     val path = Path(db)
     val eventId = EventId(pid, sid.getAndIncrement)
     val records = readRows(data) map (IngestRecord(eventId, _))
 
-    val projection = (projectionsActor ? IngestData(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append))))).flatMap { _ =>
-      logger.debug("Insert complete on //%s, waiting for cook".format(db))
-
-      (projectionsActor ? Read(path, Version.Current, None)).mapTo[List[NIHDBResource]]
-    }.copoint.head
+    val projection = {
+      for {
+        _ <- M point { 
+          vfs.unsecured.writeAll(Seq((0, IngestMessage(apiKey, path, Authorities(accountId), records, None, clock.instant, StreamRef.Append)))).unsafePerformIO 
+        }
+        _ = logger.debug("Insert complete on //%s, waiting for cook".format(db))
+        projection <- vfs.readProjection(apiKey, path, Version.Current, AccessMode.Read).run
+      } yield {
+        (projection valueOr { err => sys.error("An error was encountered attempting to read projection at path %s: %s".format(path, err.toString)) }).asInstanceOf[NIHDBResource]
+      }
+    }.copoint
 
     while (projection.db.status.copoint.pending > 0) {
       Thread.sleep(100)
     }
+
     projection.db.close(actorSystem).copoint
 
     logger.debug("Ingested %s." format data)

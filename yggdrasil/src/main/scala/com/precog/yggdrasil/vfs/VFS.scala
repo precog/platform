@@ -2,26 +2,40 @@ package com.precog.yggdrasil
 package vfs
 
 import table.Slice
+import metadata.PathStructure
 
 import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.common.security._
 import com.precog.common.jobs._
+import com.precog.niflheim._
 import com.precog.yggdrasil.actor.IngestData
+import com.precog.yggdrasil.nihdb.NIHDBProjection
+import com.precog.util._
 
-import akka.dispatch.Future
-import akka.actor.ActorRef
-import akka.pattern.ask
-import akka.util.Timeout
-
+import blueeyes.core.http.MimeType
+import blueeyes.json._
+import blueeyes.json.serialization._
+import blueeyes.json.serialization.Extractor._
+import blueeyes.json.serialization.Decomposer._
 import blueeyes.util.Clock
 
 import java.util.UUID
+import java.nio.ByteBuffer
+import java.util.Arrays
+import java.nio.CharBuffer
+import java.nio.charset.{Charset, CoderResult}
+
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
+import scalaz.EitherT._
+import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
+import scalaz.syntax.traverse._
+import scalaz.syntax.std.option._
+import scalaz.syntax.std.list._
 import scalaz.effect.IO
 
 sealed trait Version
@@ -30,96 +44,116 @@ object Version {
   case class Archived(uuid: UUID) extends Version
 }
 
-/**
- * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
- */
-trait VFS[M[+_]] {
-  def readQuery(path: Path, version: Version): M[Option[String]]
-  def readResource(path: Path, version: Version): M[ReadResult]
-  def readCache(path: Path, version: Version): M[Option[StreamT[M, Slice]]]
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[M, Slice]): StreamT[M, Slice]
+object VFSModule {
+  def bufferOutput[M[+_]: Monad](stream0: StreamT[M, CharBuffer], charset: Charset = Charset.forName("UTF-8"), bufferSize: Int = 64 * 1024): StreamT[M, Array[Byte]] = {
+    val encoder = charset.newEncoder()
+
+    def loop(stream: StreamT[M, CharBuffer], buf: ByteBuffer, arr: Array[Byte]): StreamT[M, Array[Byte]] = {
+      StreamT(stream.uncons map {
+        case Some((cbuf, tail)) =>
+          val result = encoder.encode(cbuf, buf, false)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(cbuf :: tail, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Skip(loop(tail, buf, arr))
+          }
+
+        case None =>
+          val result = encoder.encode(CharBuffer.wrap(""), buf, true)
+          if (result == CoderResult.OVERFLOW) {
+            val arr2 = new Array[Byte](bufferSize)
+            StreamT.Yield(arr, loop(stream, ByteBuffer.wrap(arr2), arr2))
+          } else {
+            StreamT.Yield(Arrays.copyOf(arr, buf.position), StreamT.empty)
+          }
+      })
+    }
+
+    val arr = new Array[Byte](bufferSize)
+    loop(stream0, ByteBuffer.wrap(arr), arr)
+  }
 }
 
-object NoopVFS extends VFS[Future] {
-  def readQuery(path: Path, version: Version): Future[Option[String]] = sys.error("stub VFS")
-  def readResource(path: Path, version: Version): Future[ReadResult] = sys.error("stub VFS")
-  def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = sys.error("stub VFS")
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice]  = sys.error("stub VFS")
-}
+trait VFSModule[M[+_], Block] extends Logging {
+  import ResourceError._
 
-class ActorVFS(projectionsActor: ActorRef, clock: Clock, projectionReadTimeout: Timeout, sliceIngestTimeout: Timeout)(implicit M: Monad[Future]) extends VFS[Future] with Logging {
-  def readQuery(path: Path, version: Version): Future[Option[String]] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult] map {
-      case ReadSuccess(_, Some(blob: Blob)) =>
-        blob.asString map(Some(_)) except { case t: Throwable => IO { logger.error("Query read error", t); None } } unsafePerformIO
+  type Projection <: ProjectionLike[M, Block]
 
-      case failure =>
-        logger.warn("Unable to read query at path %s with version %s: %s".format(path.path, version, failure))
-        None
+  sealed trait Resource {
+    def mimeType: MimeType
+    def authorities: Authorities
+    def byteStream(mimeType: Option[MimeType])(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]]
+
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
+  }
+
+  object Resource {
+    def asQuery(path: Path, version: Version)(implicit M: Monad[M]): Resource => EitherT[M, ResourceError, String] = { resource =>
+      def notAQuery = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel query.".format(path.path, version))
+      EitherT {
+        resource.fold(
+          br => br.asString.run.map(_.toRightDisjunction(notAQuery)),
+          _ => \/.left(notAQuery).point[M]
+        )
+      }
+    }
+
+    def asProjection(path: Path, version: Version)(implicit M: Monad[M]): Resource => EitherT[M, ResourceError, Projection] = { resource =>
+      def notAProjection = notFound("Requested resource at %s version %s cannot be interpreted as a Quirrel projection.".format(path.path, version))
+      resource.fold(
+        _ => EitherT.left(notAProjection.point[M]),
+        pr => EitherT.right(pr.projection)
+      )
     }
   }
 
-  def readResource(path: Path, version: Version): Future[ReadResult] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? Read(path, version, None)).mapTo[ReadResult]
+  trait ProjectionResource extends Resource {
+    def append(data: NIHDB.Batch): IO[PrecogUnit]
+    def recordCount(implicit M: Monad[M]): M[Long]
+    def projection(implicit M: Monad[M]): M[Projection]
+
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
   }
 
-  def readCache(path: Path, version: Version): Future[Option[StreamT[Future, Slice]]] = {
-    implicit val t = projectionReadTimeout
-    (projectionsActor ? ReadProjection(path, version, None)).mapTo[ReadProjectionResult] map {
-      case ReadProjectionSuccess(_, Some(projection)) => Some(projection.getBlockStream(None))
-      case failure =>
-        logger.warn("Unable to read projection at path %s with version %s: %s".format(path.path, version, failure))
-        None
-    }
+  trait BlobResource extends Resource {
+    def asString(implicit M: Monad[M]): OptionT[M, String]
+    def byteLength: Long
+
+    def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
   }
 
-  def persistingStream(apiKey: APIKey, path: Path, writeAs: Authorities, perms: Set[Permission], jobId: Option[JobId], stream: StreamT[Future, Slice]): StreamT[Future, Slice] = {
-    implicit val askTimeout = sliceIngestTimeout
-    val streamId = java.util.UUID.randomUUID()
-    val allPerms = Map(apiKey -> perms)
+  trait VFSCompanionLike {
+    def toJsonElements(block: Block): Vector[JValue]
+    def derefValue(block: Block): Block
+    def blockSize(block: Block): Int
+    def pathStructure(selector: CPath)(implicit M: Monad[M]): Projection => EitherT[M, ResourceError, PathStructure]
+  }
 
-    StreamT.unfoldM((0, stream)) {
-      case (pseudoOffset, s) =>
-        s.uncons flatMap {
-          case Some((x, xs)) =>
-            val ingestRecords = x.toJsonElements.zipWithIndex map {
-              case (v, i) => IngestRecord(EventId(pseudoOffset, i), v)
-            }
+  type VFSCompanion <: VFSCompanionLike
+  def VFS: VFSCompanion
 
-            logger.debug("Persisting %d stream records to %s".format(ingestRecords.size, path))
+  /**
+   * VFS is an unsecured interface to the virtual filesystem; validation must be performed higher in the stack.
+   */
+  abstract class VFS(implicit M: Monad[M]) { 
+    def writeAll(data: Seq[(Long, EventMessage)]): IO[PrecogUnit]
 
-            for {
-              terminal <- xs.isEmpty
-              par <- {
-                // FIXME: is Replace always desired here? Any case
-                // where we might want Create? AFAICT, this is only
-                // used for caching queries right now.
-                val streamRef = StreamRef.Replace(streamId, terminal)
-                val msg = IngestMessage(apiKey, path, writeAs, ingestRecords, jobId, clock.instant(), streamRef)
-                (projectionsActor ? IngestData(Seq((pseudoOffset, msg)))).mapTo[PathActionResponse]
-              }
-            } yield {
-              par match {
-                case UpdateSuccess(_) =>
-                  Some((x, (pseudoOffset + 1, xs)))
-                case PathFailure(_, errors) =>
-                  logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
-                  None
-                case UpdateFailure(_, errors) =>
-                  logger.error("Unable to complete persistence of result stream by %s to %s as %s: %s".format(apiKey, path.path, writeAs, errors.shows))
-                  None
+    def writeAllSync(data: Seq[(Long, EventMessage)]): EitherT[M, ResourceError, PrecogUnit]
 
-                case invalid =>
-                  logger.error("Unexpected response to persist: " + invalid)
-                  None
-              }
-            }
+    def readResource(path: Path, version: Version): EitherT[M, ResourceError, Resource]  
 
-          case None =>
-            None.point[Future]
-        }
-    }
+    /**
+     * Returns the direct children of path.
+     *
+     * The results are the basenames of the children. So for example, if
+     * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
+     * return (bar, baz).
+     */
+    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]]
+
+    def currentVersion(path: Path): M[Option[VersionEntry]]
   }
 }
+
+

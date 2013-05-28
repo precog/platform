@@ -768,55 +768,51 @@ object ImportTools extends Command with Logging {
     config.storageRoot.mkdirs
     config.archiveRoot.mkdirs
 
-    val ratatoskrConfig = config
-
     val stopTimeout = Duration(310, "seconds")
+    val authorities = Authorities(config.accountId)
+
+    implicit val actorSystem = ActorSystem("yggutilImport")
+    implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
+
+    class YggConfig(val config: Configuration) extends BaseConfig {
+      val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
+      val clock = blueeyes.util.Clock.System
+      val storageTimeout = Timeout(Duration(120, "seconds"))
+    }
+
+    val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
+
+    val chefs = (1 to 8).map { _ =>
+      actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
+    }
+    val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
+
+    val accountFinder = new StaticAccountFinder[Future](config.accountId, config.apiKey, Some("/"))
+
+    logger.info("Starting APIKeyFinder")
+    //// ****** WARNING ****** ////
+    // IF YOU EVER CHANGE THE FOLLOWING LINE TO USE ANYTHING BUT THE IN-MEMORY SYSTEM,
+    // YOU MUST FIX grantWrite OR YOU'LL GIVE ROOT PERMISSIONS TO THE API KEY BEING
+    // USED FOR THE WRITE
+    val apiKeyManager = new InMemoryAPIKeyManager[Future](Clock.System)
+    //// ****** END WARNING ****** ////
+
+    val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    object shardModule { self =>
-      class YggConfig(val config: Configuration) extends BaseConfig {
-        val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
-        val clock = blueeyes.util.Clock.System
-        val storageTimeout = Timeout(Duration(120, "seconds"))
-      }
-
-      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
-
-      implicit val actorSystem = ActorSystem("yggutilImport")
-      implicit val defaultAsyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-      implicit val M = new FutureMonad(ExecutionContext.defaultExecutionContext(actorSystem))
-
-      val chefs = (1 to 8).map { _ =>
-        actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
-      }
-      val masterChef = actorSystem.actorOf(Props[Chef].withRouter(RoundRobinRouter(chefs)))
-
-      val accountFinder = new StaticAccountFinder[Future](ratatoskrConfig.accountId, ratatoskrConfig.apiKey, Some("/"))
-
-      logger.info("Starting APIKeyFinder")
-      //// ****** WARNING ****** ////
-      // IF YOU EVER CHANGE THE FOLLOWING LINE TO USE ANYTHING BUT THE IN-MEMORY SYSTEM,
-      // YOU MUST FIX grantWrite OR YOU'LL GIVE ROOT PERMISSIONS TO THE API KEY BEING
-      // USED FOR THE WRITE
-      val apiKeyManager = new InMemoryAPIKeyManager[Future](Clock.System)
-      //// ****** END WARNING ****** ////
-
-      val apiKeyFinder = new DirectAPIKeyFinder(apiKeyManager)
-      logger.info("Starting PermissionsFinder")
-      val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
-
-      val authorities = Authorities(config.accountId)
-
+    object vfsModule extends ActorVFSModule { self =>
       logger.info("Starting ResourceBuilder")
-      val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
+      val jobManager = new InMemoryJobManager[Future]
+      val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, new Instant(0L))
+      val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
 
       logger.info("Starting Projections Actor")
-      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
 
       logger.info("Shard module complete")
     }
 
-    import shardModule._
     import AsyncParser._
 
     val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
@@ -833,7 +829,7 @@ object ImportTools extends Command with Logging {
         }
       } yield key
 
-    def logGrants(key: APIKey) = shardModule.apiKeyManager.validGrants(key, None) onComplete {
+    def logGrants(key: APIKey) = apiKeyManager.validGrants(key, None) onComplete {
       case Left(error) => logger.error("Could not retrieve grants for api key " + key, error)
       case Right(success) => logger.info("Grants for " + key + ": " + success)
     }
@@ -865,7 +861,7 @@ object ImportTools extends Command with Logging {
               Seq((offset, IngestMessage(apiKey, path, authorities, records, None, yggConfig.clock.instant, StreamRef.Append)))
             )
 
-            (projectionsActor ? update) flatMap { _ =>
+            (vfsModule.projectionsActor ? update) flatMap { _ =>
               logger.info("Batch saved")
               bb.flip()
               if (n >= 0) loop(offset + 1, parser) else Future(())
@@ -889,7 +885,7 @@ object ImportTools extends Command with Logging {
       gracefulStop(masterChef, stopTimeout) >>
       Future(logger.info("Completed chef shutdown")) >>
       Future(logger.info("Waiting for shard shutdown")) >>
-      gracefulStop(projectionsActor, stopTimeout)
+      gracefulStop(vfsModule.projectionsActor, stopTimeout)
 
     Await.result(complete, stopTimeout)
     actorSystem.shutdown()

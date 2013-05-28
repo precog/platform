@@ -9,6 +9,7 @@ import com.precog.common._
 
 import com.precog.util._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 
 import scalaz.std.map._
 
