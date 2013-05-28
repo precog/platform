@@ -18,13 +18,9 @@ class BigDecimalPrecision(num: BigDecimal) {
   def addContext: BigDecimal = BigDecimal(num.toString, context)
 }
 
-trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
-    with ReductionLibModule[M]
-    with EvaluatorMethodsModule[M] {
+trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M] with ReductionLibModule[M] {
 
-  trait NormalizationHelperLib extends ColumnarTableLib
-      with ReductionLib
-      with EvaluatorMethods {
+  trait NormalizationHelperLib extends ColumnarTableLib with ReductionLib {
 
     trait NormalizationHelper {
       import TransSpecModule._
@@ -117,9 +113,9 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
         }
       }
 
-      def applyScanner(summary: Result, scanner: Summary => CScanner[M], table: Table, ctx: EvaluationContext): M[Table] = {
+      def applyMapper(summary: Result, mapper: Summary => CMapper[M], table: Table, ctx: MorphContext): M[Table] = {
         val resultTables = summary map { case singleSummary =>
-          val spec = liftToValues(trans.Scan(trans.TransSpec1.Id, scanner(singleSummary)))
+          val spec = liftToValues(trans.MapWith(trans.TransSpec1.Id, mapper(singleSummary)))
           table.transform(spec)
         }
 
@@ -128,14 +124,12 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
         M.point(result)
       }
 
-      def normScanner(f: RowValueWithStats => BigDecimal)(singleSummary: Summary) = new CScanner[M] {
-        type A = Unit
-        def init = ()
+      def normMapper(f: RowValueWithStats => BigDecimal)(singleSummary: Summary) = new CMapperS[M] {
 
         def findSuffices(cpath: CPath): Set[CPath] =
           singleSummary.keySet.filter(cpath.hasSuffix)
 
-        def scan(a: A, cols: Map[ColumnRef, Column], range: Range): M[(A, Map[ColumnRef, Column])] = {
+        def map(cols: Map[ColumnRef, Column], range: Range): Map[ColumnRef, Column] = {
           val numericCols = cols filter { case (ColumnRef(cpath, ctype), _) =>
             ctype.isNumeric
           }
@@ -143,7 +137,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
           val groupedCols: Map[CPath, Map[ColumnRef, Column]] =
             numericCols.groupBy { case (ColumnRef(selector, _), _) => selector }
 
-          def continue: M[(A, Map[ColumnRef, Column])] = {
+          def continue: Map[ColumnRef, Column] = {
             val unifiedCols: Map[ColumnRef, Column] = {
               groupedCols map { case (cpath, refs) =>
                 (ColumnRef(cpath, CNum), unifyNumColumns(refs.values))
@@ -177,11 +171,9 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
               }
             }
 
-            val result = resultsAll map { case (ref, col) =>
+            resultsAll map { case (ref, col) =>
               (ref, intersectColumn(col))
             }
-
-            M.point(((), result))
           }
 
           val subsumes = singleSummary forall { case (cpath, _) =>
@@ -191,7 +183,7 @@ trait NormalizationHelperModule[M[+_]] extends ColumnarTableLibModule[M]
           if (subsumes)
             continue
           else
-            M.point((init, Map.empty[ColumnRef, Column]))
+            Map.empty[ColumnRef, Column]
         }
       }
     
@@ -217,11 +209,11 @@ trait NormalizationLibModule[M[+_]] extends NormalizationHelperModule[M] {
 
       def morph1Apply(summary: Result) = new Morph1Apply {
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           def makeValue(info: RowValueWithStats): BigDecimal =
             (info.rowValue - info.stats.mean) / info.stats.stdDev
 
-          applyScanner(summary, normScanner(makeValue), table, ctx)
+          applyMapper(summary, normMapper(makeValue), table, ctx)
         }
       }
     }
@@ -231,11 +223,11 @@ trait NormalizationLibModule[M[+_]] extends NormalizationHelperModule[M] {
 
       def morph1Apply(summary: Result) = new Morph1Apply {
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
           def makeValue(info: RowValueWithStats): BigDecimal =
             (info.rowValue * info.stats.stdDev) + info.stats.mean
 
-          applyScanner(summary, normScanner(makeValue), table, ctx)
+          applyMapper(summary, normMapper(makeValue), table, ctx)
         }
       }
     }

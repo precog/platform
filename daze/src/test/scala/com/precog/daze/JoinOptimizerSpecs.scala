@@ -26,7 +26,6 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   import instructions._
   import library.{ op1ForUnOp => _, _ }
 
-  val testAPIKey = "testAPIKey"
   val ctx = defaultEvaluationContext
 
   object joins extends JoinOptimizer with StdLibOpFinder {

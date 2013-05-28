@@ -15,8 +15,8 @@ import scalaz.std.stream._
 import scalaz.syntax.traverse._
 import scalaz.syntax.monad._
 
-trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethodsModule[M] {
-  trait SummaryLib extends ReductionLib with EvaluatorMethods {
+trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] {
+  trait SummaryLib extends ReductionLib {
     import trans._
     import TransSpecModule._
 
@@ -36,7 +36,7 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
       type Result = coalesced.Result
       val monoid: Monoid[Result] = coalesced.monoid
 
-      def reducer(ctx: EvaluationContext): CReducer[Result] = coalesced.reducer(ctx)
+      def reducer(ctx: MorphContext): CReducer[Result] = coalesced.reducer(ctx)
 
       def extract(res: Result): Table = {
         val arrayTable = coalesced.extract(res)
@@ -73,7 +73,7 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
         coalesce(functions map { SingleSummary -> _ })
       }
 
-      def reduceTable(table: Table, jtype: JType, ctx: EvaluationContext): M[Table] = {
+      def reduceTable(table: Table, jtype: JType, ctx: MorphContext): M[Table] = {
         val reduction = makeReduction(jtype)
 
         implicit def monoid = reduction.monoid
@@ -92,7 +92,7 @@ trait SummaryLibModule[M[+_]] extends ReductionLibModule[M] with EvaluatorMethod
         values map { extract(_, jtype) }
       }
 
-      def apply(table: Table, ctx: EvaluationContext) = {
+      def apply(table: Table, ctx: MorphContext) = {
         val jtypes0: M[Seq[Option[JType]]] = for {
           schemas <- table.schemas
         } yield {

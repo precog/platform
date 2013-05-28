@@ -18,7 +18,6 @@ trait RandomLibSpecs[M[+_]] extends Specification
   import library._
 
   val line = Line(1, 1, "")
-  val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
