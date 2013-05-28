@@ -32,7 +32,7 @@ trait OpFinderModule[M[+_]] extends Instructions with TableModule[M] with TableL
   }
 }
 
-trait StdLibOpFinderModule[M[+_]] extends Instructions with StdLibModule[M] {
+trait StdLibOpFinderModule[M[+_]] extends Instructions with StdLibModule[M] with OpFinderModule[M] {
   import instructions._
   import library._
 

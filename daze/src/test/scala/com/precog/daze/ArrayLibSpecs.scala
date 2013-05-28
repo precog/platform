@@ -42,7 +42,7 @@ trait ArrayLibSpecs[M[+_]] extends Specification
   val testAPIKey = "testAPIKey"
 
   def testEval(graph: DepGraph): Set[SEvent] = {
-    consumeEval(testAPIKey, graph, Path.Root) match {
+    consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results
       case Failure(error) => throw error
     }
@@ -112,6 +112,24 @@ trait ArrayLibSpecs[M[+_]] extends Specification
           elems must contain(obj("val"))
         case _ => ko
       }
+    }
+    
+    "flatten a non-array without exploding" in {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Flatten,
+        Const(CString("/het/arrays"))(line))(line)
+        
+      testEval(input) must haveSize(0)
+    }
+    
+    "flatten an empty set without exploding" in {
+      val line = Line(1, 1, "")
+      
+      val input = dag.Morph1(Flatten,
+        Undefined(line))(line)
+        
+      testEval(input) must haveSize(0)
     }
   }
 }

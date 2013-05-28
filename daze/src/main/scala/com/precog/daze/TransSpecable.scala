@@ -114,7 +114,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
         def EqualLiteral(node: Join)(parent: N[S], value: RValue, invert: Boolean) =
           parent.flatMap(leftMap(_) { target =>
             val inner = trans.Equal(target, transRValue(value, target))
-            if (invert) op1ForUnOp(Comp).spec(ctx)(inner) else inner
+            if (invert) op1ForUnOp(Comp).spec(MorphContext(ctx, node))(inner) else inner
           })
 
         def WrapObject(node: Join)(parent: N[S], field: String) =
@@ -143,7 +143,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
           parent.flatMap(leftMap(_) { target =>
             value match {
               case cv: CValue =>
-                trans.Map1(target, op.f2(ctx).applyr(cv))
+                trans.Map1(target, op.f2(MorphContext(ctx, node)).applyr(cv))
               
               case _ =>
                 trans.Typed(trans.Typed(target, JNullT), JTextT)     // nuke all the things
@@ -154,7 +154,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
           parent.flatMap(leftMap(_) { target =>
             value match {
               case cv: CValue =>
-                trans.Map1(target, op.f2(ctx).applyl(cv))
+                trans.Map1(target, op.f2(MorphContext(ctx, node)).applyl(cv))
               
               case _ =>
                 trans.Typed(trans.Typed(target, JNullT), JTextT)     // nuke all the things
@@ -168,7 +168,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
             pr      <- rightParent
             (r, ar) =  get(pr)
             result  <- if (al == ar) {
-              set(pl, (transFromBinOp(op, ctx)(l, r), al))
+              set(pl, (transFromBinOp(op, MorphContext(ctx, node))(l, r), al))
             } else {
               init(Leaf(Source), node)
             }
@@ -188,7 +188,7 @@ trait TransSpecableModule[M[+_]] extends TransSpecModule with TableModule[M] wit
           parent.flatMap(leftMap(_)(trans.WrapArray(_)))
         
         def Op1(node: Operate)(parent: N[S], op: UnaryOperation) =
-          parent.flatMap(leftMap(_)(parent => op1ForUnOp(op).spec(ctx)(parent)))
+          parent.flatMap(leftMap(_)(parent => op1ForUnOp(op).spec(MorphContext(ctx, node))(parent)))
         
         def Cond(node: dag.Cond)(pred: N[S], left: N[S], right: N[S]) = {
           for {

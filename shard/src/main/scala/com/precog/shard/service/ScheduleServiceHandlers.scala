@@ -42,6 +42,7 @@ import com.precog.common.services.ServiceHandlerUtil._
 import com.precog.shard.scheduling._
 import com.precog.shard.scheduling.CronExpressionSerialization._
 import com.precog.util.PrecogUnit
+import com.precog.daze.EvaluationContext
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -65,14 +66,14 @@ import scalaz.syntax.traverse._
 
 import shapeless._
 
-case class AddScheduledQueryRequest(schedule: CronExpression, owners: Set[AccountId], basePath: Path, source: Path, sink: Path, timeout: Option[Long])
+case class AddScheduledQueryRequest(schedule: CronExpression, owners: Set[AccountId], context: EvaluationContext, source: Path, sink: Path, timeout: Option[Long])
 
 object AddScheduledQueryRequest {
   import CronExpressionSerialization._
 
   implicit val iso = Iso.hlist(AddScheduledQueryRequest.apply _, AddScheduledQueryRequest.unapply _)
 
-  val schemaV1 = "schedule" :: "owners" :: "basePath" :: "source" :: "sink" :: "timeout" :: HNil
+  val schemaV1 = "schedule" :: "owners" :: "context" :: "source" :: "sink" :: "timeout" :: HNil
 
   implicit val decomposer: Decomposer[AddScheduledQueryRequest] = decomposerV(schemaV1, Some("1.0".v))
   implicit val extractor:  Extractor[AddScheduledQueryRequest]  = extractorV(schemaV1, Some("1.0".v))
@@ -108,7 +109,7 @@ class AddScheduledQueryServiceHandler(scheduler: Scheduler[Future], apiKeyFinder
         taskV: Validation[HttpResponse[JValue], (AddScheduledQueryRequest, Authorities)] = taskVV.flatMap (x => x) 
         addResultVV <- taskV traverse {
           case (request, authorities) =>
-            scheduler.addTask(Some(request.schedule), apiKey, authorities, request.basePath, request.source, request.sink, request.timeout) map {
+            scheduler.addTask(Some(request.schedule), apiKey, authorities, request.context, request.source, request.sink, request.timeout) map {
               _ leftMap { error =>
                 logger.error("Failure adding scheduled execution: " + error)
                 HttpResponse(status = HttpStatus(InternalServerError), content = Some("An error occurred scheduling your query".serialize))

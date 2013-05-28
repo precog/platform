@@ -67,20 +67,18 @@ trait QueryExecutor[M[+_], +A] { self =>
   /**
     * Execute the provided query, returning the *values* of the result set (discarding identities)
     */
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, A]]
+  def execute(query: String, context: EvaluationContext, opts: QueryOptions): M[Validation[EvaluationError, A]]
 
   def map[B](f: A => B)(implicit M: Applicative[M]): QueryExecutor[M, B] = new QueryExecutor[M, B] {
     import scalaz.syntax.monad._
-    def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
-      self.execute(apiKey, query, prefix, opts) map { _ map f }
+    def execute(query: String, context: EvaluationContext, opts: QueryOptions): M[Validation[EvaluationError, B]] = {
+      self.execute(query, context, opts) map { _ map f }
     }
   }
 }
 
 object NullQueryExecutor extends QueryExecutor[Id.Id, Nothing] {
-  def execute(apiKey: APIKey, query: String, prefix: Path, opts: QueryOptions) = {
+  def execute(query: String, context: EvaluationContext, opts: QueryOptions) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
 }
-
-// vim: set ts=4 sw=4 et:

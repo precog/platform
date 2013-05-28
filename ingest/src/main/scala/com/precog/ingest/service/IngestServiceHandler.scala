@@ -82,9 +82,10 @@ class IngestServiceHandler(
   eventStore: EventStore[Future],
   ingestTimeout: Timeout,
   batchSize: Int,
-  maxFields: Int)(implicit M: Monad[Future], executor: ExecutionContext)
+  maxFields: Int,
+  postMode: StoreMode)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
-    with Logging { 
+    with Logging {
 
   object ingestStore extends IngestStore {
     def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId], streamRef: StreamRef): Future[StoreFailure \/ PrecogUnit] = {
@@ -114,7 +115,7 @@ class IngestServiceHandler(
 
   def ingestBatch(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk], durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode): EitherT[Future, NonEmptyList[String], IngestResult] =
     right(chooseProcessing(apiKey, path, authorities, request)) flatMap {
-      case Some(processing) => 
+      case Some(processing) =>
         EitherT {
           (processing.forRequest(request) tuple request.content.toSuccess(nels("Ingest request missing body content."))) traverse {
             case (processor, data) => processor.ingest(durability, errorHandling, storeMode, data)
@@ -123,17 +124,17 @@ class IngestServiceHandler(
           }
         }
 
-      case None => 
+      case None =>
         right(Promise successful NotIngested("Could not determine a data type for your batch ingest. Please set the Content-Type header."))
     }
-  
+
 
   def notifyJob(durability: Durability, channel: String, message: String): EitherT[Future, String, PrecogUnit] =
     durability match {
-      case GlobalDurability(jobId) => 
+      case GlobalDurability(jobId) =>
         jobManager.addMessage(jobId, channel, JString(message)).map(_ => PrecogUnit)
-      case LocalDurability => 
-        right(Promise successful PrecogUnit) 
+      case LocalDurability =>
+        right(Promise successful PrecogUnit)
     }
 
   private def jobErrorResponse(message: String) = {
@@ -149,8 +150,8 @@ class IngestServiceHandler(
 
       val requestAuthorities = for {
         paramIds <- request.parameters.get('ownerAccountId)
-        ids = paramIds.split("""\s*,\s*""") 
-        auths <- Authorities.ifPresent(ids.toSet) if ids.nonEmpty 
+        ids = paramIds.split("""\s*,\s*""")
+        auths <- Authorities.ifPresent(ids.toSet) if ids.nonEmpty
       } yield auths
 
       requestAuthorities map { authorities =>
@@ -158,7 +159,7 @@ class IngestServiceHandler(
       } getOrElse {
         permissionsFinder.inferWriteAuthorities(apiKey, path, Some(timestamp.toInstant))
       } onFailure {
-        case ex: Exception => 
+        case ex: Exception =>
           logger.error("Ingest of request " + request.shows + " failed due to unavailability of security subsystem.", ex)
           // FIXME: Provisionally accept data for ingest if one of the permissions-checking services is unavailable
       } flatMap {
@@ -169,10 +170,10 @@ class IngestServiceHandler(
             import Validation._
 
             val errorHandling = if (request.parameters.get('mode).exists(_ equalsIgnoreCase "batch")) IngestAllPossible
-                                else StopOnFirstError 
+                                else StopOnFirstError
 
             val durabilityM = request.method match {
-              case HttpMethods.POST => createJob map { jobId => (GlobalDurability(jobId), StoreMode.Create) }
+              case HttpMethods.POST => createJob map { jobId => (GlobalDurability(jobId), postMode) }
               case HttpMethods.PUT => createJob map { jobId => (GlobalDurability(jobId), StoreMode.Replace) }
               case HttpMethods.PATCH => right[Future, String, (Durability, StoreMode)](Promise.successful((LocalDurability, StoreMode.Append)))
               case _ => left[Future, String, (Durability, StoreMode)](Promise.successful("HTTP method " + request.method + " not supported for data ingest."))
@@ -219,7 +220,7 @@ class IngestServiceHandler(
                   notifyJob(durability, JobManager.channels.Info, message) map { _ =>
                     HttpResponse[JValue](if (ingested == 0 && total > 0) BadRequest else OK, content = Some(responseContent))
                   }
-              } 
+              }
             } valueOr { errors =>
               HttpResponse(BadRequest, content = Some(JString("Errors were encountered processing your ingest request: " + errors)))
             }
