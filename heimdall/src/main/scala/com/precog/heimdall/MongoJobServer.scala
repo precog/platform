@@ -18,7 +18,7 @@ object MongoJobServer extends BlueEyesServer with JobService with ManagedMongoJo
 
   val clock = blueeyes.util.Clock.System
 
-  type Resource = Mongo
+  type JobResource = Mongo
 
   def close(mongo: Mongo) = mongo.close
 

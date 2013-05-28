@@ -55,10 +55,9 @@ trait BlockStoreTestModule[M[+_]] extends BaseBlockStoreTestModule[M] {
   object Table extends TableCompanion
 }
 
-trait BaseBlockStoreTestModule[M[+_]]
-    extends ColumnarTableModuleTestSupport[M]
-    with SliceColumnarTableModule[M, JArray]
-    with StubProjectionModule[M, JArray, Slice] {
+trait BaseBlockStoreTestModule[M[+_]] extends ColumnarTableModuleTestSupport[M]
+    with SliceColumnarTableModule[M]
+    with StubProjectionModule[M, Slice] {
 
   import trans._
   import CValueGenerators._
@@ -67,7 +66,8 @@ trait BaseBlockStoreTestModule[M[+_]]
 
   object Projection extends ProjectionCompanion
 
-  case class Projection(data: Stream[JValue]) extends ProjectionLike[M, JArray, Slice] {
+  case class Projection(data: Stream[JValue]) extends ProjectionLike[M, Slice] {
+    type Key = JArray
     private val slices = fromJson(data).slices.toStream.copoint
 
     val length: Long = data.length

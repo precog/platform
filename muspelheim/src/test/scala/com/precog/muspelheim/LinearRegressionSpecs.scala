@@ -4,6 +4,8 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait LinearRegressionSpecs extends EvalStackSpecs {
+  import stack._
+
   def handleCoeffs(obj: Map[String, SValue]) = {
     obj.keys mustEqual Set("estimate", "standardError")
 

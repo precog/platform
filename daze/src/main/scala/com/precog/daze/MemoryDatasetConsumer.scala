@@ -5,6 +5,7 @@ import com.precog.util.VectorCase
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
 
 import akka.dispatch.Await

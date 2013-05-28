@@ -9,6 +9,7 @@ import org.specs2.mutable.Specification
 
 import com.precog.bytecode.JType.JUniverseT
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.test.YId
 import com.precog.util.IdGen
 

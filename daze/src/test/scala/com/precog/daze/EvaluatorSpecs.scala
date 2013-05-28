@@ -6,9 +6,11 @@ import com.precog.common.accounts._
 import com.precog.util._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.test._
+import com.precog.yggdrasil.vfs._
 import com.precog.yggdrasil.util._
 
 import com.precog.common.security._
@@ -23,10 +25,13 @@ import java.util.concurrent.Executors
 import org.joda.time.DateTime
 
 import scalaz._
+import scalaz.Validation._
 import scalaz.effect._
 import scalaz.syntax.comonad._
+import scalaz.syntax.traverse._
 import scalaz.std.anyVal._
 import scalaz.std.list._
+import scalaz.std.stream._
 import scala.Function._
 
 import org.specs2.specification.Fragment
@@ -68,13 +73,14 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   })
 
   val projections = Map.empty[Path, Projection]
+  def vfs = sys.error("VFS metadata not supported in test.")
 
   trait TableCompanion extends BaseBlockStoreTestTableCompanion {
-    override def load(table: Table, apiKey: APIKey, jtpe: JType) = {
+    override def load(table: Table, apiKey: APIKey, jtpe: JType) = EitherT {
       table.toJson map { events =>
-        fromJson {
-          events.toStream flatMap {
-            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+        val eventsV = events.toStream.traverse[({ type λ[α] = Validation[ResourceError, α] })#λ, Stream[JValue]] {
+          case JString(pathStr) => success {
+            indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
 
               val index = initialIndices get path getOrElse {
@@ -99,10 +105,13 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
                 case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
             }
-
-            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
           }
+
+          case x => 
+            failure(ResourceError.corrupt("Attempted to load JSON as a table from something that wasn't a string: " + x))
         }
+
+        eventsV.disjunction.map(ss => fromJson(ss.flatten))
       }
     }
   }

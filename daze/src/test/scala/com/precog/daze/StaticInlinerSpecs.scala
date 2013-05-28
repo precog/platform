@@ -5,6 +5,7 @@ import org.specs2.mutable._
 
 import com.precog.common._
 import yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.test._
 
 trait StaticInlinerSpecs[M[+_]] extends Specification

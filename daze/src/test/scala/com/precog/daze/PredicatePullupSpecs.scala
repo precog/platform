@@ -7,6 +7,7 @@ import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
 import yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import yggdrasil.test._
 
 trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSupport[M] {

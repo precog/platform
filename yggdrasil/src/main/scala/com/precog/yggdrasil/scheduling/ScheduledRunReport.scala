@@ -1,4 +1,4 @@
-package com.precog.shard
+package com.precog.yggdrasil
 package scheduling
 
 import blueeyes.json._

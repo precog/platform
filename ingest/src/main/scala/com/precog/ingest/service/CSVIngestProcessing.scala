@@ -12,7 +12,7 @@ import blueeyes.json._
 import com.precog.common.Path
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
-import com.precog.common.security.{APIKey, Authorities}
+import com.precog.common.security.{APIKey, Authorities, WriteMode}
 import com.precog.ingest.util.CsvType
 import IngestProcessing._
 
@@ -154,11 +154,11 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
       }
     }
 
-    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult] = {
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: WriteMode, data: ByteChunk): Future[IngestResult] = {
       readerBuilder map { f =>
         for {
           (file, size) <- writeToFile(data)
-          result <- ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), durability.jobId, storeMode.createStreamRef(false))
+          result <- ingestSync(f(new InputStreamReader(new FileInputStream(file), "UTF-8")), durability.jobId, StreamRef.forWriteMode(storeMode, false))
         } yield {
           file.delete()
           result

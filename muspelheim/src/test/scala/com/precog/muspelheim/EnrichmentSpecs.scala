@@ -2,6 +2,7 @@ package com.precog.muspelheim
 
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.common._
 
 trait EnrichmentSpecs extends EvalStackSpecs {
@@ -20,8 +21,8 @@ trait EnrichmentSpecs extends EvalStackSpecs {
           { crap: medals }
         """.stripMargin
 
-      val results = evalE(input)
-      val results2 = evalE(input2)
+      val results = stack.evalE(input)
+      val results2 = stack.evalE(input2)
 
       val data = results map { case (_, x) => x }
       val data2 = results2 map { case (_, x) => x }
@@ -40,7 +41,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
           { orig: medals, enriched: medals' }
         """.stripMargin
 
-      val results = evalE(input)
+      val results = stack.evalE(input)
 
       results must haveSize(1019)
     }
@@ -50,7 +51,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
           medals := //summer_games/london_medals
           precog::enrichment(medals, { url: "http://server-error" })
         """.stripMargin
-      evalE(input) must throwA[Throwable]
+      stack.evalE(input) must throwA[Throwable]
     }
 
     "misbehaving enricher causes enrichment to fail" in {
@@ -58,7 +59,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
           medals := //summer_games/london_medals
           precog::enrichment(medals, { url: "http://misbehave" })
         """.stripMargin
-      evalE(input) must throwA[Throwable]
+      stack.evalE(input) must throwA[Throwable]
     }
 
     "empty response causes enrichment to fail" in {
@@ -66,7 +67,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
           medals := //summer_games/london_medals
           precog::enrichment(medals, { url: "http://empty" })
         """.stripMargin
-      evalE(input) must throwA[Throwable]
+      stack.evalE(input) must throwA[Throwable]
     }
 
     "options are passed through to enricher" in {
@@ -83,7 +84,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
             })
         """.stripMargin
 
-      val results = evalE(input)
+      val results = stack.evalE(input)
       results must haveSize(1)
 
       val (_, actual) = results.head
@@ -111,7 +112,7 @@ trait EnrichmentSpecs extends EvalStackSpecs {
             })
         """.stripMargin
 
-      val results = evalE(input)
+      val results = stack.evalE(input)
       results must haveSize(1)
 
       val (_, actual) = results.head

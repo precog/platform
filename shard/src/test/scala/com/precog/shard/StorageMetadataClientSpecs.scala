@@ -1,9 +1,12 @@
 package com.precog.shard
+package service
+
 
 import com.precog.common._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.vfs._
 
 import blueeyes.json._
 
@@ -13,7 +16,7 @@ import scalaz.syntax.comonad._
 
 import org.specs2.mutable._
 
-abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with Comonad[M]) extends Specification {
+abstract class BrowseServiceSpecs[M[+_]](implicit val M: Monad[M] with Comonad[M]) extends Specification {
   def colSizeMetadata(descriptor: ColumnRef, size: Long): ColumnMetadata = Map(
     descriptor -> Map(StringValueStats -> StringValueStats(size, "a", "z"))    
   )
@@ -26,34 +29,32 @@ abstract class StorageMetadataClientSpecs[M[+_]](implicit val M: Monad[M] with C
     Path("/foo/bar/") -> Map(ColumnRef(CPath(".bar"), CLong) -> 50, ColumnRef(CPath(".baz"), CLong) -> 60L)
   )
 
-  val client = new StorageMetadataClient(new StorageMetadataSource[M] {
-    def userMetadataView(userUID: String) = new StubStorageMetadata(projectionMetadata)
-  })
+  val metadata = new StubVFSMetadata[M](projectionMetadata)
+  val client = new BrowseSupport(metadata)
 
   "browse" should {
     "find child paths" in {
-      client.browse("", Path("/foo/")).copoint must beLike {
-        //case Success(JArray(results)) => results must haveTheSameElementsAs(JString("/bar/") :: JString("/bar1/") :: JString("/bar2/") :: Nil)
-        case Success(JArray(results)) => results must haveTheSameElementsAs(JString("bar/") :: JString("bar1/") :: JString("bar2/") :: Nil)
+      client.browse("", Path("/foo/")).valueOr(e => sys.error(e.toString)).copoint must beLike {
+        case JArray(results) => results must haveTheSameElementsAs(JString("bar/") :: JString("bar1/") :: JString("bar2/") :: Nil)
       }
     }
   }
 
   "structure" should {
     "find correct node information" in {
-      client.structure("", Path("/foo/bar"), CPath.Identity).copoint must beLike {
-        case Success(result) => result must_== JObject("children" -> JArray(JString(".bar") :: JString(".baz") :: Nil), "types" -> JObject())
+      client.structure("", Path("/foo/bar"), CPath.Identity).valueOr(e => sys.error(e.toString)).copoint must beLike {
+        case result => result must_== JObject("children" -> JArray(JString(".bar") :: JString(".baz") :: Nil), "types" -> JObject())
       }
     }
 
     "find correct leaf types" in {
-      client.structure("", Path("/foo/bar"), CPath("bar")).copoint must beLike {
-        case Success(result) => result must_== JObject("children" -> JArray(), "types" -> JObject("Number" -> JNum(50)))
+      client.structure("", Path("/foo/bar"), CPath("bar")).valueOr(e => sys.error(e.toString)).copoint must beLike {
+        case result => result must_== JObject("children" -> JArray(), "types" -> JObject("Number" -> JNum(50)))
       }
     }
   }
 }
 
-object StorageMetadataClientSpecs extends StorageMetadataClientSpecs[Need]
+object BrowseServiceSpecs extends BrowseServiceSpecs[Need]
 
 // vim: set ts=4 sw=4 et:
