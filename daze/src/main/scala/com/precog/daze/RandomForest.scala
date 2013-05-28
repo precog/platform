@@ -346,7 +346,7 @@ object ClassificationForest {
 }
 
 
-trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with EvaluatorMethodsModule[M] {
+trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] {
   private def makeArrays(table: Table): M[Array[Array[Double]]] = {
     extract(table) { case (c: HomogeneousArrayColumn[_]) =>
       { (row: Int) => c(row).asInstanceOf[Array[Double]] }
@@ -409,7 +409,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
     loop(table.slices, Nil)
   }
 
-  trait RandomForestLib extends ColumnarTableLib with EvaluatorMethods {
+  trait RandomForestLib extends ColumnarTableLib {
 
     override def _libMorphism2 = super._libMorphism2 ++ Set(RandomForestClassification, RandomForestRegression)
 
@@ -622,7 +622,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] with Evalua
       def morph1Apply(forests: Seq[(JType, F)]) = new Morph1Apply {
         import TransSpecModule._
 
-        def apply(table: Table, ctx: EvaluationContext): M[Table] = {
+        def apply(table: Table, ctx: MorphContext): M[Table] = {
 
           lazy val models: Map[String, (JType, F)] = forests.zipWithIndex.map({ case (elem, i) =>
             ("model" + (i + 1)) -> elem

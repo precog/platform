@@ -148,13 +148,6 @@ trait ColumnarTableModuleTestSupport[M[+_]] extends ColumnarTableModule[M] with 
 
     lib(name)
   }
-
-  def debugPrint(dataset: Table): Unit = {
-    println("\n\n")
-    dataset.slices.foreach { slice => {
-      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
-    }}
-  }
 }
 
 

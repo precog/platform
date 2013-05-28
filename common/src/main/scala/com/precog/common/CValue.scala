@@ -53,6 +53,12 @@ sealed trait RValue { self =>
 
   def flattenWithPath: Vector[(CPath, CValue)] = {
     def flatten0(path: CPath)(value: RValue): Vector[(CPath, CValue)] = value match {
+      case RObject(fields) if fields.isEmpty =>
+        Vector((path, CEmptyObject))
+
+      case RArray(elems) if elems.isEmpty =>
+        Vector((path, CEmptyArray))
+
       case RObject(fields) =>
         fields.foldLeft(Vector.empty[(CPath, CValue)]) {
           case (acc, field) =>

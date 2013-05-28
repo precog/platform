@@ -2793,6 +2793,18 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must_== Set(SDecimal(3))
     }
     
+    "evaluate a nonsense getMillis usage without exception" in {
+      val input = """
+        | import std::time::*
+        | 
+        | conversions := //conversions
+        | start := getMillis(2010)
+        | conversions where conversions > start
+        | """.stripMargin
+        
+      evalE(input) must beEmpty
+    }
+    
     "split a constant string along a constant delimiter" in {
       val input = """std::string::split("abc # def", "#")"""
       eval(input) mustEqual Set(SArray(Vector(SString("abc "), SString(" def"))))

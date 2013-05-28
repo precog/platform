@@ -38,6 +38,7 @@ import blueeyes.json.serialization.DefaultSerialization._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.security.service._
+import com.precog.common.accounts._
 import com.precog.common.services._
 import com.precog.daze._
 import com.precog.yggdrasil.TableModule
@@ -58,6 +59,7 @@ import scalaz.syntax.std.boolean._
 import java.util.concurrent.TimeUnit
 
 object ShardServiceCombinators extends Logging {
+
   trait NonNegativeLong {
     val BigIntPattern = """(0|[1-9][0-9]*)""".r
 
@@ -164,22 +166,24 @@ object ShardServiceCombinators extends Logging {
       QueryOptions(offsetAndLimit, sortOn, sortOrder, timeout.map(Duration(_, TimeUnit.MILLISECONDS)), output)
     } leftMap { errors =>
       DispatchError(BadRequest, "Errors were encountered decoding query configuration parameters.", Some(errors.list mkString "\n")) : NotServed
-    } 
+    }
   }
 
 }
 
 trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceCombinators with APIKeyServiceCombinators with Logging {
   import ShardServiceCombinators._
+  import ServiceHandlerUtil._
+  import DefaultBijections._
+
   type Query = String
 
-  import DefaultBijections._
-  def query[B](next: HttpService[ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]]] = {
-    new DelegatingService[ByteChunk, (APIKey, Path) => Future[HttpResponse[B]], ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]] {
+  def query[B](next: HttpService[ByteChunk, (APIKey, AccountDetails, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[B]]] = {
+    new DelegatingService[ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[B]], ByteChunk, (APIKey, AccountDetails, Path, Query, QueryOptions) => Future[HttpResponse[B]]] {
       val delegate = next
       val metadata = NoMetadata
-      val service: HttpRequest[ByteChunk] => Validation[NotServed, (APIKey, Path) => Future[HttpResponse[B]]]  = (request: HttpRequest[ByteChunk]) => {
-         queryOpts(request) flatMap { opts =>
+      val service: HttpRequest[ByteChunk] => Validation[NotServed, ((APIKey, AccountDetails), Path) => Future[HttpResponse[B]]] = (request: HttpRequest[ByteChunk]) => {
+        queryOpts(request) flatMap { opts =>
           def quirrelContent(request: HttpRequest[ByteChunk]): Option[ByteChunk] = for {
             header <- request.headers.header[`Content-Type`] if header.mimeTypes exists { t =>
                         t == text/plain || (t.maintype == "text" && t.subtype == "x-quirrel-script")
@@ -188,31 +192,32 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
           } yield content
 
           next.service(request) map { f => 
-            (apiKey: APIKey, path: Path) => {
+            val serv: ((APIKey, AccountDetails), Path) => Future[HttpResponse[B]] = { case ((apiKey, account), path) =>
               val query: Option[Future[String]] = 
                 request.parameters.get('q).filter(_ != null).map(Promise.successful).
                 orElse(quirrelContent(request).map(ByteChunk.forceByteArray(_:ByteChunk).map(new String(_: Array[Byte], "UTF-8"))))
 
               val result: Future[HttpResponse[B]] = query map { q =>
-                q flatMap { f(apiKey, path, _: String, opts) }
+                q flatMap { f(apiKey, account, path, _: String, opts) }
               } getOrElse {
                 Promise.successful(HttpResponse(HttpStatus(BadRequest, "Neither the query string nor request body contained an identifiable quirrel query.")))
               }
               result
             }
+            serv
           }
         }
       }
     }
   }
 
-  def asyncQuery[B](next: HttpService[ByteChunk, (APIKey, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, APIKey => Future[HttpResponse[B]]] = {
-    new DelegatingService[ByteChunk, APIKey => Future[HttpResponse[B]], ByteChunk, (APIKey, Path) => Future[HttpResponse[B]]] {
+  def asyncQuery[B](next: HttpService[ByteChunk, (APIKey, AccountDetails, Path, Query, QueryOptions) => Future[HttpResponse[B]]])(implicit executor: ExecutionContext): HttpService[ByteChunk, ((APIKey, AccountDetails)) => Future[HttpResponse[B]]] = {
+    new DelegatingService[ByteChunk, ((APIKey, AccountDetails)) => Future[HttpResponse[B]], ByteChunk, ((APIKey, AccountDetails), Path) => Future[HttpResponse[B]]] {
       val delegate = query[B](next)
       val service = { (request: HttpRequest[ByteChunk]) =>
         val path = request.parameters.get('prefixPath).filter(_ != null).getOrElse("")
         delegate.service(request.copy(parameters = request.parameters + ('sync -> "async"))) map { f =>
-          (apiKey: APIKey) => f(apiKey, Path(path))
+          { (cred: (APIKey, AccountDetails)) => f(cred, Path(path)) }
         }
       }
 
@@ -220,15 +225,34 @@ trait ShardServiceCombinators extends EitherServiceCombinators with PathServiceC
     }
   }
 
-/*
-  import java.nio.ByteBuffer
+  def requireAccount[A, B](accountFinder: AccountFinder[Future])
+      (service: HttpService[A, ((APIKey, AccountDetails)) => Future[HttpResponse[B]]])
+      (implicit inj: JValue => B, M: Monad[Future]): HttpService[A, APIKey => Future[HttpResponse[B]]] = {
+    val service0 = service map { (f: ((APIKey, AccountDetails)) => Future[HttpResponse[B]]) =>
+      { (v: Validation[String, (APIKey, AccountDetails)]) =>
+        v.fold(msg => M.point(forbidden(msg) map inj), f)
+      }
+    }
+    new FindAccountService(accountFinder)(service0)
+  }
+}
 
-  implicit def bbToString(bb: ByteBuffer): String = {
-    val arr = new Array[Byte](bb.remaining)
-    bb.get(arr)
-    new String(arr, "UTF-8")
+final class FindAccountService[A, B](accountFinder: AccountFinder[Future])
+    (val delegate: HttpService[A, Validation[String, (APIKey, AccountDetails)] => Future[B]])
+    (implicit M: Monad[Future]) extends
+    DelegatingService[A, APIKey => Future[B], A, Validation[String, (APIKey, AccountDetails)] => Future[B]] {
+
+  val service: HttpRequest[A] => Validation[NotServed, APIKey => Future[B]] = { (request: HttpRequest[A]) =>
+    delegate.service(request) map { (f: Validation[String, (APIKey, AccountDetails)] => Future[B]) =>
+      { (apiKey: APIKey) =>
+        val details = OptionT(accountFinder.findAccountByAPIKey(apiKey)) flatMap { accountId =>
+          OptionT(accountFinder.findAccountDetailsById(accountId))
+        }
+        val result = details.fold(account => Success((apiKey, account)), Failure("Cannot find account for API key: " + apiKey))
+        result flatMap f
+      }
+    }
   }
 
-  implicit def stringToBB(s: String): ByteBuffer = ByteBuffer.wrap(s.getBytes("UTF-8"))
-  */
+  val metadata = DescriptionMetadata("Finds the account associated with a given API key.")
 }
