@@ -116,9 +116,11 @@ trait ShardService extends
             get(new AsyncQueryResultServiceHandler(state.jobManager)) ~
             delete(new QueryDeleteHandler[ByteChunk](state.jobManager, state.clock))
           } ~
-          // async handler *always* returns a JSON object containing the job ID
-          shardService[({ type λ[+α] = (APIKey => α) })#λ] {
-            asyncQuery(post(new AsyncQueryServiceHandler(state.platform.asynchronous)))
+          requireAccount(state.accountFinder) {
+            // async handler *always* returns a JSON object containing the job ID
+            shardService[({ type λ[+α] = (((APIKey, AccountDetails)) => α) })#λ] {
+              asyncQuery(post(new AsyncQueryServiceHandler(state.platform.asynchronous)))
+            }
           }
         }
       }
@@ -129,17 +131,19 @@ trait ShardService extends
     val queryService = new SyncQueryServiceHandler(state.platform.synchronous, state.jobManager, SyncResultFormat.Simple)
     jsonp {
       jsonAPIKey(state.apiKeyFinder) {
-        dataPath("/analytics/fs") {
-          shardService[({ type λ[+α] = ((APIKey, Path) => α) })#λ] {
-            query[QueryResult] {
-              {
-                get { queryService } ~
-                post { queryService }
+        requireAccount(state.accountFinder) {
+          dataPath("/analytics/fs") {
+            shardService[({ type λ[+α] = (((APIKey, AccountDetails), Path) => α) })#λ] {
+              query[QueryResult] {
+                {
+                  get { queryService } ~
+                  post { queryService }
+                }
               }
+            } ~
+            options {
+              (request: HttpRequest[ByteChunk]) => (a: (APIKey, AccountDetails), p: Path) => optionsResponse
             }
-          } ~
-          options {
-            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
           }
         } ~
         dataPath("/meta/fs") {
@@ -176,10 +180,12 @@ trait ShardService extends
 
   private def analysisHandler[A](state: ShardState) = {
     jsonAPIKey(state.apiKeyFinder) {
-      dataPath("/analysis/fs") {
-        get {
-          shardService[({ type λ[+α] = (APIKey, Path) => α })#λ] {
-            new AnalysisServiceHandler(state.storedQueries, state.clock)
+      requireAccount(state.accountFinder) {
+        dataPath("/analysis/fs") {
+          get {
+            shardService[({ type λ[+α] = ((APIKey, AccountDetails), Path) => α })#λ] {
+              new AnalysisServiceHandler(state.storedQueries, state.clock)
+            }
           }
         }
       }
