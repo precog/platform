@@ -143,16 +143,16 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
       def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.Scan(
+        trans.MapWith(
           trans.InnerArrayConcat(
             trans.WrapArray(
               trans.Map1(left, UnifyStrDate)),
             trans.WrapArray(
               trans.Map1(right, UnifyStrDate))),
-          MatchScanner)
+          MatchMapper)
       }
       
-      val MatchScanner = CF2Array("std::string::regexMatch") {
+      val MatchMapper = CF2Array[String, M]("std::string::regexMatch") {
         case (target: StrColumn, regex: StrColumn, range) => {
           val table = new Array[Array[String]](range.length)
           val defined = new BitSet(range.length)
@@ -362,13 +362,13 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
       def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.Scan(
+        trans.MapWith(
           trans.InnerArrayConcat(
             trans.WrapArray(
               trans.Map1(left, UnifyStrDate)),
             trans.WrapArray(
               trans.Map1(right, UnifyStrDate))),
-          splitScanner(true))
+          splitMapper(true))
       }
     }
 
@@ -394,17 +394,17 @@ trait StringLibModule[M[+_]] extends ColumnarTableLibModule[M] {
       val tpe = BinaryOperationType(StrAndDateT, StrAndDateT, JArrayHomogeneousT(JTextT))
       
       def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = {
-        trans.Scan(
+        trans.MapWith(
           trans.InnerArrayConcat(
             trans.WrapArray(
               trans.Map1(left, UnifyStrDate)),
             trans.WrapArray(
               trans.Map1(right, UnifyStrDate))),
-          splitScanner(false))
+          splitMapper(false))
       }
     }
     
-    def splitScanner(quote: Boolean) = CF2Array("std::string::split(%s)".format(quote)) {
+    def splitMapper(quote: Boolean) = CF2Array[String, M]("std::string::split(%s)".format(quote)) {
       case (left: StrColumn, right: StrColumn, range) => {
         val result = new Array[Array[String]](range.length)
         val defined = new BitSet(range.length)
