@@ -24,6 +24,5 @@ check file shard-v2-b.server.log with path /var/log/precog/shard-v2-b.server.log
   if match "double get" for 1 cycles then alert
   if match "Halting ingest" for 1 cycle then restart
   if match "Halting ingest" for 1 cycle then alert
-  alert derek-cell@chen-becker.org on { content }
   depends on shard-v2-b
   group shard-v2-b

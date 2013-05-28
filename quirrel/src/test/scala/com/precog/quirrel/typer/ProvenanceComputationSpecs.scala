@@ -96,6 +96,7 @@ object ProvenanceComputationSpecs extends Specification
         }
       }
     } 
+
     "compute result provenance correctly in a morph2" in {
       forall(libMorphism2) { f =>
         val tree = compileSingle("""
@@ -122,6 +123,11 @@ object ProvenanceComputationSpecs extends Specification
           }
           
           case IdentityPolicy.Retain.Merge => {
+            tree.provenance mustEqual StaticProvenance("/clicks")
+            tree.errors filterNot isWarning must beEmpty
+          }
+          
+          case IdentityPolicy.Retain.Cross => {
             tree.provenance mustEqual StaticProvenance("/clicks")
             tree.errors filterNot isWarning must beEmpty
           }
@@ -695,6 +701,11 @@ object ProvenanceComputationSpecs extends Specification
             tree.errors filterNot isWarning must beEmpty
           }
 
+          case IdentityPolicy.Retain.Cross => {
+            tree.provenance mustEqual StaticProvenance("/foo")
+            tree.errors filterNot isWarning must beEmpty
+          }
+
           case IdentityPolicy.Synthesize => {
             tree.provenance must beLike {
               case DynamicProvenance(_) => ok
@@ -741,8 +752,9 @@ object ProvenanceComputationSpecs extends Specification
             tree.errors filterNot isWarning must beEmpty
           }
           
-          case _: IdentityPolicy.Retain => { 
-            tree.provenance mustEqual ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+          case IdentityPolicy.Retain.Cross => {
+            val prov = ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+            tree.provenance mustEqual prov
             tree.errors filterNot isWarning must beEmpty
           }
           
@@ -1340,6 +1352,13 @@ object ProvenanceComputationSpecs extends Specification
                 tree.errors filterNot isWarning must beEmpty
               }
               
+              case IdentityPolicy.Retain.Cross => {
+                tree.provenance must beLike {
+                  case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz")) => ok
+                }
+                tree.errors filterNot isWarning must beEmpty
+              }
+              
               case IdentityPolicy.Synthesize => {
                 tree.provenance must beLike {
                   case CoproductProvenance(DynamicProvenance(_), StaticProvenance("/baz")) => ok
@@ -1350,6 +1369,61 @@ object ProvenanceComputationSpecs extends Specification
               case IdentityPolicy.Strip => {
                 tree.provenance mustEqual NullProvenance
                 tree.errors filterNot isWarning mustEqual Set(ProductProvenanceDifferentLength)
+              }
+            }
+          }
+        }
+        {
+          forall(libMorphism2) { f =>
+            val tree = compileSingle("//foo ~ //bar %s(//foo + //bar, //foo)".format(f.fqn))
+            
+            f.idPolicy match {
+              case IdentityPolicy.Product(left, right) => {
+                val product = ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+                tree.provenance must beLike {
+                  case ProductProvenance(DynamicProvenance(_), product) => ok
+                }
+                tree.errors filterNot isWarning must beEmpty
+              }
+
+              case IdentityPolicy.Retain.Right => {
+                val prov = StaticProvenance("/foo")
+                tree.provenance mustEqual prov
+                tree.errors filterNot isWarning must beEmpty
+              }
+              
+              case IdentityPolicy.Retain.Left => {
+                val prov = ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+                tree.provenance mustEqual prov
+                tree.errors filterNot isWarning must beEmpty
+              }
+              
+              case IdentityPolicy.Retain.Merge => {
+                //note provenance is not canonicalize here, hence the two `ProductProvenance`
+                val product = ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo"))
+                val prov = ProductProvenance(StaticProvenance("/foo"), product)
+                tree.provenance mustEqual prov
+                tree.errors filterNot isWarning must beEmpty
+              }
+
+              case IdentityPolicy.Retain.Cross => {
+                //note provenance is not canonicalize here, hence the two `ProductProvenance`
+                val product = ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo"))
+                val prov = ProductProvenance(StaticProvenance("/foo"), product)
+                tree.provenance mustEqual prov
+                tree.errors filterNot isWarning must beEmpty
+              }
+              
+              case IdentityPolicy.Synthesize => {
+                tree.provenance must beLike {
+                  case DynamicProvenance(_) => ok
+                }
+                tree.errors filterNot isWarning must beEmpty
+              }
+              
+              case IdentityPolicy.Strip => {
+                tree.provenance mustEqual ValueProvenance
+                tree.errors filterNot isWarning must beEmpty
               }
             }
           }

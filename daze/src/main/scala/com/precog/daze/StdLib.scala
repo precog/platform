@@ -34,6 +34,15 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     private val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   }
 
+  trait MorphLogger {
+    def info(msg: String): M[Unit]
+    def warn(msg: String): M[Unit]
+    def error(msg: String): M[Unit]
+    def die(): M[Unit]
+  }
+
+  case class MorphContext(evalContext: EvaluationContext, logger: MorphLogger)
+
   trait TableLib extends Library {
     import TableLib._
     import trans._
@@ -51,7 +60,7 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     def _libReduction: Set[Reduction] = Set()
 
     trait Morph1Apply {
-      def apply(input: Table, ctx: EvaluationContext): M[Table]
+      def apply(input: Table, ctx: MorphContext): M[Table]
     }
 
     sealed trait MorphismAlignment
@@ -70,21 +79,27 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       val opcode: Int = defaultMorphism1Opcode.getAndIncrement
       val rowLevel: Boolean = false
       val multivariate: Boolean = false
+
+      /**
+       * This specifies how to align the 2 arguments as they are inputted. For
+       * instance, if we use MorphismAlignment.Cross, then the 2 tables will be
+       * crossed, then passed to `morph1`.
+       */
       def alignment: MorphismAlignment
     }
 
     abstract class Op1(namespace: Vector[String], name: String) extends Morphism1(namespace, name) with Op1Like {
-      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A]
+      def spec[A <: SourceType](ctx: MorphContext)(source: TransSpec[A]): TransSpec[A]
 
       def fold[A](op1: Op1 => A, op1F1: Op1F1 => A): A = op1(this)
-      def apply(table: Table, ctx: EvaluationContext) = sys.error("morphism application of an op1 is wrong")
+      def apply(table: Table, ctx: MorphContext) = sys.error("morphism application of an op1 is wrong")
     }
 
     abstract class Op1F1(namespace: Vector[String], name: String) extends Op1(namespace, name) {
-      def spec[A <: SourceType](ctx: EvaluationContext)(source: TransSpec[A]): TransSpec[A] =
+      def spec[A <: SourceType](ctx: MorphContext)(source: TransSpec[A]): TransSpec[A] =
         trans.Map1(source, f1(ctx))
       
-      def f1(ctx: EvaluationContext): F1
+      def f1(ctx: MorphContext): F1
 
       override val rowLevel: Boolean = true
 
@@ -94,20 +109,20 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
     abstract class Op2(namespace: Vector[String], name: String) extends Morphism2(namespace, name) with Op2Like {
       val alignment = MorphismAlignment.Match(M.point {
         new Morph1Apply { 
-          def apply(input: Table, ctx: EvaluationContext) = sys.error("morphism application of an op2 is wrong")
+          def apply(input: Table, ctx: MorphContext) = sys.error("morphism application of an op2 is wrong")
         }
       })
 
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A]
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A]
 
       def fold[A](op2: Op2 => A, op2F2: Op2F2 => A): A = op2(this)
     }
 
     abstract class Op2F2(namespace: Vector[String], name: String) extends Op2(namespace, name) {
-      def spec[A <: SourceType](ctx: EvaluationContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
+      def spec[A <: SourceType](ctx: MorphContext)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] =
         trans.Map2(left, right, f2(ctx))
       
-      def f2(ctx: EvaluationContext): F2
+      def f2(ctx: MorphContext): F2
 
       override val rowLevel: Boolean = true
 
@@ -121,11 +136,11 @@ trait TableLibModule[M[+_]] extends TableModule[M] with TransSpecModule {
       type Result
 
       def monoid: Monoid[Result]
-      def reducer(ctx: EvaluationContext): Reducer[Result]
+      def reducer(ctx: MorphContext): Reducer[Result]
       def extract(res: Result): Table
       def extractValue(res: Result): Option[RValue]
 
-      def apply(table: Table, ctx: EvaluationContext) = table.reduce(reducer(ctx))(monoid) map extract
+      def apply(table: Table, ctx: MorphContext) = table.reduce(reducer(ctx))(monoid) map extract
     }
 
     def coalesce(reductions: List[(Reduction, Option[JType => JType])]): Reduction
@@ -139,7 +154,7 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
       val tpe = r.tpe
 
       def monoid = r.monoid
-      def reducer(ctx: EvaluationContext) = new CReducer[Result] {
+      def reducer(ctx: MorphContext) = new CReducer[Result] {
         def reduce(schema: CSchema, range: Range): Result = {
           jtypef match {
             case Some(f) =>
@@ -236,7 +251,8 @@ trait StdLibModule[M[+_]]
     with LogisticRegressionLibModule[M]
     with LinearRegressionLibModule[M]
     with FSLibModule[M]
-    with RandomLibModule[M] {
+    with RandomLibModule[M]
+    with PrecogLibModule[M] {
   type Lib <: StdLib
 
   trait StdLib
@@ -256,6 +272,7 @@ trait StdLibModule[M[+_]]
       with LinearRegressionLib
       with FSLib
       with RandomLib
+      with PrecogLib
 }
 
 object StdLib {
