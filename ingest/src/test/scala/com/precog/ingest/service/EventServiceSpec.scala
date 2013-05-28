@@ -69,6 +69,15 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
       }
     }
 
+    "track event with valid API key at dot-prefixed path" in {
+      val result = track[JValue](JSON, Some(testAccount.apiKey), testAccount.rootPath / Path(".test"), Some(testAccount.accountId), batch = false)(testValue)
+
+      result.copoint must beLike {
+        case (HttpResponse(HttpStatus(OK, _), _, Some(_), _), Ingest(_, _, _, values, _, _, _) :: Nil) =>
+          values must contain(testValue).only
+      }
+    }
+
     "expand top-level arrays" in {
       val t1: JValue = JObject("t1" -> JNum(1))
       val t2: JValue = JObject("t2" -> JNum(2))
