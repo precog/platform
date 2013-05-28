@@ -22,6 +22,7 @@ package daze
 
 import scala.collection.mutable
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution.EvaluationContext
 
 import scalaz._
 import scalaz.std.list._

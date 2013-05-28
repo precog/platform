@@ -38,6 +38,20 @@ import scalaz.syntax.apply._
 import scalaz.syntax.plusEmpty._
 import Permission._
 
+sealed trait AccessMode { def name: String }
+sealed trait ReadMode extends AccessMode
+sealed trait WriteMode extends AccessMode
+
+object AccessMode {
+  case object Read extends AccessMode with ReadMode { val name = "read" }
+  case object Execute extends AccessMode with ReadMode { val name = "execute" }
+  case object ReadMetadata extends AccessMode with ReadMode { val name = "metadata" }
+
+  case object Create extends AccessMode with WriteMode { val name = "create" }
+  case object Replace extends AccessMode with WriteMode { val name = "replace" }
+  case object Append extends AccessMode with WriteMode { val name = "append" }
+}
+
 sealed trait Permission extends Logging {
   def path: Path
 
@@ -59,9 +73,9 @@ case class WritePermission(path: Path, writeAs: WriteAs) extends Permission {
   }
 }
 
-case class ExecutePermission(path: Path) extends Permission {
+case class ExecutePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
-    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
+    case p @ ExecutePermission(path0, w0) => path.isEqualOrParentOf(path0) && WrittenBy.implies(this, p)
     case _ => false
   }
 }
@@ -70,7 +84,7 @@ case class ReadPermission(path: Path, writtenBy: WrittenBy) extends Permission w
   def implies(other: Permission): Boolean = other match {
     case p : ReadPermission => WrittenBy.implies(this, p)
     case p : ReducePermission => WrittenBy.implies(this, p)
-    case ExecutePermission(path0) => path.isEqualOrParentOf(path0)
+    case p @ ExecutePermission(path0, w0) => path.isEqualOrParentOf(path0) && WrittenBy.implies(this, p)
     case _ => false
   }
 }
@@ -81,7 +95,6 @@ case class ReducePermission(path: Path, writtenBy: WrittenBy) extends Permission
     case _ => false
   }
 }
-
 
 case class DeletePermission(path: Path, writtenBy: WrittenBy) extends Permission with WrittenByPermission {
   def implies(other: Permission): Boolean = other match {
@@ -109,6 +122,9 @@ object Permission {
   case class WrittenByAccount(accountId: AccountId) extends WrittenBy
 
   object WrittenBy {
+    val any: WrittenBy = WrittenByAny
+    def apply(accountId: AccountId): WrittenBy = WrittenByAccount(accountId)
+
     def implies(permission: WrittenByPermission, candidate: WrittenByPermission): Boolean = {
       permission.path.isEqualOrParentOf(candidate.path) &&
       (permission.writtenBy match {

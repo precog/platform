@@ -65,8 +65,8 @@ trait AssignClusterModule[M[+_]] extends ColumnarTableLibModule[M] with ModelLib
           val rowModels: Int => Set[Model] = {
             val modelTuples: Map[ModelId, Set[(ModelId, ClusterId, CPath, DoubleColumn)]] = {
               schema.columnRefs.flatMap {
-                case ColumnRef(path @ CPath(TableModule.paths.Value, CPathField(modelName), CPathField(clusterName), rest @ _*), ctype) => 
-                  Schema.mkType((path, ctype) :: Nil) flatMap { case jType =>
+                case ref @ ColumnRef(CPath(TableModule.paths.Value, CPathField(modelName), CPathField(clusterName), rest @ _*), ctype) => 
+                  Schema.mkType(ref :: Nil) flatMap { case jType =>
                     schema.columns(jType) collectFirst { case (col: DoubleColumn) => col }
                   } map { col =>
                     (modelName, clusterName, CPath((TableModule.paths.Value +: rest): _*), col)

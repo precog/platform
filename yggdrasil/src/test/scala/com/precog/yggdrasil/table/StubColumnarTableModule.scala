@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package table
 
+import vfs.ResourceError
 import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.util.VectorCase
@@ -33,8 +34,11 @@ import blueeyes.json._
 import scala.annotation.tailrec
 
 import scalaz._
+import scalaz.Validation._
+import scalaz.std.stream._
 import scalaz.syntax.comonad._
 import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 import scalaz.std.anyVal._
 
@@ -73,11 +77,11 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
       }.map(_.transform(DerefObjectStatic(Leaf(Source), CPathField("1"))))
     }
     
-    override def load(apiKey: APIKey, jtpe: JType) = {
+    override def load(apiKey: APIKey, jtpe: JType) = EitherT {
       self.toJson map { events =>
-        fromJson {
-          events.toStream flatMap {
-            case JString(pathStr) => indexLock synchronized {      // block the WHOLE WORLD
+        val parsedV = events.toStream.traverse[({ type λ[α] = Validation[ResourceError, α] })#λ, Stream[JObject]] {
+          case JString(pathStr) => success {
+            indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
         
               val index = initialIndices get path getOrElse {
@@ -95,10 +99,13 @@ trait StubColumnarTableModule[M[+_]] extends ColumnarTableModuleTestSupport[M] {
                 case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
             }
-
-            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
           }
+
+          case x => 
+            failure(ResourceError.corrupt("Attempted to load JSON as a table from something that wasn't a string: " + x))
         }
+
+        parsedV.map(_.flatten).disjunction.map(fromJson(_))
       }
     }
 

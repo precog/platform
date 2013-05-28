@@ -58,19 +58,19 @@ object Schema {
   }
 
   def sample(jtype: JType, size: Int): Option[JType] = {
-    val paths = flatten(jtype, Nil) groupBy { _._1 } toSeq
-    val sampledPaths: Seq[(CPath, CType)] = scala.util.Random.shuffle(paths).take(size) flatMap { _._2 }
+    val paths = flatten(jtype, Nil) groupBy { _.selector } toSeq
+    val sampledPaths: Seq[ColumnRef] = scala.util.Random.shuffle(paths).take(size) flatMap { _._2 }
     
     mkType(sampledPaths)
   }
 
-  def flatten(jtype: JType, refsOriginal: List[ColumnRef]): List[(CPath, CType)] = {
-    def buildPath(nodes: List[CPathNode], refs: List[ColumnRef], jType: JType): List[(CPath, CType)] = jType match {
+  def flatten(jtype: JType, refsOriginal: List[ColumnRef]): Set[ColumnRef] = {
+    def buildPath(nodes: List[CPathNode], refs: List[ColumnRef], jType: JType): List[ColumnRef] = jType match {
       case JArrayFixedT(indices) if indices.isEmpty =>
-        (CPath(nodes.reverse), CEmptyArray) :: Nil
+        ColumnRef(CPath(nodes.reverse), CEmptyArray) :: Nil
         
       case JObjectFixedT(fields) if fields.isEmpty =>
-        (CPath(nodes.reverse), CEmptyObject) :: Nil
+        ColumnRef(CPath(nodes.reverse), CEmptyObject) :: Nil
         
       case JArrayFixedT(indices) =>
         indices.toList.flatMap { case (idx, tpe) =>
@@ -92,17 +92,17 @@ object Schema {
       case JArrayUnfixedT =>
         refs collect { 
           case ColumnRef(p @ CPath(CPathIndex(i), rest @ _*), ctype) =>
-            (CPath(nodes.reverse) \ p, ctype)
+            ColumnRef(CPath(nodes.reverse) \ p, ctype)
           case ColumnRef(CPath(), CEmptyArray) =>
-            (CPath(nodes.reverse), CEmptyArray)
+            ColumnRef(CPath(nodes.reverse), CEmptyArray)
         }
 
       case JObjectUnfixedT =>
         refs collect { 
           case ColumnRef(p @ CPath(CPathField(i), rest @ _*), ctype) =>
-            (CPath(nodes.reverse) \ p, ctype)
+            ColumnRef(CPath(nodes.reverse) \ p, ctype)
           case ColumnRef(CPath(), CEmptyObject) =>
-            (CPath(nodes.reverse), CEmptyObject)
+            ColumnRef(CPath(nodes.reverse), CEmptyObject)
         }
 
       case JArrayHomogeneousT(tpe) =>
@@ -113,28 +113,28 @@ object Schema {
 
       case JNumberT =>
         val path = CPath(nodes.reverse)
-        (path, CLong: CType) :: (path, CDouble) :: (path, CNum) :: Nil
+        ColumnRef(path, CLong: CType) :: ColumnRef(path, CDouble) :: ColumnRef(path, CNum) :: Nil
 
       case JTextT =>
-        (CPath(nodes.reverse), CString) :: Nil
+        ColumnRef(CPath(nodes.reverse), CString) :: Nil
 
       case JBooleanT =>
-        (CPath(nodes.reverse), CBoolean) :: Nil
+        ColumnRef(CPath(nodes.reverse), CBoolean) :: Nil
 
       case JDateT =>
-        (CPath(nodes.reverse), CDate) :: Nil
+        ColumnRef(CPath(nodes.reverse), CDate) :: Nil
 
       case JPeriodT =>
-        (CPath(nodes.reverse), CPeriod) :: Nil
+        ColumnRef(CPath(nodes.reverse), CPeriod) :: Nil
 
       case JNullT =>
-        (CPath(nodes.reverse), CNull) :: Nil
+        ColumnRef(CPath(nodes.reverse), CNull) :: Nil
 
       case JUnionT(ltpe, rtpe) =>
         buildPath(nodes, refs, ltpe) ++ buildPath(nodes, refs, rtpe)
     }
 
-    buildPath(Nil, refsOriginal, jtype)
+    buildPath(Nil, refsOriginal, jtype).toSet
   }
 
   private def fromCValueType(t: CValueType[_]): Option[JType] = t match {
@@ -266,37 +266,37 @@ object Schema {
   }
 
   /**
-   * Constructs a JType corresponding to the supplied sequence of (CPath, CType) pairs. Returns None if the
+   * Constructs a JType corresponding to the supplied sequence of ColumnRefs. Returns None if the
    * supplied sequence is empty.
    */
-  def mkType(ctpes: Seq[(CPath, CType)]): Option[JType] = {
+  def mkType(ctpes: Seq[ColumnRef]): Option[JType] = {
     
     val primitives = ctpes flatMap {
-      case (CPath.Identity, t: CValueType[_]) => fromCValueType(t)
-      case (CPath.Identity, CNull) => Some(JNullT)
-      case (CPath.Identity, CEmptyArray) => Some(JArrayFixedT(Map()))
-      case (CPath.Identity, CEmptyObject) => Some(JObjectFixedT(Map()))
+      case ColumnRef(CPath.Identity, t: CValueType[_]) => fromCValueType(t)
+      case ColumnRef(CPath.Identity, CNull) => Some(JNullT)
+      case ColumnRef(CPath.Identity, CEmptyArray) => Some(JArrayFixedT(Map()))
+      case ColumnRef(CPath.Identity, CEmptyObject) => Some(JObjectFixedT(Map()))
       case _ => None
     }
 
     val elements = ctpes.collect {
-      case (CPath(CPathIndex(i), _*), _) => i
+      case ColumnRef(CPath(CPathIndex(i), _*), _) => i
     }.toSet.flatMap {
       (i: Int) =>
       mkType(ctpes.collect {
-        case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
+        case ColumnRef(CPath(CPathIndex(`i`), tail @ _*), ctpe) => ColumnRef(CPath(tail : _*), ctpe)
       }).map(i -> _)
     }
     val array = if (elements.isEmpty) Nil else List(JArrayFixedT(elements.toMap))
 
     val keys = ctpes.foldLeft(Set.empty[String]) {
-      case (acc, (CPath(CPathField(key), _*), _)) => acc+key
+      case (acc, ColumnRef(CPath(CPathField(key), _*), _)) => acc+key
       case (acc, _) => acc
     }
 
     val members = keys.flatMap { key =>
       mkType(ctpes.collect {
-        case (CPath(CPathField(`key`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
+        case ColumnRef(CPath(CPathField(`key`), tail @ _*), ctpe) => ColumnRef(CPath(tail : _*), ctpe)
       }).map(key -> _)
     }
     val obj = if (members.isEmpty) Nil else List(JObjectFixedT(members.toMap))

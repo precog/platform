@@ -48,14 +48,14 @@ trait ArbitraryEventMessage extends ArbitraryJValue {
     Path(elements.filter(_.length > 0))
   }
 
-  def genStoreMode: Gen[StoreMode] = 
-      Gen.oneOf(StoreMode.Create, StoreMode.Replace, StoreMode.Append)
+  def genWriteMode: Gen[WriteMode] = 
+      Gen.oneOf(AccessMode.Create, AccessMode.Replace, AccessMode.Append)
 
   def genStreamRef: Gen[StreamRef] = 
     for {
       terminal <- arbitrary[Boolean]
-      storeMode <- genStoreMode
-    } yield storeMode.createStreamRef(terminal)
+      storeMode <- genWriteMode
+    } yield StreamRef.forWriteMode(storeMode, terminal)
 
   def genEventId: Gen[EventId] =
     for {

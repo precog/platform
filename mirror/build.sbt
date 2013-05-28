@@ -17,12 +17,6 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
+name := "mirror"
 
-import metadata.StorageMetadata
-import com.precog.common.security._
-
-trait StorageMetadataSource[M[+_]] {
-  def userMetadataView(apiKey: APIKey): StorageMetadata[M]
-}
-
+logBuffered := false       // gives us incremental output from Specs2

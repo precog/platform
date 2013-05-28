@@ -68,10 +68,15 @@ case class FileContent(data: Array[Byte], mimeType: MimeType, encoding: ContentE
 
 object FileContent {
   import MimeTypes._
+  val XQuirrelData = MimeType("application", "x-quirrel-data")
   val XQuirrelScript = MimeType("text", "x-quirrel-script")
-  val ApplicationJson = application/json
   val XJsonStream = MimeType("application", "x-json-stream")
+  val ApplicationJson = application/json
   val TextCSV = text/csv
+  val TextPlain = text/plain
+  val AnyMimeType = MimeType("*", "*")
+
+  val stringTypes = Set(XQuirrelScript, ApplicationJson, TextCSV, TextPlain)
 
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
     def decompose(v: FileContent) = JObject(

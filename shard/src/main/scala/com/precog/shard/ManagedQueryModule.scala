@@ -115,7 +115,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    * `completeJob` to ensure the job is put into a terminal state when the
    * query completes.
    */
-  def createJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[JobQueryTFMonad] = {
+  def createQueryJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[JobQueryTFMonad] = {
     val start = System.currentTimeMillis
     val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).onComplete {
       _ => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start))

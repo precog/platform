@@ -23,6 +23,7 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait LogisticRegressionSpecs extends EvalStackSpecs {
+  import stack._
   "logistic regression" should {
     "return correctly structured results in simple case of logistic regression" in {
       val input = """

@@ -33,7 +33,7 @@ import AsyncParser.{More, Done}
 import com.precog.common.Path
 import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
-import com.precog.common.security.{APIKey, Authorities}
+import com.precog.common.security.{APIKey, Authorities, WriteMode}
 
 import java.nio.ByteBuffer
 
@@ -87,7 +87,7 @@ trait IngestProcessing {
   def forRequest(request: HttpRequest[_]): ValidationNel[String, IngestProcessor]
 
   trait IngestProcessorLike {
-    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: StoreMode, data: ByteChunk): Future[IngestResult]
+    def ingest(durability: Durability, errorHandling: ErrorHandling, storeMode: WriteMode, data: ByteChunk): Future[IngestResult]
   }
 }
 

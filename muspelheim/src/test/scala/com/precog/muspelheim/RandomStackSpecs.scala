@@ -23,7 +23,7 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait RandomStackSpecs extends EvalStackSpecs {
-
+  import stack._
   "random functionality" should {
     "guarantee observe of uniform returns values between 0 and 1" in {
       val input = """
@@ -53,7 +53,7 @@ trait RandomStackSpecs extends EvalStackSpecs {
     "give error if distribution is returned unobserved" in {
       val input = """std::random::uniform(12)"""
 
-      evalE(input) must throwAn[Exception]
+      evalE(input) must throwAn[AssertionError]
     }
 
     "guarantee observe of uniform joins with original dataset" in {

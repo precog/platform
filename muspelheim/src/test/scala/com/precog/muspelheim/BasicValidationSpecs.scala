@@ -24,7 +24,10 @@ import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.daze._
 
-trait BasicValidationSpecs extends EvalStackSpecs with Instructions {
+trait BasicValidationSpecs extends EvalStackSpecs {
+  type TestStack <: EvalStackLike with Instructions
+  import stack._
+
   "Fundamental stack support" should {
 
     "count a filtered clicks dataset" in {

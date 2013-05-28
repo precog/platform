@@ -32,7 +32,9 @@ import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.niflheim._
 import com.precog.util.XLightWebHttpClientModule
+import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.vfs._
+import com.precog.yggdrasil.scheduling._
 
 import quirrel._
 import quirrel.emitter._
@@ -78,17 +80,18 @@ trait PlatformConfig extends BaseConfig
     with ColumnarTableModuleConfig
     with BlockStoreColumnarTableModuleConfig
 
-trait Platform extends muspelheim.ParseEvalStack[Future]
+trait SBTConsolePlatform extends muspelheim.ParseEvalStack[Future]
+    with SecureVFSModule[Future, Slice]
+    with ActorVFSModule
     with IdSourceScannerModule
-    with NIHDBColumnarTableModule
-    with NIHDBStorageMetadataSource
+    with VFSColumnarTableModule
     with StandaloneActorProjectionSystem
     with XLightWebHttpClientModule[Future]
     with LongIdMemoryDatasetConsumer[Future] { self =>
 
   type YggConfig = PlatformConfig
 
-  trait TableCompanion extends NIHDBColumnarTableCompanion
+  trait TableCompanion extends VFSColumnarTableCompanion
 
   object Table extends TableCompanion
 }
@@ -96,7 +99,7 @@ trait Platform extends muspelheim.ParseEvalStack[Future]
 object SBTConsole {
   val controlTimeout = Duration(30, "seconds")
 
-  val platform = new Platform { console =>
+  val platform = new SBTConsolePlatform { console =>
     implicit val actorSystem = ActorSystem("sbtConsoleActorSystem")
     implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
     implicit val M: Monad[Future] with Comonad[Future] = new UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
@@ -139,8 +142,12 @@ object SBTConsole {
 
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
-    val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
+    val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
+    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+
+    val jobManager = new InMemoryJobManager[Future]
+    val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
+    val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)
 
     def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future): EvaluatorLike[N] =
       new Evaluator[N](N0) {

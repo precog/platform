@@ -39,6 +39,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.nihdb._
 import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
@@ -78,111 +79,62 @@ import org.streum.configrity.io.BlockFormat
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
-object NIHDBPlatformSpecsActor extends NIHDBPlatformSpecsActor(Option(System.getProperty("precog.storage.root")))
+trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future] {
+  type TestStack = NIHDBTestStack
+  val stack = NIHDBTestStack
 
-class NIHDBPlatformSpecsActor(rootPath: Option[String]) extends Logging {
-  abstract class YggConfig
-      extends EvaluatorConfig
-      with StandaloneShardSystemConfig
-      with ColumnarTableModuleConfig
-      with BlockStoreColumnarTableModuleConfig {
-    val config = Configuration parse {
-      rootPath map { "precog.storage.root = " + _ } getOrElse { "" }
-    }
-
-    // None of this is used, but is required to satisfy the cake
-    val cookThreshold = 10
-    val maxSliceSize = cookThreshold
-    val smallSliceSize = 2
-    val ingestConfig = None
-    val idSource = new FreshAtomicIdSource
-    val clock = blueeyes.util.Clock.System
-    val storageTimeout = Timeout(Duration(120, "seconds"))
-  }
-
-  object yggConfig extends YggConfig
-
-  case class SystemState(projectionsActor: ActorRef, actorSystem: ActorSystem)
-
-  private[this] var state: Option[SystemState] = None
-  private[this] val users = new AtomicInteger
-
-  def actorSystem = users.synchronized {
-    state.map(_.actorSystem)
-  }
-
-  def actor = users.synchronized {
-    users.getAndIncrement
-
-    if (state.isEmpty) {
-      logger.info("Allocating new projections actor in " + this.hashCode)
-      state = {
-        val actorSystem = ActorSystem("NIHDBPlatformSpecsActor")
-        val storageTimeout = Timeout(300 * 1000)
-
-        implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(actorSystem.dispatcher, storageTimeout.duration)
-
-        val accountFinder = new StaticAccountFinder[Future](ParseEvalStackSpecs.testAccount, ParseEvalStackSpecs.testAPIKey, Some("/"))
-        val accessControl = new StaticAPIKeyFinder[Future](ParseEvalStackSpecs.testAPIKey)
-        val permissionsFinder = new PermissionsFinder(accessControl, accountFinder, new org.joda.time.Instant())
-
-        val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
-
-        val resourceBuilder = new DefaultResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout, permissionsFinder)
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, resourceBuilder, permissionsFinder, yggConfig.storageTimeout.duration, new InMemoryJobManager[Future], yggConfig.clock)))
-
-        Some(SystemState(projectionsActor, actorSystem))
-      }
-    }
-
-    state.get.projectionsActor
-  }
-
-  def release = users.synchronized {
-    users.getAndDecrement
-
-    // Allow for a grace period
-    state.foreach { case SystemState(_, as) => as.scheduler.scheduleOnce(Duration(5, "seconds")) { checkUnused }}
-  }
-
-  def checkUnused = users.synchronized {
-    logger.debug("Checking for unused projectionsActor. Count = " + users.get)
-    if (users.get == 0) {
-      state.foreach {
-        case SystemState(projectionsActor, actorSystem) =>
-          logger.info("Culling unused projections actor")
-          Await.result(gracefulStop(projectionsActor, Duration(5, "minutes"))(actorSystem), Duration(3, "minutes"))
-          actorSystem.shutdown()
-      }
-      state = None
-    }
-  }
+  override def map(fs: => Fragments): Fragments = step { stack.startup() } ^ fs ^ step { stack.shutdown() }
 }
 
-trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
+object NIHDBTestStack extends NIHDBTestStack {
+  def startup() { }
+
+  def shutdown() { }
+}
+
+trait NIHDBTestActors extends ActorVFSModule with ActorPlatformSpecs with YggConfigComponent {
+  trait NIHDBTestActorsConfig extends BaseConfig with BlockStoreColumnarTableModuleConfig {
+    val cookThreshold = 10
+    val storageTimeout = Timeout(300 * 1000)
+
+    def clock: blueeyes.util.Clock
+  }
+
+  type YggConfig <: NIHDBTestActorsConfig
+  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(executor, yggConfig.storageTimeout.duration)
+
+  val accountFinder = new StaticAccountFinder[Future](TestStack.testAccount, TestStack.testAPIKey, Some("/"))
+  val apiKeyFinder = new StaticAPIKeyFinder[Future](TestStack.testAPIKey)
+  val permissionsFinder = new PermissionsFinder(apiKeyFinder, accountFinder, yggConfig.clock.instant())
+  val jobManager = new InMemoryJobManager[Future]
+
+  val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
+  val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
+
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+}
+
+trait NIHDBTestStack extends TestStackLike[Future]
+    with SecureVFSModule[Future, Slice]
     with LongIdMemoryDatasetConsumer[Future]
-    with NIHDBColumnarTableModule
-    with NIHDBStorageMetadataSource { self =>
-
-  override def map(fs: => Fragments): Fragments = step { startup() } ^ fs ^ step { shutdown() }
-
-  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
+    with NIHDBTestActors
+    with VFSColumnarTableModule { self =>
 
   abstract class YggConfig extends ParseEvalStackSpecConfig
       with IdSourceConfig
       with EvaluatorConfig
       with StandaloneShardSystemConfig
       with ColumnarTableModuleConfig
-      with BlockStoreColumnarTableModuleConfig {
-    val cookThreshold = 10
+      with BlockStoreColumnarTableModuleConfig 
+      with NIHDBTestActorsConfig {
     val ingestConfig = None
   }
 
   object yggConfig extends YggConfig
 
-  implicit val M: Monad[Future] with Comonad[Future] = new blueeyes.bkka.UnsafeFutureComonad(asyncContext, yggConfig.maxEvalDuration)
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
 
-  val accountFinder = None
+  //val accountFinder = None
 
   def Evaluator[N[+_]](N0: Monad[N])(implicit mn: Future ~> N, nm: N ~> Future) =
     new Evaluator[N](N0)(mn,nm) {
@@ -197,25 +149,16 @@ trait NIHDBPlatformSpecs extends ParseEvalStackSpecs[Future]
       def freshIdScanner = self.freshIdScanner
   }
 
-  override val accessControl = new UnrestrictedAccessControl[Future]
-
-  val storageTimeout = Timeout(300 * 1000)
-
-  val projectionsActor = NIHDBPlatformSpecsActor.actor
+  val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
+  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
 
   val report = new LoggingQueryLogger[Future, instructions.Line] with ExceptionQueryLogger[Future, instructions.Line] with TimingQueryLogger[Future, instructions.Line] {
     implicit def M = self.M
   }
 
-  trait TableCompanion extends NIHDBColumnarTableCompanion
+  trait TableCompanion extends VFSColumnarTableCompanion
 
   object Table extends TableCompanion
-
-  def startup() { }
-
-  def shutdown() {
-    NIHDBPlatformSpecsActor.release
-  }
 }
 
 class NIHDBBasicValidationSpecs extends BasicValidationSpecs with NIHDBPlatformSpecs
@@ -243,3 +186,5 @@ class NIHDBRankSpecs extends RankSpecs with NIHDBPlatformSpecs
 class NIHDBRenderStackSpecs extends RenderStackSpecs with NIHDBPlatformSpecs
 
 class NIHDBUndefinedLiteralSpecs extends UndefinedLiteralSpecs with NIHDBPlatformSpecs
+
+class NIHDBRandomSpecs extends RandomStackSpecs with NIHDBPlatformSpecs

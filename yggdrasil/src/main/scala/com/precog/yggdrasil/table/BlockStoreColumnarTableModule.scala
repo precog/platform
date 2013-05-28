@@ -949,7 +949,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
       }
     }
 
-    def load(table: Table, apiKey: APIKey, tpe: JType): M[Table]
+    def load(table: Table, apiKey: APIKey, tpe: JType): EitherT[M, vfs.ResourceError, Table]
   }
   
   abstract class Table(slices: StreamT[M, Slice], size: TableSize) extends ColumnarTable(slices, size) {
@@ -998,7 +998,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
     
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] = M.point(this)
     
-    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
+    def load(apiKey: APIKey, tpe: JType) = Table.load(this, apiKey, tpe)
     
     override def compact(spec: TransSpec1, definedness: Definedness = AnyDefined): Table = this
 
@@ -1029,7 +1029,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder, unique: Boolean = false): M[Table] =
         toExternalTable.sort(sortKey, sortOrder, unique)
 
-    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
+    def load(apiKey: APIKey, tpe: JType): EitherT[M, vfs.ResourceError, Table] = Table.load(this, apiKey, tpe)
 
     override def force: M[Table] = M.point(this)
 
@@ -1051,7 +1051,7 @@ trait BlockStoreColumnarTableModule[M[+_]]
     import SliceTransform._
     import trans._
     
-    def load(apiKey: APIKey, tpe: JType): M[Table] = Table.load(this, apiKey, tpe)
+    def load(apiKey: APIKey, tpe: JType) = Table.load(this, apiKey, tpe)
 
     def toInternalTable(limit0: Int): EitherT[M, ExternalTable, InternalTable] = {
       val limit = limit0.toLong

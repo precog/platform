@@ -25,9 +25,10 @@ import com.precog.util._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.jobs._
-import com.precog.muspelheim._
-import com.precog.yggdrasil.table.Slice
-import com.precog.yggdrasil.vfs.Resource
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.execution._
+import com.precog.yggdrasil.table._
+import com.precog.util._
 
 import akka.dispatch.{ Future, ExecutionContext }
 
@@ -45,33 +46,35 @@ import blueeyes.core.http.MimeTypes
 
 import scalaz._
 
+trait ManagedPlatform extends ManagedExecution with Platform[Future, Slice, StreamT[Future, Slice]] with ManagedQueryModule
+
 /**
  * A `ManagedPlatform` extends `Platform` by allowing the
  * creation of a `BasicQueryExecutor` that can also allows "synchronous" (but
  * managed) queries and asynchronous queries.
  */
-trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with ManagedQueryModule { self =>
+trait ManagedExecution extends Execution[Future, StreamT[Future, Slice]] with ManagedQueryModule { self =>
+  type AsyncExecution[M[+_]] = Execution[M, JobId]
+  type SyncExecution[M[+_]]  = Execution[M, (Option[JobId], StreamT[Future, Slice])]
 
   /**
-   * Returns an `Platform` whose execution returns a `JobId` rather
+   * Returns an `Execution` whose execution returns a `JobId` rather
    * than a `StreamT[Future, Slice]`.
    */
-  def asynchronous: AsyncPlatform[Future] = {
-    new AsyncPlatform[Future] {
+  def asynchronous: AsyncExecution[Future] = {
+    new AsyncExecution[Future] {
       def executorFor(apiKey: APIKey) = self.asyncExecutorFor(apiKey)
-      def metadataClient = self.metadataClient
     }
   }
 
   /**
-   * Returns a `Platform` whose execution returns both the
+   * Returns a `Execution` whose execution returns both the
    * streaming results and its `JobId`. Note that the reults will not be saved
    * to job.
    */
-  def synchronous: SyncPlatform[Future] = {
-    new SyncPlatform[Future] {
+  def synchronous: SyncExecution[Future] = {
+    new SyncExecution[Future] {
       def executorFor(apiKey: APIKey) = self.syncExecutorFor(apiKey)
-      def metadataClient = self.metadataClient
     }
   }
 
@@ -101,21 +104,20 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
 
   protected def executor(implicit shardQueryMonad: JobQueryTFMonad): QueryExecutor[JobQueryTF, StreamT[JobQueryTF, Slice]]
 
-  def executorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, StreamT[Future, Slice]]]] = {
+  def executorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, StreamT[Future, Slice]]] = {
     import scalaz.syntax.monad._
-    syncExecutorFor(apiKey) map { queryExecV =>
-      queryExecV map { queryExec =>
-        new QueryExecutor[Future, StreamT[Future, Slice]] {
-          def execute(query: String, context: EvaluationContext, opts: QueryOptions) = {
-            queryExec.execute(query, context, opts) map (_ map (_._2))
-          }
+    for (queryExec <- syncExecutorFor(apiKey)) yield {
+      new QueryExecutor[Future, StreamT[Future, Slice]] {
+        def execute(query: String, context: EvaluationContext, opts: QueryOptions) = {
+          queryExec.execute(query, context, opts) map { _._2 }
         }
       }
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]]
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]]
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]]
+
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]
 
   trait ManagedQueryExecutor[+A] extends QueryExecutor[Future, A] {
     import UserQuery.Serialization._
@@ -123,38 +125,24 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     implicit def executionContext: ExecutionContext
     implicit def futureMonad = new blueeyes.bkka.FutureMonad(executionContext)
 
-    def complete(results: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, A]]
+    def complete(results: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, A]
 
-    def execute(query: String, context: EvaluationContext, opts: QueryOptions): Future[Validation[EvaluationError, A]] = {
+    def execute(query: String, context: EvaluationContext, opts: QueryOptions): EitherT[Future, EvaluationError, A] = {
       val userQuery = UserQuery(query, context.basePath, opts.sortOn, opts.sortOrder)
 
-      createJob(context.apiKey, Some(userQuery.serialize), opts.timeout)(executionContext) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
+      //TODO: this is craziness
+      EitherT.right(createQueryJob(context.apiKey, Some(userQuery.serialize), opts.timeout)(executionContext)) flatMap { implicit shardQueryMonad: JobQueryTFMonad =>
         import JobQueryState._
 
-        val result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]] = {
-          sink.apply(executor.execute(query, context, opts)) recover {
-            case _: QueryCancelledException => Failure(InvalidStateError("Query was cancelled before it could be executed."))
-            case _: QueryExpiredException => Failure(InvalidStateError("Query expired before it could be executed."))
-            case ex =>
-              System.out.println(">>> " + ex)
-              System.err.println(">>> " + ex)
-              throw ex
-          } 
-        }
-
-        complete(result, opts.output)
+        complete(EitherT.eitherTHoist[EvaluationError].hoist(sink).apply(executor.execute(query, context, opts)), opts.output)
       }
     }
   }
 
   trait SyncQueryExecutor extends ManagedQueryExecutor[(Option[JobId], StreamT[Future, Slice])] {
-    def complete(result: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, (Option[JobId], StreamT[Future, Slice])]] = {
-      result map {
-        _ map { stream =>
-          M.jobId -> completeJob(stream)
-        }
+    def complete(result: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, (Option[JobId], StreamT[Future, Slice])] = {
+      result map { stream =>
+        M.jobId -> completeJob(stream)
       }
     }
   }
@@ -164,6 +152,7 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
     private lazy val JSON = MimeTypes.application / MimeTypes.json
 
     // Encode a stream of Slices using the specified charset.
+    //FIXME: replace with VFSModule.bufferOutput?
     private def encodeCharStream(stream: StreamT[Future, CharBuffer], charset: Charset)(implicit M: Monad[Future]): StreamT[Future, Array[Byte]] = {
       val encoder = charset.newEncoder
       stream map { chars =>
@@ -176,22 +165,23 @@ trait ManagedPlatform extends Platform[Future, StreamT[Future, Slice]] with Mana
       }
     }
 
-    def complete(resultVF: Future[Validation[EvaluationError, StreamT[JobQueryTF, Slice]]], outputType: MimeType)(implicit
-        M: JobQueryTFMonad): Future[Validation[EvaluationError, JobId]] = {
+    def complete(resultE: EitherT[Future, EvaluationError, StreamT[JobQueryTF, Slice]], outputType: MimeType)(implicit M: JobQueryTFMonad): EitherT[Future, EvaluationError, JobId] = {
       M.jobId map { jobId =>
-        resultVF map (_ map { result =>
-          // TODO: encoding a char stream here feels like we're bleeding a bit of impl requirement into ManagedPlatform
-          val convertedStream: StreamT[JobQueryTF, CharBuffer] = Resource.toCharBuffers(outputType, result)
+        resultE map { result =>
+          val derefed = result.map(_.deref(TransSpecModule.paths.Value))
+          val convertedStream: StreamT[JobQueryTF, CharBuffer] = ColumnarTableModule.toCharBuffers(outputType, derefed)
+          //FIXME: Thread this through the EitherT
           jobManager.setResult(jobId, Some(JSON), encodeCharStream(completeJob(convertedStream), Utf8)) map {
             case Left(error) =>
               jobManager.abort(jobId, "Error occured while storing job results: " + error, yggConfig.clock.now())
             case Right(_) =>
               // This is "finished" by `completeJob`.
           }
+
           jobId
-        })
+        }
       } getOrElse {
-        Future(Failure(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
+        EitherT.left(Future(InvalidStateError("Jobs service is down; cannot execute asynchronous queries.")))
       }
     }
   }

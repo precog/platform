@@ -19,7 +19,7 @@
  */
 package com.precog.muspelheim
 
-import com.precog.bytecode._
+import com.precog.bytecode.{JType, JObjectFixedT, JTextT}
 import com.precog.common._
 import com.precog.common.ingest._
 import com.precog.common.security._
@@ -28,8 +28,10 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 import com.precog.util._
 import SValue._
+import ResourceError._
 
 import blueeyes.json._
 
@@ -53,15 +55,13 @@ import scala.collection.immutable.TreeMap
 
 import TableModule._
 
-trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
+trait RawJsonStorageModule[M[+_]] { self =>
   implicit def M: Monad[M]
 
   protected def projectionData(path: Path) = {
     if (!projections.contains(path)) load(path)
     projections(path)
   }
-
-  def userMetadataView(apiKey: APIKey) = metadata
 
   private implicit val ordering = IdentitiesOrder.toScalaOrdering
 
@@ -105,22 +105,26 @@ trait RawJsonStorageModule[M[+_]] extends StorageMetadataSource[M] { self =>
   val jsonFiles = reflections.getResources(Pattern.compile(".*\\.json"))
   for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
-  private val metadata = new StorageMetadata[M] {
-    val M = self.M
-    def findDirectChildren(path: Path) = M.point(projections.keySet.filter(_.isDirectChildOf(path)))
-    def findSize(path: Path) = M.point(projections.get(path).map(_.size.toLong).getOrElse(0L))
-    def findSelectors(path: Path) = M.point(structures.getOrElse(path, Set.empty[ColumnRef]).map(_.selector))
-    def findStructure(path: Path, selector: CPath) = M.point {
-      val structs = structures.getOrElse(path, Set.empty[ColumnRef])
-      val types : Map[CType, Long] = structs.collect {
-        // FIXME: This should use real counts
-        case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
-      }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
-
-      PathStructure(types, structs.map(_.selector))
+  val vfs: VFSMetadata[M] = new VFSMetadata[M] {
+    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
+      M.point(projections.keySet.filter(_.isDirectChildOf(path)))
     }
-    def currentVersion(path: Path) = M.point(None)
-    def currentAuthorities(path: Path) = M.point(None)
+
+    def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
+      M.point {
+        val structs = structures.getOrElse(path, Set.empty[ColumnRef])
+        val types : Map[CType, Long] = structs.collect {
+          // FIXME: This should use real counts
+          case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
+        }.groupBy(_._1).map { case (tpe, values) => (tpe, values.map(_._2).sum) }
+
+        PathStructure(types, structs.map(_.selector))
+      }
+    }
+
+    def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
+      EitherT.right(M.point(0l))
+    }
   }
 }
 
@@ -141,7 +145,7 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
     
     def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending, unique: Boolean = false): M[Seq[Table]] = sys.error("Feature not implemented in test stub.")
 
-    def load(apiKey: APIKey, tpe: JType): M[Table] = {
+    def load(apiKey: APIKey, tpe: JType) = EitherT.right {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {
           def reduce(schema: CSchema, range: Range): Set[Path] = {
@@ -153,10 +157,9 @@ trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] w
         }
       }
 
-      for {
-        paths <- pathsM
-        table =  fromJson(paths.toList.map(projectionData).flatten.toStream)
-      } yield table
+      for (paths <- pathsM) yield {
+        fromJson(paths.toList.map(projectionData).flatten.toStream)
+      }
     }
   }
 }

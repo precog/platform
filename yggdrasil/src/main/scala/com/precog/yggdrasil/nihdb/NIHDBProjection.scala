@@ -26,14 +26,16 @@ import com.precog.common._
 import com.precog.common.security.Authorities
 import com.precog.niflheim._
 import com.precog.yggdrasil.table.{SegmentsWrapper, Slice}
-import com.precog.yggdrasil.vfs.NIHDBResource
 
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz.{NonEmptyList => NEL, Monad, StreamT}
 
-final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authorities, projectionId: Int) extends ProjectionLike[Future, Long, Slice] with Logging {
+final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authorities, projectionId: Int) extends ProjectionLike[Future, Slice] with Logging {
+  type Key = Long
+
   private[this] val readers = snapshot.readers
+
   val length = readers.map(_.length.toLong).sum
 
   override def toString = "NIHDBProjection(id = %d, len = %d, authorities = %s)".format(projectionId, length, authorities)
@@ -81,10 +83,10 @@ final class NIHDBProjection(snapshot: NIHDBSnapshot, val authorities: Authoritie
 }
 
 object NIHDBProjection {
-  def wrap(nihdb: NIHDB, authorities: Authorities)(implicit M: Monad[Future]): Future[NIHDBProjection] = nihdb.getSnapshot map { snap =>
-    new NIHDBProjection(snap, authorities, nihdb.projectionId)
+  def wrap(nihdb: NIHDB): Future[NIHDBProjection] = nihdb.getSnapshot map { snap =>
+    new NIHDBProjection(snap, nihdb.authorities, nihdb.projectionId)
   }
 
-  def wrap(resource: NIHDBResource)(implicit M: Monad[Future]): Future[NIHDBProjection] =
-    wrap(resource.db, resource.authorities)
+//  def wrap(resource: NIHDBResource): Future[NIHDBProjection] =
+//    wrap(resource.db, resource.authorities)
 }
