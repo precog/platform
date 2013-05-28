@@ -201,7 +201,7 @@ trait ColumnarTableLibModule[M[+_]] extends TableLibModule[M] with ColumnarTable
             val impl = new Reduction(Vector(), "") {
             type Result = (x.Result, acc.Result)
 
-            def reducer(ctx: EvaluationContext) = new CReducer[Result] {
+            def reducer(ctx: MorphContext) = new CReducer[Result] {
               def reduce(schema: CSchema, range: Range): Result = {
                 jtypef match {
                   case Some(f) =>

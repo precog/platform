@@ -73,6 +73,3 @@ trait StdLibOpFinderModule[M[+_]] extends Instructions with StdLibModule[M] with
     }
   }
 }
-
-
-// vim: set ts=4 sw=4 et:

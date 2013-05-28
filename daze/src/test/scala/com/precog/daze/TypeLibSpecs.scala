@@ -34,8 +34,6 @@ trait TypeLibSpecs[M[+_]] extends Specification
   import instructions._
   import library._
   
-  val testAPIKey = "testAPIKey"
-  
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
       case Success(results) => results
