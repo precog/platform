@@ -1,6 +1,6 @@
 package com.precog.quirrel
 
-import scalaz.Tree
+import com.precog.util.BitSet
 
 trait Phases {
   type Expr
@@ -11,6 +11,15 @@ trait Phases {
   type GroupTree
   
   type Phase = Expr => Set[Error]
+
+  type Sigma = Map[Formal, Expr]
+
+  //todo ensure graph and indices have same length
+  case class Trace(graph: Array[(Sigma, Expr)], indices: Array[BitSet])
+
+  object Trace {
+    val empty = Trace(Array.empty[(Sigma, Expr)], Array.empty[BitSet])
+  }
   
   private val Phases: List[Phase] =
     bindNames _ :: checkProvenance _ :: inferBuckets _ :: Nil
@@ -23,7 +32,7 @@ trait Phases {
   def checkProvenance(expr: Expr): Set[Error]
   def inferBuckets(expr: Expr): Set[Error]
   
-  def buildTrace(sigma: Map[Formal, Expr])(expr: Expr): Tree[(Map[Formal, Expr], Expr)]
+  def buildTrace(sigma: Sigma)(expr: Expr): Trace
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
