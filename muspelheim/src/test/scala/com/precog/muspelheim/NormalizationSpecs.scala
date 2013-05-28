@@ -23,6 +23,8 @@ package muspelheim
 import com.precog.yggdrasil._
 
 trait NormalizationSpecs extends EvalStackSpecs {
+  import stack._
+
   def summaryHeight(obj: Map[String, SValue]) = {
     obj("count") must beLike { case SDecimal(d) =>
       d.toDouble mustEqual 993
