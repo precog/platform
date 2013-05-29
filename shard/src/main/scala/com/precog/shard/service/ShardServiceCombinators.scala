@@ -95,7 +95,11 @@ object ShardServiceCombinators extends Logging {
       mimeType <- accept.mimeTypes.headOption
     } yield mimeType
 
-    (request.headers.header[Accept].toSeq.flatMap(_.mimeTypes) ++ requestParamType).headOption.getOrElse(JSON)
+    val requested = (request.headers.header[Accept].toSeq.flatMap(_.mimeTypes) ++ requestParamType)
+
+    val allowed = Set(JSON, CSV, anymaintype/anysubtype)
+
+    requested.find(allowed).headOption.getOrElse(JSON)
   }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
