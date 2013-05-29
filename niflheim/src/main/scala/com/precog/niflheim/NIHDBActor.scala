@@ -304,14 +304,14 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
       // ned to remove/close any existing cooked block with the same
       // ID
       blockState = blockState.copy(
-        cooked = CookedReader.load(file) :: blockState.cooked.filterNot(_.id == id),
+        cooked = CookedReader.load(cookedDir, file) :: blockState.cooked.filterNot(_.id == id),
         pending = blockState.pending - id
       )
 
       currentBlocks = computeBlockMap(blockState)
 
       currentState = currentState.copy(
-        cookedMap = currentState.cookedMap + (id -> file.getName)
+        cookedMap = currentState.cookedMap + (id -> file.getPath)
       )
 
       logger.debug("Cook complete on %d".format(id))
@@ -363,7 +363,7 @@ private[niflheim] case class ProjectionState(maxOffset: Long, cookedMap: Map[Lon
   def readers(baseDir: File): List[CookedReader] =
     cookedMap.map {
       case (id, metadataFile) =>
-        CookedReader.load(new File(baseDir, metadataFile))
+        CookedReader.load(baseDir, new File(metadataFile))
     }.toList
 }
 
