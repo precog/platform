@@ -69,17 +69,17 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
     }
 
     final def readResource(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Resource] = {
-      vfs.readResource(path, version) >>= 
+      vfs.readResource(path, version) >>=
       verifyResourceAccess(apiKey, path, readMode)
     }
 
     final def readQuery(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, String] = {
-      readResource(apiKey, path, version, readMode) >>= 
+      readResource(apiKey, path, version, readMode) >>=
       Resource.asQuery(path, version)
     }
 
     final def readProjection(apiKey: APIKey, path: Path, version: Version, readMode: ReadMode): EitherT[M, ResourceError, Projection] = {
-      readResource(apiKey, path, version, readMode) >>= 
+      readResource(apiKey, path, version, readMode) >>=
       Resource.asProjection(path, version)
     }
 
@@ -94,13 +94,22 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       VFS.pathStructure(selector)
     }
 
-    final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = {
-      for {
-        children  <- vfs.findDirectChildren(path)
-        permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
-      } yield { 
-        children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
-      }
+    final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = path match {
+      // If asked for the root path, we simply determine children
+      // based on the api key permissions to avoid a massive tree walk
+      case Path.Root =>
+        logger.debug("Defaulting on root-level child browse to account path")
+        EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path)) map {
+          _ filterNot (_ == Path.Root) map { browsable => Path(browsable.components.head) }
+        }
+
+      case other =>
+        for {
+          children  <- vfs.findDirectChildren(path)
+          permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
+        } yield {
+          children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
+        }
     }
 
     final def executeStoredQuery(platform: Platform[M, Block, StreamT[M, Block]], scheduler: Scheduler[M], ctx: EvaluationContext, path: Path, queryOptions: QueryOptions)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
@@ -135,7 +144,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
               taskId        <- scheduler.addTask(None, ctx.apiKey, queryResource.authorities, ctx, path, cachePath, None) leftMap invalidState
               _              = logger.debug("Cache refresh scheduled for query %s, as id %s.".format(path.path, taskId))
             } yield taskId
-          } 
+          }
 
           for {
             _          <- recacheAction
@@ -143,12 +152,12 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
           } yield {
             StoredQueryResult(projection.getBlockStream(None), Some(timestamp), None)
           }
-           
+
         case Some(VersionEntry(_, _, timestamp)) =>
           logger.debug("Cached entry (%s) found for %s, but is not applicable to max-age %s".format(timestamp, path, maxAge))
           fallBack
 
-        case None => 
+        case None =>
           logger.debug("No cached entry found for " + path)
           fallBack
       }
@@ -157,7 +166,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
     def executeAndCache(platform: Platform[M, Block, StreamT[M, Block]], path: Path, ctx: EvaluationContext, queryOptions: QueryOptions, cacheAt: Option[Path], jobName: Option[String] = None)(implicit M: Monad[M]): EitherT[M, EvaluationError, StoredQueryResult] = {
       import EvaluationError._
       logger.debug("Executing query for %s and caching to %s".format(path, cacheAt))
-      for { 
+      for {
         executor <- platform.executorFor(ctx.apiKey) leftMap { err => systemError(new RuntimeException(err)) }
         queryRes <- readResource(ctx.apiKey, path, Version.Current, AccessMode.Execute) leftMap { storageError _ }
         query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
@@ -167,10 +176,10 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         result   <- cacheAt match {
           case Some(cachePath) =>
             for {
-              _ <- EitherT { 
+              _ <- EitherT {
                 permissionsFinder.writePermissions(ctx.apiKey, cachePath, clock.instant()) map { pset =>
                   /// here, we just terminate the computation early if no write permissions are available.
-                  if (pset.nonEmpty) \/.right(PrecogUnit) 
+                  if (pset.nonEmpty) \/.right(PrecogUnit)
                   else \/.left(
                     storageError(PermissionsError("API key %s has no permission to write to the caching path %s.".format(ctx.apiKey, cachePath)))
                   )
@@ -241,5 +250,3 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
     }
   }
 }
-
-
