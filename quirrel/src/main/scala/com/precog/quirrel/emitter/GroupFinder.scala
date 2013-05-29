@@ -25,20 +25,42 @@ import scala.annotation.tailrec
 trait GroupFinder extends parser.AST with Tracer {
   import ast._
   
-  def findGroups(solve: Solve): Set[(Map[Formal, Expr], Where, List[Dispatch])] = {
+  /**
+   * Find all groups for a particular solve using the whole world assumption.
+   * Any groups with a dtrace which is disjoint with `dispatches` (or even just
+   * a strict subset) will be filtered out.  Supersetting is allowed.
+   */
+  def findGroups(solve: Solve, dispatches: Set[Dispatch]): Set[(Map[Formal, Expr], Where, List[Dispatch])] = {
     val vars = solve.vars map { findVars(solve, _)(solve.child) } reduceOption { _ ++ _ } getOrElse Set()
     
     // TODO minimize by sigma subsetting
     vars flatMap buildBacktrace(solve.trace) flatMap { btrace =>
       val result = codrill(btrace)
       
-      result map {
+      val mapped = result map {
         case (sigma, where) =>
           val dtrace = btrace map { _._2 } dropWhile { !_.isInstanceOf[Where] } collect {
             case d: Dispatch if d.binding.isInstanceOf[LetBinding] => d
           }
           
           (sigma, where, dtrace)
+      }
+      
+      /* 
+       * Only include groups which match the set of dispatches.
+       * 
+       * FIXME this will cause some queries to break erroneously:
+       * 
+       * foo(x) := solve 'a count(foo where foo = 'a) + x
+       * solve 'b count(foo(4) where foo(4) = 'b)
+       * 
+       * The above is fine, but the actuals length trick will fail to
+       * allow it through and the compiler will fail to solve 'a.  Leaving
+       * this case unresolve for now since macros are going away.
+       */
+      mapped filter {
+        case (_, _, dtrace) =>
+          dispatches filter { _.actuals.length > 0 } forall dtrace.contains
       }
     }
   }
