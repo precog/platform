@@ -1,9 +1,9 @@
 check process jobs-v1-beta-b with pidfile /var/run/precog/jobs-v1-beta-b.pid
   start program = "/usr/sbin/service jobs-v1-beta-b start" with timeout 30 seconds
   stop program  = "/usr/sbin/service jobs-v1-beta-b stop"
-  if failed port 31066 protocol http and request '/jobs/v1/health' with timeout 15 seconds for 3 cycles 
+  if failed port 31066 protocol http and request '/jobs/v1/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh jobs-v1-beta-b"
-  if failed port 31066 protocol http and request '/jobs/v1/health' with timeout 15 seconds for 8 cycles 
+  if failed port 31066 protocol http and request '/jobs/v1/health' with timeout 60 seconds for 8 cycles
      then restart
   if 3 restarts within 10 cycles then timeout
   group jobs-v1-beta-b
