@@ -111,10 +111,12 @@ SHARD_PORT:        $SHARD_PORT
 EOF
 
 function query {
+    # "Accept" headers here are to ensure proper handling of browser-based requests
+    ACCEPTHDR='Accept: text/html, application/xhtml, application/xml, */*'
     if [ -n "$2" ]; then
-        curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID" > $2
+        curl -s -G -H "$ACCEPTHDR" --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID" > $2
     else
-        curl -s -G --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID"
+        curl -s -G -H "$ACCEPTHDR" --data-urlencode "q=$1" --data-urlencode "apiKey=$TOKEN" "http://localhost:$SHARD_PORT/analytics/v2/analytics/fs/$ACCOUNTID"
     fi
 }
 
