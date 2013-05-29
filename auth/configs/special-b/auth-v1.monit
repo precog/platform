@@ -1,9 +1,9 @@
 check process auth-v1-b with pidfile /var/run/precog/auth-v1-b.pid
   start program = "/usr/sbin/service auth-v1-b start" with timeout 30 seconds
   stop program  = "/usr/sbin/service auth-v1-b stop"
-  if failed port 31062 protocol http and request '/security/v1/health' with timeout 15 seconds for 3 cycles 
+  if failed port 31062 protocol http and request '/security/v1/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh auth-v1-b"
-  if failed port 31062 protocol http and request '/security/v1/health' with timeout 15 seconds for 8 cycles 
+  if failed port 31062 protocol http and request '/security/v1/health' with timeout 60 seconds for 8 cycles
      then restart
   if 3 restarts within 10 cycles then timeout
   group auth-v1-b
@@ -13,4 +13,3 @@ check file auth-v1-b.server.log with path /var/log/precog/auth-v1-b.server.log
   if match "Exception" for 3 cycles then alert
   depends on auth-v1-b
   group auth-v1-b
-

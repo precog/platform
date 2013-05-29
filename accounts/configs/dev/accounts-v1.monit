@@ -1,9 +1,9 @@
 check process accounts-v1 with pidfile /var/run/precog/accounts-v1.pid
   start program = "/usr/sbin/service accounts-v1 start" with timeout 30 seconds
   stop program  = "/usr/sbin/service accounts-v1 stop"
-  if failed port 30064 protocol http and request '/accounts/v1/health' with timeout 15 seconds for 3 cycles 
+  if failed port 30064 protocol http and request '/accounts/v1/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh accounts-v1"
-  if failed port 30064 protocol http and request '/accounts/v1/health' with timeout 15 seconds for 8 cycles 
+  if failed port 30064 protocol http and request '/accounts/v1/health' with timeout 60 seconds for 8 cycles
      then restart
   if 3 restarts within 10 cycles then timeout
   group accounts-v1
@@ -13,4 +13,3 @@ check file accounts-v1.server.log with path /var/log/precog/accounts-v1.server.l
   if match "Exception" for 3 cycles then alert
   depends on accounts-v1
   group accounts-v1
-

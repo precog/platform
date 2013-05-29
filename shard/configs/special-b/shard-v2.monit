@@ -1,9 +1,9 @@
 check process shard-v2-b with pidfile /var/run/precog/shard-v2-b.pid
   start program = "/usr/sbin/service shard-v2-b start" with timeout 30 seconds
   stop program  = "/usr/sbin/service shard-v2-b stop"
-  if failed port 31070 protocol http and request '/analytics/v2/health' with timeout 15 seconds for 3 cycles
+  if failed port 31070 protocol http and request '/analytics/v2/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh shard-v2-b"
-  if failed port 31070 protocol http and request '/analytics/v2/health' with timeout 15 seconds for 8 cycles
+  if failed port 31070 protocol http and request '/analytics/v2/health' with timeout 60 seconds for 8 cycles
      then restart
   if 3 restarts within 10 cycles then timeout
   group shard-v2-b
