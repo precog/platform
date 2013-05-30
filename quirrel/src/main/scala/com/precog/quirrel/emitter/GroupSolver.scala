@@ -64,7 +64,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with ProvenanceChecke
           }
         } reduceOption { _ ++ _ } getOrElse Map()
         
-        val (forestSpecM, forestErrors) = solveForest(expr, findGroups(expr))
+        val (forestSpecM, forestErrors) = solveForest(expr, findGroups(expr, dispatches))
         
         val filtered = constraints filter {
           case TicVar(_, _) => false
