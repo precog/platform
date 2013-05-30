@@ -2822,6 +2822,40 @@ trait MiscStackSpecs extends EvalStackSpecs {
       
       eval(input) must containTheSameElementsAs(expected.toSeq)
     }
+    
+    "evaluate the union of two group functions without exploding" in {
+      val input = """
+        | data := new 12
+        | 
+        | f(path) := 
+        |   solve 'price count(path where path = 'price)
+        |     
+        | f(data) union f(data with 24)""".stripMargin
+        
+      eval(input) mustEqual Set(SDecimal(1))
+    }
+    
+    "evaluate the union of two group functions of different provenance without exploding" in {
+      val input = """
+        | clicks := //clicks
+        | conversions := //conversions
+        | 
+        | histogram(path) := 
+        |   solve 'price
+        |     {price: 'price, count: count(path where path.product.price = 'price) }
+        |     
+        | histogram(conversions) union histogram(clicks)""".stripMargin
+        
+      eval(input) mustEqual Set(
+        SObject(Map("count" -> SDecimal(2030), "price" -> SDecimal(9.99))),
+        SObject(Map("count" -> SDecimal(8720), "price" -> SDecimal(0.99))),
+        SObject(Map("count" -> SDecimal(5581), "price" -> SDecimal(14.99))),
+        SObject(Map("count" -> SDecimal(315), "price" -> SDecimal(24.99))),
+        SObject(Map("count" -> SDecimal(715), "price" -> SDecimal(4.99))),
+        SObject(Map("count" -> SDecimal(3231), "price" -> SDecimal(12.99))),
+        SObject(Map("count" -> SDecimal(2501), "price" -> SDecimal(7.99))),
+        SObject(Map("count" -> SDecimal(2313), "price" -> SDecimal(13.99))))
+    }
   }
 }
 
