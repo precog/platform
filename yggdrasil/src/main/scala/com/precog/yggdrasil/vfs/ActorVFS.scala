@@ -59,7 +59,7 @@ import scalaz.syntax.std.option._
 import scalaz.syntax.std.list._
 import scalaz.syntax.effect.id._
 
-sealed trait PathActionResponse 
+sealed trait PathActionResponse
 sealed trait ReadResult extends PathActionResponse
 sealed trait WriteResult extends PathActionResponse
 sealed trait MetadataResult extends PathActionResponse
@@ -72,7 +72,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
   type Projection = NIHDBProjection
 
   def permissionsFinder: PermissionsFinder[Future]
-  def jobManager: JobManager[Future] 
+  def jobManager: JobManager[Future]
   def resourceBuilder: ResourceBuilder
 
   case class ReadSuccess(path: Path, resource: Resource) extends ReadResult
@@ -103,20 +103,20 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     // Resource creation/open and discovery
     def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDB] = {
       for {
-        nihDir <- ensureDescriptorDir(versionDir) 
+        nihDir <- ensureDescriptorDir(versionDir)
         nihdbV <- NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
-      } yield { 
+      } yield {
         nihdbV.disjunction leftMap {
-          ResourceError.fromExtractorError("Failed to create NIHDB in %s as %s".format(versionDir.toString, authorities)) 
+          ResourceError.fromExtractorError("Failed to create NIHDB in %s as %s".format(versionDir.toString, authorities))
         }
       }
     }
 
     def openNIHDB(descriptorDir: File): IO[ResourceError \/ NIHDBResource] = {
       NIHDB.open(chef, descriptorDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem) map {
-        _ map { 
+        _ map {
           _.disjunction map { NIHDBResource(_) } leftMap {
-            ResourceError.fromExtractorError("Failed to open NIHDB from %s".format(descriptorDir.toString)) 
+            ResourceError.fromExtractorError("Failed to open NIHDB from %s".format(descriptorDir.toString))
           }
         } getOrElse {
           \/.left(NotFound("No NIHDB projection found in %s".format(descriptorDir)))
@@ -153,7 +153,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
             try {
               out.write(bytes)
               write(out, size + bytes.length, tail)
-            } catch { 
+            } catch {
               case (ioe: IOException) =>
                 out.close()
                 \/.left(IOError(ioe)).point[M]
@@ -167,10 +167,10 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
       for {
         _ <- IOT { IOUtils.makeDirectory(versionDir) }
-        file = (new File(versionDir, "data")) 
+        file = (new File(versionDir, "data"))
         _ = logger.debug("Creating new blob at " + file)
         writeResult <- write(new FileOutputStream(file), 0L, data)
-        blobResult <- IOT { 
+        blobResult <- IOT {
           writeResult traverse { size =>
             logger.debug("Write complete on " + file)
             val metadata = BlobMetadata(mimeType, size, clock.now(), authorities)
@@ -178,8 +178,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
             //metadataStore.json = metadata.serialize
             IOUtils.writeToFile(metadata.serialize.renderCompact, new File(versionDir, blobMetadataFilename)) map { _ =>
               FileBlobResource(file, metadata)
-            } 
-          } 
+            }
+          }
         }
       } yield blobResult
     }
@@ -197,12 +197,10 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
     def recordCount(implicit M: Monad[Future]) = projection.map(_.length)
 
-    def byteStream(matchType: Option[MimeType])(implicit M: Monad[Future]): OptionT[Future, StreamT[Future, Array[Byte]]] = {
-      OptionT(
-        projection map { p =>
-          ColumnarTableModule.byteStream(p.getBlockStream(None), matchType)
-        }
-      )
+    def asByteStream(mimeType: MimeType)(implicit M: Monad[Future]) = OptionT {
+      projection map { p =>
+        ColumnarTableModule.byteStream(p.getBlockStream(None), Some(mimeType))
+      }
     }
   }
 
@@ -220,7 +218,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
   final case class FileBlobResource(dataFile: File, metadata: BlobMetadata) extends BlobResource {
     import FileContent._
     import FileBlobResource._
-    
+
     val authorities: Authorities = metadata.authorities
     val mimeType: MimeType = metadata.mimeType
     val byteLength = metadata.size
@@ -256,11 +254,13 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       }
     }
 
-    def byteStream(mimeType: Option[MimeType])(implicit M: Monad[Future]): OptionT[Future, StreamT[Future, Array[Byte]]] = {
-      OptionT(M.point((mimeType.forall(_ == metadata.mimeType)).option(ioStream.trans(IOF))))
-    }
-
     override def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
+
+    def asByteStream(mimeType: MimeType)(implicit M: Monad[Future]) = OptionT {
+      M.point {
+        Some(ioStream.trans(IOF))
+      }
+    }
   }
 
   class VFSCompanion extends VFSCompanionLike {
@@ -289,8 +289,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       for {
         // it's necessary to group by path then traverse since each path will respond to ingest independently.
         // -- a bit of a leak of implementation detail, but that's the actor model for you.
-        allResults <- (data groupBy { case (offset, msg) => msg.path }).toStream traverse { case (path, subset) => 
-          (projectionsActor ? IngestData(subset)).mapTo[WriteResult] 
+        allResults <- (data groupBy { case (offset, msg) => msg.path }).toStream traverse { case (path, subset) =>
+          (projectionsActor ? IngestData(subset)).mapTo[WriteResult]
         }
       } yield {
         val errors: List[ResourceError] = allResults.toList collect { case PathOpFailure(_, error) => error }
@@ -311,7 +311,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     def findDirectChildren(path: Path): EitherT[Future, ResourceError, Set[Path]] = {
       implicit val t = projectionReadTimeout
       EitherT {
-        (projectionsActor ? FindChildren(path)).mapTo[MetadataResult] map { 
+        (projectionsActor ? FindChildren(path)).mapTo[MetadataResult] map {
           case PathChildren(_, children) => \/.right(children flatMap { _ - path })
           case PathOpFailure(_, error) => \/.left(error)
         }
@@ -340,9 +340,9 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
         val pathDir = VFSPathUtils.pathDir(baseDir, path)
 
         for {
-          _ <- IOUtils.makeDirectory(pathDir) 
+          _ <- IOUtils.makeDirectory(pathDir)
           _ = logger.debug("Created new path dir for %s : %s".format(path, pathDir))
-          vlog <- VersionLog.open(pathDir) 
+          vlog <- VersionLog.open(pathDir)
           actorV <- vlog traverse { versionLog =>
             logger.debug("Creating new PathManagerActor for " + path)
             context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, clock))) tap { newActor =>
@@ -361,7 +361,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     def receive = {
       case FindChildren(path) =>
         logger.debug("Received request to find children of %s".format(path.path))
-        VFSPathUtils.findChildren(baseDir, path) map { children =>  
+        VFSPathUtils.findChildren(baseDir, path) map { children =>
           sender ! PathChildren(path, children)
         } except {
           case t: Throwable =>
@@ -375,8 +375,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
           case t: Throwable =>
             logger.error("Error obtaining path actor for " + op.path, t)
             IO { requestor ! PathOpFailure(op.path, IOError(t)) }
-        } 
-        
+        }
+
         io.unsafePerformIO
 
       case IngestData(messages) =>
@@ -423,7 +423,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
         case NIHDBResource(db) => db.close(context.system)
         case _ => Promise successful PrecogUnit
       }
-      
+
       Await.result(closeAll, shutdownTimeout)
       versionLog.close
       logger.info("Shutdown of path actor %s complete".format(path))
@@ -465,7 +465,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
                   }
                 }
               }
-            } yield resource 
+            } yield resource
         } getOrElse {
           left(IO(Corrupt("No version %s found to exist for resource %s.".format(version, path.path))))
         }
@@ -482,7 +482,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
           case NIHDBData(data) =>
             resourceBuilder.createNIHDB(versionDir(version), writeAs) flatMap {
-              _ traverse { nihdb => 
+              _ traverse { nihdb =>
                 nihdb tap { _.insert(data) } map { NIHDBResource(_) }
               }
             }
@@ -624,17 +624,17 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
         val requestor = sender
         val io: IO[ReadResult] = version match {
-          case Version.Current => 
-            versionLog.current map { v => 
+          case Version.Current =>
+            versionLog.current map { v =>
               openResource(v.id).fold(PathOpFailure(path, _), ReadSuccess(path, _))
             } getOrElse {
               IO(PathOpFailure(path, NotFound("No current version found for path %s".format(path.path))))
             }
 
-          case Version.Archived(id) => 
+          case Version.Archived(id) =>
             openResource(id).fold(PathOpFailure(path, _), ReadSuccess(path, _))
-        } 
-        
+        }
+
         io.map(requestor ! _).unsafePerformIO
 
       case CurrentVersion(_) =>

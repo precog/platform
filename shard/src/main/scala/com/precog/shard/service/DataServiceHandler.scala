@@ -4,6 +4,7 @@ package service
 import com.precog.common.Path
 import com.precog.common.jobs._
 import com.precog.common.security._
+import com.precog.common.services.ServiceHandlerUtil
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.vfs.Version
@@ -32,15 +33,19 @@ class DataServiceHandler[A](platform: Platform[Future, Slice, StreamT[Future, Sl
 
   val service = (request: HttpRequest[A]) => Success {
     (apiKey: APIKey, path: Path) => {
-      val mimeType = request.headers.header[Accept].flatMap(_.mimeTypes.headOption)
+      val mimeTypes = request.headers.header[Accept].toSeq.flatMap(_.mimeTypes)
       platform.vfs.readResource(apiKey, path, Version.Current, AccessMode.Read).run flatMap {
         _.fold(
           error => {
             logger.error("Read failure: " + error.shows)
             sys.error("fixme... return an informative HTTP repsonse.")
           },
-          resource => resource.byteStream(mimeType).run map { byteStream =>
-            HttpResponse(OK, headers = HttpHeaders(mimeType.map(`Content-Type`(_)).toSeq: _*), content = byteStream.map(Right(_)))
+          resource => resource.byteStream(mimeTypes).run map {
+            case Some((reportedType, byteStream)) =>
+              HttpResponse(OK, headers = HttpHeaders(`Content-Type`(reportedType)), content = Some(Right(byteStream)))
+
+            case None =>
+              HttpResponse(NotFound, content = Some(Left(("Could not locate content for path " + path).getBytes("UTF-8"))))
           }
         )
       } recover {
