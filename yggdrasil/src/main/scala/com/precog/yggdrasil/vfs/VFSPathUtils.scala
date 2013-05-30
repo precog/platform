@@ -45,11 +45,14 @@ object VFSPathUtils extends Logging {
   // For a given path directory, this subdir holds the full set of version dirs
   private final val versionsSubdir = "pathVersions"
 
+  // This is the previous "hidden" projection dir. Needed to filter in case of symlinking
+  private final val perAuthProjectionsDir = "perAuthProjections"
+
   private[yggdrasil] final val escapeSuffix = "_byUser"
 
   private final val pathFileFilter: FileFilter = {
     import FileFilterUtils.{notFileFilter => not, _}
-    not(nameFileFilter(versionsSubdir))
+    and(not(nameFileFilter(versionsSubdir)), not(nameFileFilter(perAuthProjectionsDir)))
   }
 
   def escapePath(path: Path, toEscape: Set[String]) =
