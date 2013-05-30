@@ -40,29 +40,24 @@ class StubVFSMetadata[M[+_]](projectionMetadata: Map[Path, Map[ColumnRef, Long]]
     }
   }
 
-  def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {
-    M.point {
-      val types: Map[CType, Long] = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) collect {
+  private def getPathMeta(path: Path): EitherT[M, ResourceError, Map[ColumnRef, Long]] = EitherT {
+    M.point(projectionMetadata.get(path) \/> NotFound("No metadata found for path %s".format(path.path)))
+  }
+
+  def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = {
+    for {
+      types <- getPathMeta(path) map { _ collect {
         case (ColumnRef(`property`, ctype), count) => (ctype, count)
-      }
+      } }
 
-      val children = projectionMetadata.getOrElse(path, Map.empty[ColumnRef, Long]) flatMap {
-        case t @ (ColumnRef(s, ctype), count) => 
+      children <- getPathMeta(path) map { _ flatMap {
+        case t @ (ColumnRef(s, ctype), count) =>
           if (s.hasPrefix(property)) s.take(property.length + 1) else None
-      }
-
-      PathStructure(types, children.toSet)
-    }
+      } }
+    } yield PathStructure(types, children.toSet)
   }
 
   def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long] = {
-    val mv = projectionMetadata.get(path) \/> NotFound("No metadata found for path %s".format(path.path))
-    EitherT { 
-      M.point {
-        mv.map(_.values.max)
-      }
-    }
+    getPathMeta(path) map(_.values.max)
   }
 }
-
-
