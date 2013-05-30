@@ -11,6 +11,8 @@ import DefaultSerialization._
 import Versioned._
 import Extractor._
 
+import org.apache.commons.codec.binary.Base64
+
 import scalaz._
 import scalaz.syntax.apply._
 import scalaz.syntax.std.option._
@@ -30,6 +32,7 @@ object ContentEncoding {
     override def validated(obj: JValue): Validation[Error, ContentEncoding] = {
       obj.validated[String]("encoding").flatMap {
         case "uncompressed" => Success(RawUTF8Encoding)
+        case "base64"       => Success(Base64Encoding)
         case invalid => Failure(Invalid("Unknown encoding " + invalid))
       }
     }
@@ -45,6 +48,12 @@ object RawUTF8Encoding extends ContentEncoding {
   def decode(compressed: String) = compressed.getBytes("UTF-8")
 }
 
+object Base64Encoding extends ContentEncoding {
+  val id = "base64"
+  def encode(raw: Array[Byte]) = Base64.encodeBase64String(raw)
+  def decode(compressed: String) = Base64.decodeBase64(compressed)
+}
+
 case class FileContent(data: Array[Byte], mimeType: MimeType, encoding: ContentEncoding)
 
 object FileContent {
@@ -58,6 +67,13 @@ object FileContent {
   val AnyMimeType = MimeType("*", "*")
 
   val stringTypes = Set(XQuirrelScript, ApplicationJson, TextCSV, TextPlain)
+
+  def apply(data: Array[Byte], mimeType: MimeType): FileContent =
+    if (stringTypes.contains(mimeType)) {
+      FileContent(data, mimeType, RawUTF8Encoding)
+    } else {
+      FileContent(data, mimeType, Base64Encoding)
+    }
 
   val DecomposerV0: Decomposer[FileContent] = new Decomposer[FileContent] {
     def decompose(v: FileContent) = JObject(
