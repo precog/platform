@@ -68,12 +68,12 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
 
   private def validateFileName(fileName: Option[String], storeMode: WriteMode): Validation[String, Path => Path] = {
     (storeMode: @unchecked) match {
-      case AccessMode.Create => 
+      case AccessMode.Create =>
         for {
           fn0 <- fileName.toSuccess("X-File-Name header must be provided.")
           // if the filename after URL encoding is the same as before, accept it.
           _ <- (URLEncoder.encode(fn0, "UTF-8") == fn0).unlessM[({ type λ[α] = Validation[String, α] })#λ, Unit] {
-            Failure("%s is not a valid file name; please do not use characters which require URL encoding.")
+            Failure("\"%s\" is not a valid file name; please do not use characters which require URL encoding.".format(fn0))
           }
         } yield {
           (dir: Path) => dir / Path(fn0)
@@ -91,7 +91,7 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
     val storeMode0 = contentType0 flatMap { validateWriteMode(_: MimeType, request.method) }
     val pathf0 = storeMode0 flatMap { validateFileName(request.headers.get("X-File-Name"), _: WriteMode) }
 
-    (pathf0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (pathf, contentType, storeMode) => 
+    (pathf0.toValidationNel |@| contentType0.toValidationNel |@| storeMode0.toValidationNel) { (pathf, contentType, storeMode) =>
       (apiKey: APIKey, path: Path) => {
         val timestamp = clock.now()
         val fullPath = pathf(path)
@@ -129,8 +129,3 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
 
   val metadata = NoMetadata
 }
-
-
-
-
-
