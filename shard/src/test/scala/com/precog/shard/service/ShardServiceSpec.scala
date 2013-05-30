@@ -367,6 +367,7 @@ class ShardServiceSpec extends TestShardService {
           content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
       }
     }
+    /* Per John, this is not the desired behavior
     "return error response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
         case HttpResponse(HttpStatus(NotFound, _), _, Some(Left(response)), _) =>
@@ -374,6 +375,14 @@ class ShardServiceSpec extends TestShardService {
             case JArray(JString(err) :: Nil) =>
               err must startWith("Could not find any resource that corresponded to path")
           }
+      }
+    }
+     */
+
+    "return empty response on browse failure" in {
+      browse(path = "/errpath").copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(response)), _) =>
+          response mustEqual JObject("size" -> JNum(0), "children" -> JArray(), "structure" -> JObject())
       }
     }
   }

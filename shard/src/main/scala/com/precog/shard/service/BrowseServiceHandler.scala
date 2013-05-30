@@ -30,8 +30,14 @@ import scalaz.syntax.show._
 import scalaz.syntax.apply._
 
 class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
-  def size(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JNum] =
-    vfs.size(apiKey, path, Version.Current) map { JNum(_) }
+  // Essentially doing a leftFlatMap here
+  def size(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JNum] = EitherT {
+    vfs.size(apiKey, path, Version.Current).run.map {
+      case -\/(ResourceError.NotFound(_)) => \/-(0L)
+      case otherError @ -\/(_) => otherError
+      case okValue @ \/-(_)   => okValue
+    }
+  } map { JNum(_) }
 
   def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
     vfs.findDirectChildren(apiKey, path) map { paths =>
@@ -53,10 +59,14 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
       } mapValues (_.serialize)
     }
 
-    vfs.pathStructure(apiKey, path, property, Version.Current) map {
-      case PathStructure(types, children) =>
-        JObject(Map("children" -> children.serialize,
-                    "types" -> JObject(normalizeTypes(types))))
+    EitherT {
+      vfs.pathStructure(apiKey, path, property, Version.Current).run.map {
+        case -\/(ResourceError.NotFound(_)) => \/-(JObject())
+        case -\/(otherError) => -\/(otherError) // make types happy
+        case \/-(PathStructure(types, children)) =>
+          \/-(JObject(Map("children" -> children.serialize,
+                    "types" -> JObject(normalizeTypes(types)))))
+      }
     }
   }
 }
