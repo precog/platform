@@ -599,6 +599,27 @@ trait MathLibSpecs[M[+_]] extends Specification
       
       result2 must contain(1.24, 123.19, 100.00, 0, 0.50)
     }
+    "round to evenly in the face of repeating decimals" in {
+      val input =
+        Operate(BuiltInFunction1Op(numToString),
+          Join(BuiltInFunction2Op(roundTo), Cross(None),
+            Join(Mul, Cross(None),
+              Join(Div, Cross(None),
+                Const(CLong(15))(line),
+                Const(CLong(3168))(line))(line),
+              Const(CLong(100))(line))(line),
+            Const(CLong(2))(line))(line))(line)
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (ids, SString(str)) if ids.isEmpty => str
+      }
+      
+      result2 must contain("0.47")
+    }
   }
 
   "for heterogeneous sets, the appropriate math function" should {

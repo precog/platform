@@ -175,7 +175,8 @@ trait MathLibModule[M[+_]] extends ColumnarTableLibModule[M] with InfixLibModule
     object roundTo extends Op2DDD("roundTo", bothDefined, { (n, digits) =>
       val adjusted = n * math.pow(10, digits)
       val rounded = if (Math.abs(n) >= 4503599627370496.0) adjusted else Math.round(adjusted)
-      rounded * math.pow(10, -digits)
+        
+      rounded / math.pow(10, digits)
     })
   }
 }
