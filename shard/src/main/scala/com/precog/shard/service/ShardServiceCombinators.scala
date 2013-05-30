@@ -80,7 +80,7 @@ object ShardServiceCombinators extends Logging {
 
     val allowed = Set(JSON, CSV, anymaintype/anysubtype)
 
-    requested.find(allowed).headOption.getOrElse(JSON)
+    requested.find(allowed).getOrElse(JSON)
   }
 
   private def getTimeout(request: HttpRequest[_]): Validation[String, Option[Long]] = {
