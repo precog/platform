@@ -26,6 +26,7 @@ import com.precog.common.ingest._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.services.ServiceLocation
+import com.precog.common.services.ServiceHandlerUtil._
 
 import blueeyes.core.data.ByteChunk
 import blueeyes.core.http._
@@ -60,8 +61,8 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
   private def validateWriteMode(contentType: MimeType, method: HttpMethod): Validation[String, WriteMode] = {
     import FileContent._
     (contentType, method) match {
-      case (XQuirrelScript, HttpMethods.POST) => Success(AccessMode.Create)
-      case (XQuirrelScript, HttpMethods.PUT)  => Success(AccessMode.Replace)
+      case (_, HttpMethods.POST) => Success(AccessMode.Create)
+      case (_, HttpMethods.PUT)  => Success(AccessMode.Replace)
       case (otherType, otherMethod) => Failure("Content-Type %s is not supported for use with method %s.".format(otherType, otherMethod))
     }
   }
@@ -105,18 +106,28 @@ class FileStoreHandler(serviceLocation: ServiceLocation, jobManager: JobManager[
 
         // TODO: check ingest permissions
           (for {
-            jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id)
-            bytes <- right(ByteChunk.forceByteArray(content))
-            storeFile = StoreFile(apiKey, fullPath, requestAuthorities, jobId, FileContent(bytes, contentType, RawUTF8Encoding), timestamp.toInstant, StreamRef.forWriteMode(storeMode, true))
+            jobId <- jobManager.createJob(apiKey, "ingest-" + path, "ingest", None, Some(timestamp)).map(_.id).leftMap { errors =>
+              logger.error("File creation failed due to errors in job service: " + errors)
+              serverError(errors)
+            }
+            bytes <- EitherT {
+              ByteChunk.forceByteArray(content) map {
+                // TODO: Raise/remove this limit
+                case b if b.length > 614400 =>
+                  logger.error("Rejecting excessive file upload of size %d".format(b.length))
+                  -\/(badRequest("File uploads are currently limited to 600KB"))
+
+                case b =>
+                  \/-(b)
+              }
+            }
+            storeFile = StoreFile(apiKey, fullPath, requestAuthorities, jobId, FileContent(bytes, contentType), timestamp.toInstant, StreamRef.forWriteMode(storeMode, true))
             _ <- right(eventStore.save(storeFile, ingestTimeout))
           } yield {
             val resultsPath = (baseURI.path |+| Some("/data/fs/" + fullPath.path)).map(_.replaceAll("//", "/"))
             val locationHeader = Location(baseURI.copy(path = resultsPath))
             HttpResponse[JValue](Accepted, headers = HttpHeaders(List(locationHeader)))
-          }) valueOr { errors =>
-            logger.error("File creation failed due to errors in job service: " + errors)
-            HttpResponse[JValue](HttpStatus(InternalServerError, "An error occurred connecting to job tracking service."))
-          }
+          }).fold(e => e, x => x)
         } getOrElse {
           Promise successful HttpResponse[JValue](HttpStatus(BadRequest, "Attempt to create a file without body content."))
         }
