@@ -47,6 +47,16 @@ import scala.collection.JavaConverters._
 private object MissingSpireOps {
   implicit def arrayOps[@specialized(Double) A](lhs: Array[A]) = new ArrayOps(lhs)
   implicit def seqOps[@specialized(Double) A](lhs:Seq[A]) = new SeqOps[A](lhs)
+
+  // TODO: Use incremental mean, or switch back to Spire's when fixed.
+  def meanSeq(xs: List[Double]): Double = {
+    def loop(sum: Double, count: Double, acc: List[Double]): Double = acc match {
+      case x :: tail => loop(sum + x, count + 1, tail)
+      case Nil => sum / count
+    }
+
+    loop(0D, 0D, xs)
+  }
 }
 
 import MissingSpireOps._
@@ -317,7 +327,7 @@ sealed trait Forest[A] {
 }
 
 case class RegressionForest(trees: List[DecisionTree[Double]]) extends Forest[Double] {
-  def predict(v: Array[Double]): Double = new SeqOps(trees.map(_(v))).qmean
+  def predict(v: Array[Double]): Double = meanSeq(trees map (_(v)))
   def ++(that: Forest[Double]) = RegressionForest(trees ++ that.trees)
 }
 
@@ -586,7 +596,7 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] {
             }
 
             def variance(values: List[Double]): Double = {
-              val mean = new SeqOps(values).qmean
+              val mean = meanSeq(values)
               val sumSq = values.foldLeft(0D) { (acc, x) =>
                 val dx = x - mean
                 acc + dx * dx
@@ -602,7 +612,8 @@ trait RandomForestLibModule[M[+_]] extends ColumnarTableLibModule[M] {
               val errors: M[List[Double]] = (forests zip validationSamples) traverse { case (forest, table) =>
                 withData(table) { (actual, features) =>
                   val predicted = features map (forest.predict) // TODO: Unbox me!
-                  findError(actual, predicted)
+                  val error = findError(actual, predicted)
+                  error
                 }
               }
 
