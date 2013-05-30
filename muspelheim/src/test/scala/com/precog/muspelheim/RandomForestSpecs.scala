@@ -7,164 +7,164 @@ trait RandomForestSpecs extends EvalStackSpecs {
   import stack._
 
   "random forest" should {
-    "return correctly structured classification results" in {
-      val input = """
-        data := //iris
-        trainingData := {predictors: data.features, dependent: data.species}
+    //"return correctly structured classification results" in {
+    //  val input = """
+    //    data := //iris
+    //    trainingData := {predictors: data.features, dependent: data.species}
 
-        std::stats::rfClassification(trainingData, data.features)
-      """
+    //    std::stats::rfClassification(trainingData, data.features)
+    //  """
 
-      val results = evalE(input)
+    //  val results = evalE(input)
 
-      val categories = Set("Iris-setosa","Iris-versicolor", "Iris-virginica") 
+    //  val categories = Set("Iris-setosa","Iris-versicolor", "Iris-virginica") 
 
-      results must haveSize(150)
+    //  results must haveSize(150)
 
-      results must haveAllElementsLike { case (ids, value) =>
-        ids must haveSize(1)
-        value must beLike { case SObject(obj) => 
-          obj.keySet mustEqual Set("model1")
-          obj("model1") must beLike { case SString(str) =>
-            categories must contain(str)
-          }
-        }
-      }
-    }
+    //  results must haveAllElementsLike { case (ids, value) =>
+    //    ids must haveSize(1)
+    //    value must beLike { case SObject(obj) => 
+    //      obj.keySet mustEqual Set("model1")
+    //      obj("model1") must beLike { case SString(str) =>
+    //        categories must contain(str)
+    //      }
+    //    }
+    //  }
+    //}
 
-    "return correctly structured regression results" in {
-      val input = """
-        data := //auto-mpg
-        features0 := data.features
+    //"return correctly structured regression results" in {
+    //  val input = """
+    //    data := //auto-mpg
+    //    features0 := data.features
 
-        features :=
-          [
-            features0[0],
-            features0[1],
-            if (features0[2] = null) then mean(features0[2]) else features0[2],
-            features0[3],
-            features0[4],
-            features0[5]
-          ]
+    //    features :=
+    //      [
+    //        features0[0],
+    //        features0[1],
+    //        if (features0[2] = null) then mean(features0[2]) else features0[2],
+    //        features0[3],
+    //        features0[4],
+    //        features0[5]
+    //      ]
 
-        trainingData := {predictors: features, dependent: data.mpg}
+    //    trainingData := {predictors: features, dependent: data.mpg}
 
-        std::stats::rfRegression(trainingData, features)
-      """
+    //    std::stats::rfRegression(trainingData, features)
+    //  """
 
-      val results = evalE(input)
+    //  val results = evalE(input)
 
-      results must haveSize(398)
+    //  results must haveSize(398)
 
-      results must haveAllElementsLike { case (ids, value) =>
-        ids must haveSize(1)
-        value must beLike { case SObject(obj) => 
-          obj.keySet mustEqual Set("model1")
-          obj("model1") must beLike { case SDecimal(_) => ok }
-        }
-      }
-    }
+    //  results must haveAllElementsLike { case (ids, value) =>
+    //    ids must haveSize(1)
+    //    value must beLike { case SObject(obj) => 
+    //      obj.keySet mustEqual Set("model1")
+    //      obj("model1") must beLike { case SDecimal(_) => ok }
+    //    }
+    //  }
+    //}
 
-    "return correctly structured classification results given dependent object" in {
-      val input = """
-        data := //iris
-        trainingData := {predictors: data.features, dependent: {species: data.species}}
+    //"return correctly structured classification results given dependent object" in {
+    //  val input = """
+    //    data := //iris
+    //    trainingData := {predictors: data.features, dependent: {species: data.species}}
 
-        std::stats::rfClassification(trainingData, data.features)
-      """
+    //    std::stats::rfClassification(trainingData, data.features)
+    //  """
 
-      val results = evalE(input)
+    //  val results = evalE(input)
 
-      val categories = Set("Iris-setosa","Iris-versicolor", "Iris-virginica") 
+    //  val categories = Set("Iris-setosa","Iris-versicolor", "Iris-virginica") 
 
-      results must haveSize(150)
+    //  results must haveSize(150)
 
-      results must haveAllElementsLike { case (ids, value) =>
-        ids must haveSize(1)
-        value must beLike { case SObject(obj) => 
-          obj.keySet mustEqual Set("model1")
-          obj("model1") must beLike { case SObject(pred) =>
-            pred.keySet mustEqual Set("species")
-            pred("species") must beLike { case SString(str) =>
-              categories must contain(str)
-            }
-          }
-        }
-      }
-    }
+    //  results must haveAllElementsLike { case (ids, value) =>
+    //    ids must haveSize(1)
+    //    value must beLike { case SObject(obj) => 
+    //      obj.keySet mustEqual Set("model1")
+    //      obj("model1") must beLike { case SObject(pred) =>
+    //        pred.keySet mustEqual Set("species")
+    //        pred("species") must beLike { case SString(str) =>
+    //          categories must contain(str)
+    //        }
+    //      }
+    //    }
+    //  }
+    //}
 
-    "return empty set in classification case when given wrongly structured data" in {
-      val input = """
-        data := //iris
-        std::stats::rfClassification(data.species, data.features)
-      """
+    //"return empty set in classification case when given wrongly structured data" in {
+    //  val input = """
+    //    data := //iris
+    //    std::stats::rfClassification(data.species, data.features)
+    //  """
 
-      evalE(input) must beEmpty
-    }
+    //  evalE(input) must beEmpty
+    //}
 
-    "return empty set in regression case when given wrongly structured data" in {
-      val input = """
-        data := //iris
-        std::stats::rfRegression(data.species, data.features)
-      """
+    //"return empty set in regression case when given wrongly structured data" in {
+    //  val input = """
+    //    data := //iris
+    //    std::stats::rfRegression(data.species, data.features)
+    //  """
 
-      evalE(input) must beEmpty
-    }
+    //  evalE(input) must beEmpty
+    //}
 
-    "handle single datapoint in regression case" in {
-      val input = """
-        trainingData := {predictors: [1, 2, 3.3, 5], dependent: 0.25}
-        std::stats::rfRegression(trainingData, [3, 4.9, 5, 1])
-      """
+    //"handle single datapoint in regression case" in {
+    //  val input = """
+    //    trainingData := {predictors: [1, 2, 3.3, 5], dependent: 0.25}
+    //    std::stats::rfRegression(trainingData, [3, 4.9, 5, 1])
+    //  """
 
-      val results = evalE(input)
+    //  val results = evalE(input)
 
-      results must haveSize(1)
+    //  results must haveSize(1)
 
-      results must haveAllElementsLike { case (ids, value) =>
-        ids must haveSize(0)
-        value must beLike { case SObject(obj) =>
-          obj.keySet mustEqual Set("model1")
-          obj("model1") must beLike { case SDecimal(d) =>
-            d.toDouble mustEqual(0.25)
-          }
-        }
-      }
-    }
+    //  results must haveAllElementsLike { case (ids, value) =>
+    //    ids must haveSize(0)
+    //    value must beLike { case SObject(obj) =>
+    //      obj.keySet mustEqual Set("model1")
+    //      obj("model1") must beLike { case SDecimal(d) =>
+    //        d.toDouble mustEqual(0.25)
+    //      }
+    //    }
+    //  }
+    //}
 
-    "return well-predicted classification results" in {
-      val input = """
-        data0 := //iris
-        data := data0 with { rand: observe(data0, std::random::uniform(42)) }
+    //"return well-predicted classification results" in {
+    //  val input = """
+    //    data0 := //iris
+    //    data := data0 with { rand: observe(data0, std::random::uniform(42)) }
 
-        pt := 0.9
+    //    pt := 0.9
 
-        trainingData0 := data where data.rand <= pt
-        trainingData := {predictors: trainingData0.features, dependent: trainingData0.species}
+    //    trainingData0 := data where data.rand <= pt
+    //    trainingData := {predictors: trainingData0.features, dependent: trainingData0.species}
 
-        predictionData := data where data.rand > pt 
+    //    predictionData := data where data.rand > pt 
 
-        predictions := std::stats::rfClassification(trainingData, predictionData.features)
+    //    predictions := std::stats::rfClassification(trainingData, predictionData.features)
 
-        results := predictionData with predictions
+    //    results := predictionData with predictions
 
-        correct := count(results where results.species = results.model1)
-        total := count(results)
+    //    correct := count(results where results.species = results.model1)
+    //    total := count(results)
 
-        correct / total
-      """
-      val results = evalE(input)
+    //    correct / total
+    //  """
+    //  val results = evalE(input)
 
-      results must haveSize(1)
+    //  results must haveSize(1)
 
-      results must haveAllElementsLike { case (ids, value) =>
-        ids must haveSize(0)
-        value must beLike { case SDecimal(d) =>
-          //println("pred rate classification: " + d.toDouble)
-          d.toDouble must be_>(0.5)
-        }
-      }
-    }
+    //  results must haveAllElementsLike { case (ids, value) =>
+    //    ids must haveSize(0)
+    //    value must beLike { case SDecimal(d) =>
+    //      //println("pred rate classification: " + d.toDouble)
+    //      d.toDouble must be_>(0.5)
+    //    }
+    //  }
+    //}
 
     "return well-predicted regression results" in {
       val input = """
@@ -209,8 +209,8 @@ trait RandomForestSpecs extends EvalStackSpecs {
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) => 
-          //println("r^2 regression: " + d)
-          d.toDouble must be_>(0.4)
+          // println("r^2 regression: " + d)
+          d.toDouble must be_>(0.6)
         }
       }
     }
