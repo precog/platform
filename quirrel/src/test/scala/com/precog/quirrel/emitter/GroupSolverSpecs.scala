@@ -105,7 +105,7 @@ object GroupSolverSpecs extends Specification
       tree1.errors must beEmpty
       tree2.errors must beEmpty
     }
-     
+    
     "accept acceptable case when one solve contains a dispatch which contains tic variable from another solve" in {
       val input = """
        |  medals := //summer_games/london_medals
@@ -1121,6 +1121,37 @@ object GroupSolverSpecs extends Specification
         | """.stripMargin
         
       compileSingle(input).errors must not(beEmpty)
+    }
+    
+    "separate bucket specs for groups within functions within union" in {
+      val input = """
+        | data := new 12
+        | 
+        | f(path) := 
+        |   solve 'price count(path where path = 'price)
+        |     
+        | f(data) union f(data with 24)""".stripMargin
+        
+      val Let(_, _, _, _,
+        Let(_, _, _,
+          solve @ Solve(_, _, Dispatch(_, _, Vector(
+            target @ Where(_, path, _)))),
+          Union(_,
+            d1 @ Dispatch(_, _, Vector(data)),
+            d2 @ Dispatch(_, _, Vector(data2))))) = compileSingle(input)
+            
+      solve.buckets must haveKey(Set(d1))
+      solve.buckets must haveKey(Set(d2))
+      
+      val spec1 = solve.buckets(Set(d1))
+      spec1 must beLike {
+        case Group(Some(`target`), `data`, UnfixedSolution("'price", _, `d1` :: Nil), `d1` :: Nil) => ok
+      }
+      
+      val spec2 = solve.buckets(Set(d2))
+      spec2 must beLike {
+        case Group(Some(`target`), `data2`, UnfixedSolution("'price", _, `d2` :: Nil), `d2` :: Nil) => ok
+      }
     }
   }
 }
