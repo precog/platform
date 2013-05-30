@@ -84,9 +84,11 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
 
     def recordCount(implicit M: Monad[M]): M[Long] = M point { proj.length }
     def projection(implicit M: Monad[M]): M[Projection] = M point { proj }
-    def byteStream(matchType: Option[MimeType])(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]] = OptionT(M point {
-      table.ColumnarTableModule.byteStream(proj.getBlockStream(None), matchType)
-    })
+    def asByteStream(mimeType: MimeType)(implicit M: Monad[M]) = OptionT {
+      M.point {
+        table.ColumnarTableModule.byteStream(proj.getBlockStream(None), Some(mimeType))
+      }
+    }
   }
 
   case class InMemoryBlobResource(data: Array[Byte], mimeType: MimeType, authorities: Authorities) extends BlobResource {
@@ -96,9 +98,11 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
       FileContent.stringTypes.contains(mimeType).option(new String(data, "UTF-8"))
     })
 
-    def byteStream(matchType: Option[MimeType])(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]] = OptionT(M point {
-      matchType.forall(_ == mimeType).option(data :: StreamT.empty[M, Array[Byte]])
-    })
+    def asByteStream(mimeType: MimeType)(implicit M: Monad[M]) = OptionT {
+      M.point {
+        Some(data :: StreamT.empty[M, Array[Byte]])
+      }
+    }
   }
 
   class VFSCompanion extends VFSCompanionLike {
@@ -107,7 +111,7 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
     def blockSize(slice: Slice) = slice.size
     def pathStructure(selector: CPath)(implicit M: Monad[M]) = { (projection: Projection) =>
       EitherT.right(
-        for (columnRefs <- projection.structure) yield { 
+        for (columnRefs <- projection.structure) yield {
           val types : Map[CType, Long] = columnRefs.collect {
             // FIXME: This should use real counts
             case ColumnRef(selector, ctype) if selector.hasPrefix(selector) => (ctype, 0L)
@@ -129,13 +133,13 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
 
     case class BinaryRecord(resource: InMemoryBlobResource, versionId: UUID) extends Record
     object BinaryRecord {
-      def apply(data: (Array[Byte], MimeType), authorities: Authorities, uuid: UUID) = 
+      def apply(data: (Array[Byte], MimeType), authorities: Authorities, uuid: UUID) =
         new BinaryRecord(new InMemoryBlobResource(data._1, data._2, authorities), uuid)
     }
 
     case class JsonRecord(resource: InMemoryProjectionResource, versionId: UUID) extends Record
     object JsonRecord {
-      def apply(data: Vector[JValue], authorities: Authorities, uuid: UUID) = 
+      def apply(data: Vector[JValue], authorities: Authorities, uuid: UUID) =
         new JsonRecord(new InMemoryProjectionResource(new Projection(Vector(Slice.fromJValues(data.toStream))), authorities), uuid)
     }
 
@@ -147,10 +151,10 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
   class InMemoryVFS(data0: Map[Path, ((Array[Byte], MimeType) \/ Vector[JValue], Authorities)], clock: Clock)(implicit M: Monad[M]) extends VFS {
     import VFS._
 
-    private var data: Map[(Path, Version), Record] = data0 map { 
-      case (p, (r, auth)) => 
+    private var data: Map[(Path, Version), Record] = data0 map {
+      case (p, (r, auth)) =>
         (p, Version.Current) -> r.fold(
-          BinaryRecord(_, auth, newVersion), 
+          BinaryRecord(_, auth, newVersion),
           JsonRecord(_, auth, newVersion)
         )
     }
@@ -177,7 +181,7 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
 
       IO {
         data = (events groupBy { case (offset, msg) => msg.path }).foldLeft(data) {
-          case (acc, (path, messages)) => 
+          case (acc, (path, messages)) =>
             val currentKey = (path, Version.Current)
             // We can discard the event IDs for the purposes of this class
             messages.map(_._2).foldLeft(acc) {
@@ -235,7 +239,7 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
     }
 
     def currentVersion(path: Path): M[Option[VersionEntry]] = M point {
-      data.get((path, Version.Current)) map { 
+      data.get((path, Version.Current)) map {
         case BinaryRecord(_, id) => VersionEntry(id, PathData.BLOB, clock.instant)
         case JsonRecord(_, id) => VersionEntry(id, PathData.NIHDB, clock.instant)
       }

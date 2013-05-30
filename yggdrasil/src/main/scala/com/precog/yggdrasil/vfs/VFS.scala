@@ -102,9 +102,11 @@ trait VFSModule[M[+_], Block] extends Logging {
   sealed trait Resource {
     def mimeType: MimeType
     def authorities: Authorities
-    def byteStream(mimeType: Option[MimeType])(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]]
+    def byteStream(requestedMimeTypes: Seq[MimeType])(implicit M: Monad[M]): OptionT[M, (MimeType, StreamT[M, Array[Byte]])]
 
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A): A
+
+    protected def asByteStream(mimeType: MimeType)(implicit M: Monad[M]): OptionT[M, StreamT[M, Array[Byte]]]
   }
 
   object Resource {
@@ -133,6 +135,19 @@ trait VFSModule[M[+_], Block] extends Logging {
     def projection(implicit M: Monad[M]): M[Projection]
 
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = projectionResource(this)
+
+    def byteStream(requestedMimeTypes: Seq[MimeType])(implicit M: Monad[M]): OptionT[M, (MimeType, StreamT[M, Array[Byte]])] = {
+      import FileContent._
+      // Map to the type we'll use for conversion and the type we report to the user
+      // FIXME: We're dealing with MimeType in too many places here
+      val acceptableMimeTypes = ((Seq(ApplicationJson, XJsonStream, TextCSV).map { mt => mt -> (mt, mt) }) ++
+        Seq(AnyMimeType -> (XJsonStream, XJsonStream), OctetStream -> (XJsonStream, OctetStream))).toMap
+      for {
+        selectedMT <- OptionT(M.point(requestedMimeTypes.find(acceptableMimeTypes.contains)))
+        (conversionMT, returnMT) = acceptableMimeTypes(selectedMT)
+        stream <- asByteStream(conversionMT)
+      } yield (returnMT, stream)
+    }
   }
 
   trait BlobResource extends Resource {
@@ -140,6 +155,15 @@ trait VFSModule[M[+_], Block] extends Logging {
     def byteLength: Long
 
     def fold[A](blobResource: BlobResource => A, projectionResource: ProjectionResource => A) = blobResource(this)
+
+    def byteStream(requestedMimeTypes: Seq[MimeType])(implicit M: Monad[M]): OptionT[M, (MimeType, StreamT[M, Array[Byte]])] = {
+      import FileContent._
+      val acceptableMimeTypes = Map(mimeType -> mimeType, AnyMimeType -> mimeType, OctetStream -> OctetStream)
+      for {
+        selectedMT <- OptionT(M.point(requestedMimeTypes.find(acceptableMimeTypes.contains)))
+        stream     <- asByteStream(selectedMT)
+      } yield (selectedMT, stream)
+    }
   }
 
   trait VFSCompanionLike {

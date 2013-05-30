@@ -84,6 +84,7 @@ object FileContent {
   val TextCSV = text/csv
   val TextPlain = text/plain
   val AnyMimeType = MimeType("*", "*")
+  val OctetStream = application/`octet-stream`
 
   val stringTypes = Set(XQuirrelScript, ApplicationJson, TextCSV, TextPlain)
 
