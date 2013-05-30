@@ -13,11 +13,12 @@ import scalaz.syntax.traverse._
 import scalaz.std.list._
 
 object CookedReader { 
-  def load(metadataFile: File, blockFormat: CookedBlockFormat = VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), segmentFormat: SegmentFormat = VersionedSegmentFormat(Map(1 -> V1SegmentFormat))): CookedReader = 
-    new CookedReader(metadataFile, blockFormat, segmentFormat)
+  def load(baseDir: File, metadataFile: File, blockFormat: CookedBlockFormat = VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), segmentFormat: SegmentFormat = VersionedSegmentFormat(Map(1 -> V1SegmentFormat))): CookedReader = 
+    new CookedReader(baseDir, metadataFile, blockFormat, segmentFormat)
 }
 
-final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, segmentFormat: SegmentFormat) extends StorageReader {
+final class CookedReader(baseDir: File, metadataFile0: File, blockFormat: CookedBlockFormat, segmentFormat: SegmentFormat) extends StorageReader {
+  private val metadataFile = if (metadataFile0.isAbsolute) metadataFile0 else new File(baseDir, metadataFile0.getPath)
 
   private val lock = new AnyRef { }
 
@@ -76,7 +77,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
         segs flatMap (_._2)
       }).valueOr { nel => throw nel.head }
     } getOrElse {
-      metadata.valueOr(throw _).segments map { case (segId, file) =>
+      metadata.valueOr(throw _).segments map { case (segId, file0) =>
+        val file = if (file0.isAbsolute) file0 else new File(baseDir, file0.getPath)
         read(file) { channel =>
           segmentFormat.reader.readSegment(channel)
         }.valueOr(throw _)
@@ -115,7 +117,8 @@ final class CookedReader(metadataFile: File, blockFormat: CookedBlockFormat, seg
   def load(paths: List[ColumnRef]): ValidationNel[IOException, List[(ColumnRef, List[Segment])]] = {
     segmentsByRef.toValidationNel flatMap { (segsByRef: Map[ColumnRef, List[File]]) =>
       paths.map { path =>
-        val v: ValidationNel[IOException, List[Segment]] = segsByRef.getOrElse(path, Nil).map { file =>
+        val v: ValidationNel[IOException, List[Segment]] = segsByRef.getOrElse(path, Nil).map { file0 =>
+          val file = if (file0.isAbsolute) file0 else new File(baseDir, file0.getPath)
           read(file) { channel =>
             segmentFormat.reader.readSegment(channel).toValidationNel
           }

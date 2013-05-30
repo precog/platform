@@ -30,9 +30,10 @@ final case class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) ext
     assert(root.canWrite)
     val files0 = reader.snapshot(None).segments map { seg =>
       val file = File.createTempFile(prefix(seg), ".cooked", root)
+      val relativized = new File(file.getName)
       val channel: WritableByteChannel = new FileOutputStream(file).getChannel()
       val result = try {
-        format.writer.writeSegment(channel, seg) map { _ => (seg.id, file) }
+        format.writer.writeSegment(channel, seg) map { _ => (seg.id, relativized) }
       } finally {
         channel.close()
       }
@@ -46,7 +47,7 @@ final case class Chef(blockFormat: CookedBlockFormat, format: SegmentFormat) ext
       val channel = new FileOutputStream(mdFile).getChannel()
       try {
         blockFormat.writeCookedBlock(channel, metadata).toValidationNel.map { _ : PrecogUnit =>
-          mdFile
+          new File(mdFile.getName)
         }
       } finally {
         channel.close()
