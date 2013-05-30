@@ -286,7 +286,7 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       val struct2 = h.structure
       struct1.toSet must_== Set()
-      struct2.toSet must_== Set((cpa, CString))
+      struct2.toSet must_== Set(ColumnRef(cpa, CString))
 
       val snap2 = h.snapshot(None).segments
       snap1.toSet must_== Set()
@@ -311,8 +311,8 @@ object RawHandlerSpecs extends Specification with ScalaCheck {
 
       val struct3 = h.structure
       struct1.toSet must_== Set()
-      struct2.toSet must_== Set((cpa, CString))
-      struct3.toSet must_== Set((cpa, CString), (cpb, CString))
+      struct2.toSet must_== Set(ColumnRef(cpa, CString))
+      struct3.toSet must_== Set(ColumnRef(cpa, CString), ColumnRef(cpb, CString))
 
       val snap3 = h.snapshot(None).segments
       val snap3R = h.snapshotRef(None).segments

@@ -209,8 +209,8 @@ trait RandomForestSpecs extends EvalStackSpecs {
       results must haveAllElementsLike { case (ids, value) =>
         ids must haveSize(0)
         value must beLike { case SDecimal(d) => 
-          //println("r^2 regression: " + d)
-          d.toDouble must be_>(0.4)
+          // println("r^2 regression: " + d)
+          d.toDouble must be_>(0.6)
         }
       }
     }
