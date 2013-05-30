@@ -7,7 +7,6 @@ import com.precog.common._
 import com.precog.common.security.Authorities
 import com.precog.niflheim._
 import com.precog.yggdrasil.table.Slice
-import com.precog.yggdrasil.nihdb.SegmentsWrapper
 
 import com.weiglewilczek.slf4s.Logging
 
