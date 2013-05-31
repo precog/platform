@@ -41,7 +41,7 @@ trait Memoizer extends DAG {
   private def applyMemoizations(target: DepGraph, refs: Map[DepGraph, Set[OpSide]]): DepGraph = {
     import OpSide._
     
-    val memotable = mutable.Map[DepGraph, DepGraph]()
+    val memotable = mutable.Map[DepGraphWrapper, DepGraph]()
     
     def numRefs(node: DepGraph) = refs get node map { _.size } getOrElse 0
     
@@ -190,9 +190,9 @@ trait Memoizer extends DAG {
           dag.Extra(memoized(target))
       }
 
-      memotable.get(node) getOrElse {
+      memotable.get(new DepGraphWrapper(node)) getOrElse {
         val result = inner(node)
-        memotable += (node -> result)
+        memotable += (new DepGraphWrapper(node) -> result)
         result
       }
     }
