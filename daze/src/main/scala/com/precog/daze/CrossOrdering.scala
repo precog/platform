@@ -11,7 +11,7 @@ trait CrossOrdering extends DAG {
   import dag._
 
   def orderCrosses(node: DepGraph): DepGraph = {
-    val memotable = mutable.Map[DepGraph, DepGraph]()
+    val memotable = mutable.Map[DepGraphWrapper, DepGraph]()
     
     def memoizedSpec(spec: BucketSpec): BucketSpec = spec match {
       case UnionBucketSpec(left, right) =>
@@ -120,9 +120,9 @@ trait CrossOrdering extends DAG {
         case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }
   
-      memotable.get(node) getOrElse {
+      memotable.get(new DepGraphWrapper(node)) getOrElse {
         val result = inner(node)
-        memotable += (node -> result)
+        memotable += (new DepGraphWrapper(node) -> result)
         result
       }
     }
