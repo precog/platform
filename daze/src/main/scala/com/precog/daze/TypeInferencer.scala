@@ -15,8 +15,6 @@ trait TypeInferencer extends DAG {
 
   def inferTypes(jtpe: JType)(graph: DepGraph): DepGraph = {
 
-    val memotable = mutable.Map[DepGraph, DepGraph]()
-
     def collectTypes(universe: JType, graph: DepGraph): Map[DepGraph, Set[JType]] = {
       def collectSpecTypes(typing: Map[DepGraph, Set[JType]], splits: Map[Identifier, Split], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
         case UnionBucketSpec(left, right) =>

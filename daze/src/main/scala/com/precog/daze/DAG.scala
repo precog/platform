@@ -430,7 +430,7 @@ trait DAG extends Instructions {
     def containsSplitArg: Boolean
 
     def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
-      val memotable = mutable.Map[DepGraph, DepGraph]()
+      val memotable = mutable.Map[DepGraphWrapper, DepGraph]()
 
       def memoized(node: DepGraph): DepGraph = {
         lazy val pf: PartialFunction[DepGraph, DepGraph] = body(memoized)
@@ -509,9 +509,9 @@ trait DAG extends Instructions {
             dag.Extra(memoized(target))
         }
   
-        memotable.get(node) getOrElse {
+        memotable.get(new DepGraphWrapper(node)) getOrElse {
           val result = inner(node)
-          memotable += (node -> result)
+          memotable += (new DepGraphWrapper(node) -> result)
           result
         }
       }
@@ -859,6 +859,15 @@ trait DAG extends Instructions {
           1
       }
     }
+  }
+
+  class DepGraphWrapper(val graph: DepGraph) {
+    override def equals(that: Any) = that match {
+      case (that: DepGraphWrapper) => this.graph eq that.graph
+      case _ => false
+    }
+    
+    override def hashCode: Int = System identityHashCode graph
   }
   
   object dag {
