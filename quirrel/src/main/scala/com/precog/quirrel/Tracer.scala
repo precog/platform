@@ -9,17 +9,15 @@ trait Tracer extends parser.AST with typer.Binder {
   import Stream.{empty => SNil}
 
   def copyTrace(trace: Trace, sigma: Sigma, expr: Expr, parentIdx: Option[Int]): Trace = {
-    val copied = if (trace.graph.contains((sigma, expr))) {
+    val copied = if (trace.nodes.contains((sigma, expr))) {
       trace
     } else {
-      trace.copy(
-        graph = trace.graph :+ (sigma, expr),
-        indices = trace.indices :+ BitSetUtil.create())
+      Trace.safeCopy(trace, (sigma, expr), BitSetUtil.create())
     }
 
     parentIdx match {
       case Some(idx) => {
-        copied.indices(idx) set copied.graph.indexOf((sigma, expr))
+        copied.indices(idx) set copied.nodes.indexOf((sigma, expr))
         copied
       }
       case None => copied
@@ -36,7 +34,7 @@ trait Tracer extends parser.AST with typer.Binder {
         exprs: Vector[Expr]): Trace = {
 
       val updated = copyTrace(trace, sigma, expr, parentIdx)
-      val idx = updated.graph.indexOf((sigma, expr)) 
+      val idx = updated.nodes.indexOf((sigma, expr)) 
 
       var i = 0
       var traceAcc = updated
@@ -78,7 +76,7 @@ trait Tracer extends parser.AST with typer.Binder {
 
             if (actuals.length > 0) {
               val updated = copyTrace(trace, sigma, expr, parentIdx)
-              val idx = updated.graph.indexOf((sigma, expr))
+              val idx = updated.nodes.indexOf((sigma, expr))
 
               loop(sigma2, updated, let.left, Some(idx))
             } else {
@@ -106,14 +104,14 @@ trait Tracer extends parser.AST with typer.Binder {
    * and associated actual context.
    */
   def buildBacktrace(trace: Trace)(target0: Expr): List[List[(Sigma, Expr)]] = {
-    val targetLocations: Array[Int] = trace.graph.zipWithIndex collect {
+    val targetLocations: Array[Int] = trace.nodes.zipWithIndex collect {
       case ((_, expr), idx) if target0 == expr => idx
     }
 
     def loop(stack: List[(Sigma, Expr)])(location: Int): List[(Sigma, Expr)] = {
       val newTargets: Array[(Int, (Sigma, Expr))] = {
         trace.indices.zipWithIndex collect {
-          case (bitset, idx) if bitset(location) => (idx, trace.graph(idx))
+          case (bitset, idx) if bitset(location) => (idx, trace.nodes(idx))
         }
       }
 
