@@ -33,11 +33,16 @@ trait Phases {
 
   type Sigma = Map[Formal, Expr]
 
-  //todo ensure graph and indices have same length
-  case class Trace(graph: Array[(Sigma, Expr)], indices: Array[BitSet])
+  // if `indices(i)(j)` is set, then there is a graph arrow from `nodes(i)` to `nodes(j)`
+  case class Trace(nodes: Array[(Sigma, Expr)], indices: Array[BitSet])
 
   object Trace {
     val empty = Trace(Array.empty[(Sigma, Expr)], Array.empty[BitSet])
+
+    def safeCopy(trace: Trace, node: (Sigma, Expr), indices: BitSet) =
+      trace.copy(
+        nodes = trace.nodes :+ node,
+        indices = trace.indices :+ indices) 
   }
   
   private val Phases: List[Phase] =
