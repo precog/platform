@@ -16,6 +16,7 @@ trait GroupFinder extends parser.AST with Tracer {
     
     // TODO minimize by sigma subsetting
     val btraces = vars flatMap buildBacktrace(solve.trace)
+
     btraces flatMap { btrace =>
       val result = codrill(btrace)
       

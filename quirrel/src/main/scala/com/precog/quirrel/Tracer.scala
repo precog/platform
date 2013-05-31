@@ -8,7 +8,7 @@ trait Tracer extends parser.AST with typer.Binder {
   import ast._
   import Stream.{empty => SNil}
 
-  def copyTrace(trace: Trace, sigma: Sigma, expr: Expr, parentIdx: Option[Int]): Trace = {
+  private def addNode(trace: Trace, sigma: Sigma, expr: Expr, parentIdx: Option[Int]): Trace = {
     val copied = if (trace.nodes.contains((sigma, expr))) {
       trace
     } else {
@@ -33,7 +33,7 @@ trait Tracer extends parser.AST with typer.Binder {
         parentIdx: Option[Int],
         exprs: Vector[Expr]): Trace = {
 
-      val updated = copyTrace(trace, sigma, expr, parentIdx)
+      val updated = addNode(trace, sigma, expr, parentIdx)
       val idx = updated.nodes.indexOf((sigma, expr)) 
 
       var i = 0
@@ -66,7 +66,7 @@ trait Tracer extends parser.AST with typer.Binder {
         foldThrough(trace, sigma, expr, parentIdx, Vector(from, to, in))
 
       case (_: TicVar) =>
-        copyTrace(trace, sigma, expr, parentIdx)
+        addNode(trace, sigma, expr, parentIdx)
 
       case expr @ Dispatch(_, name, actuals) => {
         expr.binding match {
@@ -75,7 +75,7 @@ trait Tracer extends parser.AST with typer.Binder {
             val sigma2 = sigma ++ (ids zip Stream.continually(let) zip actuals)
 
             if (actuals.length > 0) {
-              val updated = copyTrace(trace, sigma, expr, parentIdx)
+              val updated = addNode(trace, sigma, expr, parentIdx)
               val idx = updated.nodes.indexOf((sigma, expr))
 
               loop(sigma2, updated, let.left, Some(idx))
