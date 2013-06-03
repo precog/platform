@@ -147,15 +147,12 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           result must haveSize(0)
         }
 
+        // note that `5 intersect undefined` is provably empty
+        // and thus kicked out by the compiler
         "union" >> {
           val result = eval("5 union undefined")
           result must haveSize(1)
           result must contain(SDecimal(5))
-        }
-
-        "intersect" >> {
-          val result = eval("5 intersect undefined")
-          result must haveSize(0)
         }
       }
 
