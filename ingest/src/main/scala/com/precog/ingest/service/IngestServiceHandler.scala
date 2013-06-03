@@ -75,12 +75,13 @@ class IngestServiceHandler(
   eventStore: EventStore[Future],
   ingestTimeout: Timeout,
   batchSize: Int,
-  maxFields: Int)(implicit M: Monad[Future], executor: ExecutionContext)
+  maxFields: Int,
+  tmpdir: File)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
     with IngestStore
     with Logging { ingestStore =>
 
-  private[this] val processorSelector = new IngestProcessorSelection(maxFields, batchSize, ingestStore)
+  private[this] val processorSelector = new IngestProcessorSelection(maxFields, batchSize, tmpdir, ingestStore)
   import processorSelector._
 
   def store(apiKey: APIKey, path: Path, authorities: Authorities, data: Seq[JValue], jobId: Option[JobId]): Future[PrecogUnit] = {
