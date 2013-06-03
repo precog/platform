@@ -26,7 +26,7 @@ import com.precog.common.security._
 import com.precog.common.services.ServiceHandlerUtil
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.vfs.Version
+import com.precog.yggdrasil.vfs.{ResourceError, Version}
 
 import blueeyes.util.Clock
 import blueeyes.core.data._
@@ -51,20 +51,55 @@ class DataServiceHandler[A](platform: Platform[Future, Slice, StreamT[Future, Sl
     extends CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[ByteChunk]]] with Logging {
 
   val service = (request: HttpRequest[A]) => Success {
+    import ResourceError._
+
     (apiKey: APIKey, path: Path) => {
       val mimeTypes = request.headers.header[Accept].toSeq.flatMap(_.mimeTypes)
       platform.vfs.readResource(apiKey, path, Version.Current, AccessMode.Read).run flatMap {
         _.fold(
-          error => {
-            logger.error("Read failure: " + error.shows)
-            sys.error("fixme... return an informative HTTP repsonse.")
+          resourceError => M point { 
+            resourceError match {
+              case Corrupt(message) =>
+                logger.error("Corrupt resource found for current version of path %s: %s".format(path.path, message))
+                HttpResponse(InternalServerError)
+
+              case IOError(throwable) =>
+                logger.error("An IO error was encountered reading data from path %s".format(path.path), throwable)
+                HttpResponse(InternalServerError)
+
+              case IllegalWriteRequestError(message) =>
+                logger.error("Unexpected write response to readResource of path %s: %s".format(path.path, message))
+                HttpResponse(InternalServerError)
+                
+              case PermissionsError(message) =>
+                val err = JObject("errors" -> JArray(JString(message)))
+                HttpResponse(HttpStatus(Forbidden, message))
+
+              case NotFound(message) =>
+                HttpResponse(HttpStatus(HttpStatusCodes.NotFound, message))
+
+              case multiple: ResourceErrors =>
+                multiple.fold(
+                  fatal => { 
+                    logger.error("Multiple errors encountered serving readResource of path %s: %s".format(path.path, fatal.messages.list.mkString("[\n", ",\n", "]")))
+                    HttpResponse(InternalServerError)
+                  },
+                  userError => 
+                    HttpResponse(HttpStatus(BadRequest, "Multiple errors encountered reading resource at path %s".format(path.path)), 
+                      // although the returned content is actually application/json, the HTTP spec only allows for text/plain to be returned
+                      // in violation of accept headers, so I think the best thing to do here is lie.
+                      headers = HttpHeaders(`Content-Type`(text/plain)), 
+                      content = Some(Left(JObject("errors" -> JArray(userError.messages.list.map(JString(_)): _*)).renderPretty.getBytes("UTF-8"))))
+
+                )
+            }
           },
           resource => resource.byteStream(mimeTypes).run map {
             case Some((reportedType, byteStream)) =>
               HttpResponse(OK, headers = HttpHeaders(`Content-Type`(reportedType)), content = Some(Right(byteStream)))
 
             case None =>
-              HttpResponse(NotFound, content = Some(Left(("Could not locate content for path " + path).getBytes("UTF-8"))))
+              HttpResponse(HttpStatus(HttpStatusCodes.NotFound, "Could not locate content for path " + path))
           }
         )
       } recover {

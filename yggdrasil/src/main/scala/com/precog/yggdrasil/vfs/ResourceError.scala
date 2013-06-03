@@ -26,6 +26,7 @@ import scalaz.NonEmptyList._
 
 sealed trait ResourceError {
   def fold[A](fatalError: ResourceError.FatalError => A, userError: ResourceError.UserError => A): A
+  def messages: NonEmptyList[String]
 }
   
 object ResourceError {
@@ -54,24 +55,39 @@ object ResourceError {
 
   sealed trait FatalError { self: ResourceError =>
     def fold[A](fatalError: FatalError => A, userError: UserError => A) = fatalError(self)
+    def messages: NonEmptyList[String] 
   }
 
   sealed trait UserError { self: ResourceError =>
     def fold[A](fatalError: FatalError => A, userError: UserError => A) = userError(self)
+    def messages: NonEmptyList[String] 
   }
 
-  case class Corrupt(message: String) extends ResourceError with FatalError
-  case class IOError(exception: Throwable) extends ResourceError with FatalError
+  case class Corrupt(message: String) extends ResourceError with FatalError {
+    def messages = nels(message)
+  }
+  case class IOError(exception: Throwable) extends ResourceError with FatalError {
+    def messages = nels(Option(exception.getMessage).getOrElse(exception.getClass.getName))
+  }
 
-  case class IllegalWriteRequestError(message: String) extends ResourceError with UserError
-  case class PermissionsError(message: String) extends ResourceError with UserError
-  case class NotFound(message: String) extends ResourceError with UserError
+  case class IllegalWriteRequestError(message: String) extends ResourceError with UserError {
+    def messages = nels(message)
+  }
+  case class PermissionsError(message: String) extends ResourceError with UserError {
+    def messages = nels(message)
+  }
+
+  case class NotFound(message: String) extends ResourceError with UserError {
+    def messages = nels(message)
+  }
 
   case class ResourceErrors private[ResourceError] (errors: NonEmptyList[ResourceError]) extends ResourceError with FatalError with UserError { self =>
     override def fold[A](fatalError: FatalError => A, userError: UserError => A) = {
       val hasFatal = errors.list.exists(_.fold(_ => true, _ => false))
       if (hasFatal) fatalError(self) else userError(self)
     }
+
+    def messages: NonEmptyList[String] = errors.flatMap(_.messages)
   }
 }
 
