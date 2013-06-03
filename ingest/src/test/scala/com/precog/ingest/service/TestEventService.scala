@@ -124,7 +124,8 @@ trait TestEventService extends
     val jobManager = new InMemoryJobManager[({ type l[+a] = EitherT[Future, String, a] })#l]
     val shardClient = new HttpClient.EchoClient((_: HttpRequest[ByteChunk]).content)
     val localhost = ServiceLocation("http", "localhost", 80, None)
-    val serviceConfig = ServiceConfig(localhost, localhost, Timeout(10000l), 500, 1024, Timeout(10000l))
+    val tmpdir = java.io.File.createTempFile("test.ingest.tmpdir", null).getParentFile()
+    val serviceConfig = ServiceConfig(localhost, localhost, Timeout(10000l), 500, 1024, tmpdir, Timeout(10000l))
 
     buildServiceState(serviceConfig, apiKeyFinder, permissionsFinder, eventStore, jobManager, Stoppable.Noop)
   }
