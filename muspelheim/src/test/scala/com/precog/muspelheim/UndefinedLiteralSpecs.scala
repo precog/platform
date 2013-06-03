@@ -28,20 +28,11 @@ trait UndefinedLiteralSpecs extends EvalStackSpecs {
       results must beEmpty
     }
 
-    "intersect load with undefined" >> {
-      val input = """
-          clicks  := //clicks
-          clicks intersect undefined
-        """
-
-      val results = evalE(input)
-
-      results must beEmpty
-    }
-
+    // note that `5 intersect undefined` is provably empty
+    // and thus kicked out by the compiler
     "union load with undefined" >> {
       val input = """
-          clicks  := //clicks
+          clicks := //clicks
           clicks union undefined
         """
 
@@ -52,8 +43,8 @@ trait UndefinedLiteralSpecs extends EvalStackSpecs {
 
     "multiple union on loads with undefined" >> {
       val input = """
-          clicks  := //clicks
-          views   := //views
+          clicks := //clicks
+          views := //views
           clickViews := clicks union views
 
           clickViews union undefined

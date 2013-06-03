@@ -72,7 +72,7 @@ case object OperationOnUnrelatedSets extends ErrorType {
   override def toString = "cannot perform operation on unrelated sets"
 }
 
-case object ProductProvenanceDifferentLength extends ErrorType {
+case object UnionProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform union on two sets with different numbers of identities"
 }
 
@@ -84,12 +84,16 @@ case object DifferenceProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform set difference on two sets each with different numbers of identities"
 }
 
+case object CondProvenanceDifferentLength extends ErrorType {
+  override def toString = "cannot perform a conditional on sets each with different numbers of identities"
+}
+
 case object DifferenceWithNoCommonalities extends ErrorType {
   override def toString = "cannot perform set difference on two sets which have no commonality (always returns left)"
 }
 
-case object DifferenceProvenanceValue extends ErrorType {
-  override def toString = "cannot perform set difference on values"
+case object IntersectWithNoCommonalities extends ErrorType {
+  override def toString = "cannot perform set intersection on two sets which have no commonality (always returns empty set)"
 }
 
 case object AlreadyRelatedSets extends ErrorType {
