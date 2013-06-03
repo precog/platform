@@ -113,5 +113,3 @@ trait TestStackLike[M[+_]] extends ParseEvalStack[M]
     }
   }
 }
-
-// vim: set ts=4 sw=4 et:
