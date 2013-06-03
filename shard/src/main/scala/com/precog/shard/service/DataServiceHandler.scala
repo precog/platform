@@ -53,7 +53,7 @@ class DataServiceHandler[A](platform: Platform[Future, Slice, StreamT[Future, Sl
                 HttpResponse(InternalServerError)
                 
               case PermissionsError(message) =>
-                val err = JObject("errors" -> JArray(JString(message)))
+                logger.warn("Access denied after auth combinator check to path %s for %s: %s".format(path.path, apiKey, message))
                 HttpResponse(HttpStatus(Forbidden, message))
 
               case NotFound(message) =>
