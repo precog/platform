@@ -42,7 +42,7 @@ import scala.annotation.tailrec
 
 import scalaz._
 
-final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorities, batchSize: Int, ingest: IngestStore)(implicit M: Monad[Future], val executor: ExecutionContext) extends IngestProcessor with Logging {
+final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorities, batchSize: Int, ingest: IngestStore, tmpdir: File)(implicit M: Monad[Future], val executor: ExecutionContext) extends IngestProcessor with Logging {
   import scalaz.syntax.applicative._
   import scalaz.Validation._
 
@@ -54,11 +54,15 @@ final class CSVIngestProcessor(apiKey: APIKey, path: Path, authorities: Authorit
   }
 
   def writeToFile(byteStream: ByteChunk): Future[(File, Long)] = {
-    val file = File.createTempFile("async-ingest-", null)
-    logger.debug("Writing CSV stream for ingest by %s at path %s to file %s".format(apiKey, path, file))
+    if (tmpdir.isDirectory || tmpdir.mkdirs()) { 
+      val file = File.createTempFile("async-ingest-", ".csv.tmp", tmpdir)
+      logger.debug("Writing CSV stream for ingest by %s at path %s to file %s".format(apiKey, path, file))
 
-    val outChannel = new FileOutputStream(file).getChannel()
-    for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
+      val outChannel = new FileOutputStream(file).getChannel()
+      for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
+    } else {
+      Promise.failed(new IOException("Temporary directory %s is not a directory, or cannot be created.".format(tmpdir.getCanonicalPath)))
+    }
   }
 
   final private def writeChannel(chan: WritableByteChannel, stream: StreamT[Future, ByteBuffer], written: Long): Future[Long] = {

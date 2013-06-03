@@ -33,6 +33,7 @@ import com.precog.common.Path
 import com.precog.common.jobs.JobId
 import com.precog.common.security.{APIKey, Authorities}
 
+import java.io.File
 import java.nio.ByteBuffer
 
 import scala.annotation.tailrec
@@ -45,7 +46,7 @@ trait IngestProcessor {
   def processStream(data: ByteChunk, parseDirectives: Set[ParseDirective]): Future[StreamingIngestResult]
 }
 
-class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: IngestStore)(implicit M: Monad[Future], executor: ExecutionContext){
+class IngestProcessorSelection(maxFields: Int, batchSize: Int, tmpdir: File, ingestStore: IngestStore)(implicit M: Monad[Future], executor: ExecutionContext){
   val JSON = application/json
   val JSON_STREAM = MimeType("application", "x-json-stream")
   val CSV = text/csv
@@ -60,7 +61,7 @@ class IngestProcessorSelection(maxFields: Int, batchSize: Int, ingestStore: Inge
       parseDirectives collectFirst {
         case MimeDirective(JSON) => new JSONIngestProcessor(apiKey, path, authorities, JsonValueStyle, maxFields, ingestStore)
         case MimeDirective(JSON_STREAM) => new JSONIngestProcessor(apiKey, path, authorities, JsonStreamStyle, maxFields, ingestStore)
-        case MimeDirective(CSV) => new CSVIngestProcessor(apiKey, path, authorities, batchSize, ingestStore)
+        case MimeDirective(CSV) => new CSVIngestProcessor(apiKey, path, authorities, batchSize, ingestStore, tmpdir)
       }
     }
   }
