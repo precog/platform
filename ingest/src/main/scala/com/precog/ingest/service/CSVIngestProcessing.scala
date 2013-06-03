@@ -26,7 +26,7 @@ import scala.annotation.tailrec
 
 import scalaz._
 
-class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, batchSize: Int, ingestStore: IngestStore)(implicit M: Monad[Future]) extends IngestProcessing {
+class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, batchSize: Int, tmpdir: File, ingestStore: IngestStore)(implicit M: Monad[Future]) extends IngestProcessing {
 
   def forRequest(request: HttpRequest[_]): ValidationNel[String, IngestProcessor] = {
     val delimiter = request.parameters get 'delimiter
@@ -48,7 +48,7 @@ class CSVIngestProcessing(apiKey: APIKey, path: Path, authorities: Authorities, 
     }
 
     def writeToFile(byteStream: ByteChunk): Future[(File, Long)] = {
-      val file = File.createTempFile("async-ingest-", null)
+      val file = File.createTempFile("async-ingest-", null, tmpdir)
       val outChannel = new FileOutputStream(file).getChannel()
       for (written <- writeChunkStream(outChannel, byteStream)) yield (file, written)
     }

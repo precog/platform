@@ -16,6 +16,7 @@ import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
 import com.precog.common.security.{APIKey, Authorities, WriteMode}
 
+import java.io.File
 import java.nio.ByteBuffer
 
 import scala.annotation.tailrec
@@ -76,7 +77,7 @@ trait IngestProcessingSelector {
   def select(partialData: Array[Byte], request: HttpRequest[_]): Option[IngestProcessing]
 }
 
-class DefaultIngestProcessingSelectors(maxFields: Int, batchSize: Int, ingestStore: IngestStore)(implicit M: Monad[Future], executor: ExecutionContext){
+class DefaultIngestProcessingSelectors(maxFields: Int, batchSize: Int, tmpdir: File, ingestStore: IngestStore)(implicit M: Monad[Future], executor: ExecutionContext){
   import IngestProcessing._
 
   class MimeIngestProcessingSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends IngestProcessingSelector {
@@ -84,7 +85,7 @@ class DefaultIngestProcessingSelectors(maxFields: Int, batchSize: Int, ingestSto
       request.headers.header[`Content-Type`].toSeq.flatMap(_.mimeTypes) collectFirst {
         case JSON => new JSONIngestProcessing(apiKey, path, authorities, JSONValueStyle, maxFields, ingestStore)
         case JSON_STREAM => new JSONIngestProcessing(apiKey, path, authorities, JSONStreamStyle, maxFields, ingestStore)
-        case CSV => new CSVIngestProcessing(apiKey, path, authorities, batchSize, ingestStore)
+        case CSV => new CSVIngestProcessing(apiKey, path, authorities, batchSize, tmpdir, ingestStore)
       }
     }
   }
