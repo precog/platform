@@ -823,6 +823,26 @@ trait ProvenanceChecker extends parser.AST with Binder {
       unionP orElse leftP orElse rightP
     }
 
+    case (DynamicDerivedProvenance(left, right), p2) => {
+      val leftP = unifyProvenance(relations)(left, p2)
+      val rightP = unifyProvenance(relations)(right, p2)
+      val unionP = (leftP |@| rightP) {
+        case (p1, p2) => p1.joinDynamic(p2)
+      }
+
+      unionP orElse leftP orElse rightP
+    }
+
+    case (p1, DynamicDerivedProvenance(left, right)) => {
+      val leftP = unifyProvenance(relations)(p1, left)
+      val rightP = unifyProvenance(relations)(p1, right)
+      val unionP = (leftP |@| rightP) {
+        case (p1, p2) => p1.joinDynamic(p2)
+      }
+
+      unionP orElse leftP orElse rightP
+    }
+
     case (NullProvenance, p) => Some(NullProvenance)
     case (p, NullProvenance) => Some(NullProvenance)
     
@@ -944,6 +964,13 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case (NullProvenance, _) => NullProvenance
       case (_, NullProvenance) => NullProvenance
       case _ => CoproductProvenance(this, that)
+    }
+
+    def joinDynamic(that: Provenance) = (this, that) match {
+      case (`that`, `that`) => that
+      case (NullProvenance, _) => NullProvenance
+      case (_, NullProvenance) => NullProvenance
+      case _ => DynamicDerivedProvenance(this, that)
     }
 
     def isParametric: Boolean

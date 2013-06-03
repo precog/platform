@@ -2342,6 +2342,23 @@ object ProvenanceComputationSpecs extends Specification
         tree.errors must beEmpty
       }
     }
+
+    "identify correct provenance of if-then-else inside user defined function" in {
+      val input = """
+        | clicks := //clicks2
+        |
+        | foo(data) :=
+        |   bar := if (data.product.price = 7.99) then mean(data.product.price) else data.product.price
+        |   [bar, data.customer.state]
+        |
+        | foo(clicks)
+      """.stripMargin
+
+      val tree = compileSingle(input)
+
+      tree.provenance mustEqual StaticProvenance("/clicks2")
+      tree.errors must beEmpty 
+    }
   }
   
   val exampleDir = new File("quirrel/examples")
