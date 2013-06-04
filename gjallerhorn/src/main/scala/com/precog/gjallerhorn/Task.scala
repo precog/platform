@@ -63,8 +63,10 @@ abstract class Task(settings: Settings) extends Specification {
 
   def analytics = host0(serviceHost, shardPort) / "analytics" / "v2" / "analytics"
 
-  def getjson(rb: RequestBuilder) =
-    JParser.parseFromString(Http(rb OK as.String)()).valueOr(throw _)
+  def getjson(rb: RequestBuilder, setContentType: Boolean = true) = {
+    val rb2 = if (setContentType) rb <:< List("Content-Type" -> "application/json") else rb
+    JParser.parseFromString(Http(rb2 OK as.String)()).valueOr(throw _)
+  }
 
   def createAccount: Account = {
     val (user, pass) = generateUserAndPassword
