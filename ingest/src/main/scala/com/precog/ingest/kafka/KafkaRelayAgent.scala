@@ -89,42 +89,37 @@ final class KafkaRelayAgent(
 
   private def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long, retries: Int = 5): Unit = {
     if (runnable) {
-      try {
-        if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-        val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
+      if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
+      val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
 
-        val messages = consumer.fetch(fetchRequest) // try/catch is for this line. Okay to wrap in a future & flatMap instead?
-        forwardAll(messages.toList) onSuccess {
-          case _ =>
-            val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
+      val ingestStep = for {
+        messages <- Future(consumer.fetch(fetchRequest)) // try/catch is for this line. Okay to wrap in a future & flatMap instead?
+        _ <- forwardAll(messages.toList) 
+      } yield {
+        val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
-            val (newOffset, newWaitCount) = if(messages.size > 0) {
-              val o: Long = messages.last.offset
-              logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
-              (o, 0L)
-            } else {
-              (offset, waitCount + 1)
-            }
-
-            Thread.sleep(newDelay)
-
-            ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
-        } onFailure {
-          case error =>
-            logger.error("Batch ingest failed at offset %d batch %d; retrying. Data transfer to central queue halted pending manual intervention.".format(offset, batch), error)
-            runnable = false
-            stopPromise.success(PrecogUnit)
+        val (newOffset, newWaitCount) = if(messages.size > 0) {
+          val o: Long = messages.last.offset
+          logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
+          (o, 0L)
+        } else {
+          (offset, waitCount + 1)
         }
-      } catch {
-        case ex =>
-          if (retries > 0) {
-            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Retrying from offset %d batch %d.".format(offset, batch), ex)
-            ingestBatch(offset, batch, delay, waitCount, retries - 1)
-          } else {
-            logger.error("An unexpected error occurred retrieving messages from local kafka consumer. Halting at offset %d batch %d.".format(offset, batch), ex)
-            runnable = false
-            stopPromise.success(PrecogUnit)
-          }
+
+        Thread.sleep(newDelay)
+
+        ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
+      } 
+      
+      ingestStep onFailure { case ex  =>
+        if (retries > 0) {
+          logger.error("An unexpected error occurred relaying messages from the local queue; retrying from offset %d batch %d.".format(offset, batch), ex)
+          ingestBatch(offset, batch, delay, waitCount, retries - 1)
+        } else {
+          logger.error("Batch relay failed at offset %d batch %d. Data transfer to central queue halted pending manual intervention.".format(offset, batch), ex)
+          runnable = false
+          stopPromise.success(PrecogUnit)
+        }
       }
     } else {
       logger.info("Kafka relay agent shutdown request detected. Halting at offset %d batch %d.".format(offset, batch))
