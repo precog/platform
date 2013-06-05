@@ -145,9 +145,10 @@ abstract class Task(settings: Settings) extends Specification {
       prop map ("property" -> _)
     ).flatten
     val req = f(metadata / "fs") <<? params
-    val res = Http(req OK as.String)
-    val json = JParser.parseFromString(res()).valueOr(throw _)
-    json
+    Http(req OK as.String).either.apply().fold(
+      error => JUndefined,
+      json => JParser.parseFromString(json).valueOr(throw _)
+    )
   }
 
   def listGrantsFor(targetApiKey: String, authApiKey: String): ApiResult =

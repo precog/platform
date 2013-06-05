@@ -97,7 +97,7 @@ class SecurityTask(settings: Settings) extends Task(settings: Settings) with Spe
 
           perms must_== Set(
             (JString("/"),JArray(List(JString(accountId))),JString("read")),
-            (JString("/"),JArray(List(JString(accountId))),JString("reduce")),
+            //(JString("/"),JArray(List(JString(accountId))),JString("reduce")),
             (JString(rootPath),JArray(Nil),JString("write")),
             (JString(rootPath),JArray(Nil),JString("delete"))
           )
