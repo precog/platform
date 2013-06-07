@@ -43,6 +43,7 @@ import org.objectweb.howl.log._
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
+import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
 
 import java.io.{File, FileNotFoundException, IOException}
@@ -218,7 +219,13 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
 
   private[this] val cookSequence = new AtomicLong
 
-  def initDirs(f: File) {
+  private[this] var txLog: CookStateLog = _
+  private[this] var blockState: BlockState = _
+  private[this] var currentBlocks: SortedMap[Long, StorageReader] = _
+
+  def open = (initDirs(cookedDir) >> initDirs(rawDir) >> initBlockState)
+
+  private def initDirs(f: File) = IO {
     if (!f.isDirectory) {
       if (!f.mkdirs) {
         throw new Exception("Failed to create dir: " + f)
@@ -226,20 +233,11 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
     }
   }
 
-  try {
-    initDirs(cookedDir)
-    initDirs(rawDir)
-  } catch { case t: Exception =>
-    logger.error("Failed to set up base directory: " + baseDir, t)
-    throw t
-  }
+  private def initBlockState = IO {
+    logger.debug("Opening log in " + baseDir)
+    txLog = new CookStateLog(baseDir, txLogScheduler)
+    logger.debug("Current raw block id = " + txLog.currentBlockId)
 
-  logger.debug("Opening log in " + baseDir)
-  private[this] val txLog = new CookStateLog(baseDir, txLogScheduler)
-
-  logger.debug("Current raw block id = " + txLog.currentBlockId)
-
-  private[this] var blockState: BlockState = {
     // We'll need to update our current thresholds based on what we read out of any raw logs we open
     var maxOffset = currentState.maxOffset
 
@@ -272,34 +270,39 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
     // Restore the cooked map
     val cooked = currentState.readers(cookedDir)
 
-    BlockState(cooked, pendingCooks, currentLog)
+    blockState = BlockState(cooked, pendingCooks, currentLog) 
+    currentBlocks = computeBlockMap(blockState)
+
+    logger.debug("Initial block state = " + blockState)
+
+    // Re-fire any restored pending cooks
+    blockState.pending.foreach {
+      case (id, reader) =>
+        logger.debug("Restarting pending cook on block %s:%d".format(baseDir, id))
+        chef ! Prepare(id, cookSequence.getAndIncrement, cookedDir, reader)
+    }
   }
 
-  logger.debug("Initial block state = " + blockState)
+  private def close = IO {
+    logger.debug("Closing projection in " + baseDir)
+    blockState.rawLog.close
+    txLog.close
+    ProjectionState.toFile(currentState, descriptorFile)
+  } except { case t: Throwable =>
+    IO { logger.error("Error during close", t) }
+  } ensuring {
+    IO { workLock.release }
+  }
 
-  private[this] var currentBlocks: SortedMap[Long, StorageReader] = computeBlockMap(blockState)
+  override def preStart() = {
+    open.unsafePerformIO
+  }
 
-  // Re-fire any restored pending cooks
-  blockState.pending.foreach {
-    case (id, reader) =>
-      logger.debug("Restarting pending cook on block %s:%d".format(baseDir, id))
-      chef ! Prepare(id, cookSequence.getAndIncrement, cookedDir, reader)
+  override def postStop() = {
+    close.unsafePerformIO
   }
 
   def getSnapshot(): NIHDBSnapshot = NIHDBSnapshot(currentBlocks)
-
-  override def postStop() = {
-    IO {
-      logger.debug("Closing projection in " + baseDir)
-      blockState.rawLog.close
-      txLog.close
-      ProjectionState.toFile(currentState, descriptorFile)
-    }.except { case t: Throwable =>
-      IO { logger.error("Error during close", t) }
-    }.unsafePerformIO
-
-    workLock.release
-  }
 
   private def rawFileFor(seq: Long) = new File(rawDir, "%06x.raw".format(seq))
 
