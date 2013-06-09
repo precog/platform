@@ -95,6 +95,7 @@ object SBTConsole {
       val memoizationWorkDir = scratchDir
 
       val storageTimeout = Timeout(Duration(120, "seconds"))
+      val quiescenceTimeout = Duration(300, "seconds")
       val flatMapTimeout = storageTimeout.duration
       val maxEvalDuration = storageTimeout.duration
       val clock = blueeyes.util.Clock.System
@@ -124,7 +125,7 @@ object SBTConsole {
     val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
 
     val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
-    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+    val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.quiescenceTimeout, yggConfig.clock)))
 
     val jobManager = new InMemoryJobManager[Future]
     val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)

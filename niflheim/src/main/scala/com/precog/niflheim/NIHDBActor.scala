@@ -99,6 +99,8 @@ trait NIHDB {
    */
   def count(paths0: Option[Set[CPath]]): Future[Long]
 
+  def quiesce: IO[PrecogUnit]
+
   def close(implicit actorSystem: ActorSystem): Future[PrecogUnit]
 }
 
@@ -133,6 +135,9 @@ private[niflheim] class NIHDBImpl private[niflheim] (actor: ActorRef, timeout: T
 
   def count(paths0: Option[Set[CPath]]): Future[Long] =
     getSnapshot().map(_.count(paths0))
+
+  def quiesce: IO[PrecogUnit] =
+    IO(actor ! Quiesce)
 
   def close(implicit actorSystem: ActorSystem): Future[PrecogUnit] =
     gracefulStop(actor, timeout.duration)(actorSystem).map { _ => PrecogUnit }
@@ -207,7 +212,7 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
   private[this] var actorState: Option[State] = None
   private def state = {
     import scalaz.syntax.effect.id._
-    actorState getOrElse initActorState.flatMap(_.tap(s => IO(actorState = Some(s)))).unsafePerformIO
+    actorState getOrElse open.flatMap(_.tap(s => IO(actorState = Some(s)))).unsafePerformIO
   }
 
   private def initDirs(f: File) = IO {
@@ -272,8 +277,8 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
 
   private def open = actorState.map(IO(_)) getOrElse {
     for {
-      _ <- initDirs(cookedDir) 
-      _ <- initDirs(rawDir) 
+      _ <- initDirs(cookedDir)
+      _ <- initDirs(rawDir)
       state <- initActorState
     } yield state
   }

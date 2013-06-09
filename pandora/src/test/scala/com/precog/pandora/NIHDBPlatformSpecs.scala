@@ -77,6 +77,7 @@ trait NIHDBTestActors extends ActorVFSModule with ActorPlatformSpecs with YggCon
   trait NIHDBTestActorsConfig extends BaseConfig with BlockStoreColumnarTableModuleConfig {
     val cookThreshold = 10
     val storageTimeout = Timeout(300 * 1000)
+    val quiescenceTimeout = Duration(300, "seconds")
 
     def clock: blueeyes.util.Clock
   }
@@ -92,7 +93,7 @@ trait NIHDBTestActors extends ActorVFSModule with ActorPlatformSpecs with YggCon
   val masterChef = actorSystem.actorOf(Props(Chef(VersionedCookedBlockFormat(Map(1 -> V1CookedBlockFormat)), VersionedSegmentFormat(Map(1 -> V1SegmentFormat)))))
   val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
 
-  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.quiescenceTimeout, yggConfig.clock)))
 }
 
 trait NIHDBTestStack extends TestStackLike[Future]
