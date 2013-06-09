@@ -35,7 +35,7 @@ import com.precog.yggdrasil.nihdb.NIHDBProjection
 import com.precog.yggdrasil.table.ColumnarTableModule
 import com.precog.util._
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props, ReceiveTimeout}
 import akka.dispatch._
 import akka.pattern.ask
 import akka.pattern.pipe
@@ -345,7 +345,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
   case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[WritePermission]])
 
-  class PathRoutingActor(baseDir: File, shutdownTimeout: Duration, clock: Clock) extends Actor with Logging {
+  class PathRoutingActor(baseDir: File, shutdownTimeout: Duration, quiescenceTimeout: Duration, clock: Clock) extends Actor with Logging {
     private implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
 
     private[this] var pathActors = Map.empty[Path, ActorRef]
@@ -364,7 +364,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
           vlog <- VersionLog.open(pathDir)
           actorV <- vlog traverse { versionLog =>
             logger.debug("Creating new PathManagerActor for " + path)
-            context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, clock))) tap { newActor =>
+            context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, quiescenceTimeout, clock))) tap { newActor =>
               IO { pathActors += (path -> newActor) }
             }
           }
@@ -429,7 +429,9 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     * An actor that manages resources under a given path. The baseDir is the version
     * subdir for the path.
     */
-  final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, shutdownTimeout: Duration, clock: Clock) extends Actor with Logging {
+  final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, shutdownTimeout: Duration, quiescenceTimeout: Duration, clock: Clock) extends Actor with Logging {
+    context.setReceiveTimeout(quiescenceTimeout)
+
     private[this] implicit def executor: ExecutionContext = context.dispatcher
     private[this] implicit val futureM = new FutureMonad(executor)
 
@@ -634,6 +636,11 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     }
 
     def receive = {
+      case ReceiveTimeout =>
+        logger.info("Resource entering state of quiescence after receive timeout.")
+        val quiesce = versions.values.toStream collect { case NIHDBResource(db) => db } traverse (_.quiesce)
+        quiesce.unsafePerformIO
+
       case IngestBundle(messages, permissions) =>
         logger.debug("Received ingest request for %d messages.".format(messages.size))
         processEventMessages(messages.toStream, permissions, sender).unsafePerformIO

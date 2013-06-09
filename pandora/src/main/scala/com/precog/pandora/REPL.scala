@@ -310,7 +310,7 @@ object Console extends App {
         val permissionsFinder = new PermissionsFinder(accessControl, new StaticAccountFinder[Future]("", ""), new org.joda.time.Instant())
         val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, storageTimeout)
 
-        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, Duration(300, "seconds"), yggConfig.clock)))
+        val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, Duration(300, "seconds"), Duration(300, "seconds"), yggConfig.clock)))
 
         val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
         val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, Clock.System)

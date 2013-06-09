@@ -798,6 +798,7 @@ object ImportTools extends Command with Logging {
       val cookThreshold = config[Int]("precog.jdbm.maxSliceSize", 20000)
       val clock = blueeyes.util.Clock.System
       val storageTimeout = Timeout(Duration(120, "seconds"))
+      val quiescenceTimeout = Duration(300, "seconds")
     }
 
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot))
@@ -827,7 +828,7 @@ object ImportTools extends Command with Logging {
       val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
 
       logger.info("Starting Projections Actor")
-      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+      val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.quiescenceTimeout, yggConfig.clock)))
 
       logger.info("Shard module complete")
     }
