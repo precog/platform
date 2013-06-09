@@ -302,14 +302,18 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
     } yield state
   }
 
-  private def close = IO {
+  private def quiesce = IO {
     actorState foreach { s =>
-      logger.debug("Closing projection in " + baseDir)
+      logger.debug("Releasing resources for projection in " + baseDir)
       s.blockState.rawLog.close
       s.txLog.close
       ProjectionState.toFile(currentState, descriptorFile)
       actorState = None
     }
+  }
+
+  private def close = {
+    IO(logger.debug("Closing projection in " + baseDir)) >> quiesce
   } except { case t: Throwable =>
     IO { logger.error("Error during close", t) }
   } ensuring {
@@ -399,7 +403,7 @@ private[niflheim] class NIHDBActor private (private var currentState: Projection
       sender ! Status(state.blockState.cooked.length, state.blockState.pending.size, state.blockState.rawLog.length)
 
     case Quiesce => 
-      close.unsafePerformIO
+      quiesce.unsafePerformIO
   }
 }
 
