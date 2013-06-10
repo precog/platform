@@ -62,6 +62,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     val cookThreshold = 10000
     val clock = blueeyes.util.Clock.System
     val storageTimeout = Timeout(Duration(120, "seconds"))
+    val quiescenceTimeout = Duration(300, "seconds")
   }
 
   yggConfig.dataDir.mkdirs()
@@ -85,7 +86,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
 
   val jobManager = new InMemoryJobManager[Future]
   val resourceBuilder = new ResourceBuilder(actorSystem, yggConfig.clock, masterChef, yggConfig.cookThreshold, yggConfig.storageTimeout)
-  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.clock)))
+  val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.quiescenceTimeout, 1000, yggConfig.clock)))
 
   val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
   val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
