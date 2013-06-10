@@ -401,7 +401,7 @@ class ShardServiceSpec extends TestShardService {
     "return empty response on browse failure" in {
       browse(path = "/errpath").copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(response)), _) =>
-          response mustEqual JObject("size" -> JNum(0), "children" -> JArray(), "structure" -> JObject())
+          response mustEqual JObject("size" -> JNum(0), "children" -> JArray())
       }
     }
   }

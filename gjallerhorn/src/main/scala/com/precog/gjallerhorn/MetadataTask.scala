@@ -154,7 +154,7 @@ class MetadataTask(settings: Settings) extends Task(settings: Settings) with Spe
 
         val json2 = metadataFor(eve.apiKey)(_ / adam.bareRootPath / "")
         //println(json2)
-        (json2 \ "size").deserialize[Long] must_== 0
+        json2 must_== JUndefined
       }
     }
 

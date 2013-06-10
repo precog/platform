@@ -240,7 +240,7 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
 
     def currentVersion(path: Path): M[Option[VersionEntry]] = M point {
       data.get((path, Version.Current)) map {
-        case BinaryRecord(_, id) => VersionEntry(id, PathData.BLOB, clock.instant)
+        case BinaryRecord(resource, id) => VersionEntry(id, PathData.BLOB(resource.mimeType), clock.instant)
         case JsonRecord(_, id) => VersionEntry(id, PathData.NIHDB, clock.instant)
       }
     }
