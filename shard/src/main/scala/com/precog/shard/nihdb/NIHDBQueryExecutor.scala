@@ -76,6 +76,7 @@ trait NIHDBQueryExecutorConfig
   def maxSliceSize = cookThreshold
   lazy val storageTimeout: Timeout = Timeout(config[Int]("precog.storage.timeout", 300) seconds)
   lazy val quiescenceTimeout: Duration = config[Int]("precog.storage.quiescence_timeout", 300) seconds
+  lazy val maxOpenPaths: Int = config[Int]("precog.storage.max_open_paths", 500)
 }
 
 trait NIHDBQueryExecutorComponent  {
@@ -133,7 +134,7 @@ trait NIHDBQueryExecutorComponent  {
       val permissionsFinder = new PermissionsFinder(extApiKeyFinder, extAccountFinder, yggConfig.timestampRequiredAfter)
       val resourceBuilder = new ResourceBuilder(actorSystem, clock, masterChef, yggConfig.cookThreshold, storageTimeout)
 
-      private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, yggConfig.quiescenceTimeout, clock)))
+      private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, storageTimeout.duration, yggConfig.quiescenceTimeout, yggConfig.maxOpenPaths, clock)))
       val ingestSystem = initShardActors(permissionsFinder, projectionsActor)
 
       private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout) 
