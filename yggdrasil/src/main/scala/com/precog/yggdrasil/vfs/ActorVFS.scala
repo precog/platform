@@ -345,8 +345,17 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
   case class IngestBundle(data: Seq[(Long, EventMessage)], perms: Map[APIKey, Set[WritePermission]])
 
-  class PathRoutingActor(baseDir: File, shutdownTimeout: Duration, quiescenceTimeout: Duration, clock: Clock) extends Actor with Logging {
+  class PathRoutingActor(baseDir: File, shutdownTimeout: Duration, quiescenceTimeout: Duration, maxOpenPaths: Int, clock: Clock) extends Actor with Logging {
+    import com.precog.util.cache._
+    import com.precog.util.cache.Cache._
+    import com.google.common.cache.RemovalCause
+
     private implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
+
+    private[this] val pathLRU = Cache.simple[Path, Unit](
+      MaxSize(maxOpenPaths), 
+      OnRemoval({(p: Path, _: Unit, _: RemovalCause) => pathActors.get(p).foreach(_ ! ReceiveTimeout) })
+    )
 
     private[this] var pathActors = Map.empty[Path, ActorRef]
 
@@ -365,7 +374,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
           actorV <- vlog traverse { versionLog =>
             logger.debug("Creating new PathManagerActor for " + path)
             context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, quiescenceTimeout, clock))) tap { newActor =>
-              IO { pathActors += (path -> newActor) }
+              IO { pathActors += (path -> newActor); pathLRU += (path -> ()) }
             }
           }
         } yield {
