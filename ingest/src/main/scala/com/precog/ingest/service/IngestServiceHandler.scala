@@ -64,6 +64,7 @@ class IngestServiceHandler(
   ingestTimeout: Timeout,
   batchSize: Int,
   maxFields: Int,
+  ingestTmpDir: File,
   postMode: WriteMode)(implicit M: Monad[Future], executor: ExecutionContext)
     extends CustomHttpService[ByteChunk, (APIKey, Path) => Future[HttpResponse[JValue]]]
     with Logging {
@@ -76,7 +77,7 @@ class IngestServiceHandler(
     }
   }
 
-  private[this] val processingSelectors = new DefaultIngestProcessingSelectors(maxFields, batchSize, ingestStore)
+  private[this] val processingSelectors = new DefaultIngestProcessingSelectors(maxFields, batchSize, ingestTmpDir, ingestStore)
 
   def chooseProcessing(apiKey: APIKey, path: Path, authorities: Authorities, request: HttpRequest[ByteChunk]): Future[Option[IngestProcessing]] = {
     val selectors = processingSelectors.selectors(apiKey, path, authorities)

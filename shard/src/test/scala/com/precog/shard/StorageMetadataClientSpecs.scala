@@ -75,7 +75,7 @@ abstract class BrowseServiceSpecs[M[+_]](implicit val M: Monad[M] with Comonad[M
 
     "find default empty result for non-existent path" in {
       client.structure("", Path("/bar/foo"), CPath.Identity).valueOr(e => sys.error(e.toString)).copoint must beLike {
-        case result => result must_== JObject()
+        case result => result must_== JUndefined
       }
     }
   }

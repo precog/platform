@@ -33,6 +33,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder
 
 import org.streum.configrity.Configuration
 import org.joda.time.Instant
+import java.io.File
 
 import scalaz._
 import scalaz.std.function._
@@ -59,6 +60,7 @@ object EventService {
     ingestTimeout: Timeout,
     ingestBatchSize: Int,
     ingestMaxFields: Int,
+    ingestTmpDir: File, 
     deleteTimeout: Timeout
   )
 
@@ -71,6 +73,7 @@ object EventService {
           ingestTimeout = akka.util.Timeout(config[Long]("insert.timeout", 10000l)),
           ingestBatchSize = config[Int]("ingest.batch_size", 500),
           ingestMaxFields = config[Int]("ingest.max_fields", 1024),
+          ingestTmpDir = config.get[String]("ingest.tmpdir").map(new File(_)).orElse(Option(File.createTempFile("ingest.tmpfile", null).getParentFile)).get, //fail fast 
           deleteTimeout = akka.util.Timeout(config[Long]("delete.timeout", 10000l))
         )
       }
@@ -94,8 +97,8 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
       stoppable: Stoppable): State = {
     import serviceConfig._
 
-    val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, AccessMode.Append)
-    val dataHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, AccessMode.Create)
+    val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, ingestTmpDir, AccessMode.Append)
+    val dataHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, ingestTmpDir, AccessMode.Create)
     val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, Clock.System, deleteTimeout)
     val createHandler = new FileStoreHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
     val shardClient = (new HttpClientXLightWeb).protocol(shardLocation.protocol).host(shardLocation.host).port(shardLocation.port)

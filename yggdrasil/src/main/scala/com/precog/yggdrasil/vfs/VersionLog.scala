@@ -161,7 +161,7 @@ class VersionLog(logFiles: VersionLog.LogFiles, initVersion: Option[VersionEntry
   }
 }
 
-case class VersionEntry(id: UUID, typeName: String, timestamp: Instant)
+case class VersionEntry(id: UUID, typeName: PathData.DataType, timestamp: Instant)
 
 object VersionEntry {
   implicit val versionEntryIso = Iso.hlist(VersionEntry.apply _, VersionEntry.unapply _)
