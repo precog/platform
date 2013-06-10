@@ -45,7 +45,7 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
     }
   }
 
-  def structure(apiKey: APIKey, path: Path, property: CPath): EitherT[M, ResourceError, JObject] = {
+  def structure(apiKey: APIKey, path: Path, property: CPath): EitherT[M, ResourceError, JValue] = {
     /**
      * This turns a set of types/counts into something usable by strucutre. It
      * will serialize the longs to JNums and unify CNumericTypes under "Number".
@@ -60,13 +60,16 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
     }
 
     EitherT {
-      vfs.pathStructure(apiKey, path, property, Version.Current).run.map {
-        case -\/(ResourceError.NotFound(_)) => \/-(JObject())
-        case -\/(otherError) => -\/(otherError) // make types happy
-        case \/-(PathStructure(types, children)) =>
-          \/-(JObject(Map("children" -> children.serialize,
-                    "types" -> JObject(normalizeTypes(types)))))
-      }
+      vfs.pathStructure(apiKey, path, property, Version.Current).fold(
+        {
+          case ResourceError.NotFound(_) => \/.right(JUndefined)
+          case otherError => \/.left(otherError)
+        },
+        { 
+          case PathStructure(types, children) => 
+            \/.right(JObject("children" -> children.serialize, "types" -> JObject(normalizeTypes(types))))
+        }
+      )
     }
   }
 }
@@ -92,7 +95,7 @@ class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Futur
         children <- browse(apiKey, path)
         struct <- structure(apiKey, path, CPath.Identity)
       } yield {
-        JObject("size" -> sz, "children" -> children, "structure" -> struct)
+        JObject("size" -> sz, "children" -> children, "structure" -> struct).normalize
       }
     } map { content0 =>
       HttpResponse[JValue](OK, content = Some(content0))
