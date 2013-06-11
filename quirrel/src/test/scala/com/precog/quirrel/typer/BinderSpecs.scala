@@ -384,6 +384,13 @@ object BinderSpecs extends Specification
         d.errors must beEmpty
       }
       
+      "relativeLoad" >> {
+        val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("relativeLoad := 1 relativeLoad")
+        d.binding mustEqual LetBinding(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
       "max" >> {
         val e @ Let(_, _, _, _, d: Dispatch) = parseSingle("max := 1 max")
         d.binding mustEqual LetBinding(e)
@@ -908,6 +915,13 @@ object BinderSpecs extends Specification
     "bind load" in {
       val d @ Dispatch(_, _, _) = parseSingle("load(42)")
       d.binding mustEqual LoadBinding
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+    
+    "bind relativeLoad" in {
+      val d @ Dispatch(_, _, _) = parseSingle("relativeLoad(42)")
+      d.binding mustEqual RelLoadBinding
       d.isReduction mustEqual false
       d.errors must beEmpty
     }

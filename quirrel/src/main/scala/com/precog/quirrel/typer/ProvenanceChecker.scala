@@ -649,7 +649,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
               (errors ++ distinctErrors, constr)
             }
             
-            case LoadBinding | RelLoadBinding => {
+            case LoadBinding | RelLoadBinding => {      // FIXME not the same as StaticProvenance!
               val (errors, constr) = loop(actuals.head, relations, constraints)
               
               expr.provenance = actuals.head match {
