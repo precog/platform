@@ -243,6 +243,13 @@ trait EvaluatorModule extends ProvenanceChecker
             } flatten
           }
           
+          // TODO base paths
+          case RelLoadBinding => {
+            actualSets.head collect {
+              case (_, JString(path)) => mappedFS("/" + path)
+            } flatten
+          }
+          
           case ExpandGlobBinding => actualSets.head       // TODO
           
           case Op1Binding(op1) => {
