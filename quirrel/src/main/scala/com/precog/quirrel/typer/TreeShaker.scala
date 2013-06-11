@@ -22,7 +22,7 @@ package typer
 
 import com.codecommit.gll.LineStream
 
-trait TreeShaker extends Phases with parser.AST with Binder {
+trait TreeShaker extends Phases with parser.AST with Binder with Errors {
   import ast._
   import library._
 
@@ -30,13 +30,18 @@ trait TreeShaker extends Phases with parser.AST with Binder {
    * @return The <em>root</em> of the shaken tree
    */
   def shakeTree(tree: Expr): Expr = {
-    val (root, _, _, errors) = performShake(tree.root)
-    bindRoot(root, root)
-    
-    root._errors appendFrom tree._errors
-    root._errors ++= errors
-    
-    root
+    // if binder rejects a tree, shaking it can remove the errors
+    if (bindNames(tree.root) forall isWarning) {
+      val (root, _, _, errors) = performShake(tree.root)
+      bindRoot(root, root)
+      
+      root._errors appendFrom tree._errors
+      root._errors ++= errors
+      
+      root
+    } else {
+      tree.root
+    }
   }
   
   def performShake(tree: Expr): (Expr, Set[(Identifier, NameBinding)], Set[(TicId, VarBinding)], Set[Error]) = tree match {

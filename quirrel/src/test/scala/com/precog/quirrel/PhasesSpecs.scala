@@ -40,5 +40,21 @@ object PhasesSpecs extends Specification
       val tree = compileSingle("fubar")
       tree.errors must not(beEmpty)
     }
+    
+    "propagate binder errors through tree shaking" in {
+      val input = """
+        | f( x ) :=
+        |   new x ~ new x
+        |   (new x) + (new x)
+        | f(5)
+        | """.stripMargin
+        
+      val forest = compile(input)
+      val validForest = forest filter { tree =>
+        tree.errors forall isWarning
+      }
+      
+      validForest must beEmpty
+    }
   }
 }
