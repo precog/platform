@@ -29,10 +29,12 @@ import scalaz._
 import scalaz.Ordering._
 import scalaz.std.option._  
 import scalaz.std.set._
+import scalaz.std.anyVal._
 import scalaz.std.tuple._
 import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
+import scalaz.syntax.monoid._
 
 trait ProvenanceChecker extends parser.AST with Binder {
   import library._
@@ -213,12 +215,12 @@ trait ProvenanceChecker extends parser.AST with Binder {
       (provenance, (finalErrors, finalConstrs))
     }
 
-    def handleCross(l1: Provenance, l2: Provenance, r1: Provenance, r2: Provenance): Boolean = {
-      val leftOk = hasCommonality(l1, r1) || hasCommonality(l1, r2)
-      val rightOk = hasCommonality(l2, r1) || hasCommonality(l2, r2)
-      leftOk && rightOk
-    }
-
+    // different from unifyProvenace in that:
+    // unifyProvenance(foo&bar, bar&baz) = Some((foo&bar)&baz)
+    // hasCommonality(foo&bar, bar&baz) = false
+    // this way we can statically reject this query:
+    // | //foo ~ //bar ~ //baz
+    // | (//foo + //bar) intersect (//bar + //baz)
     def hasCommonality(left: Provenance, right: Provenance): Boolean = (left, right) match {
       case (CoproductProvenance(prov1, prov2), pr) =>
         hasCommonality(prov1, pr) || hasCommonality(prov2, pr) 
@@ -226,20 +228,11 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case (pl, CoproductProvenance(prov1, prov2)) =>
         hasCommonality(pl, prov1) || hasCommonality(pl, prov2)
 
-      case (ProductProvenance(l1, l2), ProductProvenance(r1, r2)) =>
-        handleCross(l1, l2, r1, r2)
-
-      case (UnifiedProvenance(l1, l2), UnifiedProvenance(r1, r2)) =>
-        handleCross(l1, l2, r1, r2)
-
-      case (DerivedUnionProvenance(l1, l2), DerivedUnionProvenance(r1, r2)) =>
-        handleCross(l1, l2, r1, r2)
-
-      case (DerivedIntersectProvenance(l1, l2), DerivedIntersectProvenance(r1, r2)) =>
-        handleCross(l1, l2, r1, r2)
-
-      case (DerivedDifferenceProvenance(l1, l2), DerivedDifferenceProvenance(r1, r2)) =>
-        handleCross(l1, l2, r1, r2)
+      case (ProductProvenance(l1, l2), ProductProvenance(r1, r2)) => {
+        val leftOk = hasCommonality(l1, r1) || hasCommonality(l1, r2)
+        val rightOk = hasCommonality(l2, r1) || hasCommonality(l2, r2)
+        leftOk && rightOk
+      }
 
       case (pl, pr) => pl == pr 
     }
@@ -300,13 +293,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
           (NullProvenance, Set(Error(expr, IntersectProvenanceDifferentLength)), Set())
 
         else if (isCommon) {
-          //todo wrong
           val unified = unifyProvenance(relations)(left.provenance, right.provenance)
-
-          if (unified.isDefined) 
-            (unified.get, Set(), Set())
-          else
-            sys.error("oops")
+          val prov = unified getOrElse CoproductProvenance(left.provenance, right.provenance)
+          (prov, Set(), Set())
         }
         
         else if (isDynamic)
@@ -510,8 +499,11 @@ trait ProvenanceChecker extends parser.AST with Binder {
           } else {
             expr.provenance = in.provenance
           }
+
+          val finalErrors = fromErrors ++ toErrors ++ inErrors ++ contribErrors
+          val finalConstrs = fromConstr ++ toConstr ++ inConstr ++ contribConstr
           
-          (fromErrors ++ toErrors ++ inErrors ++ contribErrors, fromConstr ++ toConstr ++ inConstr ++ contribConstr)
+          (finalErrors, finalConstrs)
         }
 
         case UndefinedLit(_) => {
@@ -1017,12 +1009,14 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val left2 = substituteParam(id, let, left, sub)
       val right2 = substituteParam(id, let, right, sub)
 
-      if (left2 == right2)
+      if (left2 == right2) {
         left2
-      else if (!(left2.isParametric && right2.isParametric)) 
-        CoproductProvenance(left2, right2)
-      else
+      } else if (!(left2.isParametric && right2.isParametric)) {
+        val unified = unifyProvenance(Map())(left2, right2)
+        unified getOrElse CoproductProvenance(left2, right2)
+      } else {
         DerivedIntersectProvenance(left2, right2)
+      }
     }
 
     case DerivedDifferenceProvenance(left, right) => {
@@ -1050,7 +1044,6 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case UnifiedProvenance(left, right) => {
       val left2 = resolveUnifications(relations)(left)
       val right2 = resolveUnifications(relations)(right)
-      
       UnifiedProvenance(left2, right2)
     }
     
@@ -1113,29 +1106,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
     def isParametric: Boolean
     
     def possibilities = Set(this)
+
+    def cardinality: Option[Int]
     
-    // TODO DerivedUnionProvenance?
-    def cardinality: Option[Int] = this match {
-      case NullProvenance => None
-      case CoproductProvenance(left, _) => left.cardinality
-      case _ =>
-        if (isParametric) {
-          None
-        } else {
-          val back = possibilities filter {
-            case ValueProvenance => false
-            case _: ProductProvenance => false
-            case _: CoproductProvenance => false
-
-            // should probably remove UnifiedProvenance, but it's never going to happen
-
-            case _ => true
-          } size
-
-          Some(back)
-        }
-    }
-
     private def associateLeft: Provenance = this match {
       case UnifiedProvenance(_, _) => 
         findChildren(this, true).toList sorted Provenance.order.toScalaOrdering reduceLeft UnifiedProvenance
@@ -1148,6 +1121,12 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
       case DerivedUnionProvenance(_, _) =>
         findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft DerivedUnionProvenance
+
+      case DerivedIntersectProvenance(_, _) =>
+        findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft DerivedIntersectProvenance
+
+      case DerivedDifferenceProvenance(_, _) =>
+        findChildren(this, false).toList sorted Provenance.order.toScalaOrdering reduceLeft DerivedDifferenceProvenance
 
       case prov => prov
     }
@@ -1264,88 +1243,112 @@ trait ProvenanceChecker extends parser.AST with Binder {
   
   case class ParamProvenance(id: Identifier, let: ast.Let) extends Provenance {
     override val toString = "$" + id.id
-    
     val isParametric = true
+    def cardinality: Option[Int] = None
   }
   
   case class DerivedUnionProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "@@U<" + left.toString + "|" + right.toString + ">"
-    
+
     val isParametric = left.isParametric || right.isParametric
-    
+
     override def possibilities = left.possibilities ++ right.possibilities + this
+
+    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
   }
   
   case class DerivedIntersectProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "@@I<" + left.toString + "|" + right.toString + ">"
-    
+
     val isParametric = left.isParametric || right.isParametric
-    
+
     override def possibilities = left.possibilities ++ right.possibilities + this
+
+    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
   }
   
   case class DerivedDifferenceProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "@@D<" + left.toString + "|" + right.toString + ">"
-    
+
     val isParametric = left.isParametric || right.isParametric
-    
+
     override def possibilities = left.possibilities ++ right.possibilities + this
+
+    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
   }
   
   case class UnifiedProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s >< %s)".format(left, right)
-    
+
     val isParametric = left.isParametric || right.isParametric
+
+    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
   }
   
   case class ProductProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s & %s)".format(left, right)
-    
+
     val isParametric = left.isParametric || right.isParametric
-    
+
     override def possibilities = left.possibilities ++ right.possibilities + this
+
+    def cardinality = left.cardinality |+| right.cardinality
   }
 
   case class CoproductProvenance(left: Provenance, right: Provenance) extends Provenance {
     override val toString = "(%s | %s)".format(left, right)
+
     val isParametric = left.isParametric || right.isParametric
 
     override def possibilities = left.possibilities ++ right.possibilities + this
+
+    def cardinality: Option[Int] = if (left.cardinality == right.cardinality) {
+      left.cardinality
+    } else {
+      sys.error("cardinality invariant not upheld")
+    }
   }
   
   case class StaticProvenance(path: String) extends Provenance {
     override val toString = path
     val isParametric = false
+    def cardinality: Option[Int] = Some(1)
   }
   
   case class DynamicProvenance(id: Int) extends Provenance {
     override val toString = "@" + id
     val isParametric = false
+    def cardinality: Option[Int] = Some(1)
   }
   
   case class ParametricDynamicProvenance(prov: Provenance, id: Int) extends Provenance {
     override val toString = "@@" + prov.toString
     val isParametric = true
+    def cardinality: Option[Int] = Some(1)
   }
   
   case object ValueProvenance extends Provenance {
     override val toString = "<value>"
     val isParametric = false
+    def cardinality: Option[Int] = Some(0)
   }
   
   case object InfiniteProvenance extends Provenance {
     override val toString = "<infinite>"
     val isParametric = false
+    def cardinality: Option[Int] = None  //todo remove me ahhhhhh
   }
   
   case object UndefinedProvenance extends Provenance {
     override val toString = "<undefined>"
     val isParametric = false
+    def cardinality: Option[Int] = None
   }
 
   case object NullProvenance extends Provenance {
     override val toString = "<null>"
     val isParametric = false
+    def cardinality: Option[Int] = None
   }
   
   
