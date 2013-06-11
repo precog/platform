@@ -501,12 +501,28 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               idSpec = makeTableTrans(Map(paths.Key -> trans.WrapArray(Scan(Leaf(Source), freshIdScanner))))
               tableM2 = pendingTable.table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
             } yield PendingTable(tableM2, graph, TransSpec1.Id, IdentityOrder(graph))
-        
+            
+          // TODO abstract over absolute/relative load
           case dag.AbsoluteLoad(parent, jtpe) => 
             for {
               pendingTable <- prepareEval(parent, splits)
+              trans2 = trans.DerefObjectStatic(pendingTable.trans, paths.Value)
+              loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
+                {
+                  case ResourceError.NotFound(message) => report.warn(graph.loc, message) >> Table.empty.point[N]
+                  case ResourceError.PermissionsError(message) => report.warn(graph.loc, message) >> Table.empty.point[N]
+                  case fatal => report.error(graph.loc, "Fatal error while loading dataset") >> report.die() >> Table.empty.point[N]
+                },
+                table => table.point[N]
+              )
+              back <- transState liftM mn(loaded).join
+            } yield PendingTable(back, graph, TransSpec1.Id, IdentityOrder(graph))
+        
+          case dag.RelativeLoad(parent, jtpe) => 
+            for {
+              pendingTable <- prepareEval(parent, splits)
               Path(prefixStr) = ctx.basePath
-              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("/$", "")))
+              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("([^/])$", "$1/")))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
               loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
                 {
@@ -923,6 +939,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             case dag.Distinct(parent) => queue2 enqueue parent
             
             case dag.AbsoluteLoad(parent, _) => queue2 enqueue parent
+            case dag.RelativeLoad(parent, _) => queue2 enqueue parent
             
             case dag.Operate(_, parent) => queue2 enqueue parent
             
