@@ -26,8 +26,8 @@ trait LogisticRegressionTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
   def predictionInput(morph: Morphism2, modelData: String, model: String) = {
     val line = Line(0, 0, "")
     dag.Morph2(morph,
-      dag.LoadLocal(Const(CString(modelData))(line))(line),
-      dag.LoadLocal(Const(CString(model))(line))(line)
+      dag.AbsoluteLoad(Const(CString(modelData))(line))(line),
+      dag.AbsoluteLoad(Const(CString(model))(line))(line)
     )(line)
   }
 
@@ -89,10 +89,10 @@ trait LogisticRegressionSpecs[M[+_]] extends Specification
 
     dag.Morph2(LogisticRegression,
       dag.Join(DerefArray, Cross(Some(TableModule.CrossOrder.CrossLeft)),
-        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.AbsoluteLoad(Const(CString(points))(line))(line),
         dag.Const(CLong(1))(line))(line),
       dag.Join(DerefArray, Cross(Some(TableModule.CrossOrder.CrossLeft)),
-        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.AbsoluteLoad(Const(CString(points))(line))(line),
         dag.Const(CLong(0))(line))(line))(line)
   }
 

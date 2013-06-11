@@ -69,8 +69,8 @@ trait Memoizer extends DAG {
             dag.Distinct(memoized(parent))(node.loc)
         }
         
-        case target @ dag.LoadLocal(parent, jtpe) =>
-          dag.LoadLocal(memoized(parent), jtpe)(target.loc)
+        case target @ dag.AbsoluteLoad(parent, jtpe) =>
+          dag.AbsoluteLoad(memoized(parent), jtpe)(target.loc)
         
         case target @ dag.Operate(op, parent) =>
           dag.Operate(op, memoized(parent))(target.loc)
@@ -216,7 +216,7 @@ trait Memoizer extends DAG {
     case Distinct(parent) =>
       updateMap(findForcingRefs(parent, OpSide.Center(graph)), graph, force)
     
-    case LoadLocal(parent, _) =>
+    case AbsoluteLoad(parent, _) =>
       findForcingRefs(parent, OpSide.Center(graph))      // load is a forcing point, but not a memo candidate
     
     case Operate(_, parent) =>

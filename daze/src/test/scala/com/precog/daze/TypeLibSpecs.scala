@@ -27,7 +27,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isNumber),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -47,7 +47,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isBoolean),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -67,7 +67,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isNull),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -87,7 +87,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isString),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -107,7 +107,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isObject),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -127,7 +127,7 @@ trait TypeLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Operate(BuiltInFunction1Op(isArray),
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices2"))(line))(line))(line)
 
       val result = testEval(input)
 

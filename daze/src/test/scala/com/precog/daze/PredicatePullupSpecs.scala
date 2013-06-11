@@ -37,7 +37,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
 
       val loc = instructions.Line(1, 1, "")
       
-      val load = LoadLocal(Const(CString("/clicks"))(loc))(loc)
+      val load = AbsoluteLoad(Const(CString("/clicks"))(loc))(loc)
       
       val id = new Identifier
       
@@ -141,7 +141,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
 
       val loc = instructions.Line(1, 1, "")
 
-      val load = LoadLocal(Const(CString("/clicks"))(loc))(loc) 
+      val load = AbsoluteLoad(Const(CString("/clicks"))(loc))(loc) 
       
       val split =
         Split(
@@ -255,7 +255,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
         
       val loc = instructions.Line(1, 1, "")
       
-      val load = LoadLocal(Const(CString("/summer_games/london_medals"))(loc))(loc)
+      val load = AbsoluteLoad(Const(CString("/summer_games/london_medals"))(loc))(loc)
       
       lazy val split =
         Split(
@@ -350,7 +350,7 @@ trait PredicatePullupSpecs[M[+_]] extends Specification with EvaluatorTestSuppor
       
       val loc = instructions.Line(1, 1, "")
 
-      val load = LoadLocal(Const(CString("/summer_games/london_medals"))(loc))(loc) 
+      val load = AbsoluteLoad(Const(CString("/summer_games/london_medals"))(loc))(loc) 
         
       val split =
         Split(

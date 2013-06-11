@@ -27,7 +27,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
     "compute identities given a relative path" in {
       val line = Line(1, 1, "")
 
-      val input = dag.LoadLocal(Const(CString("/numbers"))(line))(line)
+      val input = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
 
       val ctx = defaultEvaluationContext
       val result = fullRewriteDAG(true, ctx)(input)
@@ -43,7 +43,7 @@ trait DAGRewriterSpecs[M[+_]] extends Specification
 
       val line = Line(1, 1, "")
 
-      val t1 = dag.LoadLocal(Const(CString("/hom/pairs"))(line))(line)
+      val t1 = dag.AbsoluteLoad(Const(CString("/hom/pairs"))(line))(line)
 
       val input =
         Join(Add, IdentitySort,

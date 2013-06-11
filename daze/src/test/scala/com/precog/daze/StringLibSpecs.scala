@@ -23,8 +23,8 @@ trait StringLibSpecs[M[+_]] extends Specification
   import library._
 
   private val line = Line(1, 1, "")
-  private def homStrings(line: Line) = dag.LoadLocal(Const(CString("/hom/strings"))(line))(line)
-  private def hetStrings(line: Line) = dag.LoadLocal(Const(CString("/het/strings"))(line))(line)
+  private def homStrings(line: Line) = dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line)
+  private def hetStrings(line: Line) = dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line)
 
   def testEval(graph: DepGraph): Set[SEvent] = {
     consumeEval(graph, defaultEvaluationContext) match {
@@ -33,11 +33,11 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
   }
 
-  def op1Input(op: Op1, loadFrom: Line => dag.LoadLocal) = {
+  def op1Input(op: Op1, loadFrom: Line => dag.AbsoluteLoad) = {
     dag.Operate(BuiltInFunction1Op(op), loadFrom(line))(line)
   }
 
-  def op2Input(op: Op2, const: RValue, loadFrom: Line => dag.LoadLocal) = {
+  def op2Input(op: Op2, const: RValue, loadFrom: Line => dag.AbsoluteLoad) = {
     Join(BuiltInFunction2Op(op), Cross(None), loadFrom(line), Const(const)(line))(line)
   }
         
@@ -327,7 +327,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareToIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(compareToIgnoreCase), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line),
         Const(CString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
@@ -355,7 +355,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine compareIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(compareIgnoreCase), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line),
         Const(CString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
@@ -370,7 +370,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equals" in {
       val input = Join(BuiltInFunction2Op(library.equals), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line),
         Const(CString("quirky"))(line))(line)
         
       val result = testEval(input)
@@ -385,7 +385,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine indexOf" in {
       val input = Join(BuiltInFunction2Op(indexOf), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line),
         Const(CString("e"))(line))(line)
         
       val result = testEval(input)
@@ -400,7 +400,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equalsIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(equalsIgnoreCase), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/strings"))(line))(line), 
+        dag.AbsoluteLoad(Const(CString("/hom/strings"))(line))(line), 
         Const(CString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
@@ -418,7 +418,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "for heterogeneous sets, the appropriate string function" should {
     "determine length" in {
       val input = dag.Operate(BuiltInFunction1Op(library.length),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -432,7 +432,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine trim" in {
       val input = dag.Operate(BuiltInFunction1Op(trim),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -446,7 +446,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine toUpperCase" in {
       val input = dag.Operate(BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -460,7 +460,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine toLowerCase" in {
       val input = dag.Operate(BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -474,7 +474,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine isEmpty" in {
       val input = dag.Operate(BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -488,7 +488,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }  
     "determine intern" in {
       val input = dag.Operate(BuiltInFunction1Op(intern),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -503,7 +503,7 @@ trait StringLibSpecs[M[+_]] extends Specification
 
     "determine codePointAt with valid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(7))(line))(line)
         
       val result = testEval(input)
@@ -518,7 +518,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointAt with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointAt), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
@@ -533,7 +533,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine startsWith" in {
       val input = Join(BuiltInFunction2Op(startsWith), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CString("s"))(line))(line)
         
       val result = testEval(input)
@@ -548,7 +548,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine lastIndexOf" in {
       val input = Join(BuiltInFunction2Op(lastIndexOf), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CString("s"))(line))(line)
         
       val result = testEval(input)
@@ -563,7 +563,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine concat" in {
       val input = Join(BuiltInFunction2Op(concat), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CString("7"))(line))(line)
         
       val result = testEval(input)
@@ -578,7 +578,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine endsWith" in {
       val input = Join(BuiltInFunction2Op(endsWith), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CString("y"))(line))(line)
         
       val result = testEval(input)
@@ -593,7 +593,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointBefore with valid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(7))(line))(line)
         
       val result = testEval(input)
@@ -608,7 +608,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine codePointBefore with invalid integer" in {
       val input = Join(BuiltInFunction2Op(codePointBefore), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CNum(7.5))(line))(line)
         
       val result = testEval(input)
@@ -623,7 +623,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine takeLeft with valid integer" in {
       val input = Join(BuiltInFunction2Op(takeLeft), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
       val result = testEval(input)
@@ -637,7 +637,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine takeRight with valid integer" in {
       val input = Join(BuiltInFunction2Op(takeRight), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
       val result = testEval(input)
@@ -651,7 +651,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine dropLeft with valid integer" in {
       val input = Join(BuiltInFunction2Op(dropLeft), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
 
       val result = testEval(input)
@@ -665,7 +665,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine dropRight with valid integer" in {
       val input = Join(BuiltInFunction2Op(dropRight), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CLong(8))(line))(line)
       
       val result = testEval(input)
@@ -767,7 +767,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine indexOf" in {
       val input = Join(BuiltInFunction2Op(indexOf), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line),
         Const(CString("e"))(line))(line)
         
       val result = testEval(input)
@@ -782,7 +782,7 @@ trait StringLibSpecs[M[+_]] extends Specification
     }
     "determine equalsIgnoreCase" in {
       val input = Join(BuiltInFunction2Op(equalsIgnoreCase), Cross(None),
-        dag.LoadLocal(Const(CString("/het/strings"))(line))(line), 
+        dag.AbsoluteLoad(Const(CString("/het/strings"))(line))(line), 
         Const(CString("QUIRKY"))(line))(line)
         
       val result = testEval(input)
@@ -800,7 +800,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "parseNum" should {
     "handle valid and invalid inputs" in {
       val input = dag.Operate(BuiltInFunction1Op(parseNum),
-        dag.LoadLocal(Const(CString("/het/stringNums"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/stringNums"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -826,7 +826,7 @@ trait StringLibSpecs[M[+_]] extends Specification
   "toString" should {
     "convert values to strings" in {
       val input = dag.Operate(BuiltInFunction1Op(numToString),
-        dag.LoadLocal(Const(CString("/het/random"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/random"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -873,7 +873,7 @@ trait StringLibSpecs[M[+_]] extends Specification
 
     def mktree(f: Op2, path: String, sep: String) =
       Join(BuiltInFunction2Op(f), Cross(None),
-        dag.LoadLocal(Const(CString(path))(line))(line),
+        dag.AbsoluteLoad(Const(CString(path))(line))(line),
         Const(CString(sep))(line))(line)
 
     def tester(f: Op2, path: String, sep: String) =

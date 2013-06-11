@@ -19,7 +19,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
       "left" >> {
         val line = Line(1, 1, "")
         
-        val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
+        val left = dag.AbsoluteLoad(Const(CString("/foo"))(line))(line)
         val right = Const(CLong(42))(line)
         
         val input = Join(Eq, Cross(None), left, right)(line)
@@ -32,7 +32,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
         val line = Line(1, 1, "")
         
         val left = Const(CLong(42))(line)
-        val right = dag.LoadLocal(Const(CString("/foo"))(line))(line)
+        val right = dag.AbsoluteLoad(Const(CString("/foo"))(line))(line)
         
         val input = Join(Eq, Cross(None), left, right)(line)
         val expected = Join(Eq, Cross(Some(CrossRight)), left, right)(line)
@@ -44,7 +44,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "refrain from sorting when sets are already aligned in match" in {
       val line = Line(1, 1, "")
       
-      val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
+      val left = dag.AbsoluteLoad(Const(CString("/foo"))(line))(line)
       val right = Const(CLong(42))(line)
       
       val input = Join(Or, IdentitySort, Join(Eq, Cross(None), left, right)(line), left)(line)
@@ -56,7 +56,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "refrain from sorting when sets are already aligned in filter" in {
       val line = Line(1, 1, "")
       
-      val left = dag.LoadLocal(Const(CString("/foo"))(line))(line)
+      val left = dag.AbsoluteLoad(Const(CString("/foo"))(line))(line)
       val right = Const(CLong(42))(line)
       
       val input = Filter(IdentitySort, Join(Eq, Cross(None), left, right)(line), left)(line)
@@ -68,8 +68,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "memoize RHS of cross when it is not a forcing point" in {
       val line = Line(1, 1, "")
       
-      val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-      val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
+      val foo = dag.AbsoluteLoad(Const(CString("/foo"))(line), JTextT)(line)
+      val bar = dag.AbsoluteLoad(Const(CString("/bar"))(line), JTextT)(line)
       
       val barAdd = Join(Add, IdentitySort, bar, bar)(line)
       
@@ -83,8 +83,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "refrain from memoizing RHS of cross when it is a forcing point" in {
       val line = Line(1, 1, "")
       
-      val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
-      val bar = dag.LoadLocal(Const(CString("/bar"))(line), JTextT)(line)
+      val foo = dag.AbsoluteLoad(Const(CString("/foo"))(line), JTextT)(line)
+      val bar = dag.AbsoluteLoad(Const(CString("/bar"))(line), JTextT)(line)
       
       val input = Join(Add, Cross(None), foo, bar)(line)
       
@@ -94,7 +94,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "refrain from resorting by identity when cogrouping after an ordered cross" in {
       val line = Line(1, 1, "")
       
-      val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
+      val foo = dag.AbsoluteLoad(Const(CString("/foo"))(line), JTextT)(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -109,7 +109,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with FNDummyM
     "refrain from resorting by value when cogrouping after an ordered cross" in {
       val line = Line(1, 1, "")
       
-      val foo = dag.LoadLocal(Const(CString("/foo"))(line), JTextT)(line)
+      val foo = dag.AbsoluteLoad(Const(CString("/foo"))(line), JTextT)(line)
       
       val input =
         Join(Add, ValueSort(0),

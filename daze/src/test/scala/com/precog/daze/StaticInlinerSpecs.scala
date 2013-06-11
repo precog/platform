@@ -78,7 +78,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "left" >> {
         val input = Join(Add, Cross(None),
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/foo"))(line))(line),
           Join(Div, Cross(None),
             Const(CNum(3.14))(line),
             Const(CLong(0))(line))(line))(line)
@@ -93,7 +93,7 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
           Join(Div, Cross(None),
             Const(CNum(3.14))(line),
             Const(CLong(0))(line))(line),
-          dag.LoadLocal(Const(CString("/foo"))(line))(line))(line)
+          dag.AbsoluteLoad(Const(CString("/foo"))(line))(line))(line)
           
         val expected = Const(CUndefined)(line)
         
@@ -106,15 +106,15 @@ trait StaticInlinerSpecs[M[+_]] extends Specification
       
       "true" >> {
         val input = Filter(Cross(None),
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/foo"))(line))(line),
           Const(CTrue)(line))(line)
           
-        inlineStatics(input, defaultEvaluationContext) mustEqual dag.LoadLocal(Const(CString("/foo"))(line))(line)
+        inlineStatics(input, defaultEvaluationContext) mustEqual dag.AbsoluteLoad(Const(CString("/foo"))(line))(line)
       }
       
       "false" >> {
         val input = Filter(Cross(None),
-          dag.LoadLocal(Const(CString("/foo"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/foo"))(line))(line),
           Const(CBoolean(false))(line))(line)
           
         inlineStatics(input, defaultEvaluationContext) mustEqual Const(CUndefined)(line)

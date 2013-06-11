@@ -24,7 +24,7 @@ trait NormalizationSpecs[M[+_]] extends Specification
 
   private val line = Line(1, 1, "")
   private def load(path: String) = 
-    dag.LoadLocal(Const(CString(path))(line))(line)
+    dag.AbsoluteLoad(Const(CString(path))(line))(line)
 
   // note: more comprehensive `summary` and `normalization` tests found in muspelheim
 

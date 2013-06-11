@@ -502,7 +502,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
               tableM2 = pendingTable.table.transform(liftToValues(pendingTable.trans)).transform(idSpec)
             } yield PendingTable(tableM2, graph, TransSpec1.Id, IdentityOrder(graph))
         
-          case dag.LoadLocal(parent, jtpe) => 
+          case dag.AbsoluteLoad(parent, jtpe) => 
             for {
               pendingTable <- prepareEval(parent, splits)
               Path(prefixStr) = ctx.basePath
@@ -922,7 +922,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
             
             case dag.Distinct(parent) => queue2 enqueue parent
             
-            case dag.LoadLocal(parent, _) => queue2 enqueue parent
+            case dag.AbsoluteLoad(parent, _) => queue2 enqueue parent
             
             case dag.Operate(_, parent) => queue2 enqueue parent
             
@@ -1031,7 +1031,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       
       case dag.Distinct(parent) => Set(parent)
       
-      case dag.LoadLocal(parent, _) => Set(parent)
+      case dag.AbsoluteLoad(parent, _) => Set(parent)
       
       case Operate(_, parent) => Set(parent)
       
