@@ -30,6 +30,7 @@ trait Phases {
     bindNames _ :: checkProvenance _ :: inferBuckets _ :: Nil
   
   protected def LoadId: Identifier
+  protected def RelLoadId: Identifier
   protected def ExpandGlobId: Identifier
   protected def DistinctId: Identifier
   

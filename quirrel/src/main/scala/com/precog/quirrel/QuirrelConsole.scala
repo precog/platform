@@ -47,6 +47,7 @@ object QuirrelConsole {
 
   trait StubPhases extends Phases {
     protected def LoadId = Identifier(Vector(), "load")
+    protected def RelLoadId = Identifier(Vector(), "relativeLoad")
     protected def ExpandGlobId = Identifier(Vector("std", "fs"), "expandGlob")
     protected def DistinctId = Identifier(Vector(), "distinct")
     
