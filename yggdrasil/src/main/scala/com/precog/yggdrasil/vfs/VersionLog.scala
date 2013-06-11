@@ -40,14 +40,24 @@ object VersionLog {
   final val unsetSentinel = "unset"
   final val unsetSentinelJV = unsetSentinel.serialize.renderCompact
 
-  final def hasCurrent(baseDir: File): IO[Boolean] = {
-    val currentFile = new File(baseDir, currentVersionFilename)
-
-    IO(currentFile.exists) flatMap { exists =>
-      if (exists) {
-        IOUtils.readFileToString(currentFile) map { _ != unsetSentinelJV }
-      } else {
-        IO(false)
+  final def currentVersionEntry(dir: File): EitherT[IO, ResourceError, VersionEntry] = {
+    import ResourceError._
+    val currentFile = new File(dir, currentVersionFilename)
+    EitherT {
+      IO {
+        if (currentFile.exists) {
+          for {
+            jv <- JParser.parseFromFile(currentFile).leftMap(ioError).disjunction
+            version <- jv match {
+              case JString(`unsetSentinel`) => 
+                \/.left(NotFound("No current data for the path %s exists; it has been archived.".format(dir)))
+              case other => 
+                other.validated[VersionEntry].disjunction leftMap { err => Corrupt(err.message) } 
+            }
+          } yield version
+        } else {
+          \/.left(NotFound("No data found for path %s.".format(dir)))
+        }
       }
     }
   }

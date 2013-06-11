@@ -87,8 +87,12 @@ trait RawJsonStorageModule[M[+_]] { self =>
   for (resource <- jsonFiles.asScala) load(Path(resource.replaceAll("test_data/", "").replaceAll("\\.json", "")))
 
   val vfs: VFSMetadata[M] = new VFSMetadata[M] {
-    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
-      M.point(projections.keySet.filter(_.isDirectChildOf(path)))
+    import com.precog.yggdrasil.metadata._
+    import PathMetadata._
+    def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[PathMetadata]] = EitherT.right {
+      M.point(
+        projections.keySet.filter(_.isDirectChildOf(path)).map(PathMetadata(_, DataOnly(FileContent.XQuirrelData)))
+      )
     }
 
     def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure] = EitherT.right {

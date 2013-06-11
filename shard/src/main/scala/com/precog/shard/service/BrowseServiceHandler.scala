@@ -40,8 +40,22 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
   } map { JNum(_) }
 
   def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
+    import PathMetadata._
     vfs.findDirectChildren(apiKey, path) map { paths =>
-      JArray(paths.map(p => JString(p.toString.substring(1))).toSeq: _*)
+      JArray(
+        (paths map { p => 
+          JObject(
+            "type" -> {
+              p.pathType match {
+                case DataDir(contentType) => JArray(JString("file"), JString("directory"))
+                case DataOnly(contentType) => JArray(JString("file"))
+                case PathOnly => JArray(JString("directory"))
+              }
+            },
+            "name" -> JString(p.path.path.substring(1))
+          )
+        }).toSeq: _*
+      )
     }
   }
 
