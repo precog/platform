@@ -62,17 +62,14 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
     import PathMetadata._
     vfs.findDirectChildren(apiKey, path) map { paths =>
       JArray(
-        (paths map { p => 
-          JObject(
-            "type" -> {
-              p.pathType match {
-                case DataDir(contentType) => JArray(JString("file"), JString("directory"))
-                case DataOnly(contentType) => JArray(JString("file"))
-                case PathOnly => JArray(JString("directory"))
-              }
-            },
-            "name" -> JString(p.path.path.substring(1))
-          )
+        (paths map { p =>
+          val fields: Map[String, JValue] = p.pathType match {
+            case DataDir(contentType) => 
+              Map("contentType" -> JString(contentType.value), "type" -> JArray(JString("file"), JString("directory")))
+            case DataOnly(contentType) => Map("contentType" -> JString(contentType.value), "type" -> JArray(JString("file")))
+            case PathOnly => Map("type" -> JArray(JString("directory")))
+          }
+          JObject(fields + ("name" -> JString(p.path.path.substring(1))))
         }).toSeq: _*
       )
     }
