@@ -486,6 +486,8 @@ trait DAG extends Instructions {
           case graph @ dag.Distinct(parent) => dag.Distinct(memoized(parent))(graph.loc)
 
           case graph @ dag.AbsoluteLoad(parent, jtpe) => dag.AbsoluteLoad(memoized(parent), jtpe)(graph.loc)
+          
+          case graph @ dag.RelativeLoad(parent, jtpe) => dag.RelativeLoad(memoized(parent), jtpe)(graph.loc)
 
           case graph @ dag.Operate(op, parent) => dag.Operate(op, memoized(parent))(graph.loc)
 
@@ -825,6 +827,8 @@ trait DAG extends Instructions {
         case dag.Distinct(parent) => foldDown0(parent, acc |+| f(parent))
 
         case dag.AbsoluteLoad(parent, _) => foldDown0(parent, acc |+| f(parent))
+        
+        case dag.RelativeLoad(parent, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Operate(_, parent) => foldDown0(parent, acc |+| f(parent))
 

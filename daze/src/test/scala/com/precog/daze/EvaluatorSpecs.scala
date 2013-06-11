@@ -79,11 +79,13 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
     }
 
   private val groupId = new java.util.concurrent.atomic.AtomicInteger
+  
   def newGroupId = groupId.getAndIncrement
 
-  def testAccount = AccountDetails("00001", "test@email.com",
-    new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  def testAccount = AccountDetails("00001", "test@email.com", new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
+  
   val defaultEvaluationContext = EvaluationContext("testAPIKey", testAccount, Path.Root, new DateTime)
+  
   val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
     def info(msg: String): M[Unit] = M.point(())
     def warn(msg: String): M[Unit] = M.point(())
@@ -101,7 +103,7 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
           case JString(pathStr) => success {
             indexLock synchronized {      // block the WHOLE WORLD
               val path = Path(pathStr)
-
+              
               val index = initialIndices get path getOrElse {
                 initialIndices += (path -> currentIndex)
                 currentIndex
@@ -300,7 +302,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
-    "evaluate a load_local" in {
+    "evaluate a absolute_load" in {
       val line = Line(1, 1, "")
       val input = dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line)
 
@@ -315,10 +317,40 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
-    "evaluate a join given a relative path" in {
+    "evaluate a absolute_load even with a base path" in {
+      val line = Line(1, 1, "")
+      val input = dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line)
+
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
+      }
+    }
+    
+    "evaluate a relative_load with a base path" in {
+      val line = Line(1, 1, "")
+      val input = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
+
+      testEval(input, Path("/hom")) { result =>
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
+      }
+    }
+    
+    "evaluate a join given a relative load" in {
       val line = Line(1, 1, "")
 
-      val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
+      val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
 
       val input = Join(Add, IdentitySort, numbers, numbers)(line)
 
@@ -333,11 +365,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
-    "evaluate a join given a relative path with two different JTypes" in {
+    "evaluate a join given a relative load with two different JTypes" in {
       val line = Line(1, 1, "")
 
-      val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
-      val numbers0 = dag.AbsoluteLoad(Const(CString("/numbers"))(line), JNumberT)(line)
+      val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
+      val numbers0 = dag.RelativeLoad(Const(CString("numbers"))(line), JNumberT)(line)
 
       val input = Join(Add, IdentitySort, numbers, numbers0)(line)
 
@@ -352,11 +384,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }       
     
-    "evaluate a join given a relative path with two different datasets" in {
+    "evaluate a join given a relative load with two different datasets" in {
       val line = Line(1, 1, "")
 
-      val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
-      val numbers2 = dag.AbsoluteLoad(Const(CString("/numbers2"))(line))(line)
+      val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
+      val numbers2 = dag.RelativeLoad(Const(CString("numbers2"))(line))(line)
 
       val input = Join(Add, Cross(None), numbers, numbers2)(line)
 
@@ -369,7 +401,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
         result2 must contain(84,54,119,43,55,43,54,24,89,13,25,13,119,89,154,78,90,78,43,13,78,2,14,2,55,25,90,14,26,14)
       }
-    }       
+    }
     
     "evaluate a negation mapped over numbers" in {
       val line = Line(1, 1, "")
@@ -704,9 +736,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
 
-      "from the same path (with a relative path)" >> {
+      "from the same path (with a relative load)" >> {
         val line = Line(1, 1, "")
-        val heightWeight = dag.AbsoluteLoad(Const(CString("/heightWeight"))(line))(line)
+        val heightWeight = dag.RelativeLoad(Const(CString("heightWeight"))(line))(line)
 
         val input = Join(Add, IdentitySort,
           Join(DerefObject, Cross(None), 
@@ -1676,9 +1708,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
-    "evaluate matched binary numeric operation dropping undefined result (with relative path)" in {
+    "evaluate matched binary numeric operation dropping undefined result (with relative load)" in {
       val line = Line(1, 1, "")
-      val pairs = dag.AbsoluteLoad(Const(CString("/pairs"))(line))(line)
+      val pairs = dag.RelativeLoad(Const(CString("pairs"))(line))(line)
       
       val input = Join(Div, IdentitySort,
         Join(DerefObject, Cross(None),
@@ -1829,12 +1861,12 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
-    "compute the iunion of two homogeneous sets (with relative path)" in {
+    "compute the iunion of two homogeneous sets (with relative load)" in {
       val line = Line(1, 1, "")
       
       val input = IUI(true,
-        dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line),
-        dag.AbsoluteLoad(Const(CString("/numbers3"))(line))(line))(line)
+        dag.RelativeLoad(Const(CString("numbers"))(line))(line),
+        dag.RelativeLoad(Const(CString("numbers3"))(line))(line))(line)
         
       testEval(input, Path("/hom")) { result =>
         result must haveSize(10)
@@ -1936,9 +1968,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }      
       
-      "less-than (with relative paths)" >> {
+      "less-than (with relative load)" >> {
         val line = Line(1, 1, "")
-        val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
+        val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
           numbers,
@@ -2103,9 +2135,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
 
-      "and (with relative paths)" >> {
+      "and (with relative load)" >> {
         val line = Line(1, 1, "")
-        val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
+        val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
           numbers,
@@ -2219,9 +2251,9 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }      
 
-      "less-than-equal (with relative path)" >> {
+      "less-than-equal (with relative load)" >> {
         val line = Line(1, 1, "")
-        val numbers = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
+        val numbers = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
         
         val input = Filter(IdentitySort,
           numbers,

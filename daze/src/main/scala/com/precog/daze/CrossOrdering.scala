@@ -68,6 +68,9 @@ trait CrossOrdering extends DAG {
         
         case node @ dag.AbsoluteLoad(parent, tpe) =>
           dag.AbsoluteLoad(memoized(parent), tpe)(node.loc)
+        
+        case node @ dag.RelativeLoad(parent, tpe) =>
+          dag.RelativeLoad(memoized(parent), tpe)(node.loc)
 
         case node @ Operate(op, parent) =>
           Operate(op, memoized(parent))(node.loc)
