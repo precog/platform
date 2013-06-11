@@ -44,7 +44,7 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   val line = Line(1, 1, "")
   def inputOp1(op: Op1, loadFrom: String) = {
     dag.Operate(BuiltInFunction1Op(op),
-      dag.LoadLocal(Const(CString(loadFrom))(line))(line))(line)
+      dag.AbsoluteLoad(Const(CString(loadFrom))(line))(line))(line)
   }
 
   def testEval(graph: DepGraph): Set[SEvent] = {
@@ -89,7 +89,7 @@ trait TimeMillisSpecs[M[+_]] extends Specification
  "converting a millis value to an ISO time string (homogeneous case)" should {
     "return the correct time string" in {
       val input = Join(BuiltInFunction2Op(MillisToISO), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/millisSinceEpoch"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/millisSinceEpoch"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -110,7 +110,7 @@ trait TimeMillisSpecs[M[+_]] extends Specification
   "converting a millis value to an ISO time string (heterogeneous set)" should {
     "return the correct time string" in {
       val input = Join(BuiltInFunction2Op(MillisToISO), Cross(None),
-        dag.LoadLocal(Const(CString("/het/millisSinceEpoch"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/millisSinceEpoch"))(line))(line),
         Const(CString("-10:00"))(line))(line)
         
       val result = testEval(input)

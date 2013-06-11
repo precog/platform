@@ -67,7 +67,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
   "enrichment" should {
     "enrich a homogenous set" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/hom/numbers4"))(line),
+          dag.AbsoluteLoad(const("/hom/numbers4"))(line),
           echo)(line)
 
       val result = testEval(input)
@@ -78,7 +78,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
     "enrich a homogenous set by wrapping" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/hom/numbers4"))(line),
+          dag.AbsoluteLoad(const("/hom/numbers4"))(line),
           wrapper)(line)
 
       val result = testEval(input)
@@ -91,7 +91,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
     "enrich a heterogeneous set" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/het/numbers6"))(line),
+          dag.AbsoluteLoad(const("/het/numbers6"))(line),
           echo)(line)
 
       val result = testEval(input)
@@ -110,7 +110,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
     "misbehaving enricher fails" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/hom/numbers4"))(line),
+          dag.AbsoluteLoad(const("/hom/numbers4"))(line),
           misbehave)(line)
 
       testEval(input) must throwA[Throwable]
@@ -118,7 +118,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
     "empty enricher fails" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/hom/numbers4"))(line),
+          dag.AbsoluteLoad(const("/hom/numbers4"))(line),
           empty)(line)
 
       testEval(input) must throwA[Throwable]
@@ -126,7 +126,7 @@ trait PrecogLibSpecs[M[+_]] extends Specification
 
     "failing enricher fails" in {
       val input = Join(BuiltInFunction2Op(Enrichment), Cross(None),
-          dag.LoadLocal(const("/hom/numbers4"))(line),
+          dag.AbsoluteLoad(const("/hom/numbers4"))(line),
           serverError)(line)
 
       testEval(input) must throwA[Throwable]

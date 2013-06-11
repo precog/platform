@@ -95,7 +95,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
     "results used in another time function from homogeneous set" in {
       val input = dag.Operate(BuiltInFunction1Op(Date),
         Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
-          dag.LoadLocal(Const(CString("/hom/timeString"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/timeString"))(line))(line),
           Const(CString("MMM dd yyyy k:mm:ss.SSS"))(line))(line))(line)
         
       val result = testEval(input) collect {
@@ -109,7 +109,7 @@ trait TimeParsingSpecs[M[+_]] extends Specification
 
     "from heterogeneous set" in {
       val input = Join(BuiltInFunction2Op(ParseDateTime), Cross(None),
-          dag.LoadLocal(Const(CString("/het/timeString"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/timeString"))(line))(line),
           Const(CString("MMM dd yyyy k:mm:ss.SSS"))(line))(line)
         
       val result = testEval(input) collect {

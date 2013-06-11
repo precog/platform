@@ -74,8 +74,8 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
     }
     
     "parse out load_local" in {
-      val result = decorate(Vector(Line(1, 1, ""), PushString("/foo"), instructions.LoadLocal))
-      result mustEqual Right(dag.LoadLocal(Const(CString("/foo"))(Line(1, 1, "")))(Line(1, 1, "")))
+      val result = decorate(Vector(Line(1, 1, ""), PushString("/foo"), instructions.AbsoluteLoad))
+      result mustEqual Right(dag.AbsoluteLoad(Const(CString("/foo"))(Line(1, 1, "")))(Line(1, 1, "")))
     }
     
     "parse out map1" in {
@@ -99,7 +99,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val result = decorate(Vector(
         Line(1, 1, ""),
         PushString("/summer_games/london_medals"), 
-        instructions.LoadLocal, 
+        instructions.AbsoluteLoad, 
         Dup, 
         PushString("Weight"), 
         Map2Cross(DerefObject), 
@@ -113,7 +113,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         Map2Cross(JoinArray)))
 
       val line = Line(1, 1, "")
-      val medals = dag.LoadLocal(Const(CString("/summer_games/london_medals"))(line))(line)
+      val medals = dag.AbsoluteLoad(Const(CString("/summer_games/london_medals"))(line))(line)
 
       val expected = Join(JoinArray, Cross(None),
         Operate(WrapArray,
@@ -431,7 +431,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       val result @ Right(dag.Split(_, _, id)) = decorate(Vector(
         Line(1, 1, ""),
         PushString("/organizations"),
-        instructions.LoadLocal,
+        instructions.AbsoluteLoad,
         Dup,
         Dup,
         Dup,
@@ -453,7 +453,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         instructions.Group(2),
         MergeBuckets(true),
         PushString("/campaigns"),
-        instructions.LoadLocal,
+        instructions.AbsoluteLoad,
         Dup,
         Swap(2),
         Swap(1),
@@ -479,25 +479,25 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         IntersectBucketSpec(
           dag.Group(0,
             Join(DerefObject,Cross(None),
-              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              dag.AbsoluteLoad(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("revenue"))(line))(line),
             UnfixedSolution(1,
               Join(DerefObject,Cross(None),
-                dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+                dag.AbsoluteLoad(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
                 Const(CString("revenue"))(line))(line))),
           dag.Group(2,
             Join(DerefObject,Cross(None),
-              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              dag.AbsoluteLoad(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line),
             UnfixedSolution(3,
               Join(DerefObject,Cross(None),
-              dag.LoadLocal(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
+              dag.AbsoluteLoad(Const(CString("/organizations"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line)))),
         dag.Group(4,
-          dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
+          dag.AbsoluteLoad(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
           UnfixedSolution(3,
             Join(DerefObject,Cross(None),
-              dag.LoadLocal(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
+              dag.AbsoluteLoad(Const(CString("/campaigns"))(line), JType.JUniverseT)(line),
               Const(CString("campaign"))(line))(line))))
       
       val expectedTarget = Join(JoinObject,Cross(None),
@@ -753,7 +753,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       }
       
       "load_local" >> {
-        val instr = instructions.LoadLocal
+        val instr = instructions.AbsoluteLoad
         decorate(Vector(Line(1, 1, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
     }
@@ -859,9 +859,9 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
   }
   
   "mapDown" should {
-    "rewrite a LoadLocal shared across Split branches to the same object" in {
+    "rewrite a AbsoluteLoad shared across Split branches to the same object" in {
       val line = Line(1, 1, "")
-      val load = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      val load = dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line)
       
       val id = new Identifier
       
@@ -870,8 +870,8 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         SplitParam(0, id)(line), id)(line)
         
       val result = input.mapDown { recurse => {
-        case graph @ dag.LoadLocal(Const(CString(path)), tpe) =>
-          dag.LoadLocal(Const(CString("/foo" + path))(graph.loc), tpe)(graph.loc)
+        case graph @ dag.AbsoluteLoad(Const(CString(path)), tpe) =>
+          dag.AbsoluteLoad(Const(CString("/foo" + path))(graph.loc), tpe)(graph.loc)
       }}
       
       result must beLike {
@@ -884,7 +884,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
   "foldDown" should {
     "look within a Split branch" in {
       val line = Line(1, 1, "")
-      val load = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      val load = dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line)
       
       val id = new Identifier
       
@@ -894,7 +894,7 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
         
       import scalaz.std.anyVal._
       val result = input.foldDown[Int](true) {
-        case _: LoadLocal => 1
+        case _: AbsoluteLoad => 1
       }
       
       result mustEqual 2

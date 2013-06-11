@@ -66,8 +66,8 @@ trait CrossOrdering extends DAG {
         case node @ dag.New(parent) =>
           dag.New(memoized(parent))(node.loc)
         
-        case node @ dag.LoadLocal(parent, tpe) =>
-          dag.LoadLocal(memoized(parent), tpe)(node.loc)
+        case node @ dag.AbsoluteLoad(parent, tpe) =>
+          dag.AbsoluteLoad(memoized(parent), tpe)(node.loc)
 
         case node @ Operate(op, parent) =>
           Operate(op, memoized(parent))(node.loc)
@@ -118,7 +118,7 @@ trait CrossOrdering extends DAG {
             val right2 = memoized(right)
             
             right2 match {
-              case _: Memoize | _: AddSortKey | _: LoadLocal =>
+              case _: Memoize | _: AddSortKey | _: AbsoluteLoad =>
                 Join(op, Cross(hint), memoized(left), right2)(node.loc)
               
               case _ =>

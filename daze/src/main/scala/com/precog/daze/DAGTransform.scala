@@ -55,7 +55,7 @@ trait DAGTransform extends DAG {
   
         case graph @ New(parent) => f(New(transformAux(parent))(graph.loc))
         
-        case graph @ LoadLocal(parent, jtpe) => f(LoadLocal(transformAux(parent), jtpe)(graph.loc))
+        case graph @ AbsoluteLoad(parent, jtpe) => f(AbsoluteLoad(transformAux(parent), jtpe)(graph.loc))
   
         case graph @ Operate(op, parent) => f(Operate(op, transformAux(parent))(graph.loc))
   

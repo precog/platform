@@ -90,7 +90,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
   def clusterInput(dataset: String, k: Long) = {
     dag.Morph2(KMediansClustering,
-      dag.LoadLocal(Const(CString(dataset))(line))(line),
+      dag.AbsoluteLoad(Const(CString(dataset))(line))(line),
       dag.Const(CLong(k))(line)
     )(line)
   }
@@ -148,7 +148,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
       val input = clusterInput(dataset, k)
 
-      val numbers = dag.LoadLocal(dag.Const(CString(dataset))(line))(line)
+      val numbers = dag.AbsoluteLoad(dag.Const(CString(dataset))(line))(line)
 
       val result = testEval(input)
       val resultNumbers = testEval(numbers)
@@ -179,7 +179,7 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
       val input = clusterInput(dataset, k)
 
-      val data = dag.LoadLocal(dag.Const(CString(dataset))(line))(line)
+      val data = dag.AbsoluteLoad(dag.Const(CString(dataset))(line))(line)
 
       val result = testEval(input)
       val resultData = testEval(data)
@@ -294,11 +294,11 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
   }
 
   def createDAG(pointsDataSet: String, modelDataSet: String) = {
-    val points = dag.LoadLocal(Const(CString(pointsDataSet))(line))(line)
+    val points = dag.AbsoluteLoad(Const(CString(pointsDataSet))(line))(line)
 
     val input = dag.Morph2(AssignClusters,
       points,
-      dag.LoadLocal(Const(CString(modelDataSet))(line))(line)
+      dag.AbsoluteLoad(Const(CString(modelDataSet))(line))(line)
     )(line)
 
     dag.Join(JoinObject, IdentitySort,
@@ -467,8 +467,8 @@ trait ClusteringLibSpecs[M[+_]] extends Specification
 
     "assign correctly with multiple rows of schema with overlapping modelIds" in {
       val input = dag.Morph2(AssignClusters,
-        dag.LoadLocal(Const(CString("/hom/clusteringData"))(line))(line),
-        dag.LoadLocal(Const(CString("/hom/clusteringModel"))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/clusteringData"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/clusteringModel"))(line))(line)
       )(line)
 
       val result0 = testEval(input)

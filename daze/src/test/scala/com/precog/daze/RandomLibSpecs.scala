@@ -82,7 +82,7 @@ trait RandomLibSpecs[M[+_]] extends Specification
       Const(CLong(100))(line))(line)
 
     val input = dag.Observe(
-      dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+      dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
       uniform)(line)
 
     val result = testEval(input)
@@ -107,7 +107,7 @@ trait RandomLibSpecs[M[+_]] extends Specification
   }
 
   "return observed set joined with original" in {
-    val numbers = dag.LoadLocal(Const(CString("/het/numbers"))(line))(line)
+    val numbers = dag.AbsoluteLoad(Const(CString("/het/numbers"))(line))(line)
 
     val uniform = dag.Morph1(UniformDistribution,
       Const(CLong(88))(line))(line)

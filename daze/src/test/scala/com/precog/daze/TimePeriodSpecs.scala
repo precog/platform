@@ -157,7 +157,7 @@ trait TimePeriodSpecs[M[+_]] extends Specification
     }
 
     "compute correct range given multiple values" in {
-      val objects = dag.LoadLocal(Const(CString("/hom/timerange"))(line))(line)
+      val objects = dag.AbsoluteLoad(Const(CString("/hom/timerange"))(line))(line)
 
       def deref(field: String) = {
         dag.Join(DerefObject, Cross(None),

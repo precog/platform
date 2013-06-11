@@ -54,7 +54,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
   "time difference functions (homogeneous case)" should {
     "compute difference of years" in {
       val input = Join(BuiltInFunction2Op(YearsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -69,7 +69,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of months" in {
       val input = Join(BuiltInFunction2Op(MonthsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -84,7 +84,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -99,7 +99,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of days" in {
       val input = Join(BuiltInFunction2Op(DaysBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -114,7 +114,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of hours" in {
       val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -129,7 +129,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -144,7 +144,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -159,7 +159,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of ms" in {
       val input = Join(BuiltInFunction2Op(MillisBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -177,7 +177,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
   "time difference functions (heterogeneous case)" should {
     "compute difference of years" in {
       val input = Join(BuiltInFunction2Op(YearsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -192,7 +192,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of months" in {
       val input = Join(BuiltInFunction2Op(MonthsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -207,7 +207,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -222,7 +222,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of days" in {
       val input = Join(BuiltInFunction2Op(DaysBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -237,7 +237,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of hours" in {
       val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -252,7 +252,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -267,7 +267,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -282,7 +282,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of ms" in {
       val input = Join(BuiltInFunction2Op(MillisBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
         
       val result = testEval(input)
@@ -300,7 +300,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
   "time difference functions (homogeneous case across slices)" should {
     "compute difference of years" in {
       val input = Join(BuiltInFunction2Op(YearsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -315,7 +315,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of months" in {
       val input = Join(BuiltInFunction2Op(MonthsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -330,7 +330,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -345,7 +345,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of days" in {
       val input = Join(BuiltInFunction2Op(DaysBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -360,7 +360,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of hours" in {
       val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -375,7 +375,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -390,7 +390,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -405,7 +405,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of ms" in {
       val input = Join(BuiltInFunction2Op(MillisBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -423,7 +423,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
   "time difference functions (heterogeneous case across slices)" should {
     "compute difference of years" in {
       val input = Join(BuiltInFunction2Op(YearsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -438,7 +438,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of months" in {
       val input = Join(BuiltInFunction2Op(MonthsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -453,7 +453,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -468,7 +468,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of days" in {
       val input = Join(BuiltInFunction2Op(DaysBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -483,7 +483,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of hours" in {
       val input = Join(BuiltInFunction2Op(HoursBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -498,7 +498,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -513,7 +513,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)
@@ -528,7 +528,7 @@ trait TimeDifferenceSpecs[M[+_]] extends Specification
     }
     "compute difference of ms" in {
       val input = Join(BuiltInFunction2Op(MillisBetween), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CString("2010-09-23T18:33:22.520-10:00"))(line))(line)
 
       val result = testEval(input)

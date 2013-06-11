@@ -38,7 +38,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
     "not memoize a sub-graph of non-forcing operations" in {
       val line = Line(1, 1, "")
       
-      val clicks = dag.LoadLocal(Const(CString("/clicks"))(line))(line)
+      val clicks = dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -55,7 +55,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val line = Line(1, 1, "")
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line))(line)
       
       val input =
         Join(Add, IdentitySort,
@@ -82,7 +82,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val id = new Identifier
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line))(line)
       
       val split = dag.Split(
         dag.Group(0, clicks, UnfixedSolution(1, clicks)),
@@ -113,7 +113,7 @@ object MemoizerSpecs extends Specification with Memoizer with FNDummyModule {
       val id = new Identifier
       
       val clicks = 
-        dag.Morph1(libMorphism1.head, dag.LoadLocal(Const(CString("/clicks"))(line))(line))(line)
+        dag.Morph1(libMorphism1.head, dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line))(line)
       
       val join =
         Join(Add, IdentitySort,
