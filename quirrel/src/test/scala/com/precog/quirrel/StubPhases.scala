@@ -23,6 +23,7 @@ import com.precog.util.BitSet
 
 trait StubPhases extends Phases with RawErrors {
   protected def LoadId = Identifier(Vector(), "load")
+  protected def RelLoadId = Identifier(Vector(), "relativeLoad")
   protected def ExpandGlobId = Identifier(Vector("std", "fs"), "expandPath")
   protected def DistinctId = Identifier(Vector(), "distinct")
   

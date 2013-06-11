@@ -64,7 +64,9 @@ trait Instructions {
       
       case Line(_, _, _) => (0, 0)
       
-      case LoadLocal => (1, 1)
+      case AbsoluteLoad => (1, 1)
+      case RelativeLoad => (1, 1)
+      
       case Distinct => (1, 1)
       
       case PushString(_) => (0, 1)
@@ -122,7 +124,8 @@ trait Instructions {
       override def toString = "<%d:%d>".format(line, col)
     }
     
-    case object LoadLocal extends Instruction
+    case object AbsoluteLoad extends Instruction
+    case object RelativeLoad extends Instruction
     case object Distinct extends Instruction
     
     sealed trait RootInstr extends Instruction
