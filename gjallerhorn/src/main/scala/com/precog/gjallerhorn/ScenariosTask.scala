@@ -18,6 +18,19 @@ class ScenariosTask(settings: Settings) extends Task(settings: Settings) with Sp
 """
   
   "aggregated services" should {
+    "create account, ingest data, query" in {
+      val account = createAccount
+      val res = ingestString(account, dummyEvents, "application/json")(_ / account.bareRootPath / "foo")
+
+      EventuallyResults.eventually(10, 1.second) {
+        val res = (analytics / "fs" / account.bareRootPath) <<? List("apiKey" -> account.apiKey, "q" -> "count(//foo)")
+        val str = Http(res OK as.String)()
+        val json = JParser.parseFromString(Http(res OK as.String)()).valueOr(throw _)
+        val count = json(0).deserialize[Double]
+        count must_== 2
+      }
+    }
+
     "support ingesting under own account root" in {
       val account = createAccount
       
