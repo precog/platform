@@ -91,8 +91,8 @@ abstract class Task(settings: Settings) extends Specification {
   def ingestString(account: Account, data: String, contentType: String)(f: Req => Req) {
     val req = (f(ingest / "sync" / "fs").POST
                 <:< List("Content-Type" -> contentType)
-                <<? List("apiKey" -> account.apiKey/*,
-                        "ownerAccountId" -> account.accountId*/)
+                <<? List("apiKey" -> account.apiKey,
+                         "ownerAccountId" -> account.accountId)
                 << data)
     Http(req OK as.String)()
   }
