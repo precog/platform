@@ -137,7 +137,17 @@ object EmitterSpecs extends Specification
           PushString("bar"),
           AbsoluteLoad,
           IUnion))
-    }    
+    }
+
+    "emit instruction for two unioned relative loads" in {
+      testEmit("""relativeLoad("foo") union relativeLoad("bar")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("bar"),
+          RelativeLoad,
+          IUnion))
+    }
     
     "emit instruction for two intersected loads" in {
       testEmit("""load("foo") intersect load("foo")""")(
@@ -146,6 +156,16 @@ object EmitterSpecs extends Specification
           AbsoluteLoad,
           PushString("foo"),
           AbsoluteLoad,
+          IIntersect))
+    }
+
+    "emit instruction for two intersected relative loads" in {
+      testEmit("""relativeLoad("foo") intersect relativeLoad("foo")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("foo"),
+          RelativeLoad,
           IIntersect))
     }    
 
@@ -156,6 +176,16 @@ object EmitterSpecs extends Specification
           AbsoluteLoad,
           PushString("foo"),
           AbsoluteLoad,
+          SetDifference))
+    }
+    
+    "emit instruction for two set differenced relative loads" in {
+      testEmit("""relativeLoad("foo") difference relativeLoad("foo")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("foo"),
+          RelativeLoad,
           SetDifference))
     }
 
@@ -246,6 +276,15 @@ object EmitterSpecs extends Specification
           PushNum("2"),
           Map2Cross(Mul)))
     }
+    
+    "emit cross for division of relative load in static provenance with load in value provenance" in {
+      testEmit("relativeLoad(\"foo\") * 2")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushNum("2"),
+          Map2Cross(Mul)))
+    }
 
     "emit line information for cross for division of load in static provenance with load in value provenance" in {
       testEmitLine("load(\"foo\") * 2")(
@@ -266,6 +305,15 @@ object EmitterSpecs extends Specification
           PushNum("2"),
           PushString("foo"),
           AbsoluteLoad,
+          Map2Cross(Mul)))
+    }
+    
+    "emit cross for division of relative load in static provenance with load in value provenance" in {
+      testEmit("2 * relativeLoad(\"foo\")")(
+        Vector(
+          PushNum("2"),
+          PushString("foo"),
+          RelativeLoad,
           Map2Cross(Mul)))
     }
 

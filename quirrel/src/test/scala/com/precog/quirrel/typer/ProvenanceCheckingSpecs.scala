@@ -24,6 +24,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject object definition on absolute vs relative loads" in {
+      val tree = compileSingle("{ a: //foo, b: ./foo }")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject object definition on static and dynamic provenances" in {
       val tree = compileSingle("{ a: //foo, b: new 1 }")
       tree.provenance mustEqual NullProvenance
@@ -41,6 +48,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject array definition on absolute vs relative loads" in {
+      val tree = compileSingle("[ //foo, ./foo ]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject array definition on static and dynamic provenances" in {
       val tree = compileSingle("[ //foo, new 1 ]")
@@ -60,6 +74,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject deref on different absolute vs relative loads" in {
+      val tree = compileSingle("//foo[./foo]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject deref on static and dynamic provenances" in {
       val tree = compileSingle("(//foo)[new 1]")
       tree.provenance mustEqual NullProvenance
@@ -77,6 +98,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject dispatch on absolute vs relative loads" in {
+      val tree = compileSingle("fun(a, b) := a + b fun(//foo, ./foo)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject dispatch on static and dynamic provenances" in {
       val tree = compileSingle("fun(a, b) := a + b fun(//foo, new 1)")
@@ -128,6 +156,34 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance.possibilities must containAllOf(List(StaticProvenance("/foo"), StaticProvenance("/bar")))
       tree.errors must beEmpty
     }
+    
+    // TODO uncomment
+    /* "reject dispatch to relative load-modified identity function with dynamic provenance" in {
+      val tree = compileSingle("fun(a) := a + ./foo fun(new 24)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject dispatch to relative load-modified identity function with static provenance" in {
+      val tree = compileSingle("fun(a) := a + ./bar fun(//foo)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "accept dispatch to relative load-modified identity function with union provenance" in {
+      val input = """
+        | foo := ./foo
+        | bar := ./bar
+        |
+        | id(a, b) := a + b + foo
+        |
+        | foo ~ bar
+        |   id(foo, bar)
+        """.stripMargin
+      val tree = compileSingle(input)
+      tree.provenance.possibilities must containAllOf(List(StaticProvenance("/foo"), StaticProvenance("/bar")))
+      tree.errors must beEmpty
+    } */
 
     "reject sum of two news of same value" in {
       val input = """ (new 5) + (new 5) """
@@ -446,6 +502,24 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject where on different relative loads" in {
+      val tree = compileSingle("./foo where ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+
+    "reject operations on different relative loads through where" in {
+      val rawInput = """
+        | a := ./users
+        | b := ./heightWeight
+        | { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
+        
+      val tree = compileSingle(rawInput)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject where on static and dynamic provenances" in {
       val tree = compileSingle("//foo where new 1")
       tree.provenance mustEqual NullProvenance
@@ -463,6 +537,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject with on different relative loads" in {
+      val tree = compileSingle("./foo with ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject with on static and dynamic provenances" in {
       val tree = compileSingle("//foo with new 1")
@@ -482,6 +563,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
     
+    // TODO uncomment
+    /* "accept union on different relative loads" in {
+      val tree = compileSingle("./foo union ./bar")
+      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
+      tree.errors must beEmpty
+    } */
+    
     "accept union on static and dynamic provenances" in {
       val tree = compileSingle("//foo union new 1")
       tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
@@ -500,6 +588,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
+    // TODO uncomment
+    /* "reject intersect on different relative loads" in {
+      val tree = compileSingle("./foo intersect ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+    } */
+    
     "accept intersect on static and dynamic provenances" in {
       val tree = compileSingle("//foo intersect new 1")
       tree.provenance mustEqual NullProvenance
@@ -517,6 +612,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
+    
+    // TODO uncomment
+    /* "reject difference on different relative loads" in {
+      val tree = compileSingle("./foo difference ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    } */
     
     "reject difference on static and dynamic provenances" in {
       val tree = compileSingle("//foo difference new 1")
@@ -1027,6 +1129,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject addition on different relative loads" in {
+      val tree = compileSingle("./foo + ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject addition on static and dynamic provenances" in {
       val tree = compileSingle("//foo + new 1")
       tree.provenance mustEqual NullProvenance
@@ -1044,6 +1153,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject subtraction on different relative loads" in {
+      val tree = compileSingle("./foo - ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject subtraction on static and dynamic provenances" in {
       val tree = compileSingle("//foo - new 1")
@@ -1063,6 +1179,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject multiplication on different relative loads" in {
+      val tree = compileSingle("./foo * ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject multiplication on static and dynamic provenances" in {
       val tree = compileSingle("//foo * new 1")
       tree.provenance mustEqual NullProvenance
@@ -1080,6 +1203,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject division on different relative loads" in {
+      val tree = compileSingle("./foo / ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject division on static and dynamic provenances" in {
       val tree = compileSingle("//foo / new 1")
@@ -1099,6 +1229,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject mod on different relative loads" in {
+      val tree = compileSingle("./foo % ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject mod on static and dynamic provenances" in {
       val tree = compileSingle("//foo % new 1")
       tree.provenance mustEqual NullProvenance
@@ -1116,6 +1253,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject less-than on different relative loads" in {
+      val tree = compileSingle("./foo < ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject less-than on static and dynamic provenances" in {
       val tree = compileSingle("//foo < new 1")
@@ -1135,6 +1279,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject less-than-equal on different relative loads" in {
+      val tree = compileSingle("./foo <= ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject less-than-equal on static and dynamic provenances" in {
       val tree = compileSingle("//foo <= new 1")
       tree.provenance mustEqual NullProvenance
@@ -1152,6 +1303,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject greater-than on different loads" in {
+      val tree = compileSingle("./foo > ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject greater-than on static and dynamic provenances" in {
       val tree = compileSingle("//foo > new 1")
@@ -1171,6 +1329,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject greater-than-equal on different relative loads" in {
+      val tree = compileSingle("./foo >= ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject greater-than-equal on static and dynamic provenances" in {
       val tree = compileSingle("//foo >= new 1")
       tree.provenance mustEqual NullProvenance
@@ -1188,6 +1353,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject equality on different relative loads" in {
+      val tree = compileSingle("./foo = ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject equality on static and dynamic provenances" in {
       val tree = compileSingle("//foo = new 1")
@@ -1207,6 +1379,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject not-equality on different relative loads" in {
+      val tree = compileSingle("./foo != ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject not-equality on static and dynamic provenances" in {
       val tree = compileSingle("//foo != new 1")
       tree.provenance mustEqual NullProvenance
@@ -1225,6 +1404,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
+    // TODO uncomment
+    /* "reject boolean and on different relative loads" in {
+      val tree = compileSingle("./foo & ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
+    
     "reject boolean and on static and dynamic provenances" in {
       val tree = compileSingle("//foo & new 1")
       tree.provenance mustEqual NullProvenance
@@ -1242,6 +1428,13 @@ object ProvenanceCheckingSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+    
+    // TODO uncomment
+    /* "reject boolean or on different relative loads" in {
+      val tree = compileSingle("./foo | ./bar")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    } */
     
     "reject boolean or on static and dynamic provenances" in {
       val tree = compileSingle("//foo | new 1")
