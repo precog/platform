@@ -1670,6 +1670,11 @@ object ProvenanceComputationSpecs extends Specification
           tree.errors must beEmpty
         }
         {
+          val tree = compileSingle("(//foo union //bar) intersect (//bar union //baz)")
+          tree.provenance mustEqual StaticProvenance("/bar")
+          tree.errors must beEmpty
+        }
+        {
           val tree = compileSingle("((//foo).a + (//foo).b union //baz) union 12")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
