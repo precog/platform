@@ -2170,7 +2170,7 @@ object EmitterSpecs extends Specification
     }
   }
   
-  val exampleDir = new File("quirrel/examples")
+  /* val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {
     "specification examples" >> {
@@ -2194,5 +2194,5 @@ object EmitterSpecs extends Specification
     }
   } else {
     "specification examples" >> skipped
-  }
+  } */
 }
