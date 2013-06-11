@@ -54,9 +54,14 @@ object DAGSpecs extends Specification with DAG with FNDummyModule {
       decorate(Vector(Line(1, 1, ""), PushNum("5"), Map1(instructions.New))) mustEqual Right(dag.New(Const(CLong(5))(Line(1, 1, "")))(Line(1, 1, "")))
     }
     
-    "parse out load_local" in {
+    "parse out absolute_load" in {
       val result = decorate(Vector(Line(1, 1, ""), PushString("/foo"), instructions.AbsoluteLoad))
       result mustEqual Right(dag.AbsoluteLoad(Const(CString("/foo"))(Line(1, 1, "")))(Line(1, 1, "")))
+    }
+    
+    "parse out relative_load" in {
+      val result = decorate(Vector(Line(1, 1, ""), PushString("/foo"), instructions.RelativeLoad))
+      result mustEqual Right(dag.RelativeLoad(Const(CString("/foo"))(Line(1, 1, "")))(Line(1, 1, "")))
     }
     
     "parse out map1" in {

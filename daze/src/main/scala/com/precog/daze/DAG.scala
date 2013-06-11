@@ -273,6 +273,14 @@ trait DAG extends Instructions {
             case _ => Left(StackUnderflow(instr))
           }
         }
+        
+        case instr @ instructions.RelativeLoad => {
+          continue {
+            case Right(hd) :: tl => Right(Right(RelativeLoad(hd)(loc)) :: tl)
+            case Left(_) :: _ => Left(OperationOnBucket(instr))
+            case _ => Left(StackUnderflow(instr))
+          }
+        }
 
         case PushUndefined => {
           loop(loc, Right(Undefined(loc)) :: roots, splits, stream.tail)
@@ -1020,6 +1028,23 @@ trait DAG extends Instructions {
     }
     
     case class AbsoluteLoad(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
+      lazy val identities = parent match {
+        case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
+        case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
+        case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+      }
+
+      def uniqueIdentities = true
+      
+      def valueKeys = Set.empty
+      
+      val isSingleton = false
+      
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+    
+    case class RelativeLoad(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
+      // FIXME we need to use a special RelLoadIds to avoid ambiguities in provenance
       lazy val identities = parent match {
         case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
         case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
