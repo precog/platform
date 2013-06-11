@@ -563,8 +563,20 @@ object ZookeeperTools extends Command {
     }
 
     def parseCheckpoint(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[YggCheckpoint])
+    def parseRelayState(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[EventRelayState])
 
     def setCheckpoint(path: String, data: YggCheckpoint) {
+      if (!client.exists(path)) client.createPersistent(path, true)
+
+      val updater = new DataUpdater[Array[Byte]] {
+        def update(cur: Array[Byte]): Array[Byte] = data.serialize.renderCompact.getBytes
+      }
+
+      client.updateDataSerialized(path, updater)
+      println("Checkpoint updated: %s with %s".format(path, data))
+    }
+
+    def setRelayState(path: String, data: EventRelayState) {
       if (!client.exists(path)) client.createPersistent(path, true)
 
       val updater = new DataUpdater[Array[Byte]] {
@@ -589,7 +601,7 @@ object ZookeeperTools extends Command {
 
     config.relayAgentUpdate.foreach {
       case (path, data) =>
-        setCheckpoint(path, parseCheckpoint(data).valueOr(err => sys.error(err.message)))
+        setRelayState(path, parseRelayState(data).valueOr(err => sys.error(err.message)))
     }
   }
 
