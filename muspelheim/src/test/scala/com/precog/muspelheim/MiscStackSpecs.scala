@@ -46,7 +46,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
 
       result must haveSize(100)
 
-      val pageIds = Set(
+      val pageIds = List(
         SString("foobar"),
         SString("page-0"),
         SString("page-2"),
@@ -56,7 +56,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       result must haveAllElementsLike {
         case (ids, SArray(arr)) =>
           ids must haveSize(1)
-          pageIds must contain(arr(0))
+          arr.head must beOneOf(pageIds: _*)
         case _ => ko
       }
     }
