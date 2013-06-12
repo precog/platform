@@ -418,8 +418,7 @@ object NullProvenanceSpecs extends Specification
       }
     }
     
-    // TODO uncomment
-    /* "leave unconnected loads unconstrained within a relation" in {
+    "leave unconnected loads unconstrained within a relation" in {
       {
         val Relate(_, from, _, in) = compileSingle("//foo ~ //bar //baz")
         in.constrainingExpr must beNone
@@ -457,7 +456,7 @@ object NullProvenanceSpecs extends Specification
         val Relate(_, from, _, in) = compileSingle("//foo ~ //bar ./foo")
         in.constrainingExpr must beNone
       }
-    } */
+    }
     
     "propagate constraints through a nested relation" in {
       {
