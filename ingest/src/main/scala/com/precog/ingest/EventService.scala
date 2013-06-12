@@ -119,7 +119,7 @@ trait EventService extends BlueEyesServiceBuilder with EitherServiceCombinators 
     val ingestHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, ingestTmpDir, AccessMode.Append)
     val dataHandler = new IngestServiceHandler(permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout, ingestBatchSize, ingestMaxFields, ingestTmpDir, AccessMode.Create)
     val archiveHandler = new ArchiveServiceHandler[ByteChunk](apiKeyFinder, eventStore, Clock.System, deleteTimeout)
-    val createHandler = new FileStoreHandler(serviceLocation, jobManager, Clock.System, eventStore, ingestTimeout)
+    val createHandler = new FileStoreHandler(serviceLocation, permissionsFinder, jobManager, Clock.System, eventStore, ingestTimeout)
     val shardClient = (new HttpClientXLightWeb).protocol(shardLocation.protocol).host(shardLocation.host).port(shardLocation.port)
 
     EventService.State(apiKeyFinder, ingestHandler, dataHandler, createHandler, archiveHandler, shardClient, stoppable)

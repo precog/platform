@@ -582,8 +582,20 @@ object ZookeeperTools extends Command {
     }
 
     def parseCheckpoint(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[YggCheckpoint])
+    def parseRelayState(data: String) = ((Extractor.Thrown(_:Throwable)) <-: JParser.parseFromString(data)).flatMap(_.validated[EventRelayState])
 
     def setCheckpoint(path: String, data: YggCheckpoint) {
+      if (!client.exists(path)) client.createPersistent(path, true)
+
+      val updater = new DataUpdater[Array[Byte]] {
+        def update(cur: Array[Byte]): Array[Byte] = data.serialize.renderCompact.getBytes
+      }
+
+      client.updateDataSerialized(path, updater)
+      println("Checkpoint updated: %s with %s".format(path, data))
+    }
+
+    def setRelayState(path: String, data: EventRelayState) {
       if (!client.exists(path)) client.createPersistent(path, true)
 
       val updater = new DataUpdater[Array[Byte]] {
@@ -608,7 +620,7 @@ object ZookeeperTools extends Command {
 
     config.relayAgentUpdate.foreach {
       case (path, data) =>
-        setCheckpoint(path, parseCheckpoint(data).valueOr(err => sys.error(err.message)))
+        setRelayState(path, parseRelayState(data).valueOr(err => sys.error(err.message)))
     }
   }
 
@@ -839,10 +851,10 @@ object ImportTools extends Command with Logging {
     logger.info("Using PID: " + pid)
     implicit val insertTimeout = Timeout(300 * 1000)
 
-    def grantWrite(key: APIKey) = 
-      for { 
-        rootKey <- apiKeyManager.rootAPIKey 
-        rootGrantId <- apiKeyManager.rootGrantId 
+    def grantWrite(key: APIKey) =
+      for {
+        rootKey <- apiKeyManager.rootAPIKey
+        rootGrantId <- apiKeyManager.rootGrantId
         _ <- apiKeyManager.populateAPIKey(None, None, rootKey, key, Set(rootGrantId)) onComplete {
           case Left(error) => logger.error("Could not add grant " + rootGrantId + " to apiKey " + key, error)
           case Right(success) => logger.info("Updated API key record: " + success)
@@ -890,15 +902,15 @@ object ImportTools extends Command with Logging {
             if (n >= 0) loop(offset + 1, parser) else Future(())
           }
         }
-        
-        loop(0L, AsyncParser.stream()) onComplete { 
+
+        loop(0L, AsyncParser.stream()) onComplete {
           case _ => ch.close()
         }
     }
 
-    val complete = 
+    val complete =
       grantWrite(config.apiKey) >>
-      logGrants(config.apiKey) >> 
+      logGrants(config.apiKey) >>
       runIngest(config.apiKey) >>
       Future(logger.info("Finalizing chef work-in-progress")) >>
       chefs.toList.traverse(gracefulStop(_, stopTimeout)) >>
