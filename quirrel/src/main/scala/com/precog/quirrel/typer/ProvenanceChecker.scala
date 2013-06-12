@@ -1235,7 +1235,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
     override def possibilities = left.possibilities ++ right.possibilities + this
 
-    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
+    def cardinality: Option[Int] = None
   }
   
   case class DerivedIntersectProvenance(left: Provenance, right: Provenance) extends Provenance {
@@ -1245,7 +1245,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
     override def possibilities = left.possibilities ++ right.possibilities + this
 
-    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
+    def cardinality: Option[Int] = None
   }
   
   case class DerivedDifferenceProvenance(left: Provenance, right: Provenance) extends Provenance {
@@ -1255,7 +1255,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
 
     override def possibilities = left.possibilities ++ right.possibilities + this
 
-    def cardinality: Option[Int] = left.cardinality |+| right.cardinality
+    def cardinality: Option[Int] = None
   }
   
   case class UnifiedProvenance(left: Provenance, right: Provenance) extends Provenance {
