@@ -2149,6 +2149,64 @@ object EmitterSpecs extends Specification
         Map2Cross(Eq),
         FilterMatch))
     }
+
+    "emit match in join of if-then-else inside user defined function" in {
+      val input = """
+        | clicks := //clicks2
+        |
+        | foo(data) :=
+        |   bar := if (data.product.price = 7.99) then mean(data.product.price) else data.product.price
+        |   [bar, data.customer.state]
+        |
+        | foo(clicks)
+      """.stripMargin
+
+      testEmit(input)(Vector(
+        PushString("/clicks2"),
+        Morph1(BuiltInMorphism1(expandGlob)),
+        LoadLocal,
+        Dup,
+        Dup,
+        Dup,
+        Dup,
+        PushString("product"),
+        Map2Cross(DerefObject),
+        PushString("price"),
+        Map2Cross(DerefObject),
+        Reduce(BuiltInReduction(Reduction(Vector(), "mean", 0x2013))),
+        Swap(1),
+        PushString("product"),
+        Map2Cross(DerefObject),
+        PushString("price"),
+        Map2Cross(DerefObject),
+        PushNum("7.99"),
+        Map2Cross(Eq),
+        FilterCross,
+        Swap(1),
+        PushString("product"),
+        Map2Cross(DerefObject),
+        PushString("price"),
+        Map2Cross(DerefObject),
+        Swap(1),
+        Swap(2),
+        PushString("product"),
+        Map2Cross(DerefObject),
+        PushString("price"),
+        Map2Cross(DerefObject),
+        PushNum("7.99"),
+        Map2Cross(Eq),
+        Map1(Comp),
+        FilterMatch,
+        IUnion,
+        Map1(WrapArray),
+        Swap(1),
+        PushString("customer"),
+        Map2Cross(DerefObject),
+        PushString("state"),
+        Map2Cross(DerefObject),
+        Map1(WrapArray),
+        Map2Match(JoinArray)))
+    }
   }
   
   /* val exampleDir = new File("quirrel/examples")
