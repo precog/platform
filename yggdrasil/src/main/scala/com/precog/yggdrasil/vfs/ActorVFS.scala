@@ -199,7 +199,8 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
     def asByteStream(mimeType: MimeType)(implicit M: Monad[Future]) = OptionT {
       projection map { p =>
-        ColumnarTableModule.byteStream(p.getBlockStream(None), Some(mimeType))
+        val slices = p.getBlockStream(None) map VFS.derefValue
+        ColumnarTableModule.byteStream(slices, Some(mimeType))
       }
     }
   }
