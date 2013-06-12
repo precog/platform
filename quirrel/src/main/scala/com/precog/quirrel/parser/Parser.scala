@@ -97,6 +97,11 @@ trait Parser extends RegexParsers with Filters with AST {
         Dispatch(loc, ExpandGlobId, Vector(StrLit(loc, str)))))
     }
     
+    | relPathLiteral ^# { (loc, str) =>
+      Dispatch(loc, RelLoadId, Vector(
+        Dispatch(loc, ExpandGlobId, Vector(StrLit(loc, str)))))
+    }
+    
     | strLiteral  ^# StrLit
     | numLiteral  ^# NumLit
     | boolLiteral ^# BoolLit
@@ -197,8 +202,13 @@ trait Parser extends RegexParsers with Filters with AST {
     | """"([^"\\]|\\.)+"""".r ^^ canonicalizeStr        //"
   )
   
-  private[quirrel] lazy val pathLiteralRegex = """/(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+""".r
-  private lazy val pathLiteral = (pathLiteralRegex preferred) ^^ canonicalizePath 
+  private val basePathLiteralRegex = """(/[a-zA-Z0-9\-\._~:/?#@!$&'*+=]+)+"""
+  
+  private[quirrel] lazy val pathLiteralRegex = ("/" + basePathLiteralRegex).r
+  private[quirrel] lazy val relPathLiteralRegex = ("""\.""" + basePathLiteralRegex).r
+  
+  private lazy val pathLiteral = (pathLiteralRegex preferred) ^^ canonicalizePath
+  private lazy val relPathLiteral = (relPathLiteralRegex preferred) ^^ canonicalizeRelPath 
   
   private[quirrel] lazy val strLiteralRegex = """"([^\n\r\\"]|\\.)*"""".r //"
   private lazy val strLiteral = strLiteralRegex ^^ canonicalizeStr
@@ -288,7 +298,11 @@ trait Parser extends RegexParsers with Filters with AST {
     back.substring(1, back.length - 1)
   }
   
+  /**
+   * Identity function
+   */
   private[quirrel] def canonicalizePath(str: String): String = str substring 1
+  private[quirrel] def canonicalizeRelPath(str: String): String = str substring 2
   
   private def canonicalizePropertyName(str: String): String = {
     val (back, _) = str.substring(1, str.length - 1).foldLeft(("", false)) {

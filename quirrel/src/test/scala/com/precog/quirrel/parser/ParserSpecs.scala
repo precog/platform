@@ -338,6 +338,13 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parseSingle("//cafe-babe42_silly/SILLY") must beLike { case PathLit("/cafe-babe42_silly/SILLY") => ok }
     }
     
+    "accept a relative path literal" in {
+      // TODO find a way to use LoadId instead
+      parseSingle("./foo") must beLike { case RelPathLit("foo") => ok }
+      parseSingle("./foo/bar/baz") must beLike { case RelPathLit("foo/bar/baz") => ok }
+      parseSingle("./cafe-babe42_silly/SILLY") must beLike { case RelPathLit("cafe-babe42_silly/SILLY") => ok }
+    }
+    
     "accept a string literal" in {
       parseSingle("\"I have a dream\"") must beLike { case StrLit(_, "I have a dream") => ok }
       parseSingle("\"\"") must beLike { case StrLit(_, "") => ok }
@@ -1473,6 +1480,16 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   private object PathLit {
     def unapply(expr: Expr): Option[String] = expr match {
       case Dispatch(_, Identifier(Vector(), "load"), Vector(
+        Dispatch(_, Identifier(Vector("std", "fs"), "expandPath"), Vector(
+          StrLit(_, str))))) => Some(str)
+        
+      case _ => None
+    }
+  }
+  
+  private object RelPathLit {
+    def unapply(expr: Expr): Option[String] = expr match {
+      case Dispatch(_, Identifier(Vector(), "relativeLoad"), Vector(
         Dispatch(_, Identifier(Vector("std", "fs"), "expandPath"), Vector(
           StrLit(_, str))))) => Some(str)
         
