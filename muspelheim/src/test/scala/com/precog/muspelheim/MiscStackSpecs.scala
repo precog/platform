@@ -2786,6 +2786,32 @@ trait MiscStackSpecs extends EvalStackSpecs {
         
       evalE(input) must haveSize(1)
     }
+    
+    "join result of flatten with conditional" in {
+      val input = """
+        | x := flatten([{foo: 5, bar: 9}, {foo: 6, bar: 10}])
+        |
+        | z := if x.foo = 5 then 10000 else 0
+        | 
+        | x with {ack: z}
+        | """.stripMargin
+        
+      val result = evalE(input)
+      result must haveSize(2)
+
+      result must haveAllElementsLike {
+        case (ids, SObject(obj)) => {
+          // note that `ids` has size 1 because flatten retains the original ids
+          // and adds a new synth id, and in this case there are no original ids
+          ids must haveSize(1)
+          obj.keySet mustEqual Set("foo", "bar", "ack")
+
+          if (obj("foo") == SDecimal(5)) obj("ack") mustEqual SDecimal(10000)
+          else obj("ack") mustEqual SDecimal(0)
+        }
+        case _ => ko
+      }
+    }
 
     "compute edit distance of strings" in {
       val input = """
