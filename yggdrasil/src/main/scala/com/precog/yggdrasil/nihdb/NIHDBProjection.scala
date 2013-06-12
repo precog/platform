@@ -67,7 +67,4 @@ object NIHDBProjection {
   def wrap(nihdb: NIHDB): Future[NIHDBProjection] = nihdb.getSnapshot map { snap =>
     new NIHDBProjection(snap, nihdb.authorities, nihdb.projectionId)
   }
-
-//  def wrap(resource: NIHDBResource): Future[NIHDBProjection] =
-//    wrap(resource.db, resource.authorities)
 }
