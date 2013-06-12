@@ -151,7 +151,9 @@ trait QuirrelCache extends AST { parser: Parser =>
             }
           case _: StrLit =>
             parser.pathLiteralRegex.findPrefixOf(s).map(x => ("p", x.length)).orElse {
-              parser.strLiteralRegex.findPrefixOf(s).map(x => ("s", x.length))
+              parser.relPathLiteralRegex.findPrefixOf(s).map(x => ("rp", x.length)).orElse {
+                parser.strLiteralRegex.findPrefixOf(s).map(x => ("s", x.length))
+              }
             }.getOrElse {
               sys.error("error recovering string literal from %s (%s at %s)" format (s, original, i))
             }

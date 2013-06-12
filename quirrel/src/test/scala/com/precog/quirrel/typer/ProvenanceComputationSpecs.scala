@@ -862,23 +862,22 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
     
-    // TODO uncomment once syntax is finalized
-    /* "identify relative load dispatch with static params according to its path" in {
+    "identify relative load dispatch with static params according to its path" in {
       {
         val tree = compileSingle("./foo")
-        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.provenance mustEqual StaticProvenance("foo")
         tree.errors must beEmpty
       }
       
       {
         val tree = compileSingle("./bar")
-        tree.provenance mustEqual StaticProvenance("/bar")
+        tree.provenance mustEqual StaticProvenance("bar")
         tree.errors must beEmpty
       }
       
       {
         val tree = compileSingle("./bar/baz")
-        tree.provenance mustEqual StaticProvenance("/bar/baz")
+        tree.provenance mustEqual StaticProvenance("bar/baz")
         tree.errors must beEmpty
       }
     }
@@ -920,7 +919,7 @@ object ProvenanceComputationSpecs extends Specification
         tree.provenance mustEqual StaticProvenance("/clicks")
         tree.errors must beEmpty
       }
-    } */
+    }
     
     "identify dispatch to identity function by parameter" in {
       {
@@ -981,12 +980,11 @@ object ProvenanceComputationSpecs extends Specification
       tree.errors must beEmpty
     }
     
-    // TODO uncomment
-    /* "identify dispatch to relative load-modified identity function as static" in {
+    "identify dispatch to relative load-modified identity function as static" in {
       val tree = compileSingle("id(a) := a + ./foo id(24)")
-      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.provenance mustEqual StaticProvenance("foo")
       tree.errors must beEmpty
-    } */
+    }
     
     "identify dispatch to simple operation function by unification of parameters" in {
       {
