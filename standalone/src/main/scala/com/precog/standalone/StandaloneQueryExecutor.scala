@@ -1,8 +1,9 @@
 package com.precog.standalone
 
+import akka.actor.{ActorSystem, Props}
 import akka.dispatch.{ExecutionContext, Future, Promise}
 import akka.util.duration._
-import akka.util.Duration
+import akka.util.{Duration, Timeout}
 
 import blueeyes.json.serialization._
 import blueeyes.json.serialization.DefaultSerialization.{ DateTimeExtractor => _, DateTimeDecomposer => _, _ }
@@ -16,17 +17,18 @@ import com.precog.muspelheim._
 import com.precog.shard._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.execution.QueryExecutor
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.util._
+import com.precog.yggdrasil.vfs._
 
 import com.weiglewilczek.slf4s.Logging
 
 import java.nio.CharBuffer
 
 import scalaz._
-import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
 import scalaz.syntax.bifunctor._
@@ -55,15 +57,27 @@ trait StandaloneQueryExecutorConfig extends BaseConfig
 
   val clock = blueeyes.util.Clock.System
 
+  lazy val storageTimeout: Timeout = Timeout(config[Int]("precog.storage.timeout", 300) seconds)
+  lazy val quiescenceTimeout: Duration = config[Int]("precog.storage.quiescence_timeout", 300) seconds
+  lazy val maxOpenPaths: Int = config[Int]("precog.storage.max_open_paths", 500)
+
   val ingestConfig = None
 }
 
 trait StandaloneQueryExecutor
     extends ManagedPlatform
     with ShardQueryExecutorPlatform[Future]
+    with ActorVFSModule
     with Logging { platform =>
 
   type YggConfig <: StandaloneQueryExecutorConfig
+
+  implicit val actorSystem = ActorSystem("nihdbExecutorActorSystem")
+  private val projectionsActor = actorSystem.actorOf(Props(new PathRoutingActor(yggConfig.dataDir, yggConfig.storageTimeout.duration, yggConfig.quiescenceTimeout, yggConfig.maxOpenPaths, yggConfig.clock)))
+
+  def permissionsFinder: PermissionsFinder[Future]
+  private val actorVFS = new ActorVFS(projectionsActor, yggConfig.storageTimeout, yggConfig.storageTimeout)
+  val vfs = new SecureVFS(actorVFS, permissionsFinder, jobManager, yggConfig.clock)
 
   def executionContext: ExecutionContext
 
@@ -94,16 +108,16 @@ trait StandaloneQueryExecutor
     }
   }
 
-  def asyncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, JobId]]] = {
+  def asyncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, JobId]] = {
     logger.debug("Creating new async executor for %s => %s".format(apiKey, executionContext))
-    Promise.successful(Success(new AsyncQueryExecutor {
+    EitherT.right(Promise.successful(new AsyncQueryExecutor {
       def executionContext: ExecutionContext = platform.executionContext
     }))
   }
 
-  def syncExecutorFor(apiKey: APIKey): Future[Validation[String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]]] = {
+  def syncExecutorFor(apiKey: APIKey): EitherT[Future, String, QueryExecutor[Future, (Option[JobId], StreamT[Future, Slice])]] = {
     logger.debug("Creating new sync executor for %s => %s".format(apiKey, executionContext))
-    Promise.successful(Success(new SyncQueryExecutor {
+    EitherT.right(Promise.successful(new SyncQueryExecutor {
       def executionContext: ExecutionContext = platform.executionContext
     }))
   }

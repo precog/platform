@@ -30,8 +30,8 @@ import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.shard._
-import com.precog.shard.scheduling.NoopScheduler
-import com.precog.yggdrasil.vfs.NoopVFS
+import com.precog.shard.ShardStateOptions._
+import com.precog.yggdrasil.scheduling.NoopScheduler
 import java.awt.Desktop
 import java.net.URI
 
@@ -74,12 +74,11 @@ trait StandaloneShardServer
     ShardState(platform,
                apiKeyFinder,
                accountFinder,
-               NoopVFS,
-               NoopStoredQueries[Future],
                NoopScheduler[Future],
                jobManager,
                Clock.System,
-               stoppable)
+               stoppable,
+               NoOptions)
   }
 
   val jettyService = this.service("labcoat", "1.0") { context =>
