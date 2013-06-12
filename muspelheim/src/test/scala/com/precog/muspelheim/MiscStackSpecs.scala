@@ -2789,6 +2789,68 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must not(throwA[Throwable])
     }
     
+    "verify that results of flatten joinable with original dataset" in {
+      val input = """
+        | array := new [2, 3, 4]
+        |
+        | foo(data) :=
+        |   bar := flatten(data)
+        |   [bar, data]
+        |
+        | foo(array)
+        | """.stripMargin
+        
+      val result = evalE(input)
+      result must haveSize(3)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(arr)) => {
+          ids must haveSize(2)
+          arr must haveSize(2)
+
+          arr(0) must beOneOf(SDecimal(2), SDecimal(3), SDecimal(4))
+          arr(1) mustEqual SArray(Vector(SDecimal(2), SDecimal(3), SDecimal(4)))
+        }
+        case _ => ko
+      }
+
+      val result2 = result collect {
+        case (_, SArray(arr)) if !(arr.isEmpty) => arr.head
+      }
+      result2 mustEqual Set(SDecimal(2), SDecimal(3), SDecimal(4))
+    }
+    
+    "verify that results of flatten joinable with original dataset when formal is partially inlined" in {
+      val input = """
+        | array := new [2, 3, 4]
+        |
+        | foo(data) :=
+        |   bar := flatten(array)
+        |   [bar, data]
+        |
+        | foo(array)
+        | """.stripMargin
+        
+      val result = evalE(input)
+      result must haveSize(3)
+
+      result must haveAllElementsLike {
+        case (ids, SArray(arr)) => {
+          ids must haveSize(2)
+          arr must haveSize(2)
+
+          arr(0) must beOneOf(SDecimal(2), SDecimal(3), SDecimal(4))
+          arr(1) mustEqual SArray(Vector(SDecimal(2), SDecimal(3), SDecimal(4)))
+        }
+        case _ => ko
+      }
+
+      val result2 = result collect {
+        case (_, SArray(arr)) if !(arr.isEmpty) => arr.head
+      }
+      result2 mustEqual Set(SDecimal(2), SDecimal(3), SDecimal(4))
+    }
+
     "reduce the size of a filtered flattened array" in {
       val input = """
         | foo := flatten([{ a: 1, b: 2 }, { a: 3, b: 4 }])
