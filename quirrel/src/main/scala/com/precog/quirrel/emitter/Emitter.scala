@@ -337,11 +337,13 @@ trait Emitter extends AST
       provs.tail.foldLeft((provs.head.possibilities, Vector.empty[EmitterState])) {
         case ((provAcc, instrAcc), prov) => {
           val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
-            val resolved = e.subResolve(prov)
+            val resolvedProv = e.subResolve(prov)
+            val resolvedProvAcc = provAcc.map(e.subResolve)
 
-            assert(!resolved.isParametric)
+            assert(!resolvedProv.isParametric)
 
-            val itx = resolved.possibilities.intersect(provAcc).filter(p => p != ValueProvenance && p != NullProvenance)
+            val intersection = resolvedProv.possibilities.intersect(resolvedProvAcc)
+            val itx = intersection.filter(p => p != ValueProvenance && p != NullProvenance)
 
             emitInstr(if (itx.isEmpty) Map2Cross(op2) else Map2Match(op2))(e)
           }
@@ -504,7 +506,7 @@ trait Emitter extends AST
 
           val (groups, indices) = provToElements.foldLeft((Vector.empty[EmitterState], Vector.empty[Int])) {
             case ((allStates, allIndices), (provenance, elements)) => {
-              val singles = elements.map { case (expr, idx) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
+              val singles = elements.map { case (expr, _) => emitExpr(expr, dispatches) >> emitInstr(Map1(WrapArray)) }
               val indices = elements.map(_._2)
 
               val joinInstr = StateT.apply[Id, Emission, Unit] { e =>
