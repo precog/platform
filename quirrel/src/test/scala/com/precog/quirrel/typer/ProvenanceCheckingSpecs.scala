@@ -133,7 +133,7 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "accept dispatch to load-modified identity function with union provenance" in {
+    "accept dispatch to load-modified identity function with product provenance" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -516,13 +516,13 @@ object ProvenanceCheckingSpecs extends Specification
     "reject intersect on different loads" in {
       val tree = compileSingle("//foo intersect //bar")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
     "accept intersect on static and dynamic provenances" in {
       val tree = compileSingle("//foo intersect new 1")
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
     "accept intersect on differing dynamic provenances" in {
@@ -537,16 +537,16 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
-    "accept difference on static and dynamic provenances" in {
+    "reject difference on static and dynamic provenances" in {
       val tree = compileSingle("//foo difference new 1")
-      tree.provenance must beLike { case StaticProvenance("/foo") => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
 
-    "accept difference on static and dynamic provenances" in {
+    "reject difference on static and dynamic provenances" in {
       val tree = compileSingle("(new 1) difference //foo")
-      tree.provenance must beLike { case DynamicProvenance(_) => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
     "accept difference on differing dynamic provenances" in {
@@ -557,7 +557,10 @@ object ProvenanceCheckingSpecs extends Specification
     
     "give left for difference with coproducts containing commonality" in {
       val tree = compileSingle("(//foo union //bar) difference (//bar union //baz)")
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
+      tree.provenance must beLike {
+        case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
+        case CoproductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
+      }
       tree.errors must beEmpty
     }
 
@@ -567,9 +570,19 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
 
-    "give coproduct provenance for difference with coproducts containing dynamic provenance" in {
+    "give null provenance for difference with coproducts containing dynamic provenance" in {
       val tree = compileSingle("(//foo union //bar) difference ((new //baz) union //qux)")
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    }
+
+    // the compiler doesn't know that `new //foo` and `new //bar` have different identities,
+    // while different instances of `new //foo` and `new //foo` have the same identities
+    "give coproduct provenance for difference with coproducts containing dynamic provenance" in {
+      val tree = compileSingle("(//foo union (new //bar)) difference ((new //baz) union //qux)")
+      tree.provenance must beLike {
+        case CoproductProvenance(StaticProvenance("/foo"), DynamicProvenance(_)) => ok
+      }
       tree.errors must beEmpty
     }
 
@@ -591,7 +604,7 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
     
-    "accept union on union provenances" in {
+    "accept union on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -611,8 +624,24 @@ object ProvenanceCheckingSpecs extends Specification
       
       tree.errors must beEmpty
     }
+
+    "reject intersect of two loaded sets" in {
+      val input = """//clicks intersect //conversions"""
+      val tree = compileSingle(input)
+
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
+    }
     
-    "accept intersect on union provenances" in {
+    "reject difference of two loaded sets" in {
+      val input = """//clicks difference //conversions"""
+      val tree = compileSingle(input)
+
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    }
+    
+    "reject intersect on distinct product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -626,14 +655,54 @@ object ProvenanceCheckingSpecs extends Specification
         
       val tree = compileSingle(input)
       
-      tree.provenance must beLike {
-        case StaticProvenance("/bar") => ok
-      }
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
+    }
+
+    "accept intersect on distinct product provenances containing coproducts" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        |
+        | union1 := foo union bar
+        | 
+        | cross1 := union1 ~ baz union1 + baz
+        | cross2 := foo ~ baz foo + baz
+        |
+        | cross1 intersect cross2
+        | """.stripMargin
+        
+      val tree = compileSingle(input)
       
+      tree.provenance mustEqual ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/baz"))
       tree.errors must beEmpty
     }
-    
-    "accept difference on union provenances" in {
+
+    "accept intersect on distinct product provenances containing coproducts through dispatch" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        |
+        | g(a, b, c) :=
+        |   union1 := a union b
+        |   
+        |   cross1 := union1 ~ c union1 + c
+        |   cross2 := a ~ c a + c
+        |
+        |   cross1 intersect cross2
+        |
+        | g(foo, bar, baz)
+        | """.stripMargin
+        
+      val tree = compileSingle(input)
+      
+      tree.provenance mustEqual ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/baz"))
+      tree.errors must beEmpty
+    }
+
+    "reject difference on distinct product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -647,12 +716,64 @@ object ProvenanceCheckingSpecs extends Specification
         
       val tree = compileSingle(input)
       
-      tree.provenance must beLike {
-        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
-      }
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    }
+
+    "accept intersect on common coproduct provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo union bar
+        | bb := bar ~ baz bar union baz
+        | 
+        | fb intersect bb
+        | """.stripMargin
+        
+      val tree = compileSingle(input)
       
+      tree.provenance mustEqual StaticProvenance("/bar")
       tree.errors must beEmpty
+    }
+
+    "accept difference on common coproduct provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo union bar
+        | bb := bar ~ baz bar union baz
+        | 
+        | fb difference bb
+        | """.stripMargin
+        
+      val tree = compileSingle(input)
+      
+      // in this case we are "removing" all of `bar` from `fb`
+      // but the provenance alone does not tell us this
+      tree.provenance mustEqual CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar"))
+      tree.errors must beEmpty
+    }
+    
+    "reject difference on distinct product provenances" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | baz := //baz
+        | 
+        | fb := foo ~ bar foo + bar
+        | bb := bar ~ baz bar + baz
+        | 
+        | fb difference bb
+        | """.stripMargin
+        
+      val tree = compileSingle(input)
+      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
     "accept union through a function on static provenances" in {
@@ -679,7 +800,7 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors must beEmpty
     }
 
-    "accept intersect through a function on static provenance" in {
+    "reject intersect through a function on static provenance" in {
       val input = """
         | f(a, b) := a intersect b
         | 
@@ -687,10 +808,34 @@ object ProvenanceCheckingSpecs extends Specification
         | """.stripMargin
       
       val tree = compileSingle(input)
-      tree.provenance must beLike { case CoproductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
+    }
+
+    "reject if-then-else  through a function on static provenance" in {
+      val input = """
+        | f(a, b) := if true then a else b
+        | 
+        | f(//foo, 5)
+        | """.stripMargin
+      
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(CondProvenanceDifferentLength)
     }
     
+    "accept intersect of same provenances and operator through a function on static provenance" in {
+      val input = """
+        | f(a, b) := (a intersect b) + a
+        |
+        | f(//foo, //foo)
+        | """.stripMargin
+
+      val tree = compileSingle(input)
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+
     "accept intersect and operator through a function on static provenance" in {
       val input = """
         | f(a, b) := (a intersect b) + a
@@ -699,23 +844,36 @@ object ProvenanceCheckingSpecs extends Specification
         | """.stripMargin
 
       val tree = compileSingle(input)
-      tree.provenance must beLike { case StaticProvenance("/foo") => ok }
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
 
-    "accept difference through a function on static provenances" in {
+    "accept difference of same provenance through a function on static provenances" in {
       val input = """
         | f(a, b) := a difference b
         | 
         | f(//foo, //foo)
         | """.stripMargin
       
+      // we cannot tell statically that this is the empty set
       val tree = compileSingle(input)
       tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty
     }
     
-    "accept union through a function on union provenances" in {
+    "accept difference of different provenances through a function on static provenances" in {
+      val input = """
+        | f(a, b) := a difference b
+        | 
+        | f(//foo, //bar)
+        | """.stripMargin
+      
+      val tree = compileSingle(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+    }
+    
+    "accept union through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -731,13 +889,15 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
 
       tree.provenance must beLike {
-        case CoproductProvenance(ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")), ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz"))) => ok
+        case CoproductProvenance(
+          ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")), 
+          ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz"))) => ok
       }
       
       tree.errors must beEmpty
     }
     
-    "accept intersect through a function on union provenances" in {
+    "accept intersect through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -752,14 +912,11 @@ object ProvenanceCheckingSpecs extends Specification
         
       val tree = compileSingle(input)
       
-      tree.provenance must beLike {
-        case CoproductProvenance(ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")), ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/baz"))) => ok
-      }
-      
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
-    "accept difference through a function on union provenances" in {
+    "accept difference through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -774,15 +931,11 @@ object ProvenanceCheckingSpecs extends Specification
         
       val tree = compileSingle(input)
       
-      tree.provenance must beLike {
-        case ProductProvenance(StaticProvenance("/foo"), StaticProvenance("/bar")) => ok
-        case ProductProvenance(StaticProvenance("/bar"), StaticProvenance("/foo")) => ok
-      }
-      
-      tree.errors must beEmpty
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
-    "reject union on non-matching union provenances" in {
+    "reject union on product provenance with static provenance" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -795,10 +948,10 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
     }
     
-    "reject intersect on non-matching union provenances" in {
+    "reject intersect on product provenance with static provenance" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -815,7 +968,7 @@ object ProvenanceCheckingSpecs extends Specification
       tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
     }
     
-    "reject difference on non-matching union provenances" in {
+    "reject difference on product provenance with static provenance" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -828,10 +981,10 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
+      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
     }
     
-    "reject union through a function on non-matching union provenances" in {
+    "reject union through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -846,10 +999,10 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+      tree.errors mustEqual Set(UnionProvenanceDifferentLength)
     }
     
-    "reject intersect through a function on union provenances" in {
+    "reject intersect through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -864,10 +1017,11 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+      // both errors are propogated through here because we're handling parametric provenances
+      tree.errors mustEqual Set(IntersectProvenanceDifferentLength, IntersectWithNoCommonalities)
     }
     
-    "reject difference through a function on union provenances" in {
+    "reject difference through a function on product provenances" in {
       val input = """
         | foo := //foo
         | bar := //bar
@@ -882,7 +1036,8 @@ object ProvenanceCheckingSpecs extends Specification
       val tree = compileSingle(input)
       
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(ProductProvenanceDifferentLength)
+      // both errors are propogated through here because we're handling parametric provenances
+      tree.errors mustEqual Set(DifferenceProvenanceDifferentLength, DifferenceWithNoCommonalities)
     }
 
     "reject addition on different loads" in {

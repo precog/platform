@@ -31,6 +31,36 @@ trait MiscStackSpecs extends EvalStackSpecs {
   implicit val precision = Precision(0.000000001)
 
   "the full stack" should {
+    "accept if-then-else inside user defined function" in {
+      val input = """
+        | clicks := //clicks
+        |
+        | foo(data) :=
+        |   bar := if (data.pageId = "page-1") then "foobar" else data.pageId
+        |   [bar, data.timeString]
+        |
+        | foo(clicks)
+      """.stripMargin
+
+      val result = evalE(input)
+
+      result must haveSize(100)
+
+      val pageIds = List(
+        SString("foobar"),
+        SString("page-0"),
+        SString("page-2"),
+        SString("page-3"),
+        SString("page-4"))
+
+      result must haveAllElementsLike {
+        case (ids, SArray(arr)) =>
+          ids must haveSize(1)
+          arr.head must beOneOf(pageIds: _*)
+        case _ => ko
+      }
+    }
+
     "return count of empty set as 0 in body of solve" in {
       val input = """
         | data := new {a: "down", b: 13}
