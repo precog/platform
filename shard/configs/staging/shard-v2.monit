@@ -1,6 +1,6 @@
 check process shard-v2-staging with pidfile /var/run/precog/shard-v2-staging.pid
-  start program = "/usr/sbin/service shard-v2-staging start" with timeout 30 seconds
-  stop program  = "/usr/sbin/service shard-v2-staging stop"
+  start program = "/sbin/start shard-v2-staging" with timeout 30 seconds
+  stop program  = "/sbin/stop shard-v2-staging"
   if failed port 40070 protocol http and request '/analytics/v2/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh shard-v2-staging"
   if failed port 40070 protocol http and request '/analytics/v2/health' with timeout 60 seconds for 8 cycles

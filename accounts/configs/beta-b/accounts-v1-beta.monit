@@ -1,6 +1,6 @@
 check process accounts-v1-beta-b with pidfile /var/run/precog/accounts-v1-beta-b.pid
-  start program = "/usr/sbin/service accounts-v1-beta-b start" with timeout 30 seconds
-  stop program  = "/usr/sbin/service accounts-v1-beta-b stop"
+  start program = "/sbin/start accounts-v1-beta-b" with timeout 30 seconds
+  stop program  = "/sbin/stop accounts-v1-beta-b"
   if failed port 31064 protocol http and request '/accounts/v1/health' with timeout 60 seconds for 3 cycles
      then exec "/opt/precog/threaddump.sh accounts-v1-beta-b"
   if failed port 31064 protocol http and request '/accounts/v1/health' with timeout 60 seconds for 8 cycles
