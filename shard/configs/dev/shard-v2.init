@@ -3,6 +3,7 @@
 #
 
 description "shard-v2 - ReportGrid dev shard service (v2)"
+setuid precog
 
 start on runlevel [2345]
 stop on runlevel [06]
@@ -17,9 +18,10 @@ end script
 
 script
   if [ -f /etc/default/shard-v2 ]; then . /etc/default/shard-v2; fi
-  su precog -s "/bin/bash" -c "/usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v2.logging.xml -jar /usr/share/java/shard-v2.jar --configFile /etc/precog/shard-v2.conf >> /var/log/precog/shard-v2.stdout.log 2>&1"
+  exec /usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/shard-v2.logging.xml -jar /usr/share/java/shard-v2.jar --configFile /etc/precog/shard-v2.conf >> /var/log/precog/shard-v2.stdout.log 2>&1
 end script
 
 post-start script
+  rm -f /var/run/precog/shard-v2-b.pid
   echo `status shard-v2 | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/shard-v2.pid
 end script
