@@ -2696,6 +2696,8 @@ trait MiscStackSpecs extends EvalStackSpecs {
       eval(input) must not(throwA[Throwable])
     }
     
+    // commented out because SLOW
+    // please uncomment when FAST
     //"not explode weirdly" in {
     //  val input = """
     //    | import std::stats::*
