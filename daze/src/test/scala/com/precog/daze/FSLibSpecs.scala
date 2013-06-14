@@ -91,6 +91,12 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
       runExpansion(table) must_== expected
     }
     
+    "not alter un-globbed relative paths" in {
+      val table = pathTable("foo")
+      val expected: List[JValue] = List(JString("/foo/"))
+      runExpansion(table) mustEqual expected
+    }
+    
     "expand a leading glob" in {
       val table = pathTable("/*/bar1")
       val expected: List[JValue] = List(JString("/foo/bar1/"), JString("/foo2/bar1/"))
