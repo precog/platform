@@ -191,7 +191,6 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
         query    <- Resource.asQuery(path, Version.Current).apply(queryRes) leftMap { storageError _ }
         _ = logger.debug("Text of stored query at %s: \n%s".format(path.path, query))
         raw      <- executor.execute(query, ctx, queryOptions)
-        _        <- EitherT(raw.isEmpty map { if (_) \/.left(invalidState("Raw query result stream for %s is empty!".format(path.path))) else \/.right(PrecogUnit) })
         result   <- cacheAt match {
           case Some(cachePath) =>
             for {
