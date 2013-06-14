@@ -1,4 +1,4 @@
-clicks := //clicks
+clicks := ./clicks
 
 countsForTimezone := solve 'timeZone
   clicksForZone := clicks where clicks.timeZone = 'timeZone
