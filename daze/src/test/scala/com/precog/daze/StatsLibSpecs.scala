@@ -43,7 +43,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -60,7 +60,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/hom/numbers5"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers5"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -94,7 +94,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/hom/numbers2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers2"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -128,7 +128,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -145,7 +145,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Dummy,
-        dag.LoadLocal(Const(CString("/hom/numbers"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -167,7 +167,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Dummy,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -188,7 +188,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(Rank,
-        dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -204,7 +204,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     "compute rank, denseRank, indexedRank" in {
       val line = Line(1, 1, "")
       
-      val data = dag.LoadLocal(Const(CString("/het/numbersDoubleLong"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("/het/numbersDoubleLong"))(line))(line)
     
       def wrapper(d: DepGraph, name: String) = 
         Join(WrapObject, Cross(None), Const(CString(name))(line), d)(line)
@@ -254,7 +254,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     "compute rank, denseRank, indexedRank on heterogenous numbers" in {
       val line = Line(1, 1, "")
       
-      val data = dag.LoadLocal(Const(CString("/het/numbersDoubleLong"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("/het/numbersDoubleLong"))(line))(line)
     
       def wrapper(d: DepGraph, name: String) = 
         Join(WrapObject, Cross(None), Const(CString(name))(line), d)(line)
@@ -305,7 +305,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(IndexedRank,
-        dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -321,7 +321,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     "compute rank within a filter" in {
       val line = Line(1, 1, "")
     
-      val numbers = dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line)
+      val numbers = dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line)
     
       val input = Filter(IdentitySort,
         numbers,
@@ -345,7 +345,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Eq, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line),
         Const(CLong(4))(line))(line)
         
       val result = testEval(input)
@@ -367,7 +367,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
@@ -385,7 +385,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(DenseRank,
-        dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -402,10 +402,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line),
           Const(CLong(3))(line))(line))(line)
         
       val result = testEval(input)
@@ -424,7 +424,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(DenseRank,
-          dag.LoadLocal(Const(CString("/hom/numbers6"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
@@ -440,7 +440,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "compute linear correlation" in {
       val line = Line(1, 1, "")
-      val heightWeight = dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line)
+      val heightWeight = dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line)
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
@@ -466,10 +466,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -488,10 +488,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -516,10 +516,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -545,7 +545,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/het/numbers"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbers"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -562,7 +562,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/het/numbers2"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbers2"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -579,7 +579,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/het/random"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/random"))(line))(line))(line)
         
       val result = testEval(input)
       
@@ -596,7 +596,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(Rank,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -613,7 +613,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(IndexedRank,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -628,7 +628,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "compute rank heterogenously" in {
       val line = Line(1, 1, "")
-      val data = dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line)
       val input = Join(
         JoinArray,
         IdentitySort,
@@ -670,9 +670,9 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, Cross(None),
-          dag.Morph1(Rank, dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+          dag.Morph1(Rank, dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
           Const(CLong(13))(line))(line))(line)
         
       val result = testEval(input)
@@ -690,10 +690,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
           Const(CLong(5))(line))(line))(line)
         
       val result = testEval(input)
@@ -712,10 +712,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line),
         Join(LtEq, Cross(None),
           dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
           Const(CLong(10))(line))(line))(line)
         
       val result = testEval(input)
@@ -734,7 +734,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
@@ -752,7 +752,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(DenseRank,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -769,10 +769,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
           Const(CLong(10))(line))(line))(line)
         
       val result = testEval(input)
@@ -790,10 +790,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line),
         Join(LtEq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
           Const(CLong(9))(line))(line))(line)
         
       val result = testEval(input)
@@ -812,7 +812,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(DenseRank,
-          dag.LoadLocal(Const(CString("/het/numbers6"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/numbers6"))(line))(line))(line),
         Const(CLong(2))(line))(line)
         
       val result = testEval(input)
@@ -831,10 +831,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -853,10 +853,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -875,10 +875,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -903,10 +903,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -934,10 +934,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -956,10 +956,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -978,10 +978,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1006,10 +1006,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1036,10 +1036,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1058,10 +1058,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1080,10 +1080,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1108,10 +1108,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1140,7 +1140,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
         
         val input = dag.Morph2(LinearCorrelation,
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line),
           Const(CLong(5))(line))(line)
 
@@ -1155,7 +1155,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
         val input = dag.Morph2(LinearCorrelation,
           Const(CLong(5))(line),
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line))(line)
 
         val result = testEval(input)
@@ -1169,7 +1169,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -1189,7 +1189,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
           Const(CString("height"))(line))(line),
         Const(CLong(5))(line))(line)
 
@@ -1216,7 +1216,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
         
         val input = dag.Morph2(LogarithmicRegression,
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line),
           Const(CLong(5))(line))(line)
 
@@ -1244,12 +1244,12 @@ trait StatsLibSpecs[M[+_]] extends Specification
           Operate(Neg, 
             Const(CLong(5))(line))(line),
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line),
             Const(CString("height"))(line))(line))(line)
 
         val result = testEval(input)
 
-        val input2 = dag.LoadLocal(Const(CString("hom/heightWeight"))(line))(line)
+        val input2 = dag.AbsoluteLoad(Const(CString("hom/heightWeight"))(line))(line)
 
         val result2 = testEval(input2)
         
@@ -1263,10 +1263,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
         
         val input = dag.Morph2(LogarithmicRegression,
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight_neg"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight_neg"))(line))(line),
             Const(CString("height"))(line))(line),
           Join(DerefObject, Cross(None),
-            dag.LoadLocal(Const(CString("hom/heightWeight_neg"))(line))(line),
+            dag.AbsoluteLoad(Const(CString("hom/heightWeight_neg"))(line))(line),
             Const(CString("weight"))(line))(line))(line)
 
         val result = testEval(input)
@@ -1293,7 +1293,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1310,7 +1310,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1344,7 +1344,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1378,7 +1378,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1395,7 +1395,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(Rank,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -1411,7 +1411,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     "compute rank within a filter" in {
       val line = Line(1, 1, "")
     
-      val numbers = dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line)
+      val numbers = dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line)
     
       val input = Filter(IdentitySort,
         numbers,
@@ -1435,7 +1435,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Eq, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
         Const(CLong(4))(line))(line)
     
       val result = testEval(input)
@@ -1457,7 +1457,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
         Const(CLong(3))(line))(line)
     
       val result = testEval(input)
@@ -1475,7 +1475,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(DenseRank,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -1492,10 +1492,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(3))(line))(line))(line)
     
       val result = testEval(input)
@@ -1514,7 +1514,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(DenseRank,
-          dag.LoadLocal(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/hom/numbersAcrossSlices"))(line))(line))(line),
         Const(CLong(3))(line))(line)
     
       val result = testEval(input)
@@ -1533,10 +1533,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1555,10 +1555,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1577,10 +1577,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1605,10 +1605,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1630,7 +1630,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "simple exponential smoothing" in {
       val line = Line(1, 1, "")
-      val data = dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
       def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
 
       val left = Join(JoinObject, IdentitySort,
@@ -1656,7 +1656,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "double exponential smoothing" in {
       val line = Line(1, 1, "")
-      val data = dag.LoadLocal(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("hom/heightWeightAcrossSlices"))(line))(line)
       def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
 
       val left = Join(JoinObject, IdentitySort,
@@ -1688,7 +1688,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Median,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1705,7 +1705,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1722,7 +1722,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
 
       val input = dag.Morph1(Mode,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
 
       val result = testEval(input)
 
@@ -1739,7 +1739,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(Rank,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -1756,10 +1756,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(17))(line))(line))(line)
     
       val result = testEval(input)
@@ -1777,10 +1777,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(9))(line))(line))(line)
     
       val result = testEval(input)
@@ -1798,10 +1798,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(LtEq, Cross(None),
           dag.Morph1(Rank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(10))(line))(line))(line)
     
       val result = testEval(input)
@@ -1820,7 +1820,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(Rank,
-          dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
         Const(CLong(3))(line))(line)
     
       val result = testEval(input)
@@ -1838,7 +1838,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = dag.Morph1(DenseRank,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line)
     
       val result = testEval(input)
     
@@ -1855,10 +1855,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(Eq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(13))(line))(line))(line)
     
       val result = testEval(input)
@@ -1876,10 +1876,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
     
       val input = Filter(IdentitySort,
-        dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line),
         Join(LtEq, Cross(None),
           dag.Morph1(DenseRank,
-            dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+            dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
           Const(CLong(10))(line))(line))(line)
     
       val result = testEval(input)
@@ -1898,7 +1898,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
     
       val input = Join(Add, Cross(None),
         dag.Morph1(DenseRank,
-          dag.LoadLocal(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/numbersAcrossSlices"))(line))(line))(line),
         Const(CLong(3))(line))(line)
     
       val result = testEval(input)
@@ -1917,10 +1917,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(Covariance,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1939,10 +1939,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefArray, Cross(None),
-          dag.LoadLocal(Const(CString("uncorrelated"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("uncorrelated"))(line))(line),
           Const(CLong(0))(line))(line),
         Join(DerefArray, Cross(None),
-          dag.LoadLocal(Const(CString("uncorrelated"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("uncorrelated"))(line))(line),
           Const(CLong(1))(line))(line))(line)
 
       val result = testEval(input)
@@ -1958,10 +1958,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearCorrelation,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -1980,10 +1980,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LinearRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -2008,10 +2008,10 @@ trait StatsLibSpecs[M[+_]] extends Specification
       
       val input = dag.Morph2(LogarithmicRegression,
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("height"))(line))(line),
         Join(DerefObject, Cross(None),
-          dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
+          dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line),
           Const(CString("weight"))(line))(line))(line)
 
       val result = testEval(input)
@@ -2033,7 +2033,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "simple exponential smoothing" in {
       val line = Line(1, 1, "")
-      val data = dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
       def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
 
       val left = Join(JoinObject, IdentitySort,
@@ -2059,7 +2059,7 @@ trait StatsLibSpecs[M[+_]] extends Specification
 
     "double exponential smoothing" in {
       val line = Line(1, 1, "")
-      val data = dag.LoadLocal(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
+      val data = dag.AbsoluteLoad(Const(CString("het/heightWeightAcrossSlices"))(line))(line)
       def const[A: CValueType](a: A): Const = Const(CValueType[A](a))(line)
 
       val left = Join(JoinObject, IdentitySort,

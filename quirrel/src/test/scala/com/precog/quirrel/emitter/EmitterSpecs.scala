@@ -133,19 +133,39 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") union load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("bar"),
-          LoadLocal,
+          AbsoluteLoad,
           IUnion))
-    }    
+    }
+
+    "emit instruction for two unioned relative loads" in {
+      testEmit("""relativeLoad("foo") union relativeLoad("bar")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("bar"),
+          RelativeLoad,
+          IUnion))
+    }
     
     "emit instruction for two intersected loads" in {
       testEmit("""load("foo") intersect load("foo")""")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
+          IIntersect))
+    }
+
+    "emit instruction for two intersected relative loads" in {
+      testEmit("""relativeLoad("foo") intersect relativeLoad("foo")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("foo"),
+          RelativeLoad,
           IIntersect))
     }    
 
@@ -153,9 +173,19 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") difference load("foo")""")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
+          SetDifference))
+    }
+    
+    "emit instruction for two set differenced relative loads" in {
+      testEmit("""relativeLoad("foo") difference relativeLoad("foo")""")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
+          PushString("foo"),
+          RelativeLoad,
           SetDifference))
     }
 
@@ -242,7 +272,16 @@ object EmitterSpecs extends Specification
       testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
+          PushNum("2"),
+          Map2Cross(Mul)))
+    }
+    
+    "emit cross for division of relative load in static provenance with load in value provenance" in {
+      testEmit("relativeLoad(\"foo\") * 2")(
+        Vector(
+          PushString("foo"),
+          RelativeLoad,
           PushNum("2"),
           Map2Cross(Mul)))
     }
@@ -253,7 +292,7 @@ object EmitterSpecs extends Specification
           Line(1, 6, "load(\"foo\") * 2"),
           PushString("foo"),
           Line(1, 1, "load(\"foo\") * 2"),
-          LoadLocal,
+          AbsoluteLoad,
           Line(1, 15, "load(\"foo\") * 2"),
           PushNum("2"),
           Line(1, 1, "load(\"foo\") * 2"),
@@ -265,7 +304,16 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
+          Map2Cross(Mul)))
+    }
+    
+    "emit cross for division of relative load in static provenance with load in value provenance" in {
+      testEmit("2 * relativeLoad(\"foo\")")(
+        Vector(
+          PushNum("2"),
+          PushString("foo"),
+          RelativeLoad,
           Map2Cross(Mul)))
     }
 
@@ -363,7 +411,7 @@ object EmitterSpecs extends Specification
           Swap(2),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Map2Cross(Add),
@@ -393,7 +441,7 @@ object EmitterSpecs extends Specification
           PushString("weight"),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(4),
           Swap(3),
@@ -450,7 +498,7 @@ object EmitterSpecs extends Specification
           Swap(3),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Map2Cross(Add),
@@ -493,7 +541,7 @@ object EmitterSpecs extends Specification
           Swap(3),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Map2Cross(Add),
@@ -516,7 +564,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("Weight"),
           Map2Cross(DerefObject),
@@ -543,14 +591,14 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
           Map1(WrapArray),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("HeightIncm"),
           Map2Cross(DerefObject),
           Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
@@ -575,10 +623,10 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/summer_games/athletes"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -616,7 +664,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("Weight"),
           Map2Cross(DerefObject),
           Dup,
@@ -626,7 +674,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Add),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("HeightIncm"),
           Map2Cross(DerefObject),
           Dup,
@@ -646,7 +694,7 @@ object EmitterSpecs extends Specification
           PushString("foo"),
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Map2Cross(WrapObject)))
     }    
     
@@ -656,7 +704,7 @@ object EmitterSpecs extends Specification
           PushString("foo"),
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -733,7 +781,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/bar"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("a"),
           Map2Cross(DerefObject),
@@ -745,7 +793,7 @@ object EmitterSpecs extends Specification
           Map2Match(JoinArray),
           PushString("/foo"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -772,7 +820,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("foo"),
           Map2Cross(DerefObject)))
     }
@@ -782,7 +830,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("foo"),
           Map2Cross(DerefMetadata)))
     }
@@ -792,7 +840,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushNum("1"),
           Map2Cross(DerefArray)))
     }
@@ -801,7 +849,7 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
-          LoadLocal)
+          AbsoluteLoad)
       )
     }
 
@@ -818,10 +866,10 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("foo"),
           Map2Cross(DerefObject),
           PushNull,
@@ -834,7 +882,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(1),
           Map2Match(DerefArray)))
@@ -844,7 +892,7 @@ object EmitterSpecs extends Specification
       testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(1),
           FilterMatch))
@@ -855,7 +903,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/foo"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(1),
           PushString("id"),
@@ -869,7 +917,7 @@ object EmitterSpecs extends Specification
       testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(1),
           Map2Match(Add)))
@@ -880,7 +928,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -933,7 +981,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushString("/foobar"),
             Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
+            AbsoluteLoad,
             PushString("baz"),
             Map2Cross(DerefObject),
             Map1(BuiltInFunction1Op(f))))
@@ -955,12 +1003,12 @@ object EmitterSpecs extends Specification
           Vector(
             PushString("/foo"),
             Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
+            AbsoluteLoad,
             PushString("time"),
             Map2Cross(DerefObject),
             PushString("/foo"),
             Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
+            AbsoluteLoad,
             PushString("timeZone"),
             Map2Cross(DerefObject),
             Map2Match(BuiltInFunction2Op(f))))
@@ -972,7 +1020,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(1),
           PushString("userId"),
@@ -991,10 +1039,10 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/campaigns"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("/campaigns"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("ageRange"),
           Map2Cross(DerefObject),
           PushNum("25"),
@@ -1005,7 +1053,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Eq),
           PushString("/campaigns"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           PushString("gender"),
           Map2Cross(DerefObject),
           PushString("female"),
@@ -1019,13 +1067,13 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/b"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1044,7 +1092,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/b"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           Dup,
@@ -1056,7 +1104,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           PushString("/a"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1101,7 +1149,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("day"),
           Map2Cross(DerefObject),
@@ -1123,7 +1171,7 @@ object EmitterSpecs extends Specification
         | """)(Vector(
           PushString("/foo"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("a"),
           Map2Cross(DerefObject),
@@ -1132,7 +1180,7 @@ object EmitterSpecs extends Specification
           Group(0),
           PushString("/bar"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1156,7 +1204,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           PushString("day"),
@@ -1179,7 +1227,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           PushString("day"),
@@ -1207,7 +1255,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           PushString("time"),
@@ -1251,7 +1299,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           Dup,
@@ -1293,7 +1341,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           Dup,
@@ -1337,7 +1385,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("a"),
           Map2Cross(DerefObject),
@@ -1346,7 +1394,7 @@ object EmitterSpecs extends Specification
           Group(0),
           PushString("/impressions"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1376,7 +1424,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           KeyPart(1),
@@ -1415,7 +1463,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("day"),
           Map2Cross(DerefObject),
@@ -1424,7 +1472,7 @@ object EmitterSpecs extends Specification
           Group(0),
           PushString("/impressions"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1454,7 +1502,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           KeyPart(1),
           Swap(1),
@@ -1484,7 +1532,7 @@ object EmitterSpecs extends Specification
       testEmit(input)(Vector(
         PushString("/campaigns"),
         Morph1(BuiltInMorphism1(expandGlob)),
-        LoadLocal,
+        AbsoluteLoad,
         Dup,
         PushString("cpm"),
         Map2Cross(DerefObject),
@@ -1526,7 +1574,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/campaigns"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("campaign"),
           Map2Cross(DerefObject),
@@ -1535,7 +1583,7 @@ object EmitterSpecs extends Specification
           Group(0),
           PushString("/organizations"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1593,7 +1641,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/clicks"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           PushString("time"),
           Map2Cross(DerefObject),
@@ -1609,7 +1657,7 @@ object EmitterSpecs extends Specification
           PushString("jay"),
           PushString("/views"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(3),
           Swap(2),
@@ -1648,7 +1696,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushString("/interactions"),
             Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
+            AbsoluteLoad,
             Dup,
             PushString("userId"),
             Map2Cross(DerefObject),
@@ -1723,7 +1771,7 @@ object EmitterSpecs extends Specification
             Vector(
               PushString("/conversions"),
               Morph1(BuiltInMorphism1(expandGlob)),
-              LoadLocal,
+              AbsoluteLoad,
               Dup,
               PushString("userId"),
               Map2Cross(DerefObject),
@@ -1732,7 +1780,7 @@ object EmitterSpecs extends Specification
               Group(0),
               PushString("/impressions"),
               Morph1(BuiltInMorphism1(expandGlob)),
-              LoadLocal,
+              AbsoluteLoad,
               Dup,
               Swap(2),
               Swap(1),
@@ -1826,7 +1874,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushString("/clicks"),
             Morph1(BuiltInMorphism1(expandGlob)),
-            LoadLocal,
+            AbsoluteLoad,
             Dup,
             KeyPart(1),
             Swap(1),
@@ -1864,7 +1912,7 @@ object EmitterSpecs extends Specification
           PushString("a"),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(2),
           Swap(1),
@@ -1909,7 +1957,7 @@ object EmitterSpecs extends Specification
           PushString("a"),
           PushString("/summer_games/london_medals"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Swap(3),
           Swap(2),
@@ -1974,7 +2022,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/conversions"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           PushString("female"),
@@ -2020,7 +2068,7 @@ object EmitterSpecs extends Specification
       testEmit(input)(Vector(
         PushString("/foo"),
         Morph1(BuiltInMorphism1(expandGlob)),
-        LoadLocal,
+        AbsoluteLoad,
         Dup,
         KeyPart(1),
         Swap(1),
@@ -2075,7 +2123,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("/foo"),
           Morph1(BuiltInMorphism1(expandGlob)),
-          LoadLocal,
+          AbsoluteLoad,
           Dup,
           Dup,
           Dup,
@@ -2164,7 +2212,7 @@ object EmitterSpecs extends Specification
       testEmit(input)(Vector(
         PushString("/clicks2"),
         Morph1(BuiltInMorphism1(expandGlob)),
-        LoadLocal,
+        AbsoluteLoad,
         Dup,
         Dup,
         Dup,

@@ -97,7 +97,7 @@ trait REPL extends ParseEvalStack[Future]
 
   val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
     new DateTime, "dummyAPIKey", Path.Root, AccountPlan.Free)
-  def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, new DateTime)
+  def dummyEvaluationContext = EvaluationContext("dummyAPIKey", dummyAccount, Path.Root, Path.Root, new DateTime)
 
   val Prompt = "quirrel> "
   val Follow = "       | "

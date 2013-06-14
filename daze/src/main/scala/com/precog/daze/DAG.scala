@@ -266,9 +266,17 @@ trait DAG extends Instructions {
         
         case loc: Line => loop(loc, roots, splits, stream.tail)
         
-        case instr @ instructions.LoadLocal => {
+        case instr @ instructions.AbsoluteLoad => {
           continue {
-            case Right(hd) :: tl => Right(Right(LoadLocal(hd)(loc)) :: tl)
+            case Right(hd) :: tl => Right(Right(AbsoluteLoad(hd)(loc)) :: tl)
+            case Left(_) :: _ => Left(OperationOnBucket(instr))
+            case _ => Left(StackUnderflow(instr))
+          }
+        }
+        
+        case instr @ instructions.RelativeLoad => {
+          continue {
+            case Right(hd) :: tl => Right(Right(RelativeLoad(hd)(loc)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
             case _ => Left(StackUnderflow(instr))
           }
@@ -458,7 +466,9 @@ trait DAG extends Instructions {
 
           case graph @ dag.Distinct(parent) => dag.Distinct(memoized(parent))(graph.loc)
 
-          case graph @ dag.LoadLocal(parent, jtpe) => dag.LoadLocal(memoized(parent), jtpe)(graph.loc)
+          case graph @ dag.AbsoluteLoad(parent, jtpe) => dag.AbsoluteLoad(memoized(parent), jtpe)(graph.loc)
+          
+          case graph @ dag.RelativeLoad(parent, jtpe) => dag.RelativeLoad(memoized(parent), jtpe)(graph.loc)
 
           case graph @ dag.Operate(op, parent) => dag.Operate(op, memoized(parent))(graph.loc)
 
@@ -623,8 +633,8 @@ trait DAG extends Instructions {
                   case graph @ dag.Distinct(parent) =>
                     for { newParent <- memoized(parent) } yield dag.Distinct(newParent)(graph.loc)
         
-                  case graph @ dag.LoadLocal(parent, jtpe) =>
-                    for { newParent <- memoized(parent) } yield dag.LoadLocal(newParent, jtpe)(graph.loc)
+                  case graph @ dag.AbsoluteLoad(parent, jtpe) =>
+                    for { newParent <- memoized(parent) } yield dag.AbsoluteLoad(newParent, jtpe)(graph.loc)
         
                   case graph @ dag.Operate(op, parent) =>
                     for { newParent <- memoized(parent) } yield dag.Operate(op, newParent)(graph.loc)
@@ -797,7 +807,9 @@ trait DAG extends Instructions {
 
         case dag.Distinct(parent) => foldDown0(parent, acc |+| f(parent))
 
-        case dag.LoadLocal(parent, _) => foldDown0(parent, acc |+| f(parent))
+        case dag.AbsoluteLoad(parent, _) => foldDown0(parent, acc |+| f(parent))
+        
+        case dag.RelativeLoad(parent, _) => foldDown0(parent, acc |+| f(parent))
 
         case dag.Operate(_, parent) => foldDown0(parent, acc |+| f(parent))
 
@@ -1019,7 +1031,24 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
+    case class AbsoluteLoad(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
+      lazy val identities = parent match {
+        case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
+        case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))
+        case _ => Identities.Specs(Vector(SynthIds(IdGen.nextInt())))
+      }
+
+      def uniqueIdentities = true
+      
+      def valueKeys = Set.empty
+      
+      val isSingleton = false
+      
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+    
+    case class RelativeLoad(parent: DepGraph, jtpe: JType = JType.JUniverseT)(val loc: Line) extends DepGraph with StagingPoint {
+      // FIXME we need to use a special RelLoadIds to avoid ambiguities in provenance
       lazy val identities = parent match {
         case Const(CString(path)) => Identities.Specs(Vector(LoadIds(path)))
         case Morph1(expandGlob, Const(CString(path))) => Identities.Specs(Vector(LoadIds(path)))

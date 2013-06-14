@@ -53,7 +53,7 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
   val testAPIKey = "testAPIKey"
   def testAccount = AccountDetails("00001", "test@email.com",
     new DateTime, "testAPIKey", Path.Root, AccountPlan.Free)
-  val defaultEvaluationContext = EvaluationContext(testAPIKey, testAccount, Path.Root, new DateTime)
+  val defaultEvaluationContext = EvaluationContext(testAPIKey, testAccount, Path.Root, Path.Root, new DateTime)
   val defaultMorphContext = MorphContext(defaultEvaluationContext, new MorphLogger {
     def info(msg: String): M[Unit] = M.point(())
     def warn(msg: String): M[Unit] = M.point(())
@@ -70,6 +70,12 @@ trait FSLibSpecs[M[+_]] extends Specification with FSLibModule[M] with TestColum
       val table = pathTable("/foo/bar/baz/")
       val expected: List[JValue] = List(JString("/foo/bar/baz/"))
       runExpansion(table) must_== expected
+    }
+    
+    "not alter un-globbed relative paths" in {
+      val table = pathTable("foo")
+      val expected: List[JValue] = List(JString("/foo/"))
+      runExpansion(table) mustEqual expected
     }
     
     "expand a leading glob" in {

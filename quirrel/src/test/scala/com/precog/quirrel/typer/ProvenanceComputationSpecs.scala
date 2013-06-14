@@ -843,6 +843,65 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
     
+    "identify relative load dispatch with static params according to its path" in {
+      {
+        val tree = compileSingle("./foo")
+        tree.provenance mustEqual StaticProvenance("foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compileSingle("./bar")
+        tree.provenance mustEqual StaticProvenance("bar")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compileSingle("./bar/baz")
+        tree.provenance mustEqual StaticProvenance("bar/baz")
+        tree.errors must beEmpty
+      }
+    }
+    
+    "identify load dispatch with non-static params as dynamic" in {
+      {
+        val tree = compileSingle("relativeLoad(42)")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compileSingle("a := 42 relativeLoad(a)")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compileSingle("relativeLoad(count(42))")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compileSingle("relativeLoad(new 42)")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }      
+      {
+        val tree = compileSingle("""relativeLoad("/clicks")""")
+        tree.provenance mustEqual StaticProvenance("/clicks")
+        tree.errors must beEmpty
+      }
+    }
+    
     "identify dispatch to identity function by parameter" in {
       {
         val tree = compileSingle("id(a) := a id(42)")
@@ -899,6 +958,12 @@ object ProvenanceComputationSpecs extends Specification
     "identify dispatch to load-modified identity function as static" in {
       val tree = compileSingle("id(a) := a + //foo id(24)")
       tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
+    }
+    
+    "identify dispatch to relative load-modified identity function as static" in {
+      val tree = compileSingle("id(a) := a + ./foo id(24)")
+      tree.provenance mustEqual StaticProvenance("foo")
       tree.errors must beEmpty
     }
     

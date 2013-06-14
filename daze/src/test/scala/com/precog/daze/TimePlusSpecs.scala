@@ -35,7 +35,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
   "time plus functions (homogeneous case)" should {
     "compute incrememtation of positive number of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -55,7 +55,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of negative number of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(-5))(line))(line)
         
       val result = testEval(input)
@@ -75,7 +75,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of zero of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(0))(line))(line)
         
       val result = testEval(input)
@@ -96,7 +96,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of months" in {
       val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -117,7 +117,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -137,7 +137,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of days" in {
       val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -157,7 +157,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of hours" in {
       val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -177,7 +177,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -197,7 +197,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -217,7 +217,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of ms" in {
       val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -240,7 +240,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
   "time plus functions (heterogeneous case)" should {
     "compute incrememtation of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -261,7 +261,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of months" in {
       val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -282,7 +282,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -302,7 +302,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of days" in {
       val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -322,7 +322,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of hours" in {
       val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -342,7 +342,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -362,7 +362,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -382,7 +382,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of ms" in {
       val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601"))(line))(line),
         Const(CLong(5))(line))(line)
         
       val result = testEval(input)
@@ -405,7 +405,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
   "time plus functions (homogeneous case across slices)" should {
     "compute incrememtation of positive number of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -442,7 +442,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of negative number of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(-5))(line))(line)
 
       val result = testEval(input)
@@ -479,7 +479,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of zero of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(0))(line))(line)
 
       val result = testEval(input)
@@ -517,7 +517,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of months" in {
       val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -555,7 +555,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -592,7 +592,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of days" in {
       val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -629,7 +629,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of hours" in {
       val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -666,7 +666,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -703,7 +703,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -740,7 +740,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of ms" in {
       val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/hom/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -780,7 +780,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
   "time plus functions (heterogeneous case across slices)" should {
     "compute incrememtation of years" in {
       val input = Join(BuiltInFunction2Op(YearsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -806,7 +806,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of months" in {
       val input = Join(BuiltInFunction2Op(MonthsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -832,7 +832,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
 
     "compute incrememtation of weeks" in {
       val input = Join(BuiltInFunction2Op(WeeksPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -857,7 +857,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of days" in {
       val input = Join(BuiltInFunction2Op(DaysPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -882,7 +882,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of hours" in {
       val input = Join(BuiltInFunction2Op(HoursPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -907,7 +907,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of minutes" in {
       val input = Join(BuiltInFunction2Op(MinutesPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -932,7 +932,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of seconds" in {
       val input = Join(BuiltInFunction2Op(SecondsPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)
@@ -957,7 +957,7 @@ trait TimePlusSpecs[M[+_]] extends Specification
     }
     "compute incrememtation of ms" in {
       val input = Join(BuiltInFunction2Op(MillisPlus), Cross(None),
-        dag.LoadLocal(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
+        dag.AbsoluteLoad(Const(CString("/het/iso8601AcrossSlices"))(line))(line),
         Const(CLong(5))(line))(line)
 
       val result = testEval(input)

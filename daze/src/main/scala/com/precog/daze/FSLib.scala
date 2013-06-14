@@ -28,7 +28,7 @@ trait FSLibModule[M[+_]] extends ColumnarTableLibModule[M] {
     object expandGlob extends Morphism1(FSNamespace, "expandGlob") {
       val tpe = UnaryOperationType(JTextT, JTextT)
   
-      val pattern = Pattern.compile("""/+((?:[a-zA-Z0-9\-\._~:?#@!$&'+=]+)|\*)""")
+      val pattern = Pattern.compile("""/?+((?:[a-zA-Z0-9\-\._~:?#@!$&'+=]+)|\*)""")
   
       def expand_*(apiKey: APIKey, pathString: String, pathRoot: Path): M[Stream[Path]] = {
         def walk(m: Matcher, prefixes: Stream[Path]): M[Stream[Path]] = {

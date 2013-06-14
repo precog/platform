@@ -32,7 +32,7 @@ trait ArrayLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Flatten,
-        dag.LoadLocal(Const(CString("/hom/arrays"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/hom/arrays"))(line))(line))(line)
         
       val result = testEval(input)
       result must haveSize(25)
@@ -49,7 +49,7 @@ trait ArrayLibSpecs[M[+_]] extends Specification
       val line = Line(1, 1, "")
       
       val input = dag.Morph1(Flatten,
-        dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line)
+        dag.AbsoluteLoad(Const(CString("/het/arrays"))(line))(line))(line)
         
       val result = testEval(input)
       result must haveSize(26)
@@ -72,11 +72,11 @@ trait ArrayLibSpecs[M[+_]] extends Specification
       val input = dag.Join(JoinObject, IdentitySort,
         dag.Join(WrapObject, Cross(None),
           Const(CString("arr"))(line),
-          dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line),
+          dag.AbsoluteLoad(Const(CString("/het/arrays"))(line))(line))(line),
         dag.Join(WrapObject, Cross(None),
           Const(CString("val"))(line),
           dag.Morph1(Flatten,
-            dag.LoadLocal(Const(CString("/het/arrays"))(line))(line))(line))(line))(line)
+            dag.AbsoluteLoad(Const(CString("/het/arrays"))(line))(line))(line))(line))(line)
         
       val result = testEval(input)
       result must haveSize(26)

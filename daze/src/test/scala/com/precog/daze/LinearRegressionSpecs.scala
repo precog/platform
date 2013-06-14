@@ -26,8 +26,8 @@ trait LinearRegressionTestSupport[M[+_]]
   def morph2Input(morph: Morphism2, dataLeft: String, dataRight: String) = {
     val line = Line(0, 0, "")
     dag.Morph2(morph,
-      dag.LoadLocal(Const(CString(dataLeft))(line))(line),
-      dag.LoadLocal(Const(CString(dataRight))(line))(line)
+      dag.AbsoluteLoad(Const(CString(dataLeft))(line))(line),
+      dag.AbsoluteLoad(Const(CString(dataRight))(line))(line)
     )(line)
   }
 
@@ -78,10 +78,10 @@ trait LinearRegressionSpecs[M[+_]] extends Specification
 
     dag.Morph2(MultiLinearRegression,
       dag.Join(DerefArray, Cross(Some(TableModule.CrossOrder.CrossLeft)),
-        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.AbsoluteLoad(Const(CString(points))(line))(line),
         dag.Const(CLong(1))(line))(line),
       dag.Join(DerefArray, Cross(Some(TableModule.CrossOrder.CrossLeft)),
-        dag.LoadLocal(Const(CString(points))(line))(line),
+        dag.AbsoluteLoad(Const(CString(points))(line))(line),
         dag.Const(CLong(0))(line))(line))(line)
   }
 

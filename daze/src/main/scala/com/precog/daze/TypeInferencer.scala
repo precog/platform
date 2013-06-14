@@ -39,7 +39,17 @@ trait TypeInferencer extends DAG {
     
           case New(parent) => inner(jtpe, typing, splits, parent)
     
-          case ld @ LoadLocal(parent, _) =>
+          case ld @ AbsoluteLoad(parent, _) =>
+            val typing0 = inner(Some(JTextT), typing, splits, parent)
+            jtpe map { jtpe0 =>
+              typing0 get ld map { jtpes =>
+                typing + (ld -> (jtpes + jtpe0))
+              } getOrElse {
+                typing + (ld -> Set(jtpe0))
+              }
+            } getOrElse typing
+            
+          case ld @ RelativeLoad(parent, _) =>
             val typing0 = inner(Some(JTextT), typing, splits, parent)
             jtpe map { jtpe0 =>
               typing0 get ld map { jtpes =>
@@ -135,8 +145,11 @@ trait TypeInferencer extends DAG {
 
     def applyTypes(typing: Map[DepGraph, JType], graph: DepGraph): DepGraph = {
       graph mapDown { recurse => {
-        case ld @ LoadLocal(parent, _) =>
-          LoadLocal(recurse(parent), typing(ld))(ld.loc)
+        case ld @ AbsoluteLoad(parent, _) =>
+          AbsoluteLoad(recurse(parent), typing(ld))(ld.loc)
+        
+        case ld @ RelativeLoad(parent, _) =>
+          RelativeLoad(recurse(parent), typing(ld))(ld.loc)
       }}
     }
     
