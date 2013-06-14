@@ -103,7 +103,7 @@ class ManagedQueryModuleSpec extends TestManagedQueryModule with Specification {
   // Performs an incredibly intense compuation that requires numTicks ticks.
   def execute(numTicks: Int, ticksToTimeout: Option[Int] = None): Future[(JobId, AtomicInteger, Future[Int])] = {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
-    val ctx = EvaluationContext(apiKey, account, Path.Root, clock.now())
+    val ctx = EvaluationContext(apiKey, account, Path.Root, Path.Root, clock.now())
 
     val result = for {
       // TODO: No idea how to work with EitherT[TestFuture, so sys.error it is]

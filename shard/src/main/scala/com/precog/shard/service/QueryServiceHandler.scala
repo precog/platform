@@ -100,7 +100,7 @@ abstract class QueryServiceHandler[A](implicit M: Monad[Future])
     success { (apiKey: APIKey, account: AccountDetails, path: Path, query: String, opts: QueryOptions) =>
       val responseEither = for {
         executor <- execution.executorFor(apiKey) leftMap { EvaluationError.invalidState } 
-        ctx = EvaluationContext(apiKey, account, path, new DateTime) //CLOCK!!!!!!
+        ctx = EvaluationContext(apiKey, account, path, Path.Root, new DateTime) //CLOCK!!!!!!
         result <- executor.execute(query, ctx, opts) 
         httpResponse <- EitherT.right(extractResponse(request, result, opts.output))
       } yield {
@@ -123,7 +123,7 @@ class AnalysisServiceHandler(platform: Platform[Future, Slice, StreamT[Future, S
       { (details: (APIKey, AccountDetails), path: Path) =>
         val (apiKey, accountDetails) = details
         // The context needs to use the prefix of the requested script, not th script path
-        val context = EvaluationContext(apiKey, accountDetails, path.prefix getOrElse Path.Root, clock.now())
+        val context = EvaluationContext(apiKey, accountDetails, Path.Root, path.prefix getOrElse Path.Root, clock.now())
         val cacheDirectives = request.headers.header[`Cache-Control`].toSeq.flatMap(_.directives)
         logger.debug("Received analysis request with cache directives: " + cacheDirectives)
 

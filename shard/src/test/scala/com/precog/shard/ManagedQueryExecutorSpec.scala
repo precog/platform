@@ -71,7 +71,7 @@ class ManagedQueryExecutorSpec extends TestManagedPlatform with Specification {
     val timeout = ticksToTimeout map { t => Duration(clock.duration * t, TimeUnit.MILLISECONDS) }
     val executionResult = for {
       executor <- asyncExecutorFor(apiKey) leftMap { EvaluationError.invalidState }
-      ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), clock.now())
+      ctx = EvaluationContext(apiKey, account, Path("/\\\\/\\///\\/"), Path.Root, clock.now())
       result <- executor.execute(numTicks.toString, ctx, QueryOptions(timeout = timeout))
     } yield result 
 

@@ -136,7 +136,7 @@ object SBTConsole {
     val rootAPIKey = rawAPIKeyFinder.rootAPIKey.copoint
     val rootAccount = AccountDetails("root", "nobody@precog.com",
       new DateTime, rootAPIKey, Path.Root, AccountPlan.Root)
-    def evaluationContext = EvaluationContext(rootAPIKey, rootAccount, Path.Root, new DateTime)
+    def evaluationContext = EvaluationContext(rootAPIKey, rootAccount, Path.Root, Path.Root, new DateTime)
 
 
     val storageTimeout = yggConfig.storageTimeout
