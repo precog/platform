@@ -22,7 +22,8 @@ package vfs
 
 import ResourceError._
 import table.Slice
-import metadata.PathStructure
+import metadata._
+import PathMetadata._
 
 import com.precog.common._
 import com.precog.common.ingest._
@@ -232,9 +233,35 @@ trait InMemoryVFSModule[M[+_]] extends VFSModule[M, Slice] { moduleSelf =>
       }
     }
 
-    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]] = EitherT.right {
-      M point {
-        data.keySet.map(_._1) flatMap { _ - path }
+    private def childMetadata(path: Path): Set[PathMetadata] = {
+      data.keySet.map(_._1) flatMap { _ - path } flatMap { p0 =>
+        val childPath = path / Path(p0.elements.headOption.toList)
+        val isDir = p0.length > 1
+        data.get((childPath, Version.Current)) map { record =>
+          Set(PathMetadata(p0, if (isDir) DataDir(record.resource.mimeType) else DataOnly(record.resource.mimeType)))
+        } getOrElse {
+          // no current version
+          if (isDir) Set(PathMetadata(p0, PathOnly)) else Set.empty[PathMetadata]
+        }
+      }
+    }    
+    
+    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[PathMetadata]] = {
+      EitherT.right {
+        M point { childMetadata(path) } 
+      }
+    }
+
+    def findPathMetadata(path: Path): EitherT[M, ResourceError, PathMetadata] = {
+      EitherT {
+        M point {
+          val isDir = childMetadata(path).nonEmpty
+          data.get((path, Version.Current)) map { record => 
+            \/.right(PathMetadata(path, if (isDir) DataDir(record.resource.mimeType) else DataOnly(record.resource.mimeType)))
+          } getOrElse {
+            if (isDir) \/.right(PathMetadata(path, PathOnly)) else \/.left(NotFound("Path not fournd: %s".format(path.path)))
+          }
+        }
       }
     }
 
