@@ -1,4 +1,4 @@
-clicks := //clicks
+clicks := ./clicks
 
 solve 'time = clicks.time
   belowTime := max(clicks.time where clicks.time < 'time)

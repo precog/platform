@@ -1,4 +1,4 @@
-tweets  := //tweets
+tweets  := ./tweets
 tweets' := new tweets
 
 tweets ~ tweets'

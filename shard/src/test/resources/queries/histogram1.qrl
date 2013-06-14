@@ -1,5 +1,5 @@
-campaigns := //campaigns
-organizations := //organizations
+campaigns := ./campaigns
+organizations := ./organizations
 
 solve 'revenue = organizations.revenue & 'campaign = organizations.campaign
   campaigns' := campaigns where campaigns.campaign = 'campaign

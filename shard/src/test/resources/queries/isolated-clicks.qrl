@@ -1,4 +1,4 @@
-clicks := //clicks
+clicks := ./clicks
 
 spacings := solve 'time
   click := clicks where clicks.time = 'time
