@@ -238,16 +238,16 @@ object RelationSpecs extends Specification
       tree.errors must beEmpty      
     }    
 
-    "accept intersect on different loads when related" in {
+    "reject intersect on different loads when related" in {
       val tree = compileSingle("//foo ~ //bar //foo intersect //bar")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
-    "accept intersect on different relative loads when related" in {
+    "reject intersect on different relative loads when related" in {
       val tree = compileSingle("./foo ~ ./bar ./foo intersect ./bar")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
     "accept intersect on static and dynamic provenances when related" in {
@@ -262,16 +262,16 @@ object RelationSpecs extends Specification
       tree.errors must beEmpty      
     }    
     
-    "accept difference on different loads when related" in {
+    "reject difference on different loads when related" in {
       val tree = compileSingle("//foo ~ //bar //foo difference //bar")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
-    "accept difference on different relative loads when related" in {
+    "reject difference on different relative loads when related" in {
       val tree = compileSingle("./foo ~ ./bar ./foo difference ./bar")
-      tree.provenance mustEqual StaticProvenance("foo")
-      tree.errors must beEmpty      
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(DifferenceWithNoCommonalities)
     }
     
     "accept difference on static and dynamic provenances when related" in {

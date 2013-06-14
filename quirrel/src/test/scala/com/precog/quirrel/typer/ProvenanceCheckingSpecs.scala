@@ -602,7 +602,7 @@ object ProvenanceCheckingSpecs extends Specification
     "reject intersect on different relative loads" in {
       val tree = compileSingle("./foo intersect ./bar")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+      tree.errors mustEqual Set(IntersectWithNoCommonalities)
     }
     
     "accept intersect on static and dynamic provenances" in {
