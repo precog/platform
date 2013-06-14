@@ -22,6 +22,7 @@ package vfs
 
 import ResourceError._
 import table.Slice
+import metadata.PathMetadata
 import metadata.PathStructure
 
 import com.precog.common._
@@ -84,7 +85,7 @@ sealed trait WriteResult extends PathActionResponse
 sealed trait MetadataResult extends PathActionResponse
 
 case class UpdateSuccess(path: Path) extends WriteResult
-case class PathChildren(path: Path, children: Set[Path]) extends MetadataResult
+case class PathChildren(path: Path, children: Set[PathMetadata]) extends MetadataResult
 case class PathOpFailure(path: Path, error: ResourceError) extends ReadResult with WriteResult with MetadataResult
 
 trait ActorVFSModule extends VFSModule[Future, Slice] {
@@ -328,15 +329,32 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
       }
     }
 
-    def findDirectChildren(path: Path): EitherT[Future, ResourceError, Set[Path]] = {
+    def findDirectChildren(path: Path): EitherT[Future, ResourceError, Set[PathMetadata]] = {
       implicit val t = projectionReadTimeout
       EitherT {
         (projectionsActor ? FindChildren(path)).mapTo[MetadataResult] map {
-          case PathChildren(_, children) => \/.right(children flatMap { _ - path })
+          case PathChildren(_, children) => \/.right(for (pm <- children; p0 <- (pm.path - path)) yield { pm.copy(path = p0) })
           case PathOpFailure(_, error) => \/.left(error)
         }
       }
     }
+
+    def findPathMetadata(path: Path): EitherT[Future, ResourceError, PathMetadata] = {
+      implicit val t = projectionReadTimeout
+      EitherT {
+        (projectionsActor ? FindPathMetadata(path)).mapTo[MetadataResult] map {
+          case PathChildren(_, children) => 
+            children.headOption flatMap { pm => 
+              (pm.path - path) map { p0 => pm.copy(path = p0) } 
+            } toRightDisjunction {
+              ResourceError.notFound("Cannot return metadata for path %s".format(path.path))
+            }
+          case PathOpFailure(_, error) => 
+            \/.left(error)
+        }
+      }
+    }
+
 
     def currentVersion(path: Path) = {
       implicit val t = projectionReadTimeout
@@ -397,6 +415,17 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
             logger.error("Error obtaining path children for " + path, t)
             IO { sender ! PathOpFailure(path, IOError(t)) }
         } unsafePerformIO
+
+      case FindPathMetadata(path) =>
+        logger.debug("Received request to find metadata for path %s".format(path.path))
+        val requestor = sender
+        val eio = VFSPathUtils.currentPathMetadata(baseDir, path) map { pathMetadata =>
+          requestor ! PathChildren(path, Set(pathMetadata))
+        } leftMap { error =>
+          requestor ! PathOpFailure(path, error)
+        }
+
+        eio.run.unsafePerformIO
 
       case op: PathOp =>
         val requestor = sender

@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package vfs
 
 import table.Slice
+import metadata.PathMetadata
 import metadata.PathStructure
 
 import com.precog.common._
@@ -193,7 +194,9 @@ trait VFSModule[M[+_], Block] extends Logging {
      * we have /foo/bar/qux and /foo/baz/duh, and path=/foo, we will
      * return (bar, baz).
      */
-    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[Path]]
+    def findDirectChildren(path: Path): EitherT[M, ResourceError, Set[PathMetadata]]
+
+    def findPathMetadata(path: Path): EitherT[M, ResourceError, PathMetadata]
 
     def currentVersion(path: Path): M[Option[VersionEntry]]
   }

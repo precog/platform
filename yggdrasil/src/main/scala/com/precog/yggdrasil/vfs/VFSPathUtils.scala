@@ -17,8 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package vfs
 
 import akka.dispatch.Future
@@ -26,6 +25,8 @@ import akka.dispatch.Future
 import com.precog.common.Path
 import com.precog.common.security.{APIKey, PermissionsFinder}
 import com.precog.niflheim.NIHDBActor
+import com.precog.yggdrasil.metadata._
+import ResourceError._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -33,6 +34,7 @@ import java.io.{File, FileFilter}
 
 import org.apache.commons.io.filefilter.FileFilterUtils
 
+import scalaz._
 import scalaz.effect.IO
 import scalaz.std.list._
 import scalaz.syntax.std.boolean._
@@ -81,47 +83,78 @@ object VFSPathUtils extends Logging {
 
   def versionsSubdir(pathDir: File): File = new File(pathDir, versionsSubdir)
 
-  def findChildren(baseDir: File, path: Path): IO[Set[Path]] = {
+  def findChildren(baseDir: File, path: Path): IO[Set[PathMetadata]] = {
     val pathRoot = pathDir(baseDir, path)
 
     logger.debug("Checking for children of path %s in dir %s".format(path, pathRoot))
-    Option(pathRoot.listFiles(pathFileFilter)).map { files =>
+    Option(pathRoot.listFiles(pathFileFilter)) map { files =>
       logger.debug("Filtering children %s in path %s".format(files.mkString("[", ", ", "]"), path))
-      val io = files.toList traverse { f => 
-        hasCurrentData(f) map { unescapePath(path / Path(f.getName)) -> _ }
-      } 
-      
-      io.map(_.collect({ case (path, true) => path }).toSet)
+      val childMetadata = files.toList traverse { f => 
+        val childPath = unescapePath(path / Path(f.getName))
+        currentPathMetadata(baseDir, childPath).fold[Option[PathMetadata]](
+          {
+            case NotFound(message) =>
+              logger.trace("No child data found for %s".format(childPath.path))
+              None
+            case error => 
+              logger.error("Encountered corruption or error searching child paths: %s".format(error.messages.list.mkString("; ")))
+              None
+          },
+          pathMetadata => Some(pathMetadata)
+        ) 
+      }
+
+      childMetadata.map(_.flatten.toSet): IO[Set[PathMetadata]]
     } getOrElse {
       logger.debug("Path dir %s for path %s is not a directory!".format(pathRoot, path))
       IO(Set.empty)
     }
   }
 
-  def hasCurrentData(dir: File): IO[Boolean] = {
-    IO(dir.isDirectory) flatMap { isDir =>
-      if (isDir) {
-        // hasCurrent relies on atomic reads of disk blocks and the fact that a "current version" fits entirely within a block
-        VersionLog.hasCurrent(dir) flatMap { hasCurrent =>
-          if (hasCurrent) {
-            IO(true)
-          } else {
-            // Recurse on children
-            IO(Option(dir.listFiles(pathFileFilter))) flatMap { optFiles =>
-              optFiles map { files =>
-                files.filter(_.isDirectory).foldLeft(IO(false)) {
-                  case (lastCheck, childDir) => lastCheck flatMap {
-                    case true  => IO(true) // We already found a child with data, so no need to recurse
-                    case false => hasCurrentData(childDir)
-                  }
-                }
-              } getOrElse IO(false)
-            }
-          }
+  def currentPathMetadata(baseDir: File, path: Path): EitherT[IO, ResourceError, PathMetadata] = {
+    def containsNonemptyChild(dirs: List[File]): IO[Boolean] = dirs match {
+      case f :: xs =>
+        val childPath = unescapePath(path / Path(f.getName))
+        findChildren(baseDir, childPath) flatMap { children =>
+          if (children.nonEmpty) IO(true) else containsNonemptyChild(xs)
         }
-      } else {
-        IO(false)
+
+      case Nil => IO(false)
+    }
+
+    val pathDir0 = pathDir(baseDir, path)
+    EitherT {
+      IO(pathDir0.isDirectory) flatMap { 
+        case true =>
+          VersionLog.currentVersionEntry(pathDir0).run flatMap { currentVersionV =>
+            currentVersionV.fold[IO[ResourceError \/ PathMetadata]](
+              {
+                case NotFound(message) =>
+                  // Recurse on children to find one that is nonempty
+                  containsNonemptyChild(Option(pathDir0.listFiles(pathFileFilter)).toList.flatten) map {
+                    case true =>
+                      \/.right(PathMetadata(path, PathMetadata.PathOnly))
+                    case false =>
+                      \/.left(NotFound("All subpaths of %s appear to be empty.".format(path.path)))
+                  }
+
+                case otherError =>
+                  IO(\/.left(otherError))
+              },
+              { 
+                case VersionEntry(uuid, dataType, timestamp) => 
+                  containsNonemptyChild(Option(pathDir0.listFiles(pathFileFilter)).toList.flatten) map {
+                    case true => \/.right(PathMetadata(path, PathMetadata.DataDir(dataType.contentType)))
+                    case false => \/.right(PathMetadata(path, PathMetadata.DataOnly(dataType.contentType)))
+                  }
+              }
+            )
+          }
+
+        case false =>
+          IO(\/.left(NotFound("No data found at path %s".format(path.path))))
       }
     }
   }
+
 }

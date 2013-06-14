@@ -210,6 +210,9 @@ trait TestShardService extends BlueEyesServiceSpecification
   lazy val metaService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/analytics/v2/meta/fs/")
 
+  lazy val metadataService = client.contentType[QueryResult](application/(MimeTypes.json))
+                                .path("/analytics/v2/metadata/fs/")
+
   lazy val asyncService = client.contentType[QueryResult](application/(MimeTypes.json))
                                 .path("/analytics/v2/analytics/queries")
 
@@ -358,6 +361,10 @@ class ShardServiceSpec extends TestShardService {
     "reject read in the absence of read permissions" in todo
   }
 
+  def meta(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
+    apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metadataService).get(path)
+  }
+
   def browse(apiKey: Option[String] = Some(testAPIKey), path: String = "/test"): Future[HttpResponse[QueryResult]] = {
     apiKey.map{ metaService.query("apiKey", _) }.getOrElse(metaService).get(path)
   }
@@ -398,8 +405,34 @@ class ShardServiceSpec extends TestShardService {
     }
      */
 
-    "return empty response on browse failure" in {
-      browse(path = "/errpath").copoint must beLike {
+    "return empty response on metadata failure" in {
+      meta(path = "/errpath").copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(response)), _) =>
+          response mustEqual JObject("size" -> JNum(0), "children" -> JArray())
+      }
+    }
+
+    "handle metadata for API key accessible path" in {
+      val obj = JObject(Map("foo" -> JArray(JString("foo")::JString("bar")::Nil)))
+      meta().copoint must beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(Left(obj)), _) => ok
+        case HttpResponse(HttpStatus(NotFound, _), _, Some(Left(obj)), _) => 
+          failure("Not found: " + obj.renderCompact)
+      }
+    }
+    "reject metadata when no API key provided" in {
+      meta(None).copoint must beLike {
+        case HttpResponse(HttpStatus(BadRequest, "An apiKey query parameter is required to access this URL"), _, _, _) => ok
+      }
+    }
+    "reject metadata when API key not found" in {
+      meta(Some("not-gonna-find-it")).copoint must beLike {
+        case HttpResponse(HttpStatus(Forbidden, _), _, Some(content), _) =>
+          content must_== Left(JString("The specified API key does not exist: not-gonna-find-it"))
+      }
+    }
+    "return empty response on metadata failure" in {
+      meta(path = "/errpath").copoint must beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(Left(response)), _) =>
           response mustEqual JObject("size" -> JNum(0), "children" -> JArray())
       }
