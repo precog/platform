@@ -2961,7 +2961,69 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       // histogram
       // 
       // 
-      val clicks = dag.AbsoluteLoad(Const(CString("/clicks"))(line))(line)
+      val clicks = dag.AbsoluteLoad(dag.Morph1(expandGlob, Const(CString("/clicks"))(line))(line))(line)
+      
+      val id = new Identifier
+       
+      val input = dag.Split(
+        dag.Group(1,
+          clicks,
+          UnfixedSolution(0, 
+            Join(DerefObject, Cross(None),
+              clicks,
+              Const(CString("user"))(line))(line))),
+        Join(JoinObject, Cross(None),
+          Join(WrapObject, Cross(None),
+            Const(CString("user"))(line),
+            SplitParam(0, id)(line))(line),
+          Join(WrapObject, Cross(None),
+            Const(CString("num"))(line),
+            dag.Reduce(Count,
+              SplitGroup(1, clicks.identities, id)(line))(line))(line))(line), id)(line)
+      
+      testEval(input) { result =>
+        result must haveSize(10)
+        
+        result must haveAllElementsLike {
+          case (ids, SObject(obj)) =>
+            ids must haveSize(1)
+            obj must haveKey("user")
+            obj must haveKey("num")
+            
+            obj("user") must beLike {
+              case SString(str) => {
+                str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                  "alissa", "franco", "matthew", "jason")
+              }
+              case SNull => ok
+            }
+  
+            val user = (obj("user"): @unchecked) match {
+              case SString(user) => user
+              case SNull => SNull
+            }
+              
+            obj("num") must beLike {
+              case SDecimal(d) => d mustEqual Expected(user)
+            }
+        }
+      }
+    }
+    
+    "evaluate a histogram function against relative path" in {
+      val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
+        "john" -> 13, "alissa" -> 7, "franco" -> 13, "matthew" -> 10, "jason" -> 13, SNull -> 3)
+      
+      val line = Line(1, 1, "")
+      
+      // 
+      // clicks := dataset(//clicks)
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram
+      // 
+      // 
+      val clicks = dag.RelativeLoad(dag.Morph1(expandGlob, Const(CString("clicks"))(line))(line))(line)
       
       val id = new Identifier
        

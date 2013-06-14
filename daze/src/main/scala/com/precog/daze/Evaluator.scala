@@ -1055,6 +1055,7 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
       case dag.Distinct(parent) => Set(parent)
       
       case dag.AbsoluteLoad(parent, _) => Set(parent)
+      case dag.RelativeLoad(parent, _) => Set(parent)
       
       case Operate(_, parent) => Set(parent)
       
