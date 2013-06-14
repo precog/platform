@@ -525,7 +525,9 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case dag.AbsoluteLoad(parent, jtpe) => 
             for {
               pendingTable <- prepareEval(parent, splits)
-              trans2 = trans.DerefObjectStatic(pendingTable.trans, paths.Value)
+              Path(prefixStr) = ctx.basePath
+              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("([^/])$", "$1/")))
+              trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
               loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
                 {
                   case ResourceError.NotFound(message) => report.warn(graph.loc, message) >> Table.empty.point[N]
@@ -540,8 +542,12 @@ trait EvaluatorModule[M[+_]] extends CrossOrdering
           case dag.RelativeLoad(parent, jtpe) => 
             for {
               pendingTable <- prepareEval(parent, splits)
+              
               Path(prefixStr) = ctx.basePath
-              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(prefixStr.replaceAll("([^/])$", "$1/")))
+              Path(midStr) = ctx.scriptPath
+              fullPrefix = prefixStr.replaceAll("([^/])$", "$1/") + midStr.replaceAll("([^/])$", "$1/")
+              
+              f1 = concatString(MorphContext(ctx, graph)).applyl(CString(fullPrefix))
               trans2 = trans.Map1(trans.DerefObjectStatic(pendingTable.trans, paths.Value), f1)
               loaded = pendingTable.table.transform(trans2).load(ctx.apiKey, jtpe).fold(
                 {

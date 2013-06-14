@@ -82,7 +82,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends ParseEvalStack[M]
 
   val dummyAccount = AccountDetails("dummyAccount", "nobody@precog.com",
     new DateTime, yggConfig.apiKey, Path.Root, AccountPlan.Free)
-  def dummyEvaluationContext = EvaluationContext(yggConfig.apiKey, dummyAccount, Path.Root, new DateTime)
+  def dummyEvaluationContext = EvaluationContext(yggConfig.apiKey, dummyAccount, Path.Root, Path.Root, new DateTime)
 
   def eval(query: String): M[Result] = try {
     val forest = Timing.time("Compiling query")(compile(query))
