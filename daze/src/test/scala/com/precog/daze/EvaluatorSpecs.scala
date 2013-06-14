@@ -91,16 +91,15 @@ trait EvaluatorTestSupport[M[+_]] extends StdLibEvaluatorStack[M]
               }
               
               val prefix = "filesystem"
-              val target = path.path.replaceAll("/$", ".json")
+              val target = path.path.replaceAll("/$", ".json").replaceAll("^/" + prefix, prefix)
               
-              val src = if (pathStr startsWith prefix) {
-                          io.Source.fromFile(new File(target.substring(prefix.length + 1)))
-                        } else {
-                          io.Source.fromInputStream(getClass.getResourceAsStream(target))
-                        }
+              val src = if (target startsWith prefix)
+                io.Source.fromFile(new File(target.substring(prefix.length)))
+              else
+                io.Source.fromInputStream(getClass.getResourceAsStream(target))
 
               val parsed: Stream[JValue] = src.getLines map JParser.parseUnsafe toStream
-
+              
               currentIndex += parsed.length
               
               parsed zip (Stream from index) map {
@@ -151,8 +150,8 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
   val testAPIKey = "testAPIKey"
 
-  def testEval(graph: DepGraph, path: Path = Path.Root, optimize: Boolean = true)(test: Set[SEvent] => Result): Result = {
-    val ctx = defaultEvaluationContext.copy(basePath = path)
+  def testEval(graph: DepGraph, path: Path = Path.Root, scriptPath: Path = Path.Root, optimize: Boolean = true)(test: Set[SEvent] => Result): Result = {
+    val ctx = defaultEvaluationContext.copy(basePath = path, scriptPath = scriptPath)
     (consumeEval(graph, ctx, optimize) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
@@ -298,11 +297,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
-    "evaluate a absolute_load even with a base path" in {
+    "evaluate a absolute_load with a base path and not script path" in {
       val line = Line(1, 1, "")
-      val input = dag.AbsoluteLoad(Const(CString("/hom/numbers"))(line))(line)
+      val input = dag.AbsoluteLoad(Const(CString("/numbers"))(line))(line)
 
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path("/hom"), Path("/foo")) { result =>
         result must haveSize(5)
         
         val result2 = result collect {
@@ -313,11 +312,26 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
     
-    "evaluate a relative_load with a base path" in {
+    "evaluate a relative_load with just a script path" in {
       val line = Line(1, 1, "")
       val input = dag.RelativeLoad(Const(CString("numbers"))(line))(line)
 
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
+      }
+    }
+    
+    "evaluate a relative_load with both a base path and a script path" in {
+      val line = Line(1, 1, "")
+      val input = dag.RelativeLoad(Const(CString("numbersdiff"))(line))(line)
+
+      testEval(input, Path("/hom"), Path("/stuff")) { result =>
         result must haveSize(5)
         
         val result2 = result collect {
@@ -335,7 +349,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input = Join(Add, IdentitySort, numbers, numbers)(line)
 
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
         result must haveSize(5)
 
         val result2 = result collect {
@@ -354,7 +368,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input = Join(Add, IdentitySort, numbers, numbers0)(line)
 
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
         result must haveSize(5)
 
         val result2 = result collect {
@@ -373,7 +387,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
 
       val input = Join(Add, Cross(None), numbers, numbers2)(line)
 
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
         result must haveSize(30)
 
         val result2 = result collect {
@@ -729,7 +743,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             heightWeight,
             Const(CString("height"))(line))(line))(line)
 
-        testEval(input, Path("/hom")) { result =>
+        testEval(input, Path.Root, Path("/hom")) { result =>
           result must haveSize(5)
 
           val result2 = result collect {
@@ -1701,7 +1715,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           pairs,
           Const(CString("second"))(line))(line))(line)
         
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
         result must haveSize(4)
         
         val result2 = result collect {
@@ -1849,7 +1863,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         dag.RelativeLoad(Const(CString("numbers"))(line))(line),
         dag.RelativeLoad(Const(CString("numbers3"))(line))(line))(line)
         
-      testEval(input, Path("/hom")) { result =>
+      testEval(input, Path.Root, Path("/hom")) { result =>
         result must haveSize(10)
         
         val result2 = result collect {
@@ -1959,7 +1973,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Const(CLong(13))(line))(line))(line)
           
-        testEval(input, Path("/hom")) { result =>
+        testEval(input, Path.Root, Path("/hom")) { result =>
           result must haveSize(2)
           
           val result2 = result collect {
@@ -2130,7 +2144,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
               numbers,
               Const(CLong(13))(line))(line))(line))(line)
           
-        testEval(input, Path("/hom")) { result =>
+        testEval(input, Path.Root, Path("/hom")) { result =>
           result must haveSize(3)
           
           val result2 = result collect {
@@ -2242,7 +2256,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
             numbers,
             Const(CLong(13))(line))(line))(line)
           
-        testEval(input, Path("/het")) { result =>
+        testEval(input, Path.Root, Path("/het")) { result =>
           result must haveSize(3)
           
           val result2 = result collect {
