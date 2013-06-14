@@ -39,9 +39,26 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
     }
   } map { JNum(_) }
 
-  def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
+  def children(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
     vfs.findDirectChildren(apiKey, path) map { paths =>
       JArray(paths.map(p => JString(p.toString.substring(1))).toSeq: _*)
+    }
+  }
+
+  def browse(apiKey: APIKey, path: Path): EitherT[M, ResourceError, JArray] = {
+    import PathMetadata._
+    vfs.findDirectChildren(apiKey, path) map { paths =>
+      JArray(
+        (paths map { p =>
+          val fields: Map[String, JValue] = p.pathType match {
+            case DataDir(contentType) => 
+              Map("contentType" -> JString(contentType.value), "type" -> JArray(JString("file"), JString("directory")))
+            case DataOnly(contentType) => Map("contentType" -> JString(contentType.value), "type" -> JArray(JString("file")))
+            case PathOnly => Map("type" -> JArray(JString("directory")))
+          }
+          JObject(fields + ("name" -> JString(p.path.path.substring(1))))
+        }).toSeq: _*
+      )
     }
   }
 
@@ -74,7 +91,7 @@ class BrowseSupport[M[+_]: Bind](vfs: VFSMetadata[M]) {
   }
 }
 
-class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Future])
+class BrowseServiceHandler[A](vfs0: VFSMetadata[Future], legacy: Boolean = false /* Enterprise software! */)(implicit M: Monad[Future])
     extends BrowseSupport[Future](vfs0) with CustomHttpService[A, (APIKey, Path) => Future[HttpResponse[JValue]]] with Logging {
 
   val service = (request: HttpRequest[A]) => success { (apiKey: APIKey, path: Path) =>
@@ -83,23 +100,25 @@ class BrowseServiceHandler[A](vfs0: VFSMetadata[Future])(implicit M: Monad[Futur
         size(apiKey, path) map { sz => JObject("size" -> sz) }
 
       case "children" =>
-        browse(apiKey, path) map { paths => JObject("children" -> paths) }
+        val kids = if (legacy) children(apiKey, path) else browse(apiKey, path)
+        kids map { paths => JObject("children" -> paths) }
 
       case "structure" =>
         val cpath = request.parameters.get('property).map(CPath(_)).getOrElse(CPath.Identity)
         structure(apiKey, path, cpath) map { detail => JObject("structure" -> detail) }
+
     } getOrElse {
       logger.debug("Retrieving all available metadata for %s as %s".format(path.path, apiKey))
       for {
         sz <- size(apiKey, path)
-        children <- browse(apiKey, path)
+        children <- if (legacy) children(apiKey, path) else browse(apiKey, path)
         struct <- structure(apiKey, path, CPath.Identity)
       } yield {
         JObject("size" -> sz, "children" -> children, "structure" -> struct).normalize
       }
     } map { content0 =>
       HttpResponse[JValue](OK, content = Some(content0))
-    } valueOr { 
+    } valueOr {
       _.fold(
         fatalError => {
           logger.error("A fatal error was encountered handling browse request %s: %s".format(request.shows, fatalError))

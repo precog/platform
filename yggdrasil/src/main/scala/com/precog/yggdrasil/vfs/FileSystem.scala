@@ -45,7 +45,10 @@ import scalaz.syntax.traverse._
 
 sealed class PathData(val typeName: PathData.DataType)
 object PathData {
-  sealed abstract class DataType(name: String)
+  sealed abstract class DataType(val name: String) {
+    def contentType: MimeType
+  }
+
   object DataType {
     implicit val decomposer: Decomposer[DataType] with Extractor[DataType] = new Decomposer[DataType] with Extractor[DataType] {
       def decompose(t: DataType) = t match {
@@ -66,8 +69,9 @@ object PathData {
       }
     }
   }
+
   case class BLOB(contentType: MimeType) extends DataType("blob")
-  case object NIHDB extends DataType("nihdb")
+  case object NIHDB extends DataType("nihdb") { val contentType = FileContent.XQuirrelData }
 }
 
 case class BlobData(data: Array[Byte], mimeType: MimeType) extends PathData(PathData.BLOB(mimeType))
@@ -82,7 +86,8 @@ sealed trait PathOp {
 }
 
 case class Read(path: Path, version: Version) extends PathOp 
-case class FindChildren(path: Path) extends PathOp //FIXME: remove auth
+case class FindChildren(path: Path) extends PathOp 
+case class FindPathMetadata(path: Path) extends PathOp 
 case class CurrentVersion(path: Path) extends PathOp 
 
 
