@@ -99,6 +99,8 @@ object VFSPathUtils extends Logging {
         findChildren(baseDir, childPath) flatMap { children =>
           if (children.nonEmpty) IO(true) else containsNonemptyChild(xs)
         }
+
+      case Nil => IO(false)
     }
 
     val pathDir0 = pathDir(baseDir, path)
