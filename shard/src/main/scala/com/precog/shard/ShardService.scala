@@ -144,10 +144,20 @@ trait ShardService extends
             }
           }
         } ~
-        dataPath("/meta/fs") {
+        dataPath("/metadata/fs") {
           get {
             produce(application/json)(
               new BrowseServiceHandler[ByteChunk](state.platform.vfs) map { _ map { _ map { _ map { jvalueToChunk } } } }
+            )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
+          } ~
+          options {
+            (request: HttpRequest[ByteChunk]) => (a: APIKey, p: Path) => optionsResponse
+          }
+        } ~
+        dataPath("/meta/fs") {
+          get {
+            produce(application/json)(
+              new BrowseServiceHandler[ByteChunk](state.platform.vfs, legacy = true) map { _ map { _ map { _ map { jvalueToChunk } } } }
             )(ResponseModifier.responseFG[({ type λ[α] = (APIKey, Path) => α })#λ, Future, ByteChunk])
           } ~
           options {

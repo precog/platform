@@ -28,8 +28,10 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz._
 import scalaz.NonEmptyList.nels
 import scalaz.std.string._
+import scalaz.std.list._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
+import scalaz.syntax.traverse._
 import scalaz.syntax.std.boolean._
 import scalaz.syntax.std.list._
 import scalaz.syntax.std.option._
@@ -37,7 +39,7 @@ import scalaz.effect.IO
 import scala.math.Ordered._
 
 trait VFSMetadata[M[+_]] {
-  def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]]
+  def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[PathMetadata]]
   def pathStructure(apiKey: APIKey, path: Path, property: CPath, version: Version): EitherT[M, ResourceError, PathStructure]
   def size(apiKey: APIKey, path: Path, version: Version): EitherT[M, ResourceError, Long]
 }
@@ -94,13 +96,17 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
       VFS.pathStructure(selector)
     }
 
-    final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[Path]] = path match {
+    final def findDirectChildren(apiKey: APIKey, path: Path): EitherT[M, ResourceError, Set[PathMetadata]] = path match {
       // If asked for the root path, we simply determine children
       // based on the api key permissions to avoid a massive tree walk
       case Path.Root =>
         logger.debug("Defaulting on root-level child browse to account path")
-        EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path)) map {
-          _ filterNot (_ == Path.Root) map { browsable => Path(browsable.components.head) }
+        for {
+          children <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
+          nonRoot = children.filterNot(_ == Path.Root)
+          childMetadata <- nonRoot.toList.traverseU(vfs.findPathMetadata)
+        } yield {
+          childMetadata.toSet
         }
 
       case other =>
@@ -108,7 +114,7 @@ trait SecureVFSModule[M[+_], Block] extends VFSModule[M, Block] {
           children  <- vfs.findDirectChildren(path)
           permitted <- EitherT.right(permissionsFinder.findBrowsableChildren(apiKey, path))
         } yield {
-          children filter { child => permitted.exists(_.isEqualOrParentOf(path / child)) }
+          children filter { case PathMetadata(child, _) => permitted.exists(_.isEqualOrParentOf(path / child)) }
         }
     }
 

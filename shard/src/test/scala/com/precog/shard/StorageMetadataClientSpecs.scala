@@ -35,7 +35,7 @@ abstract class BrowseServiceSpecs[M[+_]](implicit val M: Monad[M] with Comonad[M
   "browse" should {
     "find child paths" in {
       client.browse("", Path("/foo/")).valueOr(e => sys.error(e.toString)).copoint must beLike {
-        case JArray(results) => results must haveTheSameElementsAs(JString("bar/") :: JString("bar1/") :: JString("bar2/") :: Nil)
+        case JArray(results) => results.map(_ \ "name") must haveTheSameElementsAs(JString("bar/") :: JString("bar1/") :: JString("bar2/") :: Nil)
       }
     }
   }

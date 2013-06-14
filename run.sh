@@ -132,6 +132,7 @@ function queryCache {
     SCRIPT_FOUND=0
 
     while [[ $TRIES_LEFT -gt 0 && $SCRIPT_FOUND -eq 0 ]]; do
+        #scripts/shardtool -m / "children"
         if scripts/shardtool -m / "children" | grep $SCRIPTNAME > /dev/null; then
             [ -n "$DEBUG" ] && echo "$SCRIPTNAME stored successfully"
             SCRIPT_FOUND=1
