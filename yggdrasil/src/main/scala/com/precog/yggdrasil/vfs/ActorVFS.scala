@@ -121,13 +121,15 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     }
 
     // Resource creation/open and discovery
-    def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDB] = {
+    def createNIHDB(versionDir: File, authorities: Authorities): IO[ResourceError \/ NIHDBResource] = {
       for {
         nihDir <- ensureDescriptorDir(versionDir)
         nihdbV <- NIHDB.create(chef, authorities, nihDir, cookThreshold, storageTimeout, txLogScheduler)(actorSystem)
       } yield {
         nihdbV.disjunction leftMap {
           ResourceError.fromExtractorError("Failed to create NIHDB in %s as %s".format(versionDir.toString, authorities))
+        } map {
+          NIHDBResource(_)
         }
       }
     }
@@ -392,7 +394,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
           vlog <- VersionLog.open(pathDir)
           actorV <- vlog traverse { versionLog =>
             logger.debug("Creating new PathManagerActor for " + path)
-            context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, quiescenceTimeout, clock))) tap { newActor =>
+            context.actorOf(Props(new PathManagerActor(path, VFSPathUtils.versionsSubdir(pathDir), versionLog, shutdownTimeout, quiescenceTimeout, clock, self))) tap { newActor =>
               IO { pathActors += (path -> newActor); pathLRU += (path -> ()) }
             }
           }
@@ -468,7 +470,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
     * An actor that manages resources under a given path. The baseDir is the version
     * subdir for the path.
     */
-  final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, shutdownTimeout: Duration, quiescenceTimeout: Duration, clock: Clock) extends Actor with Logging {
+  final class PathManagerActor(path: Path, baseDir: File, versionLog: VersionLog, shutdownTimeout: Duration, quiescenceTimeout: Duration, clock: Clock, routingActor: ActorRef) extends Actor with Logging {
     context.setReceiveTimeout(quiescenceTimeout)
 
     private[this] implicit def executor: ExecutionContext = context.dispatcher
@@ -542,23 +544,37 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
 
           case NIHDBData(data) =>
             resourceBuilder.createNIHDB(versionDir(version), writeAs) flatMap {
-              _ traverse { nihdb =>
-                nihdb tap { _.insert(data) } map { NIHDBResource(_) }
+              _ traverse { nihdbr =>
+                nihdbr tap { _.db.insert(data) }
               }
             }
         }
         _ <- created traverse { resource =>
           for {
             _ <- IO { versions += (version -> resource) }
-            _ <- complete.whenM(versionLog.completeVersion(version) >> versionLog.setHead(version))
+            _ <- complete.whenM(versionLog.completeVersion(version) >> versionLog.setHead(version) >> maybeExpireCache(apiKey, resource))
           } yield PrecogUnit
         }
       } yield {
         created.fold(
           error => PathOpFailure(path, error),
-          _ => UpdateSuccess(path)
+          (_: Resource) => UpdateSuccess(path)
         )
       }
+    }
+
+    private def maybeExpireCache(apiKey: APIKey, resource: Resource): IO[PrecogUnit] = {
+      resource.fold(
+        blobr => IO {
+          if (blobr.mimeType == FileContent.XQuirrelScript) {
+            // invalidate the cache
+            val cachePath = path / Path(".cached") //TODO: factor out this logic
+            //FIXME: remove eventId from archive messages?
+            routingActor ! ArchiveMessage(apiKey, cachePath, None, EventId.fromLong(0l), clock.instant())
+          }
+        },
+        nihdbr => IO(PrecogUnit)
+      )
     }
 
     private def maybeCompleteJob(msg: EventMessage, terminal: Boolean, response: PathActionResponse) = {
@@ -662,7 +678,7 @@ trait ActorVFSModule extends VFSModule[Future, Slice] {
               IO(requestor ! PathOpFailure(path, IllegalWriteRequestError("Append is not yet supported for binary files.")))
           }
 
-        case (offset, ArchiveMessage(apiKey, path, jobId, eventId, timestamp)) =>
+        case (offset, ArchiveMessage(apiKey, path, jobId, _, timestamp)) =>
           versionLog.clearHead >> IO(requestor ! UpdateSuccess(path))
       } map {
         _ => PrecogUnit
