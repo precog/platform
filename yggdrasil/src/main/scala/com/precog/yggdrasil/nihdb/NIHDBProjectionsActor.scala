@@ -60,21 +60,7 @@ case class ProjectionArchive(path: Path, archiveBy: APIKey, id: EventId) extends
 
 //case class ProjectionGetBlock(path: Path, id: Option[Long], columns: Option[Set[ColumnRef]])
 
-class NIHDBProjectionsActor(
-    activeDir: File,
-    archiveDir: File,
-    fileOps: FileOps,
-    chef: ActorRef,
-    cookThreshold: Int,
-    storageTimeout: Timeout,
-    permissionsFinder: PermissionsFinder[Future],
-    txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
-    ) extends Actor with Logging {
-
-  import permissionsFinder.apiKeyFinder
-
-  implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
-
+object NIHDBProjectionsActor {
   private final val disallowedPathComponents = Set(".", "..")
 
   private final val perAuthoritySubdir = "perAuthProjections"
@@ -84,25 +70,6 @@ class NIHDBProjectionsActor(
   private final val pathFileFilter: FileFilter = {
     import FileFilterUtils.{notFileFilter => not, _}
     not(nameFileFilter(perAuthoritySubdir))
-  }
-
-  private var projections = Map.empty[Path, Map[Authorities, NIHDBActorProjection]]
-
-  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
-
-  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
-
-  override def preStart() = {
-    logger.debug("Starting projections actor with base = " + activeDir)
-  }
-
-  override def postStop() = {
-    logger.info("Initiating shutdown of %d projections".format(projections.size))
-    Await.result(projections.values.flatMap(_.values).toList.traverse(_.close(context.system)), storageTimeout.duration)
-    logger.info("Projection shutdown complete")
-    logger.info("Shutting down TX log scheduler")
-    txLogScheduler.shutdown()
-    logger.info("TX log scheduler shutdown complete")
   }
 
   /**
@@ -124,7 +91,7 @@ class NIHDBProjectionsActor(
   }
 
   // Must return a directory
-  def ensureDescriptorDir(path: Path, authorities: Authorities): IO[File] = IO {
+  def ensureDescriptorDir(activeDir: File, path: Path, authorities: Authorities): IO[File] = IO {
     val dir = descriptorDir(activeDir, path, authorities)
     if (!dir.exists && !dir.mkdirs()) {
       throw new Exception("Failed to create directory for projection: " + dir)
@@ -132,13 +99,49 @@ class NIHDBProjectionsActor(
     dir
   }
 
-  def findDescriptorDirs(path: Path): Option[Set[File]] = {
+  def findDescriptorDirs(activeDir: File, path: Path): Option[Set[File]] = {
     // No pathFileFilter needed here, since the projections dir should only contain descriptor dirs
     Option(projectionsDir(activeDir, path).listFiles).map {
       _.filter { dir =>
         dir.isDirectory && NIHDBActor.hasProjection(dir)
       }.toSet
     }
+  }
+}
+
+class NIHDBProjectionsActor(
+    activeDir: File,
+    archiveDir: File,
+    fileOps: FileOps,
+    chef: ActorRef,
+    cookThreshold: Int,
+    storageTimeout: Timeout,
+    permissionsFinder: PermissionsFinder[Future],
+    txLogSchedulerSize: Int = 20 // default for now, should come from config in the future
+    ) extends Actor with Logging {
+
+  import permissionsFinder.apiKeyFinder
+  import NIHDBProjectionsActor._
+
+  implicit val M: Monad[Future] = new FutureMonad(context.dispatcher)
+
+  private var projections = Map.empty[Path, Map[Authorities, NIHDBActorProjection]]
+
+  private final val txLogScheduler = new ScheduledThreadPoolExecutor(txLogSchedulerSize, (new ThreadFactoryBuilder()).setNameFormat("HOWL-sched-%03d").build())
+
+  case class ReductionId(blockid: Long, path: Path, reduction: Reduction[_], columns: Set[(CPath, CType)])
+
+  override def preStart() = {
+    logger.debug("Starting projections actor with base = " + activeDir)
+  }
+
+  override def postStop() = {
+    logger.info("Initiating shutdown of %d projections".format(projections.size))
+    Await.result(projections.values.flatMap(_.values).toList.traverse(_.close(context.system)), storageTimeout.duration)
+    logger.info("Projection shutdown complete")
+    logger.info("Shutting down TX log scheduler")
+    txLogScheduler.shutdown()
+    logger.info("TX log scheduler shutdown complete")
   }
 
   def archive(path: Path, authorities: Authorities): IO[PrecogUnit] = {
@@ -209,7 +212,7 @@ class NIHDBProjectionsActor(
 
       case None =>
         // No open projections, so we need to scan the descriptors
-        val authorities = findDescriptorDirs(path).map {
+        val authorities = findDescriptorDirs(activeDir, path).map {
           _.toList traverse { dir =>
             NIHDBActor.readDescriptor(dir).map {
               _.map(_.map(_.authorities).valueOr { e => throw new Exception("Error reading projection descriptor for %s from %s: %s".format(path, dir, e.message)) })
@@ -270,7 +273,7 @@ class NIHDBProjectionsActor(
   private def createProjection(path: Path, authorities: Authorities): IO[NIHDBActorProjection] = {
     projections.get(path).flatMap(_.get(authorities)).map(IO(_)) getOrElse {
       for {
-        bd <- ensureDescriptorDir(path, authorities)
+        bd <- ensureDescriptorDir(activeDir, path, authorities)
         dbv <- NIHDB.create(chef, authorities, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system)
       } yield {
         val proj = dbv map { db => new NIHDBActorProjection(db)(context.dispatcher) } valueOr { error =>
@@ -290,7 +293,7 @@ class NIHDBProjectionsActor(
       IO(existing.values.toList)
     } orElse {
       logger.debug("Opening new projection for " + path)
-      findDescriptorDirs(path).map { projDirs =>
+      findDescriptorDirs(activeDir, path).map { projDirs =>
         projDirs.toList.map { bd =>
           NIHDB.open(chef, bd, cookThreshold, storageTimeout, txLogScheduler)(context.system).map { dbov =>
             dbov.map { dbv =>
