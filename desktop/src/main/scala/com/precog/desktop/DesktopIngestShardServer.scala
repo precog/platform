@@ -154,7 +154,7 @@ object DesktopIngestShardServer
   def platformFor(config: Configuration, apiKeyFinder: APIKeyFinder[Future], jobManager: JobManager[Future]): (ManagedPlatform, Stoppable) = {
     val rootAPIKey = config[String]("security.masterAccount.apiKey")
     val accountFinder = new StaticAccountFinder("desktop", rootAPIKey, Some("/"))
-    val platform = platformFactory(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
+    val platform = nihdbPlatform(config.detach("queryExecutor"), apiKeyFinder, accountFinder, jobManager)
 
     val stoppable = Stoppable.fromFuture {
       platform.shutdown.onComplete { _ =>
