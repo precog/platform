@@ -1,0 +1,24 @@
+<configuration scan="true">
+  <property name="SERVICE" value="auth-v1" />
+  <property name="LOG_DIR" value="/var/log/precog" />
+
+  <appender name="SERVERLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_DIR}/${SERVICE}.server.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <!-- daily rollover -->
+      <fileNamePattern>${LOG_DIR}/${SERVICE}.server-%d{yyyyMMdd}.log</fileNamePattern>
+
+      <!-- keep 30 days' worth of history -->
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{ISO8601} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="blueeyes.core.http" level="trace" />
+
+  <root level="trace">
+    <appender-ref ref="SERVERLOG" />
+  </root>
+</configuration>
