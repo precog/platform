@@ -4,8 +4,8 @@ cd $(dirname $0)
 
 . common.sh
 
-if [ ! -x $MONGO_DIR/mongo ]; then
-    echo "mongo command was not found under $MONGO_DIR - please update config."
+if [ ! -x $MONGO_BASE/bin/mongoimport ]; then
+    echo "mongoimport command was not found under $MONGO_BASE/bin - please update config."
     exit 1
 fi
 
@@ -20,11 +20,18 @@ if [ ! -e "$WORKDIR"/root_token.txt ]; then
     }
 fi
 
-TOKENID=$(cat "$WORKDIR"/root_token.txt)
+NEW_ROOT_KEY=$(cat "$WORKDIR"/root_token.txt)
 
+echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
+read
+
+find ./dump -name "*.json" -exec sed -i s/$ROOT_ACCOUNT_ID/$NEW_ROOT_KEY/ {} \;
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection accounts ./dump/$MONGO_ACCT_DB/accounts.json
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens ./dump/$MONGO_AUTH_DB/tokens.json
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants ./dump/$MONGO_AUTH_DB/grants.json
 
 # Make root user have root token
-echo -e "db.accounts.update({\"accountId\":\"$ROOT_ACCOUNT_ID\"},{\$set:{\"apiKey\":\"$TOKENID\"}})" | $MONGO_DIR/mongo --port $MONGO_PORT dev_accounts_v1
+#echo -e "db.accounts.update({\"accountId\":\"$ROOT_ACCOUNT_ID\"},{\$set:{\"apiKey\":\"$NEW_ROOT_KEY\"}})" | $MONGO_BASE/bin/mongo --port $MONGO_PORT dev_accounts_v1
 
 
 # Zookeeper
@@ -68,7 +75,7 @@ sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s
 
 # Ingest and Shard
 sed -e "s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
+	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#" < \
 	"$BASEDIR"/templates/dev-auth-v1.conf > \

@@ -1,5 +1,7 @@
-MONGO_DIR="/usr/local/bin"
+MONGO_BASE="/usr/local/"
 MONGO_PORT=27017
+MONGO_ACCT_DB="accounts"
+MONGO_AUTH_DB="auth"
 
 GC_OPTS=""
 JAVA="java $GC_OPTS"
