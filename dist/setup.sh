@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd $(dirname $0)
+
 . common.sh
 
 if [ ! -x $MONGO_DIR/mongo ]; then
