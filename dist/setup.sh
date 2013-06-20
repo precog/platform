@@ -11,21 +11,25 @@ fi
 
 mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,configs/templates,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
 
+echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
+echo "For example: $MONGO_BASE/bin/mongod --port $MONGO_PORT --dbpath <your_data_path> --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &"
+read
+
+UUIDGEN = which uuidgen
+if [ ! -x $UUIDGEN ]; then
+    echo "uuidgen command was not found"
+    exit 1
+fi
+
 # Get a root token
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
-    echo "Retrieving new root token"
-    $JAVA -jar "$RATATOSKR_ASSEMBLY" tokens -s "localhost:$MONGO_PORT" -d dev_auth_v1 -c | tail -n 1 > "$WORKDIR"/root_token.txt || {
-        echo "Error retrieving new root token" >&2
-        exit 3
-    }
+    echo "Creating new root token"
+    $UUIDGEN > "$WORKDIR"/root_token.txt 
 fi
 
 NEW_ROOT_KEY=$(cat "$WORKDIR"/root_token.txt)
 
-echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
-read
-
-find ./dump -name "*.json" -exec sed -i s/$ROOT_ACCOUNT_ID/$NEW_ROOT_KEY/ {} \;
+find ./dump -name "*.json" -exec sed -i s/REPLACE_ROOT_KEY/$NEW_ROOT_KEY/ {} \;
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection accounts ./dump/$MONGO_ACCT_DB/accounts.json
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens ./dump/$MONGO_AUTH_DB/tokens.json
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants ./dump/$MONGO_AUTH_DB/grants.json
