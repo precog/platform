@@ -99,7 +99,8 @@ object PlatformBuild extends Build {
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
     scalaVersion := "2.9.2",
 
-    defaultJarName in assembly <<= (name) { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
+    jarName in assembly <<= (name) map { name => name + "-assembly-" + ("git describe".!!.trim) + ".jar" },
+    target in assembly <<= target,
 
     EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
     EclipseKeys.withSource := true,
