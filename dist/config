@@ -1,5 +1,5 @@
-MONGO_BASE="/usr/local/"
-MONGO_PORT=27017
+MONGO_BASE="/usr"
+MONGO_PORT=37017
 MONGO_ACCT_DB="accounts"
 MONGO_AUTH_DB="auth"
 

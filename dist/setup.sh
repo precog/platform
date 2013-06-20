@@ -15,7 +15,7 @@ echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
 echo "For example: $MONGO_BASE/bin/mongod --port $MONGO_PORT --dbpath <your_data_path> --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &"
 read
 
-UUIDGEN = which uuidgen
+UUIDGEN=$(which uuidgen)
 if [ ! -x $UUIDGEN ]; then
     echo "uuidgen command was not found"
     exit 1
@@ -39,6 +39,7 @@ $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection 
 
 
 # Zookeeper
+echo "Unpacking zookeeper into $ZKBASE"
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
     echo "Failed to unpack zookeeper" >&2
@@ -64,20 +65,24 @@ EOF
 
 
 # Kafka
-cd "$WORKDIR"
+echo "Unpacking Kafka into $KFBASE"
+pushd "$WORKDIR" > /dev/null
 unzip -u "$ARTIFACTDIR"/kafka* > /dev/null || {
     echo "Failed to unpack kafka" >&2
     exit 3
 }
+popd
 
-cd "$WORKDIR"/kafka/config
+echo "Configuring Kafka"
 chmod +x $KFBASE/bin/kafka-server-start.sh
 
+pushd $KFBASE/config > /dev/null
 sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
 sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
-
+popd > /dev/null
 
 # Ingest and Shard
+echo "Updating configuration files..."
 sed -e "s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#/var/log#$WORKDIR/logs#; \
@@ -91,7 +96,7 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 sed -e "s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
+	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; \
         s#/etc/precog/templates#$WORKDIR/configs/templates#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
@@ -107,7 +112,7 @@ cp "$BASEDIR"/templates/reset.* "$WORKDIR"/configs/templates/
 sed -e "s#port = 30066#port = $JOBS_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
+	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
 	"$BASEDIR"/templates/jobs-v1.conf > \
@@ -119,7 +124,7 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 sed -e "s/port = 30060/port = $INGEST_PORT/; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#;
+	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#;
 	s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#port = 30066#port = $JOBS_PORT#; \
 	s#port = 30070#port = $SHARD_PORT#; \
@@ -134,7 +139,7 @@ sed -e "s#port = 30070#port = $SHARD_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#/opt/precog/shard#$WORKDIR/shard-data#; \
 	s#port = 30062#port = $AUTH_PORT#; \
-	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
+	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#port = 30066#port = $JOBS_PORT#; \
 	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
@@ -145,10 +150,15 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 	"$BASEDIR"/templates/shard-v2.logging.xml > \
 	"$WORKDIR"/configs/shard-v2.logging.xml
 
-cd "$BASEDIR"
+echo "Done."
 
+echo "Starting zookeeper on port $ZOOKEEPER_PORT"
+pushd $ZKBASE/bin > /dev/null
+./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
+popd > /dev/null
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
+echo "Setting initial checkpoint"
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
     $JAVA -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:initial" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
@@ -157,8 +167,11 @@ if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
     touch "$WORKDIR"/initial_checkpoint.json
 fi
 
+pushd $ZKBASE/bin > /dev/null
+./zkServer.sh stop
+popd > /dev/null
 
 echo "Finished setup"
 echo "============================================================"
-echo "Root token: $TOKENID"
+echo "Root token: $NEW_ROOT_KEY"
 echo "============================================================"
