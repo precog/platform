@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd $(dirname $0)
+
 MAX_PORT_OPEN_TRIES=60
 
 function port_is_open() {
