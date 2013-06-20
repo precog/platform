@@ -16,6 +16,33 @@ object PlatformBuild extends Build {
   val extractData = TaskKey[String]("extract-data", "Extracts the data files used by the tests and the REPL")
   val mainTest = SettingKey[String]("main-test", "The primary test class for the project (just used for pandora)")
 
+  // Copies necessary jars into the dist directory
+  val buildDist = Command.command("dist") { state =>
+    val extracted = Project.extract(state)
+    val projects = Seq(ingest, auth, accounts, heimdall, shard, ratatoskr)
+
+    val dist = Path("dist")
+
+    IO.write(dist / "version", "git describe".!!.trim)
+
+    val lib = dist / "lib"
+    IO.createDirectory(lib)
+
+    projects.foreach { project =>
+      extracted.runTask(assembly.in(project, assembly), state)
+
+      val targetValue = extracted.get(target.in(project, assembly))
+      val (_, assemblyValue) = extracted.runTask(jarName.in(project, assembly), state)
+
+      val src = targetValue / assemblyValue
+      val dest = lib / assemblyValue
+
+      println("Copying " + src + " to " + dest)
+      IO.copyFile(src, dest)
+    }
+    state
+  }
+
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
     resolvers ++= Seq(
       "ReportGrid repo"                   at "http://nexus.reportgrid.com/content/repositories/releases",
@@ -127,6 +154,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
+    settings(commands ++= Seq(buildDist)).
     aggregate(quirrel, mirror, yggdrasil, bytecode, daze, ingest, shard, auth, accounts, pandora, util, common, ragnarok , heimdall, ratatoskr) //, mongo, jdbc, desktop)
 
   lazy val util = Project(id = "util", base = file("util")).
