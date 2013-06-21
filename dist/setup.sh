@@ -34,6 +34,17 @@ $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection 
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens ./dump/$MONGO_AUTH_DB/tokens.json
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants ./dump/$MONGO_AUTH_DB/grants.json
 
+DATAFILE=
+if [[ -f ./data.tar.gz ]]; then
+    DATAFILE=./data.tar.gz
+elif [[ -d ./data ]]; then
+    DATAFILE=./data
+fi
+
+if [[ "$DATAFILE" ]]; then
+    import -i $INGEST_SERVICE -u $USER_ACCOUNT -a $USER_TOKEN "$DATAFILE"
+fi
+
 # Make root user have root token
 #echo -e "db.accounts.update({\"accountId\":\"$ROOT_ACCOUNT_ID\"},{\$set:{\"apiKey\":\"$NEW_ROOT_KEY\"}})" | $MONGO_BASE/bin/mongo --port $MONGO_PORT dev_accounts_v1
 
