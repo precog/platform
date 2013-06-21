@@ -1,0 +1,83 @@
+#!/bin/bash
+
+STARTDIR="`pwd`"
+SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$STARTDIR"
+
+APIKEY=
+ACCOUNTID=
+SERVICE=https://nebula.precog.com
+INGEST_SERVICE=
+
+VERBOSE=
+
+function usage {
+  echo Usage: import [-v] [-s service] [-u account_id] -a apikey export-tarball
+}
+
+while getopts "a:s:u:h:v" opt; do
+  case $opt in
+    a  ) APIKEY=$OPTARG;;
+    s  ) SERVICE=$OPTARG;;
+    u  ) ACCOUNTID=$OPTARG;;
+    v  ) VERBOSE=true;;
+    h  ) usage;;
+    \? ) echo "Unknown otion -$OPTARG" >&2; exit 1;;
+    :  ) echo "Unknown otion argument for -$OPTARG" >&2; exit 1;;
+  esac
+done
+
+shift $(( ${OPTIND} - 1 ))
+
+if [[ -z "$SERVICE" ]]; then
+  echo "Service (-s) is required!" >&2
+  exit 1
+fi
+
+if [[ -z "$*" ]]; then
+  usage
+  exit 1
+fi
+
+if [[ -z "$APIKEY" ]]; then
+  echo "API key (-a) is required!" >&2
+  usage
+  exit 1
+fi
+
+WORKDIR=`mktemp -d -t precog-import.XXXXXXXXXX`
+
+if [[ -z "$INGEST_SERVICE" ]]; then
+  INGEST_SERVICE="$SERVICE/ingest/v1/fs"
+fi
+
+function log {
+  [[ -n $VERBOSE ]] && echo $*
+}
+
+function ingest {
+  local suffix=$([[ $ACCOUNTID ]] && "&$ACCOUNTID" || "")
+  gunzip -c "$2" | curl --silent -H 'Content-Type: application/json' --data-binary @- "$INGEST_SERVICE/fs/$1?apiKey=$APIKEY$suffix"
+}
+
+function import {
+  local dump_file=$1
+
+  log "Importing all data from $dump_file"
+  tar -xzf $dump_file -C $WORKDIR
+  INDEXFILE="$WORKDIR/index"
+  exec 5< "$INDEXFILE"
+  
+  while read path <&5; do
+    read suffix <&5
+    local json_file="$WORKDIR/$suffix"
+    log "Importing JSON data from $suffix to $path"
+    ingest "$path" "$json_file"
+  done
+}
+
+for dump in $*; do
+  import "$dump"
+done
+
+echo "Done importing data!"
