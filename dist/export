@@ -81,7 +81,7 @@ EOF
 }
 
 function get_json {
-  curl --silent "$ANALYTICS_SERVICE/$1?apiKey=$APIKEY&q=//$2"
+  PYTHONPATH="$SCRIPTDIR/ijson" curl --silent "$ANALYTICS_SERVICE/$1?apiKey=$APIKEY&q=//$2" | python "$SCRIPTDIR/strip_array.py"
 }
 
 function norm_path {
@@ -99,12 +99,12 @@ function dump {
 
   local size=`size $fullpath`
   if [[ $size -gt 0 ]]; then
-    local datafile=`norm_path $DUMPPATH/$fullpath.json.gz`
+    local datafile=`norm_path $DUMPPATH/$fullpath.mjson.gz`
     mkdir -p "`norm_path $DUMPPATH/$basepath`"
     log "Dumping $size events from $fullpath"
     get_json "$basepath" "$filename" | gzip -c > "$datafile"
     echo "$fullpath" >> "$INDEXFILE"
-    echo "$fullpath.json.gz" >> "$INDEXFILE"
+    echo "$fullpath.mjson.gz" >> "$INDEXFILE"
   fi
 
   local children=`children $fullpath`

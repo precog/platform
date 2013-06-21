@@ -56,7 +56,7 @@ function log {
 
 function ingest {
   local suffix=$([[ $ACCOUNTID ]] && "&$ACCOUNTID" || "")
-  gunzip -c "$2" | curl --silent -H 'Content-Type: application/json' --data-binary @- "$INGEST_SERVICE/fs/$1?apiKey=$APIKEY$suffix"
+  gunzip -c "$2" | curl --silent -H 'Content-Type: application/x-json-stream' --data-binary @- "$INGEST_SERVICE/fs/$1?apiKey=$APIKEY$suffix"
 }
 
 function import {
