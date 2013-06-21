@@ -242,7 +242,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
             } else {
               // this case MUST return a failure - if a checkpoint is missing for a shard,
               // it must be created manually via Ratatoskr
-              Failure(Invalid("No checkpoint information found in Zookeeper!"))
+              Failure(Invalid("No checkpoint information found in Zookeeper at path %s!".format(checkpointPath)))
             }
           }
         }

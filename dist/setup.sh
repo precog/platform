@@ -12,7 +12,7 @@ fi
 mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,configs/templates,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
 
 echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
-echo "For example: $MONGO_BASE/bin/mongod --port $MONGO_PORT --dbpath <your_data_path> --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &"
+echo "For example: $MONGO_BASE/bin/mongod --port $MONGO_PORT --dbpath $WORKDIR/mongodata --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &"
 read
 
 UUIDGEN=$(which uuidgen)
@@ -29,10 +29,12 @@ fi
 
 NEW_ROOT_KEY=$(cat "$WORKDIR"/root_token.txt)
 
-find ./dump -name "*.json" -exec sed -i s/REPLACE_ROOT_KEY/$NEW_ROOT_KEY/ {} \;
-$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection accounts ./dump/$MONGO_ACCT_DB/accounts.json
-$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens ./dump/$MONGO_AUTH_DB/tokens.json
-$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants ./dump/$MONGO_AUTH_DB/grants.json
+mkdir -p "$WORKDIR"/dump
+cp -r $DUMPDIR/* "$WORKDIR"/dump
+find "$WORKDIR"/dump -name "*.json" -exec sed -i s/REPLACE_ROOT_KEY/$NEW_ROOT_KEY/g {} \;
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection accounts $WORKDIR/dump/accounts/accounts.json
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens $WORKDIR/dump/auth/tokens.json
+$MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants $WORKDIR/dump/auth/grants.json
 
 DATAFILE=
 if [[ -f ./data.tar.gz ]]; then
@@ -98,10 +100,10 @@ sed -e "s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$NEW_ROOT_KEY\"#; \
 	s#/var/log#$WORKDIR/logs#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#" < \
-	"$BASEDIR"/templates/dev-auth-v1.conf > \
+	"$BASEDIR"/templates/auth-v1.conf > \
 	"$WORKDIR"/configs/auth-v1.conf || echo "Failed to update auth config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
-	"$BASEDIR"/templates/dev-auth-v1.logging.xml > \
+	"$BASEDIR"/templates/auth-v1.logging.xml > \
 	"$WORKDIR"/configs/auth-v1.logging.xml
 
 sed -e "s#port = 30064#port = $ACCOUNTS_PORT#; \
@@ -166,6 +168,7 @@ echo "Done."
 echo "Starting zookeeper on port $ZOOKEEPER_PORT"
 pushd $ZKBASE/bin > /dev/null
 ./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
+wait_until_port_open $ZOOKEEPER_PORT
 popd > /dev/null
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there

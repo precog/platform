@@ -2,31 +2,12 @@
 
 cd $(dirname $0)
 
-MAX_PORT_OPEN_TRIES=60
-
-function port_is_open() {
-   netstat -an | egrep "[\.:]$1[[:space:]]+.*LISTEN" > /dev/null
-}
-
-function wait_until_port_open () {
-    for tryseq in `seq 1 $MAX_PORT_OPEN_TRIES`; do
-        if port_is_open $1; then
-            return 0
-        fi
-        sleep 1
-    done
-    echo "Time out waiting for open port: $1" >&2
-    exit 1
-}
-
-
 . common.sh
 
 if [ ! -d $WORKDIR ]; then
     echo "Please run ./setup.sh"
     exit 1
 fi
-
 
 # Shutdown hook
 function on_exit() {
@@ -85,6 +66,7 @@ function on_exit() {
 
     echo "Shutdown complete"
 }
+
 trap on_exit EXIT
 
 
@@ -92,7 +74,6 @@ trap on_exit EXIT
 cd $ZKBASE/bin
 ./zkServer.sh start &> $WORKDIR/logs/zookeeper.stdout
 wait_until_port_open $ZOOKEEPER_PORT
-
 
 # Kafka
 $KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-global.properties &> $WORKDIR/logs/kafka-global.stdout &
@@ -102,10 +83,6 @@ wait_until_port_open $KAFKA_GLOBAL_PORT
 $KFBASE/bin/kafka-server-start.sh $KFBASE/config/server-local.properties &> $WORKDIR/logs/kafka-local.stdout &
 KFLOCALPID=$!
 wait_until_port_open $KAFKA_LOCAL_PORT
-
-
-TOKENID=$(cat "$WORKDIR"/root_token.txt)
-
 
 # Auth, Accounts and Jobs
 echo "Starting auth service on $AUTH_PORT"
@@ -123,7 +100,6 @@ JOBSPID=$!
 wait_until_port_open $AUTH_PORT
 wait_until_port_open $ACCOUNTS_PORT
 wait_until_port_open $JOBS_PORT
-
 
 # Ingest and Shard
 echo "Starting ingest service on $INGEST_PORT"

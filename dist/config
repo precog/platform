@@ -1,7 +1,7 @@
 MONGO_BASE="/usr"
 MONGO_PORT=37017
-MONGO_ACCT_DB="accounts"
-MONGO_AUTH_DB="auth"
+MONGO_ACCT_DB="precog_accounts"
+MONGO_AUTH_DB="precog_auth"
 
 GC_OPTS=""
 JAVA="java $GC_OPTS"
