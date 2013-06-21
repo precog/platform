@@ -12,13 +12,14 @@ INGEST_SERVICE=
 VERBOSE=
 
 function usage {
-  echo Usage: import [-v] [-s service] [-u account_id] -a apikey export-tarball
+  echo Usage: import [-v] [-s service] [-i ingest_service] [-u account_id] -a apikey export-tarball
 }
 
-while getopts "a:s:u:h:v" opt; do
+while getopts "a:s:u:i:h:v" opt; do
   case $opt in
     a  ) APIKEY=$OPTARG;;
     s  ) SERVICE=$OPTARG;;
+    i  ) INGEST_SERVICE=$OPTARG;;
     u  ) ACCOUNTID=$OPTARG;;
     v  ) VERBOSE=true;;
     h  ) usage;;
@@ -45,8 +46,6 @@ if [[ -z "$APIKEY" ]]; then
   exit 1
 fi
 
-WORKDIR=`mktemp -d -t precog-import.XXXXXXXXXX`
-
 if [[ -z "$INGEST_SERVICE" ]]; then
   INGEST_SERVICE="$SERVICE/ingest/v1/fs"
 fi
@@ -63,14 +62,30 @@ function ingest {
 function import {
   local dump_file=$1
 
+  local workdir=
+  if [[ -d "$dump_file" ]]; then
+    workdir="$dump_file"
+  elif [[ -f "$dump_file" ]]; then
+    workdir=`mktemp -d -t precog-import.XXXXXXXXXX`
+    log "Extracting dump file to $workdir..."
+    tar -xzf $dump_file -C $workdir
+  else
+    echo "Cannot read from $dump_file" >&2
+    exit 2
+  fi
+
+  local indexfile="$workdir/index"
+  if [[ ! -f "$index_file" ]]; then
+    echo "Invalid dump file, cannot find index" >&2
+    exit 2
+  fi
+
   log "Importing all data from $dump_file"
-  tar -xzf $dump_file -C $WORKDIR
-  INDEXFILE="$WORKDIR/index"
-  exec 5< "$INDEXFILE"
+  exec 5< "$indexfile"
   
   while read path <&5; do
     read suffix <&5
-    local json_file="$WORKDIR/$suffix"
+    local json_file="$workdir/$suffix"
     log "Importing JSON data from $suffix to $path"
     ingest "$path" "$json_file"
   done

@@ -102,7 +102,7 @@ function dump {
     local datafile=`norm_path $DUMPPATH/$fullpath.json.gz`
     mkdir -p "`norm_path $DUMPPATH/$basepath`"
     log "Dumping $size events from $fullpath"
-    get_json $BASEPATH $FILENAME | gzip -c > "$datafile"
+    get_json "$basepath" "$filename" | gzip -c > "$datafile"
     echo "$fullpath" >> "$INDEXFILE"
     echo "$fullpath.json.gz" >> "$INDEXFILE"
   fi
