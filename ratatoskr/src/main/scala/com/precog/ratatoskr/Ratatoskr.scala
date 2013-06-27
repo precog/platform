@@ -830,7 +830,7 @@ object ImportTools extends Command with Logging {
           val input = if (n >= 0) Some(bb) else None
           val (AsyncParse(errors, results), parser) = p(input)
           if (!errors.isEmpty) {
-            sys.error("found %d parse errors.\nfirst 5 were: %s" format (errors.length, errors.take(5)))
+            sys.error("found %d parse errors.\nfirst %d were: %s" format (errors.length, (errors.length min 5), errors.take(5)))
           }
           val eventidobj = EventId(pid, sid.getAndIncrement)
           val records = results.map(v => IngestRecord(eventidobj, v))
@@ -842,7 +842,7 @@ object ImportTools extends Command with Logging {
         }
 
         try {
-          loop(AsyncParser(true))
+          loop(AsyncParser.stream())
         } finally {
           ch.close()
         }
