@@ -49,7 +49,7 @@ class IngestProcessorSelection(maxFields: Int, batchSize: Int, tmpdir: File, ing
 
   class JsonIngestProcessorSelector(apiKey: APIKey, path: Path, authorities: Authorities) extends IngestProcessorSelector {
     def select(partialData: Array[Byte], parseDirectives: Set[ParseDirective]): Option[IngestProcessor] = {
-      val (AsyncParse(errors, values), parser) = AsyncParser(true).apply(Some(ByteBuffer.wrap(partialData)))
+      val (AsyncParse(errors, values), parser) = AsyncParser.json().apply(Some(ByteBuffer.wrap(partialData)))
       if (errors.isEmpty && !values.isEmpty) {
         parseDirectives collectFirst {
           case MimeDirective(JSON_STREAM) => new JSONIngestProcessor(apiKey, path, authorities, JsonStreamStyle, maxFields, ingestStore)

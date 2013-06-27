@@ -125,7 +125,7 @@ class EventServiceSpec extends TestEventService with AkkaConversions with com.pr
 
           events flatMap (_.data) mustEqual (JNum(178234) :: JParser.parseUnsafe("""{ "testing": 321 }""") :: Nil)
       }
-    }
+    }.pendingUntilFixed //since we're no longer newline-delimited but instead whitespace-delimited, this recovery strategy doesn't make sense.
 
     "track CSV batch ingest with valid API key" in {
       val result = track(CSV, Some(testAccount.apiKey), testAccount.rootPath, Some(testAccount.accountId), sync = true, batch = true) {

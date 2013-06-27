@@ -35,3 +35,4 @@ jprofiler.jnilib
 .tag
 /personal
 shard.out
+dist/
