@@ -117,7 +117,7 @@ final class JSONIngestProcessor(apiKey: APIKey, path: Path, authorities: Authori
       case Right(stream) => stream
     }
 
-    ingestJSONChunk(JSONParseState(AsyncParser.json(), None, 0, Vector.empty, 0), dataStream, true).map {
+    ingestJSONChunk(JSONParseState(AsyncParser.stream(), None, 0, Vector.empty, 0), dataStream, true).map {
       case JSONParseState(_, _, ingested, errors, total) =>
         StreamingSyncResult(ingested, errors.headOption.map(_._2))
     }.recover {

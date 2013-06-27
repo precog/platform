@@ -140,7 +140,7 @@ for f in $@; do
     COUNT=$(cat "$f" | wc -l)
 
     [ -n "$DEBUG" ] && echo -e "Posting curl -X POST --data-binary @\"$f\" \"http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN\""
-    INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/json' --data-binary @"$f" "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
+    INGEST_RESULT=$(curl -s -S -v -X POST -H 'Content-Type: application/x-json-stream' --data-binary @"$f" "http://localhost:$INGEST_PORT/ingest/v2/fs/$ACCOUNTID/$TABLE?apiKey=$TOKEN${SYNCFLAG[$SYNCINDEX]}")
 
     SYNCINDEX=$(( ($SYNCINDEX + 1) % ${#SYNCFLAG[@]} ))
 
