@@ -64,6 +64,7 @@ function meta {
 
 function children {
   local json=`meta $1`
+  echo $json
   python << EOF
 import json
 meta=json.loads(u"""$json""")
