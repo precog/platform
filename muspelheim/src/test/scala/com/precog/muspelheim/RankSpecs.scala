@@ -342,39 +342,6 @@ trait RankSpecs extends EvalStackSpecs {
       }
     }
 
-    "complete nathan's denseRank solve example" in {
-      val input = """
-        | import std::time::*
-        | import std::stats::*
-        | 
-        | agents := //se/widget
-        | 
-        | upperBound := getMillis("2012-10-04T23:59:59")
-        | lowerBound := getMillis("2012-10-04T00:00:00")
-        | 
-        | data := {agentId: agents.agentId, timeStamp: agents.timeStamp, action: agents.action, millis: getMillis(agents.timeStamp)}
-        | 
-        | getEvents(agent) := 
-        |   data' := data where data.millis <= upperBound & data.millis >= lowerBound & data.agentId = agent
-        | 
-        |   data'' := data' with {rank: denseRank(data'.millis)}
-        |   data''' := new data''
-        | 
-        |   result := solve 'rank
-        |     r0 := data'' where data''.rank = 'rank
-        |     r1 := data''' where data'''.rank = 'rank - 1
-        | 
-        |     r0 ~ r1
-        |     {first: r0, second: r1}
-        | 
-        |   {start: result.first.millis, end: result.second.millis, agent: result.first.agentId, action: result.first.action} 
-        | 
-        | getEvents("Blake")
-        | """.stripMargin
-        
-      evalE(input) must not(beEmpty)
-    }
-
     "handle another case of solving on an object with denseRank" in {
       val input = """
         | import std::stats::*

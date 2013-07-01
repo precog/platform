@@ -168,14 +168,6 @@ trait HelloQuirrelSpecs extends EvalStackSpecs {
           result must haveSize(5)
       }
 
-      "should merge objects without timing out" >> {
-        val input = """
-           //richie1/test
-        """.stripMargin
-
-        eval(input) must haveSize(100)
-      }
-
       "handle filter on null" >> {
         val input = """
           //fastspring_nulls where (//fastspring_nulls).endDate = null

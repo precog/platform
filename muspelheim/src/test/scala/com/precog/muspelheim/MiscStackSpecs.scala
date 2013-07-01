@@ -2299,11 +2299,11 @@ trait MiscStackSpecs extends EvalStackSpecs {
      
     "return the non-empty set for a trivial cartesian" in {
       val input = """
-        | jobs := //cm
+        | jobs := //clicks
         | titles' := new "foo"
         | 
         | titles' ~ jobs
-        |   [titles', jobs.PositionHeader.PositionTitle]
+        |   [titles', jobs.timeZone]
         | """.stripMargin
         
       evalE(input) must not(beEmpty)
@@ -2503,38 +2503,7 @@ trait MiscStackSpecs extends EvalStackSpecs {
       results must haveSize(100)
     }
 
-    // Regression test for PLATFORM-951
-    "evaluate SnapEngage query with code caught by predicate pullups" in {
-      val input = """
-        | import std::stats::*
-        | import std::time::*
-        | data := //se/anon_status
-        |
-        | upperBound := 1353145306278
-        | lowerBound := 1353135306278
-        | extraLB := lowerBound - (24*60*60000)
-        |
-        | solve 'data
-        |   data' := data where data.time <= upperBound & data.time >= extraLB & data.a = 'data
-        |   order := denseRank(data'.time)
-        |
-        |   data'' := data' with { rank: order }
-        |   newData := new data''
-        |   newData' := newData with { rank: newData.rank - 1 }
-        |
-        |   result := newData' ~ data'' [ data'', newData' ] where newData'.rank = data''.rank
-        |
-        |   {start: std::math::max(result[0].time, lowerBound),
-        |   end: result[1].time,
-        |   a: result[0].a,
-        |   b: result[0].b,
-        |   c: result[0].c,
-        |   data: result[0]}
-        | """.stripMargin
-
-      val results = eval(input)
-      results must not(beEmpty)
-    }
+    // TODO: regression test for PLATFORM-951
 
     "use string function on date columns" in {
       val input = """
