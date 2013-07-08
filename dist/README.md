@@ -67,11 +67,11 @@ services, simply run the `run.sh` script.
 Once the services are running, you will be able to connect to each of the services
 independently; for example, you can test the ingest service by running the following:
 
-    curl -X POST http://localhost:63770/ingest/v1/fs/<your-10-digit-accountId>/test?apiKey=<your-api-key>&mode=batch -H "Content-Type: application/json" -d '{"testField": "testValue"}'
+    curl -X POST http://localhost:63770/ingest/v2/fs/<your-10-digit-accountId>/test?apiKey=<your-api-key>&mode=batch -H "Content-Type: application/json" -d '{"testField": "testValue"}'
 
  To query this data, try:
 
-    curl "http://localhost:63774/analytics/v1/fs/<your-10-digit-accountId>?apiKey=<your-api-key>&q=count\(//test\)"
+    curl "http://localhost:63774/analytics/v2/fs/<your-10-digit-accountId>?apiKey=<your-api-key>&q=count\(//test\)"
 
  Access to the remaining services follows the same pattern. In our production
  environment, we use haproxy to provide proxying, load balancing, and failover;
