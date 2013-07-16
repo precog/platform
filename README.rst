@@ -24,6 +24,7 @@ A few landmarks:
   * ``Slice``
   * ``Column``
   
+* **niflheim** - Low-level block store and filesystem (NIHDB)  
 * **ingest** - Unimaginatively, exactly what it seems to be
 * **muspelheim** - Convergence point for the compiler and evaluator stacks;
   integration test *source* and data
@@ -33,13 +34,11 @@ A few landmarks:
   
 * **pandora** - Vestigial convergence point; integration test *binaries*
 
-  * ``JDBMPlatformSpecs``
+  * ``NIHDBPlatformSpecs``
   * ``REPL``
 
 * **shard** - BlueEyes services and final instantiation of ALL THE THINGS
-
-* **desktop** - Build scripts for standalone desktop version -- see local
-  README.rst.
+* **desktop** - Build scripts for standalone desktop version -- see local README.rst
 
 Thus, to work on the evaluator, one would be in the **daze** project, writing
 tests in the **daze** and **muspelheim** projects.  The tests in the **muspelheim**
@@ -91,10 +90,10 @@ have a commit message of the following form::
     
     <message>
     
-    PLATFORM-<issue#> #finish
+    PLATFORM-<issue#>
     
 Substitute ``<message>`` and ``<issue#>`` with the desired commit message and
-the JIRA issue number (e.g. ``PLATFORM-819 #finish``).  If a commit affects more
+the JIRA issue number (e.g. ``PLATFORM-819``).  If a commit affects more
 than one issue, simply include text for both separated by a single newline.  
 Please always ensure that the issue number in your commit messages is accurate.
 This information is used by the CI server and JIRA to automatically
@@ -193,5 +192,5 @@ they are now depending on.
 To summarize: rebase privately, merge publicly.
 
 .. _JIRA: https://precog.atlassian.net/secure/Dashboard.jspa
-.. _create a fork here: https://github.com/reportgrid/platform/fork_select
+.. _create a fork here: https://github.com/precog/platform/fork_select
 .. _CI server: https://jenkins.reportgrid.com
