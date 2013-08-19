@@ -35,10 +35,12 @@ import blueeyes.health.metrics.eternity
 import ByteChunk._
 import DefaultBijections._
 
+import com.weiglewilczek.slf4s.Logging
+import com.weiglewilczek.slf4s.Logger
 import org.streum.configrity.Configuration
 import scalaz._
 
-trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators with PathServiceCombinators {
+trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinators with PathServiceCombinators with Logging {
   case class State(handlers: SecurityServiceHandlers, stoppable: Stoppable)
 
   val timeout = akka.util.Timeout(120000) //for now
@@ -103,8 +105,14 @@ trait SecurityService extends BlueEyesServiceBuilder with APIKeyServiceCombinato
                   }
                 }
               }
+            } ~ 
+            debug[ByteChunk, Future[HttpResponse[ByteChunk]]](logger) {
+              import HttpStatusCodes.NotFound
+              orFail {
+                (r: HttpRequest[ByteChunk]) => (NotFound, "No handler was found for request " + r)
+              }
             }
-          }
+          } 
         } ->
         stop[State] { case State(_, stoppable) =>
           stoppable
