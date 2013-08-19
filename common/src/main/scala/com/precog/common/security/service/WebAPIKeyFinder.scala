@@ -102,8 +102,8 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
           right(None)
 
         case res =>
-          logger.error("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
-          left("Unexpected response from security service; unable to proceed." + res)
+          logger.error("Unexpected response from auth service retrieving details for apiKey " + apiKey + ":\n" + res)
+          left("Unexpected response from auth service retrieving details for apiKey " + apiKey + ":\n" + res)
       })
     }
   }
@@ -114,8 +114,8 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_:Extractor.Error).message) <-: jvalue.validated[Set[v1.APIKeyDetails]]).disjunction
         case res =>
-          logger.error("Unexpected response from auth service for apiKey " + fromRoot + ":\n" + res)
-          left("Unexpected response from security service; unable to proceed." + res)
+          logger.error("Unexpected response from auth service finding child API keys from root " + fromRoot + ":\n" + res)
+          left("Unexpected response from auth service finding child API keys from root " + fromRoot + ":\n" + res)
       })
     }
   }
@@ -129,8 +129,8 @@ trait WebAPIKeyFinder extends BaseClient with APIKeyFinder[Response] {
         case HttpResponse(HttpStatus(OK, _), _, Some(jvalue), _) =>
           (((_:Extractor.Error).message) <-: jvalue.validated[Set[Permission]]).disjunction
         case res =>
-          logger.error("Unexpected response from auth service for apiKey " + apiKey + ":\n" + res)
-          left("Unexpected response from security service; unable to proceed." + res)
+          logger.error("Unexpected response from auth service retrieving permissions associated with apiKey " + apiKey + ":\n" + res)
+          left("Unexpected response from auth service retrieving permissions associated with apiKey " + apiKey + ":\n" + res)
       })
     }
   }
