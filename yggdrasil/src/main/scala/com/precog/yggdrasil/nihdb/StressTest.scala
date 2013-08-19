@@ -129,7 +129,7 @@ class StressTest {
       }
 
       try {
-        loop(AsyncParser.stream())
+        loop(AsyncParser.json())
       } finally {
         ch.close()
       }

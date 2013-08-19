@@ -46,8 +46,7 @@ object JsonUtil {
   def parseSingleFromStream[M[+_]](stream: StreamT[M, ByteBuffer])
     (implicit M: Monad[M]): M[Validation[Seq[Throwable], JValue]] = {
 
-    // use an empty byte buffer to "prime" the async parser
-    val p = AsyncParser.stream()
+    val p = AsyncParser.json()
 
     def xyz(stream: StreamT[M, ByteBuffer], p: AsyncParser):
         M[Validation[Seq[Throwable], JValue]] = {
@@ -83,7 +82,7 @@ object JsonUtil {
     (stream: StreamT[M, ByteBuffer])
     (implicit M: Monad[M]): StreamT[M, AsyncParse] = {
 
-    val p = AsyncParser.stream()
+    val p = AsyncParser.json()
 
     // create a new stream, using the current stream and parser
     StreamT.unfoldM((stream, p)) {
