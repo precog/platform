@@ -255,7 +255,8 @@ class NIHDBActor private (private var currentState: ProjectionState, baseDir: Fi
     BlockState(cooked, pendingCooks, currentLog)
   }
 
-  logger.debug("Initial block state = " + blockState)
+  //Excessively noisy logging.
+  //logger.trace("Initial block state = " + blockState)
 
   private[this] var currentBlocks: SortedMap[Long, StorageReader] = computeBlockMap(blockState)
 
