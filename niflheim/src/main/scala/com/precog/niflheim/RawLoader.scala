@@ -176,11 +176,11 @@ private[niflheim] object RawLoader {
     try {
       val header = reader.readLine()
       if (header == null)
-        sys.error("missing header")
+        sys.error("Missing NIHDB raw log header in file %s".format(f.getCanonicalPath))
       else if (header == ("##rawlog " + id.toString + " 1"))
         load1(id, f, reader)
       else
-        sys.error("unsupported header: %s" format header)
+        sys.error("Unsupported NIHDB raw log header [%s] in file %s".format(header, f.getCanonicalPath))
     } finally {
       reader.close()
     }
