@@ -17,8 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "heimdall"
+name := "dvergr"
 
 libraryDependencies += "org.specs2" %% "specs2" % "1.12.3-SNAPSHOT" % "test"
 
-mainClass := Some("com.precog.heimdall.MongoJobServer")
+mainClass := Some("com.precog.dvergr.MongoJobServer")

@@ -142,11 +142,11 @@ object PlatformBuild extends Build {
   lazy val logging = Project(id = "logging", base = file("logging")).settings(commonNexusSettings: _*)
 
   lazy val standalone = Project(id = "standalone", base = file("standalone")).
-    settings((commonAssemblySettings  ++ jettySettings): _*) dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, shard, muspelheim % "compile->compile;test->test", logging % "test->test", auth, accounts, ingest, heimdall)
+    settings((commonAssemblySettings  ++ jettySettings): _*) dependsOn(common % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util, shard, muspelheim % "compile->compile;test->test", logging % "test->test", auth, accounts, ingest, dvergr)
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, mirror, yggdrasil, bytecode, mimir, ingest, shard, auth, accounts, pandora, util, common, ragnarok , heimdall, ratatoskr) //, mongo, jdbc, desktop)
+    aggregate(quirrel, mirror, yggdrasil, bytecode, mimir, ingest, shard, auth, accounts, pandora, util, common, ragnarok , dvergr, ratatoskr) //, mongo, jdbc, desktop)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
@@ -215,7 +215,7 @@ object PlatformBuild extends Build {
   lazy val ingest = Project(id = "ingest", base = file("ingest")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", yggdrasil, logging % "test->test")
 
-  lazy val heimdall = Project(id = "heimdall", base = file("heimdall")).
+  lazy val dvergr = Project(id = "dvergr", base = file("dvergr")).
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util, logging % "test->test")
 
   lazy val shard = Project(id = "shard", base = file("shard")).

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.heimdall
+package com.precog.dvergr
 
 import com.precog.common.jobs._
 import com.precog.common.security._
