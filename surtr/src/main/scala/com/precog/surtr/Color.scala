@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.pandora
+package com.precog.surtr
 
 class Color(val enabled: Boolean) {
   val Bold = "\u001B[1m"

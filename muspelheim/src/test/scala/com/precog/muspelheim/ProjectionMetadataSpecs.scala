@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.pandora
+package com.precog.surtr
 
 //import com.precog.bytecode._
 //import com.precog.common._

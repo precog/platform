@@ -33,7 +33,7 @@ object PlatformBuild extends Build {
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
   val profileTask = InputKey[Unit]("profile", "Runs the given project under JProfiler")
   val extractData = TaskKey[String]("extract-data", "Extracts the data files used by the tests and the REPL")
-  val mainTest = SettingKey[String]("main-test", "The primary test class for the project (just used for pandora)")
+  val mainTest = SettingKey[String]("main-test", "The primary test class for the project (just used for surtr)")
 
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
     resolvers ++= Seq(
@@ -146,7 +146,7 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")).
     settings(ScctPlugin.mergeReportSettings ++ ScctPlugin.instrumentSettings: _*).
-    aggregate(quirrel, mirror, yggdrasil, bytecode, mimir, ingest, shard, auth, accounts, pandora, util, common, ragnarok , dvergr, ratatoskr) //, mongo, jdbc, desktop)
+    aggregate(quirrel, mirror, yggdrasil, bytecode, mimir, ingest, shard, auth, accounts, surtr, util, common, ragnarok , dvergr, ratatoskr) //, mongo, jdbc, desktop)
 
   lazy val util = Project(id = "util", base = file("util")).
     settings(commonNexusSettings: _*) dependsOn(logging % "test->test")
@@ -189,7 +189,7 @@ object PlatformBuild extends Build {
   lazy val muspelheim = Project(id = "muspelheim", base = file("muspelheim")).
     settings(commonNexusSettings: _*) dependsOn (util % "compile->compile;test->test", common, quirrel, mimir, yggdrasil % "compile->compile;test->test", logging % "test->test")
 
-  lazy val pandora = Project(id = "pandora", base = file("pandora")).
+  lazy val surtr = Project(id = "surtr", base = file("surtr")).
     settings(commonAssemblySettings: _*) dependsOn (quirrel, mimir, yggdrasil, ingest, muspelheim % "compile->compile;test->test", logging % "test->test")
 
   lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).
@@ -219,7 +219,7 @@ object PlatformBuild extends Build {
     settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", util, logging % "test->test")
 
   lazy val shard = Project(id = "shard", base = file("shard")).
-    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", muspelheim, pandora % "test->test")
+    settings(commonAssemblySettings: _*).dependsOn(common % "compile->compile;test->test", muspelheim, surtr % "test->test")
 
   /// Tooling ///
 

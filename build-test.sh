@@ -120,7 +120,7 @@ fi
 if [ -z "$SKIPTEST" ]; then
     # desktop, jdbc, and mongo are not in this list because the functionality they require is already tested in other modules
     # Their specs are run directly when needed for packaging
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard pandora mirror; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard surtr mirror; do
 		run_sbt "$PROJECT/${SCCT}test"
     done
     if [ -n "$COVERAGE" ]; then

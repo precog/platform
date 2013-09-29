@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.pandora
+package com.precog.surtr
 
 import com.precog.common.Path
 import com.precog.util.VectorCase
@@ -133,7 +133,7 @@ trait NIHDBTestStack extends TestStackLike[Future]
 
   object yggConfig extends YggConfig
 
-  lazy val psLogger = LoggerFactory.getLogger("com.precog.pandora.PlatformSpecs")
+  lazy val psLogger = LoggerFactory.getLogger("com.precog.surtr.PlatformSpecs")
 
   //val accountFinder = None
 

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.pandora
+package com.precog.surtr
 
 import akka.dispatch.Future
 import akka.pattern.ask

@@ -18,7 +18,7 @@
  *
  */
 package com.precog
-package pandora
+package surtr
 
 import akka.actor.{ActorSystem, Props}
 import akka.dispatch._

@@ -18,14 +18,14 @@
  *
  */
 package com.precog
-package pandora
+package surtr
 
 import common.kafka._
 import common.security._
 
 import mimir._
 
-import pandora._
+import surtr._
 
 import com.precog.common.Path
 import com.precog.common.accounts._

@@ -22,7 +22,7 @@ import AssemblyKeys._
 import java.io.File
 import scala.sys.process.{Process => SProcess, _}
 
-name := "pandora"
+name := "surtr"
 
 javaOptions ++= Seq("-Xmx1G")
 
@@ -30,10 +30,10 @@ libraryDependencies ++= Seq(
   "org.sonatype.jline"      % "jline"       % "2.5"
 )
 
-mainClass := Some("com.precog.pandora.Console")
+mainClass := Some("com.precog.surtr.Console")
 
 dataDir := {
-  val file = File.createTempFile("pandora", ".db")
+  val file = File.createTempFile("surtr", ".db")
   file.delete()
   file.mkdir()
   file.getCanonicalPath
@@ -115,7 +115,7 @@ initialCommands in console := """
   |
   | import mimir._
   | 
-  | import pandora._
+  | import surtr._
   | 
   | import quirrel._
   | import quirrel.emitter._
