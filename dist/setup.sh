@@ -2,26 +2,31 @@
 
 cd $(dirname $0)
 
+# Read configuration file and set up common environment variables
 . common.sh
 
+# Test for presence of mongoimport
 if [ ! -x $MONGO_BASE/bin/mongoimport ]; then
     echo "mongoimport command was not found under $MONGO_BASE/bin - please update config."
     exit 1
 fi
 
+# Create working directories for configuration, logging, data, etc.
 mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,configs/templates,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
 
+# Require user to start mongo for stored account import
 echo "Start mongod on port $MONGO_PORT, then press [ENTER]"
 echo "For example: $MONGO_BASE/bin/mongod --port $MONGO_PORT --dbpath $WORKDIR/mongodata --nojournal --nounixsocket --noauth --noprealloc &> $WORKDIR/logs/mongo.stdout &"
 read
 
+# check for uuidgen
 UUIDGEN=$(which uuidgen)
 if [ ! -x $UUIDGEN ]; then
     echo "uuidgen command was not found"
     exit 1
 fi
 
-# Get a root token
+# Create a new uuid to serve as the system root api key.
 if [ ! -e "$WORKDIR"/root_token.txt ]; then
     echo "Creating new root token"
     $UUIDGEN > "$WORKDIR"/root_token.txt 
@@ -29,6 +34,10 @@ fi
 
 NEW_ROOT_KEY=$(cat "$WORKDIR"/root_token.txt)
 
+# Create a working directory in which the account dumps will be updated
+# with the newly created root API key, copy the dump files over, replace
+# the root key and import into mongo. This populates the accounts, tokens,
+# and grants collections.
 mkdir -p "$WORKDIR"/dump
 cp -r $DUMPDIR/* "$WORKDIR"/dump
 find "$WORKDIR"/dump -name "*.json" -exec sed -i s/REPLACE_ROOT_KEY/$NEW_ROOT_KEY/g {} \;
@@ -36,6 +45,7 @@ $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_ACCT_DB --collection 
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection tokens $WORKDIR/dump/auth/tokens.json
 $MONGO_BASE/bin/mongoimport --port $MONGO_PORT --db $MONGO_AUTH_DB --collection grants $WORKDIR/dump/auth/grants.json
 
+# Import data, if it exists.
 DATAFILE=
 if [[ -f ./data.tar.gz ]]; then
     DATAFILE=./data.tar.gz
@@ -50,8 +60,11 @@ fi
 # Make root user have root token
 #echo -e "db.accounts.update({\"accountId\":\"$ROOT_ACCOUNT_ID\"},{\$set:{\"apiKey\":\"$NEW_ROOT_KEY\"}})" | $MONGO_BASE/bin/mongo --port $MONGO_PORT dev_accounts_v1
 
+###################
+#### ZOOKEEPER ####
+###################
 
-# Zookeeper
+# Unpack zookeeper executable
 echo "Unpacking zookeeper into $ZKBASE"
 pushd $ZKBASE > /dev/null
 tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-maven*' --exclude='contrib*' --exclude='recipes*' -xvzf "$ARTIFACTDIR"/zookeeper* > /dev/null 2>&1 || {
@@ -60,12 +73,13 @@ tar --strip-components=1 --exclude='docs*' --exclude='src*' --exclude='dist-mave
 }
 popd > /dev/null
 
+# build zookeeper config
 echo "# the directory where the snapshot is stored." >> $ZKBASE/conf/zoo.cfg
 echo "dataDir=$ZKDATA" >> $ZKBASE/conf/zoo.cfg
 echo "# the port at which the clients will connect" >> $ZKBASE/conf/zoo.cfg
 echo "clientPort=$ZOOKEEPER_PORT" >> $ZKBASE/conf/zoo.cfg
 
-# Zookeeper logging
+# Set up Zookeeper logging
 cat > $ZKBASE/bin/log4j.properties <<EOF
 log4j.rootLogger=INFO, file
 log4j.appender.file=org.apache.log4j.RollingFileAppender
@@ -76,8 +90,11 @@ log4j.appender.file.layout=org.apache.log4j.PatternLayout
 log4j.appender.file.layout.ConversionPattern=%d{ABSOLUTE} %5p %c{1}:%L - %m%n
 EOF
 
+###############
+#### KAFKA ####
+###############
 
-# Kafka
+# Unpack Kafka executable
 echo "Unpacking Kafka into $KFBASE"
 pushd "$WORKDIR" > /dev/null
 unzip -u "$ARTIFACTDIR"/kafka* > /dev/null || {
@@ -93,6 +110,10 @@ pushd $KFBASE/config > /dev/null
 sed -e "s#log.dir=.*#log.dir=$KFGLOBALDATA#; s/port=.*/port=$KAFKA_GLOBAL_PORT/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-global.properties
 sed -e "s#log.dir=.*#log.dir=$KFLOCALDATA#; s/port=.*/port=$KAFKA_LOCAL_PORT/; s/enable.zookeeper=.*/enable.zookeeper=false/; s/zk.connect=localhost:2181/zk.connect=localhost:$ZOOKEEPER_PORT/" < server.properties > server-local.properties
 popd > /dev/null
+
+######################################
+#### PRECOG SERVICE CONFIGURATION ####
+######################################
 
 # Ingest and Shard
 echo "Updating configuration files..."
@@ -164,6 +185,10 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
 	"$WORKDIR"/configs/shard-v2.logging.xml
 
 echo "Done."
+
+############################################
+##### INITIALIZATION OF ZOOKEEPER STATE ####
+############################################
 
 echo "Starting zookeeper on port $ZOOKEEPER_PORT"
 pushd $ZKBASE/bin > /dev/null
