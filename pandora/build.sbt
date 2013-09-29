@@ -59,7 +59,7 @@ extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
   def performExtract = {
     s.log.info("Extracting sample projection data into " + target.getCanonicalPath())
-    val rc = SProcess("./regen-jdbm-data.sh", Seq(target.getCanonicalPath)).!(new FileProcessLogger(new File("./target/test-gendata.log")))
+    val rc = SProcess("./direct-ingest.sh", Seq(target.getCanonicalPath)).!(new FileProcessLogger(new File("./target/test-gendata.log")))
     if (rc != 0) {
       error("Failed to extract data: " + rc)
     } else {
