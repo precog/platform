@@ -1,6 +1,14 @@
-===================
-The Precog Platform
-===================
+# Precog
+
+Precog is an advanced analytics engine for NoSQL data. It's sort of like a traditional analytics database, but instead of working with normalized, tabular data, it works with denormalized data that may not have a uniform schema.
+
+You can plop large amounts of JSON into Precog and start doing analytics without any preprocessing.
+
+There's an API for developer integration, and a high-level application called *Labcoat* for doing ad hoc and exploratory analytics.
+
+This is the Community Edition of Precog. For more information about commercial support and maintenance options, check out [SlamData, Inc](http://www.slamdata.com), the official sponsor of the Precog open source project.
+
+## Overview
 
 A few landmarks:
 
@@ -47,8 +55,7 @@ but using the test data stored in **muspelheim**.  All of the other projects are
 significantly saner.
 
 
-Getting Started
-===============
+## Getting Started
 
 Step one: obtain `PaulP's script`_.  At this point, you should be able to run
 ``$ ./build-test.sh`` as a sanity check, but this will take a long time.  Instead,
@@ -62,9 +69,11 @@ install CTAGS_, if your editor supports it.  Our filename conventions are…inco
 .. _PaulP's script: https://github.com/paulp/sbt-extras/blob/master/sbt
 .. _CTAGS: http://ctags.sourceforge.net/
 
+## Contributing
 
-Process
-=======
+All Contributions are bound by the terms and conditions of the [Precog Contributor License Agreement](CLA.md).
+
+### Process
 
 We use a pull request model for development.  When you want to work on a new
 feature or bug, create a new branch based off of ``master`` (do not base off of
@@ -147,9 +156,7 @@ rare cases, in ``staging``.  This process also provides a very natural and fluid
 avenue for code review and discussion, ensuring that the entire team is involved
 and aware of everything that is happening.  Code review is *everyone's* responsibility.
 
-
-Rebase Policy
-=============
+### Rebase Policy
 
 There is one hard and fast rule: **if the commits have been pushed, do not rebase.**
 Once you push a set of commits, either to the mainline repository or your own
@@ -194,3 +201,21 @@ To summarize: rebase privately, merge publicly.
 .. _JIRA: https://precog.atlassian.net/secure/Dashboard.jspa
 .. _create a fork here: https://github.com/precog/platform/fork_select
 .. _CI server: https://jenkins.reportgrid.com
+
+## License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the 
+GNU Affero General Public License as published by the Free Software Foundation, either version 
+3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See 
+the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along with this 
+program. If not, see <http://www.gnu.org/licenses/>.
+
+## Legalese
+
+Copyright (C) 2010 - 2013 SlamData, Inc. All Rights Reserved.
+Precog is a registered trademark of SlamData, Inc, licensed to this open source project.
