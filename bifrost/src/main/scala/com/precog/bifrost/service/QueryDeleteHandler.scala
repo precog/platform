@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.service
+package com.precog.bifrost.service
 
 import com.precog.common.jobs._
 import com.precog.common.security._

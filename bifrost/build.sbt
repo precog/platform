@@ -17,10 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "shard"
+name := "bifrost"
 
 libraryDependencies ++= Seq(
   "ch.qos.logback"            % "logback-classic"     % "1.0.0"
 )
 
-mainClass := Some("com.precog.shard.nihdb.NIHDBShardServer")
+mainClass := Some("com.precog.bifrost.nihdb.NIHDBShardServer")

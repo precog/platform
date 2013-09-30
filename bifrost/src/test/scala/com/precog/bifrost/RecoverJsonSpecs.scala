@@ -18,7 +18,7 @@
  *
  */
 package com.precog
-package shard
+package bifrost
 
 import org.specs2.mutable.Specification
 

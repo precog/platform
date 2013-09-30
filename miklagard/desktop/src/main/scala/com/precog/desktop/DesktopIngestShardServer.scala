@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 package desktop
 
 import akka.actor.ActorSystem
@@ -31,7 +31,7 @@ import blueeyes.util.CommandLineArguments
 import com.precog.common.jobs.JobManager
 import com.precog.common.accounts.StaticAccountFinder
 import com.precog.common.security.APIKeyFinder
-import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
+import com.precog.bifrost.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone._
 import com.precog.util.PrecogUnit
 
@@ -281,7 +281,7 @@ object LaunchLabcoat{
         DesktopIngestShardServer.runGUI(config).map {
           _.map { _ => launchBrowser(config); println("Launch complete") }
         }.getOrElse {
-          sys.error("Failed to start shard!")
+          sys.error("Failed to start bifrost!")
         }
       }
     }.getOrElse {

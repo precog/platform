@@ -22,7 +22,7 @@
  *
  * Created by dchenbecker on 1/15/12 at 7:25 AM
  */
-package com.precog.shard.util 
+package com.precog.bifrost.util 
 
 import akka.dispatch.{Future, Await, ExecutionContext}
 import akka.util.duration._

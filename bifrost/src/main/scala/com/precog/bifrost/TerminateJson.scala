@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 
 import java.nio.CharBuffer
 import java.lang.Character.isWhitespace
@@ -27,8 +27,8 @@ import scalaz.syntax.monad._
 
 object TerminateJson {
   final class ArrayStack[@specialized(Int) A: Manifest](initCapacity: Int = 128) {
-    private[shard] var stack = new Array[A](initCapacity)
-    private[shard] var next: Int = 0
+    private[bifrost] var stack = new Array[A](initCapacity)
+    private[bifrost] var next: Int = 0
 
     private def resize() {
       val stack0 = new Array[A](stack.length * 2)

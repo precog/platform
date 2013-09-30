@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 
 import com.precog.yggdrasil.YggConfigComponent
 
@@ -89,7 +89,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
   def defaultTimeout: Duration
 
   /**
-   * A mix-in for `QueryLogger`s that forcefully aborts a shard query on fatal
+   * A mix-in for `QueryLogger`s that forcefully aborts a bifrost query on fatal
    * errors.
    */
   trait ShardQueryLogger[M[+_], P] extends QueryLogger[M, P] {
@@ -117,7 +117,7 @@ trait ManagedQueryModule extends YggConfigComponent with Logging {
    */
   def createQueryJob(apiKey: APIKey, data: Option[JValue], timeout: Option[Duration])(implicit asyncContext: ExecutionContext): Future[JobQueryTFMonad] = {
     val start = System.currentTimeMillis
-    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "shard-query", data, Some(yggConfig.clock.now())).onComplete {
+    val futureJob = jobManager.createJob(apiKey, "Quirrel Query", "bifrost-query", data, Some(yggConfig.clock.now())).onComplete {
       _ => logger.debug("Job created in %d ms".format(System.currentTimeMillis - start))
     }
     for {

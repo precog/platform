@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 
 import com.precog.util.PrecogUnit
 import com.precog.muspelheim._
@@ -29,7 +29,7 @@ import com.precog.common.jobs.JobManager
 import com.precog.common.security._
 import com.precog.common.services._
 import com.precog.mimir._
-import com.precog.shard.service._
+import com.precog.bifrost.service._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table.Slice
 import com.precog.yggdrasil.vfs._
@@ -231,7 +231,7 @@ trait ShardService extends
     requestLogging(timeout) {
       healthMonitor("/health", timeout, List(eternity)) { monitor => context =>
         startup {
-          logger.info("Starting shard with config:\n" + context.config)
+          logger.info("Starting bifrost with config:\n" + context.config)
           configureShardState(context.config)
         } ->
         request { state =>

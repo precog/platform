@@ -27,7 +27,7 @@ trait Runner {
 
   def main(args: Array[String]) {
     try {
-      run(tasks(Settings.fromFile(new java.io.File("shard.out"))):_*)
+      run(tasks(Settings.fromFile(new java.io.File("bifrost.out"))):_*)
     } finally {
       Http.shutdown()
     }

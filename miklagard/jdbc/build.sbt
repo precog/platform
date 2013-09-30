@@ -26,4 +26,4 @@ libraryDependencies ++= Seq(
 
 parallelExecution in Test := true
 
-mainClass := Some("com.precog.shard.jdbc.JDBCShardServer")
+mainClass := Some("com.precog.bifrost.jdbc.JDBCShardServer")

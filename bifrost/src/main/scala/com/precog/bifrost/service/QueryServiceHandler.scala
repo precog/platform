@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 package service
 
 import com.precog.mimir._
@@ -249,7 +249,7 @@ class SyncQueryServiceHandler(
         case ex =>
           val msg = new StringWriter()
           ex.printStackTrace(new PrintWriter(msg))
-          logger.error("Error executing shard query:\n" + msg.toString())
+          logger.error("Error executing bifrost query:\n" + msg.toString())
           StreamT.Done
       })
     }

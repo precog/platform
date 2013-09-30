@@ -48,8 +48,8 @@ import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.security._
 import com.precog.common.accounts._
-import com.precog.shard._
-import com.precog.shard.scheduling.NoopScheduler
+import com.precog.bifrost._
+import com.precog.bifrost.scheduling.NoopScheduler
 import com.precog.yggdrasil.vfs.NoopVFS
 import java.awt.Desktop
 import java.net.URI
@@ -89,7 +89,7 @@ trait StandaloneShardServer
 
     val (platform, stoppable) = platformFor(config, apiKeyFinder, jobManager)
 
-    // We always want a managed shard now, for better error reporting and Labcoat compatibility
+    // We always want a managed bifrost now, for better error reporting and Labcoat compatibility
     ShardState(platform,
                apiKeyFinder,
                accountFinder,

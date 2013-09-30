@@ -38,12 +38,12 @@ object Settings {
   private val IngestPath = """^ingest\-path (.+)$""".r
   private val JobsPort = """^jobs (\d+)$""".r
   private val JobsPath = """^jobs\-path (.+)$""".r
-  private val ShardPort = """^shard (\d+)$""".r
-  private val ShardPath = """^shard\-path (.+)$""".r
+  private val ShardPort = """^bifrost (\d+)$""".r
+  private val ShardPath = """^bifrost\-path (.+)$""".r
   private val SecureRegex = """^secure (true|false)$""".r
 
   def fromFile(f: File): Settings = {
-    if (!f.canRead) sys.error("Can't read %s. Is shard running?" format f)
+    if (!f.canRead) sys.error("Can't read %s. Is bifrost running?" format f)
 
     case class PartialSettings(
         host: Option[String] = None,

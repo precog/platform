@@ -555,7 +555,7 @@ object ZookeeperTools extends Command {
     val config = new Config
     val parser = new OptionParser("yggutils zk") {
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
-      opt("c", "checkpoints", "Show shard checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
+      opt("c", "checkpoints", "Show bifrost checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
       opt("a", "agents", "Show ingest agent state with prefix", { s: String => config.showAgents = Some(s)})
       opt("uc", "update_checkpoints", "Update agent state. Format = path:json", {s: String => config.updateCheckpoint = Some(s)})
       opt("ua", "update_agents", "Update agent state. Format = path:json", {s: String => config.updateAgent = Some(s)})
@@ -676,7 +676,7 @@ object IngestTools extends Command {
       intOpt("s", "limit", "<sync-limit-messages>", "if sync is greater than the specified limit an error will occur", {s: Int => config.limit = s})
       intOpt("l", "lag", "<time-lag-minutes>", "if update lag is greater than the specified value an error will occur", {l: Int => config.lag = l})
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
-      opt("c", "shardpath", "The shard's ZK path", { s: String => config.shardZkPath = s })
+      opt("c", "shardpath", "The bifrost's ZK path", { s: String => config.shardZkPath = s })
       opt("r", "relaypath", "The relay's ZK path", { s: String => config.relayZkPath = s })
     }
     if (parser.parse(args)) {
@@ -692,12 +692,12 @@ object IngestTools extends Command {
     }
   }
 
-  val shardCheckpointPath = "/beta/com/precog/ingest/v1/shard/checkpoint/shard01"
+  val shardCheckpointPath = "/beta/com/precog/ingest/v1/bifrost/checkpoint/shard01"
   val relayAgentPath = "/test/com/precog/ingest/v1/relay_agent/qclus-demo01"
 
   def process(conn: ZkConnection, client: ZkClient, config: Config) {
     val relayRaw = getJsonAt(config.relayZkPath, client).getOrElse(sys.error("Error reading relay agent state"))
-    val shardRaw = getJsonAt(config.shardZkPath, client).getOrElse(sys.error("Error reading shard state"))
+    val shardRaw = getJsonAt(config.shardZkPath, client).getOrElse(sys.error("Error reading bifrost state"))
 
     val relayState = relayRaw.deserialize[EventRelayState]
     val shardState = shardRaw.deserialize[YggCheckpoint]
@@ -718,7 +718,7 @@ object IngestTools extends Command {
     }
 
     val relayStat = getStatAt(relayAgentPath, conn).getOrElse(sys.error("Unable to stat relay agent state"))
-    val shardStat = getStatAt(shardCheckpointPath, conn).getOrElse(sys.error("Unable to stat shard state"))
+    val shardStat = getStatAt(shardCheckpointPath, conn).getOrElse(sys.error("Unable to stat bifrost state"))
 
     val relayModified = new DateTime(relayStat.getMtime, DateTimeZone.UTC)
     val shardModified = new DateTime(shardStat.getMtime, DateTimeZone.UTC)
@@ -916,7 +916,7 @@ object ImportTools extends Command with Logging {
       chefs.toList.traverse(gracefulStop(_, stopTimeout)) >>
       gracefulStop(masterChef, stopTimeout) >>
       Future(logger.info("Completed chef shutdown")) >>
-      Future(logger.info("Waiting for shard shutdown")) >>
+      Future(logger.info("Waiting for bifrost shutdown")) >>
       gracefulStop(vfsModule.projectionsActor, stopTimeout)
 
     Await.result(complete, stopTimeout)

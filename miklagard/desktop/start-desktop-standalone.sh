@@ -29,7 +29,7 @@ BASEDIR=$(path-canonical-simple `dirname $0`)/..
 
 echo "Using base: $BASEDIR"
 
-CONFIGFILE="$BASEDIR"/desktop/configs/test/shard-v2.conf
+CONFIGFILE="$BASEDIR"/desktop/configs/test/bifrost-v2.conf
 DESCRIPTION="service"
 
 # Parse opts to determine settings
@@ -38,7 +38,7 @@ while getopts ":ad:lbZYRL:" opt; do
         a)
             echo "Using app (GUI) config"
             DESCRIPTION="app"
-            CONFIGFILE="$BASEDIR"/desktop/configs/test/shard-v2-app.conf
+            CONFIGFILE="$BASEDIR"/desktop/configs/test/bifrost-v2-app.conf
             ;;
         d)
             WORKDIR=$(cd $OPTARG; pwd)
@@ -149,9 +149,9 @@ KFBASE="$WORKDIR"/kafka
 KFDATA="$WORKDIR"/kafka-data
 
 rm -rf $ZKBASE $KFBASE
-mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
+mkdir -p $ZKBASE $KFBASE $ZKDATA "$WORKDIR"/{configs,logs,bifrost-data/data,bifrost-data/archive,bifrost-data/scratch,bifrost-data/ingest_failures}
 
-echo "Running standalone shard under $WORKDIR"
+echo "Running standalone bifrost under $WORKDIR"
 
 function is_running() {
     [ ! -z "$1" ] && kill -0 "$1" &> /dev/null
@@ -162,7 +162,7 @@ function on_exit() {
     echo "========== Shutting down system =========="
 
     if is_running $SHARDPID; then
-        echo "Stopping shard..."
+        echo "Stopping bifrost..."
         kill $SHARDPID
         wait $SHARDPID
     fi
@@ -185,8 +185,8 @@ if [ -z "$LABCOAT_PORT" ]; then
     LABCOAT_PORT=$(random_port "Labcoat")
 fi
 
-sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/shard#$WORKDIR/shard-data#; s/9082/$KAFKA_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka#$KFDATA#; s#/var/zookeeper#$ZKDATA#" < $CONFIGFILE > "$WORKDIR"/configs/shard-v2.conf || echo "Failed to update shard config"
-sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/shard-v2.logging.xml > "$WORKDIR"/configs/shard-v2.logging.xml
+sed -e "s#/var/log#$WORKDIR/logs#;  s#/opt/precog/bifrost#$WORKDIR/bifrost-data#; s/9082/$KAFKA_PORT/; s/2181/$ZOOKEEPER_PORT/; s/port = 30070/port = $SHARD_PORT/; s/port = 8000/port = $LABCOAT_PORT/; s#/var/kafka#$KFDATA#; s#/var/zookeeper#$ZKDATA#" < $CONFIGFILE > "$WORKDIR"/configs/bifrost-v2.conf || echo "Failed to update bifrost config"
+sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/desktop/configs/test/bifrost-v2.logging.xml > "$WORKDIR"/configs/bifrost-v2.logging.xml
 
 cd "$BASEDIR"
 
@@ -196,10 +196,10 @@ if [ "$DESCRIPTION" = "app" ]; then
     cd $WORKDIR # Since the app version is .-relative for config
 fi
 
-$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.shard.desktop.LaunchLabcoat --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
+$JAVA -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8123 $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/bifrost-v2.logging.xml -classpath "$BASEDIR/desktop/precog/precog-desktop.jar" com.precog.bifrost.desktop.LaunchLabcoat --configFile "$WORKDIR"/configs/bifrost-v2.conf &> $WORKDIR/logs/bifrost-v2.stdout &
 SHARDPID=$!
 
-# Let the ingest/shard services startup in parallel
+# Let the ingest/bifrost services startup in parallel
 wait_until_port_open $SHARD_PORT
 
 cat > $WORKDIR/ports.txt <<EOF

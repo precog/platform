@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 package nihdb
 
 import blueeyes.json._
@@ -131,7 +131,7 @@ trait NIHDBQueryExecutorComponent  {
 
       val defaultTimeout = yggConfig.maxEvalDuration
 
-      protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
+      protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.bifrost.ShardQueryExecutor")
 
       private val threadPooling = new PerAccountThreadPooling(extAccountFinder)
 

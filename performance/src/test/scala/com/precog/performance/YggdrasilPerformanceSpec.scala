@@ -27,7 +27,7 @@ import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.serialization._
-import com.precog.shard.yggdrasil._
+import com.precog.bifrost.yggdrasil._
 
 import com.precog.mimir._
 import com.precog.mimir.memoization._
@@ -62,20 +62,20 @@ trait JDBMPerformanceSpec extends Specification with PerformanceSpec {
   val config = Configuration(Map.empty[String, String]) 
 
   val tmpDir = newTempDir() 
-  lazy val shard = new TestShard(config, tmpDir)
-  lazy val executor = new TestQueryExecutor(config, shard)
+  lazy val bifrost = new TestShard(config, tmpDir)
+  lazy val executor = new TestQueryExecutor(config, bifrost)
 
   val perfUtil = PerformanceUtil.default
 
   step {    
-    Await.result(shard.actorsStart, timeout)
+    Await.result(bifrost.actorsStart, timeout)
   }
 
   "yggdrasil" should {
 
     val seqId = new AtomicInteger(0)
 
-    def insert(shard: TestShard, path: Path, pid: Int, batchSize: Int, batches: Int) {
+    def insert(bifrost: TestShard, path: Path, pid: Int, batchSize: Int, batches: Int) {
 
       val batch = new Array[EventMessage](batchSize)
 
@@ -90,7 +90,7 @@ trait JDBMPerformanceSpec extends Specification with PerformanceSpec {
           i += 1
           id += 1
         }
-        val result = shard.storeBatch(batch, timeout)
+        val result = bifrost.storeBatch(batch, timeout)
         Await.result(result, timeout)
         
         b += 1
@@ -98,7 +98,7 @@ trait JDBMPerformanceSpec extends Specification with PerformanceSpec {
     }
     
     "load test sim" in {
-      insert(shard, Path("/test/query_set"), 2, 10000, 1)
+      insert(bifrost, Path("/test/query_set"), 2, 10000, 1)
       val threadCount = 10 
      
       val queries = List(
@@ -120,7 +120,7 @@ histogram
           if(i == 0) {
             new Thread {
               override def run() {
-                insert(shard, Path("/test/insert_set"), 2, 10000, 1)
+                insert(bifrost, Path("/test/insert_set"), 2, 10000, 1)
               }
             } 
           } else {
@@ -158,9 +158,9 @@ histogram
     "insert" in {
       val tests = 100000
       val batchSize = 1000
-      val result = Performance().benchmark(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
+      val result = Performance().benchmark(insert(bifrost, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
       perfUtil.uploadResults("insert_100k", result)
-      //val result = Performance().profile(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
+      //val result = Performance().profile(insert(bifrost, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
 
       println("starting insert test")
       result.report("insert 100K", System.out)
@@ -172,7 +172,7 @@ histogram
     }
 
     "read large" in {
-      insert(shard, Path("/test/large"), 1, 100000, 1)
+      insert(bifrost, Path("/test/large"), 1, 100000, 1)
       println("read large test")
 
       val result = Performance().benchmark(testRead(), benchParams, benchParams)   
@@ -183,7 +183,7 @@ histogram
     }
     
     "read small 10K x 10" in {
-      insert(shard, Path("/test/small1"), 1, 10000, 1)
+      insert(bifrost, Path("/test/small1"), 1, 10000, 1)
 
       def test(i: Int) = {
         var cnt = 0
@@ -206,7 +206,7 @@ histogram
     }
     
     "multi-thread read" in {
-      insert(shard, Path("/test/small2"), 2, 10000, 1)
+      insert(bifrost, Path("/test/small2"), 2, 10000, 1)
       val threadCount = 10 
       
       def test(i: Int) = {
@@ -240,7 +240,7 @@ histogram
     }
     
     "hw2 test 100K x 1" in {
-      insert(shard, Path("/test/small3"), 1, 100000, 1)
+      insert(bifrost, Path("/test/small3"), 1, 100000, 1)
 
       val query =
 """
@@ -269,7 +269,7 @@ count(tests where tests.gender = "male")
     }
     
     "hw3 test" in {
-      insert(shard, Path("/test/small4"), 1, 100000, 1)
+      insert(bifrost, Path("/test/small4"), 1, 100000, 1)
 
       val query =
 """
@@ -380,7 +380,7 @@ histogram
           }
       }
 
-      Await.result(shard.storeBatch(msgs, timeout), timeout)
+      Await.result(bifrost.storeBatch(msgs, timeout), timeout)
 
       Thread.sleep(10000)
 
@@ -470,7 +470,7 @@ histogram
           }
       }
 
-      Await.result(shard.storeBatch(msgs, timeout), timeout)
+      Await.result(bifrost.storeBatch(msgs, timeout), timeout)
       
       Thread.sleep(10000)
 
@@ -483,7 +483,7 @@ histogram
   }
 
   step {
-    Await.result(shard.actorsStop, timeout) 
+    Await.result(bifrost.actorsStop, timeout) 
     cleanupTempDir(tmpDir)
   }
 }

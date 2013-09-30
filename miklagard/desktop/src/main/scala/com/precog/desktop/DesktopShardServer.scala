@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 package desktop
 
 import akka.actor.ActorSystem
@@ -32,7 +32,7 @@ import org.streum.configrity.Configuration
 import com.precog.common.jobs.JobManager
 import com.precog.common.accounts.StaticAccountFinder
 import com.precog.common.security.APIKeyFinder
-import com.precog.shard.nihdb.NIHDBQueryExecutorComponent
+import com.precog.bifrost.nihdb.NIHDBQueryExecutorComponent
 import com.precog.standalone.StandaloneShardServer
 
 object DesktopShardServer

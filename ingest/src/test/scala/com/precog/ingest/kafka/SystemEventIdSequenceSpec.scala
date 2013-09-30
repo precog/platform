@@ -29,8 +29,8 @@ import com.precog.ingest.SystemEventIdSequence.UnableToRetrieveRelayAgentState
 
 class SystemEventIdSequenceSpec extends Specification {
   trait MockCoordination extends SystemCoordination { // Use a zookeeper?
-    def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]] = None
-    def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint) {}
+    def loadYggCheckpoint(bifrost: String): Option[Validation[Error, YggCheckpoint]] = None
+    def saveYggCheckpoint(bifrost: String, checkpoint: YggCheckpoint) {}
     def unregisterRelayAgent(agent: String, state: EventRelayState) {}
     def renewEventRelayState(agent: String, offset: Long, producerId: Int, blockSize: Int) = Error.invalid("bad relay").fail[EventRelayState]
     def saveEventRelayState(agent: String, state: EventRelayState) = Error.invalid("bad relay").fail[EventRelayState]

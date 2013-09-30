@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.jdbc
+package com.precog.bifrost.jdbc
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
 

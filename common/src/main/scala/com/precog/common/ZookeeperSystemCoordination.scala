@@ -49,7 +49,7 @@ object ZookeeperSystemCoordination {
 
   val producerIdBasePaths = List("ingest", "producer_id")
   val relayAgentBasePaths = List("ingest", "relay_agent")
-  val shardCheckpointBasePaths = List("shard", "checkpoint")
+  val shardCheckpointBasePaths = List("bifrost", "checkpoint")
 
   def toNodeData(jval: JValue): Array[Byte] = jval.renderCompact.getBytes("UTF-8")
   def fromNodeData(bytes: Array[Byte]): JValue = JParser.parseUnsafe(new String(bytes, "UTF-8"))
@@ -222,9 +222,9 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
     Success(state)
   }
 
-  def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]] = {
+  def loadYggCheckpoint(bifrost: String): Option[Validation[Error, YggCheckpoint]] = {
     if (yggCheckpointsEnabled) {
-      val checkpointPath = shardCheckpointPath(shard)
+      val checkpointPath = shardCheckpointPath(bifrost)
 
       Some(
         acquireActivePath(checkpointPath) flatMap { _ =>
@@ -237,10 +237,10 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
             if (createOk) {
               logger.warn("Creating initial ingest checkpoint!")
               val checkpoint = YggCheckpoint.Empty
-              saveYggCheckpoint(shard, checkpoint)
+              saveYggCheckpoint(bifrost, checkpoint)
               Success(checkpoint)
             } else {
-              // this case MUST return a failure - if a checkpoint is missing for a shard,
+              // this case MUST return a failure - if a checkpoint is missing for a bifrost,
               // it must be created manually via Ratatoskr
               Failure(Invalid("No checkpoint information found in Zookeeper!"))
             }
@@ -253,15 +253,15 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
     }
   }
 
-  def shardCheckpointExists(shard: String): Boolean = zkc.exists(shardCheckpointPath(shard))
+  def shardCheckpointExists(bifrost: String): Boolean = zkc.exists(shardCheckpointPath(bifrost))
 
-  private def shardCheckpointPath(shard: String): String = shardCheckpointBase + delimeter + shard
-  private def shardCheckpointActivePath(shard: String): String = shardCheckpointPath(shard) + delimeter + active
+  private def shardCheckpointPath(bifrost: String): String = shardCheckpointBase + delimeter + bifrost
+  private def shardCheckpointActivePath(bifrost: String): String = shardCheckpointPath(bifrost) + delimeter + active
 
-  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = {
+  def saveYggCheckpoint(bifrost: String, checkpoint: YggCheckpoint): Unit = {
     if (yggCheckpointsEnabled) {
       zkc.updateDataSerialized(
-        shardCheckpointPath(shard),
+        shardCheckpointPath(bifrost),
         new DataUpdater[Array[Byte]] {
           def update(cur: Array[Byte]): Array[Byte] = toNodeData(checkpoint.serialize)
         }

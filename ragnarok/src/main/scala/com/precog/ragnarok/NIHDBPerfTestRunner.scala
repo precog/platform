@@ -128,7 +128,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     Await.result(gracefulStop(masterChef, stopWait), stopWait)
     logger.info("Completed chef shutdown")
 
-    logger.info("Waiting for shard shutdown")
+    logger.info("Waiting for bifrost shutdown")
     Await.result(gracefulStop(projectionsActor, stopWait), stopWait)
     actorSystem.shutdown()
   }

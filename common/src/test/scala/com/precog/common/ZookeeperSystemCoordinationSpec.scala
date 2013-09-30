@@ -155,7 +155,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val client = factory()
       val sc = newSystemCoordination(client)
 
-      val checkpoints = sc.loadYggCheckpoint("shard")
+      val checkpoints = sc.loadYggCheckpoint("bifrost")
 
       checkpoints must beLike {
         case Some(Failure(blueeyes.json.serialization.Extractor.Invalid(_, None))) => ok
@@ -167,18 +167,18 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val sc1 = newSystemCoordination(client1)
 
       // TODO: This has a side effect via createPersistent if the path doesn't exist. Refactor.
-      sc1.loadYggCheckpoint("shard")
+      sc1.loadYggCheckpoint("bifrost")
 
       val clock = VectorClock.empty.update(1,10).update(2,20)
       val in = YggCheckpoint(123, clock)
-      sc1.saveYggCheckpoint("shard", in)
+      sc1.saveYggCheckpoint("bifrost", in)
 
       sc1.close
 
       val client2 = factory()
       val sc2 = newSystemCoordination(client2)
 
-      val result = sc2.loadYggCheckpoint("shard")
+      val result = sc2.loadYggCheckpoint("bifrost")
 
       result must beLike {
         case Some(Success(out)) =>
@@ -186,7 +186,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       }
     }
 
-    "distinguish between normal and abnormal shard/checkpoints shutdown" in {
+    "distinguish between normal and abnormal bifrost/checkpoints shutdown" in {
       todo
     }
   }

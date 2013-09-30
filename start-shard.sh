@@ -110,7 +110,7 @@ INGEST_ASSEMBLY="$BASEDIR"/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY="$BASEDIR"/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY="$BASEDIR"/accounts/target/accounts-assembly-$VERSION.jar
 JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
-SHARD_ASSEMBLY="$BASEDIR"/shard/target/shard-assembly-$VERSION.jar
+SHARD_ASSEMBLY="$BASEDIR"/bifrost/target/bifrost-assembly-$VERSION.jar
 RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
 #GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
@@ -152,7 +152,7 @@ done
 
 if [ -n "$MISSING_ARTIFACTS" ]; then
     echo "foo"
-    echo "Up-to-date ingest, shard, auth, accounts and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
+    echo "Up-to-date ingest, bifrost, auth, accounts and ratatoskr assemblies are required before running. Please build and re-run, or run with the -b flag." >&2
     for ASM in $MISSING_ARTIFACTS; do
         echo "  missing `basename $ASM`" >&2
     done
@@ -243,9 +243,9 @@ MONGOBASE="$WORKDIR"/mongo
 MONGODATA="$WORKDIR"/mongodata
 
 rm -rf $ZKBASE $KFBASE
-mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,configs/templates,logs,shard-data/data,shard-data/archive,shard-data/scratch,shard-data/ingest_failures}
+mkdir -p $ZKBASE $KFBASE $ZKDATA $MONGOBASE $MONGODATA "$WORKDIR"/{configs,configs/templates,logs,bifrost-data/data,bifrost-data/archive,bifrost-data/scratch,bifrost-data/ingest_failures}
 
-echo "Running standalone shard under $WORKDIR"
+echo "Running standalone bifrost under $WORKDIR"
 
 # Set shutdown hook
 function on_exit() {
@@ -262,7 +262,7 @@ function on_exit() {
     fi
 
     if is_running $SHARDPID; then
-        echo "Stopping shard..."
+        echo "Stopping bifrost..."
         kill $SHARDPID
         wait $SHARDPID
     fi
@@ -409,7 +409,7 @@ ACCOUNTS_PORT=$(random_port "Accounts")
 JOBS_PORT=$(random_port "Jobs service")
 SHARD_PORT=$(random_port "Shard")
 
-# Set up ingest and shard services
+# Set up ingest and bifrost services
 sed -e "s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
 	s#/var/log#$WORKDIR/logs#; \
@@ -464,24 +464,24 @@ sed -e "s#/var/log/precog#$WORKDIR/logs#" < "$BASEDIR"/ingest/configs/dev/ingest
 
 sed -e "s#port = 30070#port = $SHARD_PORT#; \
 	s#/var/log#$WORKDIR/logs#; \
-	s#/opt/precog/shard#$WORKDIR/shard-data#; \
+	s#/opt/precog/bifrost#$WORKDIR/bifrost-data#; \
 	s#port = 30062#port = $AUTH_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
 	s#port = 30064#port = $ACCOUNTS_PORT#; \
 	s#port = 30066#port = $JOBS_PORT#; \
 	s#port = 9092#port = $KAFKA_GLOBAL_PORT#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
-	"$BASEDIR"/shard/configs/dev/shard-v2.conf > \
-	"$WORKDIR"/configs/shard-v2.conf || echo "Failed to update shard config"
+	"$BASEDIR"/bifrost/configs/dev/bifrost-v2.conf > \
+	"$WORKDIR"/configs/bifrost-v2.conf || echo "Failed to update bifrost config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
-	"$BASEDIR"/shard/configs/dev/shard-v2.logging.xml > \
-	"$WORKDIR"/configs/shard-v2.logging.xml
+	"$BASEDIR"/bifrost/configs/dev/bifrost-v2.logging.xml > \
+	"$WORKDIR"/configs/bifrost-v2.logging.xml
 
 cd "$BASEDIR"
 
 # Prior to ingest startup, we need to set an initial checkpoint if it's not already there
 if [ ! -e "$WORKDIR"/initial_checkpoint.json ]; then
-    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/shard/checkpoint/`hostname`:initial" &> $WORKDIR/logs/checkpoint_init.stdout || {
+    $JAVA $REBEL_OPTS -jar "$RATATOSKR_ASSEMBLY" zk -z "localhost:$ZOOKEEPER_PORT" -uc "/precog-dev/bifrost/checkpoint/`hostname`:initial" &> $WORKDIR/logs/checkpoint_init.stdout || {
         echo "Couldn't set initial checkpoint!" >&2
         exit 3
     }
@@ -529,11 +529,11 @@ echo "Starting ingest service on $INGEST_PORT"
 $JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/ingest-v2.logging.xml -jar "$INGEST_ASSEMBLY" --configFile "$WORKDIR"/configs/ingest-v2.conf &> $WORKDIR/logs/ingest-v2.stdout &
 INGESTPID=$!
 
-echo "Starting shard service on $SHARD_PORT"
-$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/shard-v2.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/shard-v2.conf &> $WORKDIR/logs/shard-v2.stdout &
+echo "Starting bifrost service on $SHARD_PORT"
+$JAVA $REBEL_OPTS -Dlogback.configurationFile="$WORKDIR"/configs/bifrost-v2.logging.xml -jar "$SHARD_ASSEMBLY" --configFile "$WORKDIR"/configs/bifrost-v2.conf &> $WORKDIR/logs/bifrost-v2.stdout &
 SHARDPID=$!
 
-# Let the ingest/shard services startup in parallel
+# Let the ingest/bifrost services startup in parallel
 wait_until_port_open $INGEST_PORT
 wait_until_port_open $SHARD_PORT
 
@@ -570,7 +570,7 @@ SHARD_PORT:        $SHARD_PORT
 EOF
 echo "============================================================"
 
-cat > shard.out <<EOF
+cat > bifrost.out <<EOF
 basedir $WORKDIR
 id $ACCOUNTID
 token $ACCOUNTTOKEN
@@ -578,7 +578,7 @@ accounts $ACCOUNTS_PORT
 auth $AUTH_PORT
 ingest $INGEST_PORT
 jobs $JOBS_PORT
-shard $SHARD_PORT
+bifrost $SHARD_PORT
 EOF
 
 function query() {
@@ -673,7 +673,7 @@ if [ -n "$TESTRESUME" ]; then
     NROWS=`wc -l $TESTJSON | awk '{print $1}'`
     wait_til_n_rows $NROWS 60
     trap EXIT
-    echo ";;; verifying that shard resumes ingest"
+    echo ";;; verifying that bifrost resumes ingest"
     if [ $? -eq 0 ]; then
         echo ";;; resume succeeded (found $NROWS rows)"
         echo ";;; ok"

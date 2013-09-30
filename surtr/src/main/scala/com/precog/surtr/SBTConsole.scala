@@ -190,11 +190,11 @@ object SBTConsole {
     }
 
     def startup() {
-      // start storage shard
+      // start storage bifrost
     }
 
     def shutdown() {
-      // stop storage shard
+      // stop storage bifrost
       Await.result(gracefulStop(projectionsActor, yggConfig.storageTimeout.duration), yggConfig.storageTimeout.duration)
       actorSystem.shutdown()
     }

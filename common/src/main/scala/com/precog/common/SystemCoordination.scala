@@ -38,14 +38,14 @@ import scalaz.syntax.apply._
 import scalaz.syntax.plus._
 
 trait CheckpointCoordination {
-  def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]]
-  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit
+  def loadYggCheckpoint(bifrost: String): Option[Validation[Error, YggCheckpoint]]
+  def saveYggCheckpoint(bifrost: String, checkpoint: YggCheckpoint): Unit
 }
 
 object CheckpointCoordination {
   object Noop extends CheckpointCoordination {
-    def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]] = None
-    def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = ()
+    def loadYggCheckpoint(bifrost: String): Option[Validation[Error, YggCheckpoint]] = None
+    def saveYggCheckpoint(bifrost: String, checkpoint: YggCheckpoint): Unit = ()
   }
 }
 

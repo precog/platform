@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard.mongo
+package com.precog.bifrost.mongo
 
 import akka.dispatch.{ExecutionContext, Future, Promise}
 

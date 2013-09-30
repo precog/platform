@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
+package com.precog.bifrost
 
 import blueeyes.json._
 import blueeyes.json.serialization._
@@ -97,7 +97,7 @@ trait ShardQueryExecutorPlatform[M[+_]] extends ParseEvalStack[M] with XLightWeb
       extends Evaluator[N](N0) with QueryExecutor[N, (Set[Fault], StreamT[N, Slice])] {
 
     type YggConfig <: ShardQueryExecutorConfig
-    protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.shard.ShardQueryExecutor")
+    protected lazy val queryLogger = LoggerFactory.getLogger("com.precog.bifrost.ShardQueryExecutor")
 
     implicit val M: Monad[M]
     private implicit val N: Monad[N] = N0
