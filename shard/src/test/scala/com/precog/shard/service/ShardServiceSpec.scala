@@ -22,7 +22,7 @@ package service
 
 import kafka._
 
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.common._
 import com.precog.common.Path
 import com.precog.common.accounts._

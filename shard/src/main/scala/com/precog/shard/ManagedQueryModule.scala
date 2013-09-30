@@ -23,7 +23,7 @@ import com.precog.yggdrasil.YggConfigComponent
 
 import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.daze.QueryLogger
+import com.precog.mimir.QueryLogger
 
 import blueeyes.util.Clock
 import blueeyes.json._

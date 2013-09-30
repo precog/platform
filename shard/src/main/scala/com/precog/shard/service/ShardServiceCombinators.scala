@@ -40,7 +40,7 @@ import com.precog.common.security._
 import com.precog.common.security.service._
 import com.precog.common.accounts._
 import com.precog.common.services._
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.yggdrasil.execution._
 import com.precog.yggdrasil.TableModule
 import com.precog.yggdrasil.TableModule._

@@ -22,7 +22,7 @@ package muspelheim
 
 import com.precog.bytecode._
 import com.precog.yggdrasil._
-import com.precog.daze._
+import com.precog.mimir._
 
 trait BasicValidationSpecs extends EvalStackSpecs {
   type TestStack <: EvalStackLike with Instructions

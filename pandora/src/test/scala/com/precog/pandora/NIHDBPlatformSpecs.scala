@@ -28,7 +28,7 @@ import com.precog.common.security._
 
 import com.precog.bytecode.JType
 
-import com.precog.daze._
+import com.precog.mimir._
 
 import com.precog.quirrel._
 import com.precog.quirrel.emitter._

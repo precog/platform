@@ -23,7 +23,7 @@ package pandora
 import common.kafka._
 import common.security._
 
-import daze._
+import mimir._
 
 import pandora._
 

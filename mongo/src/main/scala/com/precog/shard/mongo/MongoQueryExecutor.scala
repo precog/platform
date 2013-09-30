@@ -34,7 +34,7 @@ import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table.mongo._
 import com.precog.yggdrasil.util._
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.muspelheim._
 import com.precog.util.FilesystemFileOps
 

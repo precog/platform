@@ -29,7 +29,7 @@ import com.precog.common.ingest._
 import com.precog.common.jobs.JobId
 import com.precog.common.security._
 
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.muspelheim._
 import com.precog.niflheim.NIHDB
 import com.precog.yggdrasil._

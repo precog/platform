@@ -28,7 +28,7 @@ import com.precog.common.ingest._
 import com.precog.common.jobs.JobManager
 import com.precog.common.security._
 import com.precog.common.services._
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.shard.service._
 import com.precog.yggdrasil.scheduling._
 import com.precog.yggdrasil.table.Slice

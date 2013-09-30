@@ -20,7 +20,7 @@
 package com.precog.shard
 package service
 
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.common._
 
 import com.precog.common.security._

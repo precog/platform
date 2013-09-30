@@ -19,7 +19,7 @@
  */
 package com.precog.shard
 
-import com.precog.daze._
+import com.precog.mimir._
 
 import com.precog.util._
 import com.precog.common._

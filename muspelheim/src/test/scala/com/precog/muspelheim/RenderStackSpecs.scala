@@ -25,7 +25,7 @@ import akka.dispatch.Future
 import com.precog.common._
 import com.precog.common.accounts._
 
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.yggdrasil.execution.EvaluationContext
 import com.precog.yggdrasil.table.ColumnarTableModule
 

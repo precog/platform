@@ -55,7 +55,7 @@ import yggdrasil.table._
 import yggdrasil.util._
 import muspelheim._
 
-import daze._
+import mimir._
 
 import quirrel.LineErrors
 import quirrel.emitter._

@@ -29,8 +29,8 @@ import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.serialization._
 import com.precog.shard.yggdrasil._
 
-import com.precog.daze._
-import com.precog.daze.memoization._
+import com.precog.mimir._
+import com.precog.mimir.memoization._
 
 import akka.actor.ActorSystem
 import akka.pattern.ask

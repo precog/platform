@@ -22,7 +22,7 @@ package com.precog.shard
 import com.precog.yggdrasil.TableModule.{ DesiredSortOrder, SortAscending, SortDescending }
 import com.precog.common._
 
-import com.precog.daze._
+import com.precog.mimir._
 
 import blueeyes.json._
 import blueeyes.json.serialization.{ Decomposer, Extractor }

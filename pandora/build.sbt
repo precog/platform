@@ -113,7 +113,7 @@ initialCommands in console := """
   | 
   | import com.precog._
   |
-  | import daze._
+  | import mimir._
   | 
   | import pandora._
   | 
