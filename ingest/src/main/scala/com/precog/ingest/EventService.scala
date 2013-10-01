@@ -85,7 +85,7 @@ object EventService {
 
   object ServiceConfig {
     def fromConfiguration(config: Configuration) = {
-      (ServiceLocation.fromConfig(config.detach("eventService")) |@| ServiceLocation.fromConfig(config.detach("shard"))) { (serviceLoc, shardLoc) =>
+      (ServiceLocation.fromConfig(config.detach("eventService")) |@| ServiceLocation.fromConfig(config.detach("bifrost"))) { (serviceLoc, shardLoc) =>
         ServiceConfig(
           serviceLocation = serviceLoc,
           shardLocation = shardLoc,

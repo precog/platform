@@ -21,7 +21,7 @@
 
 cd "$(dirname $0)"
 
-# stolen shamelessly from start-shard.sh
+# stolen shamelessly from start-bifrost.sh
 port_is_open() {
 	netstat -an | egrep "[\.:]$1[[:space:]]+.*LISTEN" > /dev/null
 }
@@ -120,7 +120,7 @@ fi
 if [ -z "$SKIPTEST" ]; then
     # desktop, jdbc, and mongo are not in this list because the functionality they require is already tested in other modules
     # Their specs are run directly when needed for packaging
-    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr shard pandora mirror; do
+    for PROJECT in util common daze auth accounts ragnarok heimdall ingest bytecode quirrel muspelheim yggdrasil ratatoskr bifrost surtr mirror; do
 		run_sbt "$PROJECT/${SCCT}test"
     done
     if [ -n "$COVERAGE" ]; then
@@ -132,12 +132,12 @@ fi
 
 if [ $SUCCESS -eq 0 ]; then
     echo "Building assemblies"
-    run_sbt accounts/assembly auth/assembly ingest/assembly ratatoskr/assembly shard/assembly heimdall/assembly
+    run_sbt accounts/assembly auth/assembly ingest/assembly ratatoskr/assembly bifrost/assembly heimdall/assembly
 fi
 
 if [ $SUCCESS -eq 0 -a -z "$SKIPTEST" ]; then
-    echo "Running full shard test"
-    shard/test.sh
+    echo "Running full bifrost test"
+    bifrost/test.sh
     SUCCESS=$(($SUCCESS || $?))
 fi
 

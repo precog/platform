@@ -64,7 +64,7 @@ shift $(( $OPTIND - 1 ))
 
 WORKDIR=$(mktemp -d -t standaloneShard.XXXXXX 2>&1)
 echo "Starting under $WORKDIR"
-./start-shard.sh -d $WORKDIR $EXTRAFLAGS 1> $WORKDIR/shard.stdout &
+./start-bifrost.sh -d $WORKDIR $EXTRAFLAGS 1> $WORKDIR/bifrost.stdout &
 RUN_LOCAL_PID=$!
 
 # Wait to make sure things haven't died
@@ -77,7 +77,7 @@ else
 fi
 
 function finished {
-    echo "Hang on, killing start-shard.sh: $RUN_LOCAL_PID"
+    echo "Hang on, killing start-bifrost.sh: $RUN_LOCAL_PID"
     kill $RUN_LOCAL_PID
     wait $RUN_LOCAL_PID
     if [ -z "$DONTCLEAN" -a "$EXIT_CODE" = "0" ]; then
@@ -92,7 +92,7 @@ function finished {
 trap "finished; exit 1" TERM INT
 trap "finished" EXIT
 
-# Wait for the shard to come up fully
+# Wait for the bifrost to come up fully
 for trySeq in `seq 1 $MAX_SHARD_STARTUP_WAIT`; do
     if [ -f $WORKDIR/ports.txt ] > /dev/null; then
         break
@@ -110,7 +110,7 @@ ROOTTOKEN="$(cat $WORKDIR/root_token.txt)"
 ACCOUNTID="$(cat $WORKDIR/account_id.txt)"
 TOKEN="$(cat $WORKDIR/account_token.txt)"
 
-# start-shard.sh records the port assignments as sh-style vars in ports.txt
+# start-bifrost.sh records the port assignments as sh-style vars in ports.txt
 . $WORKDIR/ports.txt
 
 echo "Work dir:      $WORKDIR"
@@ -146,7 +146,7 @@ function queryCache {
     echo "Storing $1 as $SCRIPTNAME" 1>&2
     scripts/shardtool -q $1 $SCRIPTNAME 1>&2
 
-    # Wait for the script to become available in shard
+    # Wait for the script to become available in bifrost
     TRIES_LEFT=10
     SCRIPT_FOUND=0
 
@@ -324,12 +324,12 @@ else
         [ -n "$DEBUG" ] && echo $ARCHIVE_RESULT
     done
 
-    # Give the shard some time to actually process the archives
+    # Give the bifrost some time to actually process the archives
     TRIES=18
     while [[ $TRIES -gt 0 ]]; do
-        if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then
+        if [[ $(find $WORKDIR/bifrost-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]  ; then
             [ -n "$DEBUG" ] && echo "Archived data still found, sleeping"
-            [ -n "$DEBUG" ] && find $WORKDIR/shard-data/data -name projection_descriptor.json
+            [ -n "$DEBUG" ] && find $WORKDIR/bifrost-data/data -name projection_descriptor.json
             TRIES=$(( $TRIES - 1 ))
             sleep 10
         else
@@ -337,7 +337,7 @@ else
         fi
     done
 
-    if [[ $(find $WORKDIR/shard-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]; then
+    if [[ $(find $WORKDIR/bifrost-data/data -name projection_descriptor.json | wc -l) -gt 0 ]]; then
         echo "Archive of datasets failed. Projections still found in data directory!" 1>&2
         EXIT_CODE=1
     else
@@ -367,7 +367,7 @@ else
         echo "Jobs health check failed" >&2
         EXIT_CODE=1
     }
-    echo -n "Checking shard health at http://localhost:$SHARD_PORT/analytics/v2/health....."
+    echo -n "Checking bifrost health at http://localhost:$SHARD_PORT/analytics/v2/health....."
     curl -sG "http://localhost:$SHARD_PORT/analytics/v2/health" > /dev/null && echo OK || {
         echo "Shard health check failed" >&2
         EXIT_CODE=1

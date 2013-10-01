@@ -25,7 +25,7 @@ import com.precog.common.security._
 import com.precog.common.accounts._
 import com.precog.util._
 
-import daze.EvaluatorModule
+import mimir.EvaluatorModule
 
 import yggdrasil._
 import com.precog.yggdrasil.execution.EvaluationContext

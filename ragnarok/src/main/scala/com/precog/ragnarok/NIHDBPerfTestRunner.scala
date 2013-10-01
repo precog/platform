@@ -22,7 +22,7 @@ package com.precog.ragnarok
 import com.precog.common.accounts._
 import com.precog.common.jobs._
 import com.precog.common.security._
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.niflheim._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -128,7 +128,7 @@ final class NIHDBPerfTestRunner[T](val timer: Timer[T], val apiKey: APIKey, val 
     Await.result(gracefulStop(masterChef, stopWait), stopWait)
     logger.info("Completed chef shutdown")
 
-    logger.info("Waiting for shard shutdown")
+    logger.info("Waiting for bifrost shutdown")
     Await.result(gracefulStop(projectionsActor, stopWait), stopWait)
     actorSystem.shutdown()
   }

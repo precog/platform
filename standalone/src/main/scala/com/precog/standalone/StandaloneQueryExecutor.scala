@@ -30,9 +30,9 @@ import com.precog.common._
 import com.precog.common.jobs._
 import com.precog.common.accounts._
 import com.precog.common.security._
-import com.precog.daze._
+import com.precog.mimir._
 import com.precog.muspelheim._
-import com.precog.shard._
+import com.precog.bifrost._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._

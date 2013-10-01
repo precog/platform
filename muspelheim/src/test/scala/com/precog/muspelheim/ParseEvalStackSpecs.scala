@@ -26,7 +26,7 @@ import common.kafka._
 import com.precog.util._
 import com.precog.common.accounts._
 
-import daze._
+import mimir._
 
 import quirrel._
 import quirrel.emitter._

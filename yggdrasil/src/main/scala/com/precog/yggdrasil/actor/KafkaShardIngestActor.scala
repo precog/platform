@@ -183,7 +183,7 @@ object FilesystemIngestFailureLog {
 }
 
 /**
- * A shard ingest actor manages the IO with an external sources of messages. Its responsibilities are:
+ * A bifrost ingest actor manages the IO with an external sources of messages. Its responsibilities are:
  * 1) Manage the state of the connection to the external system
  * 2) Update the system of record with information needed to reconcile the state of the
  *    external system with the state of the system into which data is being ingested. For Kafka,
@@ -334,7 +334,7 @@ abstract class KafkaShardIngestActor(shardId: String,
   protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint): Unit
 
   private def readRemote(fromCheckpoint: YggCheckpoint): Future[Validation[Error, (Vector[(Long, EventMessage)], YggCheckpoint)]] = {
-    // The shard ingest actor needs to compute the maximum offset, so it has
+    // The bifrost ingest actor needs to compute the maximum offset, so it has
     // to traverse the full message set in process; to avoid traversing it
     // twice, we simply read the payload into event messages at this point.
     // We stop at the first archive message, either including it if it's the

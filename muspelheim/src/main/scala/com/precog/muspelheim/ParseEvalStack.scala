@@ -22,7 +22,7 @@ package muspelheim
 
 import yggdrasil._
 import yggdrasil.table.cf
-import daze._
+import mimir._
 
 import quirrel._
 import quirrel.emitter._
