@@ -98,5 +98,6 @@ popd > /dev/null
 [ -z "$DONTWIPE" ] && rm -rf $DATADIR/*
 
 echo "Importing to $DATADIR"
+echo "java -Xmx1G -cp ratatoskr/target/ratatoskr-assembly-$VERSION.jar com.precog.ratatoskr.Ratatoskr import -t $OWNERTOKEN -o $OWNERACCOUNT -s $DATADIR $SOURCES"
 
 java -Xmx1G -cp ratatoskr/target/ratatoskr-assembly-$VERSION.jar com.precog.ratatoskr.Ratatoskr import -t $OWNERTOKEN -o $OWNERACCOUNT -s $DATADIR $SOURCES

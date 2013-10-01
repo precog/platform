@@ -20,15 +20,17 @@ source project.
 
 A few landmarks:
 
--   **quirrel** - The Quirrel compiler, including parser, static
-    analysis and emitter
+-   **common** - Data structures and service interfaces that are shared
+    between multiple submodules.
+
+-   **quirrel** - The Quirrel compiler, including the parser, static
+    analysis code and bytecode emitter
 
     -   `Parser`
     -   `Binder`
     -   `ProvenanceChecker`
 
--   **daze** - The Quirrel evaluator and standard library, including
-    optimization passes
+-   **mimir** - The Quirrel optimizer, evaluator and standard library
 
     -   `EvaluatorModule`
     -   `StdLibModule`
@@ -36,32 +38,43 @@ A few landmarks:
 
 -   **yggdrasil** - Core data access and manipulation layer
 
+    -   `TableModule`
     -   `ColumnarTableModule`
     -   `Slice`
     -   `Column`
 
--   **niflheim** - Low-level block store and filesystem (NIHDB)
--   **ingest** - Unimaginatively, exactly what it seems to be
+-   **niflheim** - Low-level columnar block store. (NIHDB)
+    -   `NIHDB`
+
+-   **ingest** - BlueEyes service front-end for data ingest.
+
 -   **muspelheim** - Convergence point for the compiler and evaluator
-    stacks; integration test *source* and data
+    stacks; integration test sources and data
 
     -   `ParseEvalStack`
     -   `MiscStackSpecs`
 
--   **pandora** - Vestigial convergence point; integration test
-    *binaries*
+-   **surtr** - Integration tests that run on the NIHDB backend.
+    Surtr also provides a (somewhat defunct) REPL that gives access
+    to the evaluator and other parts of the precog environment.
 
     -   `NIHDBPlatformSpecs`
     -   `REPL`
 
--   **shard** - BlueEyes services and final instantiation of ALL THE
-    THINGS
--   **desktop** - Build scripts for standalone desktop version -- see
-    local README.rst
+-   **bifrost** - BlueEyes service front-end for the 
 
-Thus, to work on the evaluator, one would be in the **daze** project,
-writing tests in the **daze** and **muspelheim** projects. The tests in
-the **muspelheim** project would be run from the **pandora** project
+-   **miklagard** - Standalone versions for the desktop and alternate 
+    backend data stores -- see local README.rst. These need a bit of 
+    work to bring them up to date; they were disabled some time ago
+    and may have bitrotted.
+
+-   **util** - Generic utility functions and data structures that
+    are not specific to any particular function of the Precog codebase;
+    convenience APIs for external libraries.
+
+Thus, to work on the evaluator, one would be in the **mimir** project,
+writing tests in the **mimir** and **muspelheim** projects. The tests in
+the **muspelheim** project would be run from the **surtr** project
 (*not* from **muspelheim**), but using the test data stored in
 **muspelheim**. All of the other projects are significantly saner.
 
@@ -79,12 +92,44 @@ In order to more easily navigate the codebase, it is highly recommended
 that you install [CTAGS](http://ctags.sourceforge.net/), if your editor
 supports it. Our filename conventions are…inconsistent.
 
+## Building and Running
+
+These instructions are at best rudimentary, but should be sufficient to 
+get started in a minimal way. More will be coming soon!
+
+The Precog environment is organized in a modular, service-oriented
+fashion with loosely coupled components that are relatively tolerant
+to the failure of any single component (with likely degraded function).
+Most of the components allow for redundant instances of the relevant
+service, although in some cases (bifrost in particular) some tricky
+configuration is required, which will not be detailed here.
+
+Services:
+
+-   **bifrost** - The primary service for evaluating NIHDB
+-   **auth** - Authentication provider (checks tokens and grants; to be
+    merged with accounts in the near term)
+-   **accounts** - Account provider (records association between user 
+    information and an account root token; to be merged with auth in 
+    the near term)
+-   **dvergr** - A simple job tracking service that is used to track
+    batch query completion. 
+-   **ingest** - The primary service for adding data to the Precog database.
+
+Runnable jar files for all of these services can be built using the 
+`sbt assembly` target from the root (platform) project. Sample configuration
+files for each can be found in the `<projectname>/configs/dev` directory
+for each relevant project; to run a simple test instance you can use the
+start-shard.sh script. Note that this will download, configure, and run
+local instances of mongodb, apache kafka, and zookeeper. Additional instructions
+for running the precog database in a server environment will be coming soon.
+
 ## Contributing
 
 All Contributions are bound by the terms and conditions of the [Precog
 Contributor License Agreement](CLA.md).
 
-### Process
+### Pull Request Process
 
 We use a pull request model for development. When you want to work on a
 new feature or bug, create a new branch based off of `master` (do not
@@ -109,69 +154,23 @@ entirely, and thus the history is not stable.
 
 Do your work on your local branch, committing as frequently as you like,
 squashing and rebasing off of updated `master` (or any other `topic/` or
-`bug/` branch) at your discretion. Any commits which are related to
-[JIRA](https://precog.atlassian.net/secure/Dashboard.jspa) issues should
-have a commit message of the following form:
-
-    <message>
-
-    PLATFORM-<issue#>
-
-Substitute `<message>` and `<issue#>` with the desired commit message
-and the JIRA issue number (e.g. `PLATFORM-819`). If a commit affects
-more than one issue, simply include text for both separated by a single
-newline. Please always ensure that the issue number in your commit
-messages is accurate. This information is used by the CI server and JIRA
-to automatically update the workflow status of the relevant issue(s).
-There are numerous examples of JIRA-tagged commits in the Git history of
-`master`.
+`bug/` branch) at your discretion. 
 
 When you are confident in your changes and ready for them to land, push
 your `topic/` or `bug/` branch to your *own* fork of **platform** (you
-can [create a fork
-here](https://github.com/precog/platform/fork_select)). Do not push to
-the main repository.
+can [create a fork here](https://github.com/precog/platform/fork_select)). 
 
 Once you have pushed to your fork, submit a Pull Request using GitHub's
 interface. Take a moment to describe your changes as a whole,
 particularly highlighting any API or Quirrel language changes which land
-as part of the changeset. Your Pull Request will be automatically merged
-with current master (but not yet pushed!) and built by our [CI
-server](https://jenkins.reportgrid.com). The build status will appear in
-GitHub's interface, telling you whether or not your changes built
-cleanly. If your changes did *not* build cleanly, or your branch no
-longer merges cleanly with `master`, you will need to either fix the
-issues or close the pull request until such time as the issues are
-resolved. If you do close the pull request and subsequently resolve the
-problems, simply push the updated changes to your branch (do *not*
-rebase!) and reopen the old pull request (there is a button for this).
+as part of the changeset. 
 
-While the CI server is busy blessing your pull request, other developers
-will review your changes. This is a standard code review process. At the
-very least, Kris will need to sign off on any change before it lands.
-Generally, other developers will review changes that touch their
-specific areas of expertise (e.g. Daniel reviewing changes to
-**quirrel**), or if they are interested in the commit, or if they're
-bored. The more code review, the better! Don't be shy about taking
-action on their suggestions and pushing to your branch. The pull request
-will automatically update and rebuild.
-
-If you would like to request a code review from a specific person, you
-should mention them by GitHub handle within the pull request description
-(e.g. "Review by <**@dchenbecker**">). This sort of thing lets Kris know
-that your pull request should not be merged until Derek has a chance to
-comment and sign off on the changes.
-
-Once your pull request is ready to be merged, Kris will merge your
-branch into `staging`, which is a branch on the mainline repository that
+Once your pull request is ready to be merged, it will be brought into the 
+`staging` branch, which is a branch on the mainline repository that
 exists *purely* for the purposes of aggregating pull requests. It should
-not be considered a developer branch, and only Kris should ever push to
-it or use its commits directly. Whenever `staging` is pushed, the CI
-server automatically runs the full build as a final sanity check and
-then pushes the changes as a *fast forward* to `master` once the build
-has completed successfully. An automatic trigger builds `master` and
-triggers the deploy chain once everything is double-blessed.
-
+not be considered a developer branch, but is used to run the full build 
+as a final sanity check before the changes are pushed as a *fast forward* 
+to `master` once the build has completed successfully. 
 This process ensures a minimum of friction between concurrent tasks
 while simultaneously making it extremely difficult to break the build in
 `master`. Build problems are generally caught and resolved in pull
@@ -206,8 +205,8 @@ like the following:
     ...
     # hack commit hack commit hack commit hack
     ...
-    $ git fetch reportgrid
-    $ git branch -f master reportgrid/master
+    $ git fetch upstream
+    $ git branch -f master upstream/master
     $ git rebase -i master
     # squash checkpoint commits, etc
     $ git push origin topic/doin-stuff

@@ -109,7 +109,7 @@ VERSION=`git describe`
 INGEST_ASSEMBLY="$BASEDIR"/ingest/target/ingest-assembly-$VERSION.jar
 AUTH_ASSEMBLY="$BASEDIR"/auth/target/auth-assembly-$VERSION.jar
 ACCOUNTS_ASSEMBLY="$BASEDIR"/accounts/target/accounts-assembly-$VERSION.jar
-JOBS_ASSEMBLY="$BASEDIR"/heimdall/target/heimdall-assembly-$VERSION.jar
+JOBS_ASSEMBLY="$BASEDIR"/dvergr/target/dvergr-assembly-$VERSION.jar
 SHARD_ASSEMBLY="$BASEDIR"/bifrost/target/bifrost-assembly-$VERSION.jar
 RATATOSKR_ASSEMBLY="$BASEDIR"/ratatoskr/target/ratatoskr-assembly-$VERSION.jar
 
@@ -442,10 +442,10 @@ sed -e "s#port = 30066#port = $JOBS_PORT#; \
 	s#rootKey = .*#rootKey = \"$TOKENID\"#; \
 	s#\[\"localhost\"\]#\[\"localhost:$MONGO_PORT\"\]#; \
 	s#hosts = localhost:2181#hosts = localhost:$ZOOKEEPER_PORT#" < \
-	"$BASEDIR"/heimdall/configs/dev/jobs-v1.conf > \
+	"$BASEDIR"/dvergr/configs/dev/jobs-v1.conf > \
 	"$WORKDIR"/configs/jobs-v1.conf || echo "Failed to update jobs config"
 sed -e "s#/var/log/precog#$WORKDIR/logs#" < \
-	"$BASEDIR"/heimdall/configs/dev/jobs-v1.logging.xml > \
+	"$BASEDIR"/dvergr/configs/dev/jobs-v1.logging.xml > \
 	"$WORKDIR"/configs/jobs-v1.logging.xml
 
 sed -e "s/port = 30060/port = $INGEST_PORT/; \
