@@ -6,17 +6,64 @@ normalized, tabular data, it works with denormalized data that may not
 have a uniform schema.
 
 You can plop large amounts of JSON into Precog and start doing analytics
-without any preprocessing.
+without any preprocessing, such as time series analytics, filtering,
+rollups, statistics, and even some kinds of machine learning.
 
 There's an API for developer integration, and a high-level application
 called *Labcoat* for doing ad hoc and exploratory analytics.
+
+Precog has been used by developers to build reporting features into
+applications (since Precog has very comprehensive, developer-friendly APIs),
+and together with *Labcoat*, Precog has been used by data scientists to perform
+ad hoc analysis of semi-structured data.
 
 This is the Community Edition of Precog. For more information about
 commercial support and maintenance options, check out [SlamData,
 Inc](<http://www.slamdata.com>), the official sponsor of the Precog open
 source project.
 
-## Overview
+# Roadmap
+
+## Phase 1: Simplified Deployment
+
+Precog was originally designed to be offered exclusively via the cloud in
+a multi-tenant offering. As such, it has made certain tradeoffs that make it
+much harder for individuals and casual users to install and maintain.
+
+In the current roadmap, Phase 1 involves simplifying Precog to the point where
+there are so few moving pieces, anyone can install and launch Precog, and keep
+Precog running without anything more than an occasional restart.
+
+The work is currently divided into the following tickets:
+
+- Remove MongoDB dependency
+- Remove Kafka dependency
+- Remove Zookeeper dependency
+- Simplify file system model
+- Query directly from raw files
+- Conversion from raw files to NihDB file format
+- Separate ingest from query
+ 
+Many of these tickets indirectly contribute to Phase 2.
+
+## Phase 2: Support for Big Data
+
+Currently, Precog can only handle the amount of data that can reside on a single machine. 
+While there are many optimizations that still need to be made (such as support for
+indexes, type-specific columnar compression, etc.), a bigger win with more immediate
+impact will be making Precog "big data-ready", where it can compete head-to-head with Hive,
+Pig, and other analytics options for Hadoop.
+
+Spark is an in-memory computational framework that runs as a YARN application inside
+a Hadoop cluster. It can read from and write to the Hadoop file system (HDFS), and
+exposes a wide range of primitives for performing data processing. Several high-performance,
+scalable query systems have been built on Spark, such as Shark and BlinkDB. 
+
+Given that Spark's emphasis is on fast, in-memory computation, that it's written in Scala,
+and that it has already been used to implement several query languages, it seems an ideal target 
+for Precog.
+ 
+# Developer Guide
 
 A few landmarks:
 
@@ -224,7 +271,7 @@ cannot just rewrite commits which they are now depending on.
 
 To summarize: rebase privately, merge publicly.
 
-## License
+# License
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU Affero General Public License as published by
@@ -239,7 +286,7 @@ General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see \<<http://www.gnu.org/licenses/>\>.
 
-## Legalese
+# Legalese
 
 Copyright (C) 2010 - 2013 SlamData, Inc. All Rights Reserved. Precog is
 a registered trademark of SlamData, Inc, licensed to this open source
