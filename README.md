@@ -37,7 +37,7 @@ Precog running without anything more than an occasional restart.
 The work is currently divided into the following tickets:
 
 - [Remove MongoDB dependency](https://github.com/precog/platform/issues/523)
-- Remove Kafka dependency
+- [Remove Kafka dependency](https://github.com/precog/platform/issues/524)
 - Remove Zookeeper dependency
 - Simplify file system model
 - Query directly from raw files
