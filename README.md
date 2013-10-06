@@ -43,7 +43,6 @@ The work is currently divided into the following tickets:
 - [Simplify file system model](https://github.com/precog/platform/issues/527)
 - [Query directly from raw files](https://github.com/precog/platform/issues/528)
 - [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
-
  
 Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
 of Precog closer into alignment with HDFS.
@@ -64,6 +63,14 @@ scalable query systems have been built on Spark, such as Shark and BlinkDB.
 Given that Spark's emphasis is on fast, in-memory computation, that it's written in Scala,
 and that it has already been used to implement several query languages, it seems an ideal target 
 for Precog.
+
+The work is currently divided into the following tickets:
+
+- Introduce a "group by" operator into the intermediate algebra
+- Refactor solve with simpler & saner semantics
+- Create a table representation based on Spark's RDD
+- Implement table ops in terms of Spark operations
+- TODO
  
 # Developer Guide
 
