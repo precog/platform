@@ -34,7 +34,8 @@ In the current roadmap, Phase 1 involves simplifying Precog to the point where
 there are so few moving pieces, anyone can install and launch Precog, and keep
 Precog running without anything more than an occasional restart.
 
-The work is currently divided into the following tickets:
+The work is currently tracked in the [Simplified Precog](https://github.com/precog/platform/issues?milestone=1&state=open) 
+milestone and divided into the following tickets:
 
 - [Remove MongoDB dependency](https://github.com/precog/platform/issues/523)
 - [Remove Kafka dependency](https://github.com/precog/platform/issues/524)
@@ -43,6 +44,7 @@ The work is currently divided into the following tickets:
 - [Simplify file system model](https://github.com/precog/platform/issues/527)
 - [Query directly from raw files](https://github.com/precog/platform/issues/528)
 - [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
+- [Merge and simplify auth / accounts](https://github.com/precog/platform/issues/530)
  
 Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
 of Precog closer into alignment with HDFS.
