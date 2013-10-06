@@ -38,13 +38,15 @@ The work is currently divided into the following tickets:
 
 - [Remove MongoDB dependency](https://github.com/precog/platform/issues/523)
 - [Remove Kafka dependency](https://github.com/precog/platform/issues/524)
-- Remove Zookeeper dependency
-- Simplify file system model
-- Query directly from raw files
-- Conversion from raw files to NihDB file format
-- Separate ingest from query
+- [Remove Zookeeper dependency](https://github.com/precog/platform/issues/525)
+- [Separate ingest from query](https://github.com/precog/platform/issues/526)
+- [Simplify file system model](https://github.com/precog/platform/issues/527)
+- [Query directly from raw files](https://github.com/precog/platform/issues/528)
+- [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
+
  
-Many of these tickets indirectly contribute to Phase 2.
+Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
+of Precog closer into alignment with HDFS.
 
 ## Phase 2: Support for Big Data
 
