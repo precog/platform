@@ -45,6 +45,7 @@ milestone and divided into the following tickets:
 - [Query directly from raw files](https://github.com/precog/platform/issues/528)
 - [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
 - [Merge and simplify auth / accounts](https://github.com/precog/platform/issues/530)
+- [Single process server](https://github.com/precog/platform/issues/531)
  
 Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
 of Precog closer into alignment with HDFS.
