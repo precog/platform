@@ -22,6 +22,13 @@ commercial support and maintenance options, check out [SlamData,
 Inc](<http://www.slamdata.com>), the official sponsor of the Precog open
 source project.
 
+# Community
+
+- [Precog-Dev](https://groups.google.com/a/precog.com/forum/#!forum/dev-list) &mdash; An open email list for developers of Precog.
+- [Precog-User](https://groups.google.com/a/precog.com/forum/#!forum/user-list) &mdash; An open email list for users of Precog.
+- [\#precog](irc://irc.freenode.net/precog) &mdash; An IRC channel for Precog.
+- [\#quirrel](irc://irc.freenode.net/quirrel) &mdash; An IRC channel for the Quirrel query language.
+
 # Roadmap
 
 ## Phase 1: Simplified Deployment
