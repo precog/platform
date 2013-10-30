@@ -46,7 +46,7 @@ class CookStateLog(baseDir: File, scheduler: ScheduledExecutorService) extends L
   txLogConfig.setLogFileName(logName)
   txLogConfig.setLogFileMode("rwd") // Force file sync to underlying hardware
   txLogConfig.setChecksumEnabled(true)
-  txLogConfig.setScheduler(scheduler)
+  // txLogConfig.setScheduler(scheduler)
 
   private[this] val txLog = new Logger(txLogConfig)
   txLog.open()

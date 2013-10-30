@@ -37,10 +37,6 @@ object PlatformBuild extends Build {
 
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
     resolvers ++= Seq(
-      "ReportGrid repo"                   at "http://nexus.reportgrid.com/content/repositories/releases",
-      "ReportGrid repo (public)"          at "http://nexus.reportgrid.com/content/repositories/public-releases",
-      "ReportGrid snapshot repo"          at "http://nexus.reportgrid.com/content/repositories/snapshots",
-      "ReportGrid snapshot repo (public)" at "http://nexus.reportgrid.com/content/repositories/public-snapshots",
       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
@@ -48,13 +44,7 @@ object PlatformBuild extends Build {
       "Sonatype Snapshots"                at "http://oss.sonatype.org/content/repositories/snapshots/"
     ),
 
-    credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials"),
-
-    publishTo <<= (version) { version: String =>
-      val nexus = "http://nexus.reportgrid.com/content/repositories/"
-      if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at nexus+"snapshots/")
-      else                                   Some("releases"  at nexus+"releases/")
-    }
+    credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )
 
   val blueeyesVersion = "1.0.0-M9.5"

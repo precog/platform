@@ -22,67 +22,14 @@ commercial support and maintenance options, check out [SlamData,
 Inc](<http://www.slamdata.com>), the official sponsor of the Precog open
 source project.
 
-# Community
+## Community
 
 - [Precog-Dev](https://groups.google.com/a/precog.com/forum/#!forum/dev-list) &mdash; An open email list for developers of Precog.
 - [Precog-User](https://groups.google.com/a/precog.com/forum/#!forum/user-list) &mdash; An open email list for users of Precog.
 - [\#precog](irc://irc.freenode.net/precog) &mdash; An IRC channel for Precog.
 - [\#quirrel](irc://irc.freenode.net/quirrel) &mdash; An IRC channel for the Quirrel query language.
-
-# Roadmap
-
-## Phase 1: Simplified Deployment
-
-Precog was originally designed to be offered exclusively via the cloud in
-a multi-tenant offering. As such, it has made certain tradeoffs that make it
-much harder for individuals and casual users to install and maintain.
-
-In the current roadmap, Phase 1 involves simplifying Precog to the point where
-there are so few moving pieces, anyone can install and launch Precog, and keep
-Precog running without anything more than an occasional restart.
-
-The work is currently tracked in the [Simplified Precog](https://github.com/precog/platform/issues?milestone=1&state=open) 
-milestone and divided into the following tickets:
-
-- [Remove MongoDB dependency](https://github.com/precog/platform/issues/523)
-- [Remove Kafka dependency](https://github.com/precog/platform/issues/524)
-- [Remove Zookeeper dependency](https://github.com/precog/platform/issues/525)
-- [Separate ingest from query](https://github.com/precog/platform/issues/526)
-- [Simplify file system model](https://github.com/precog/platform/issues/527)
-- [Query directly from raw files](https://github.com/precog/platform/issues/528)
-- [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
-- [Merge and simplify auth / accounts](https://github.com/precog/platform/issues/530)
-- [Single process server](https://github.com/precog/platform/issues/531)
  
-Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
-of Precog closer into alignment with HDFS.
-
-## Phase 2: Support for Big Data
-
-Currently, Precog can only handle the amount of data that can reside on a single machine. 
-While there are many optimizations that still need to be made (such as support for
-indexes, type-specific columnar compression, etc.), a bigger win with more immediate
-impact will be making Precog "big data-ready", where it can compete head-to-head with Hive,
-Pig, and other analytics options for Hadoop.
-
-Spark is an in-memory computational framework that runs as a YARN application inside
-a Hadoop cluster. It can read from and write to the Hadoop file system (HDFS), and
-exposes a wide range of primitives for performing data processing. Several high-performance,
-scalable query systems have been built on Spark, such as Shark and BlinkDB. 
-
-Given that Spark's emphasis is on fast, in-memory computation, that it's written in Scala,
-and that it has already been used to implement several query languages, it seems an ideal target 
-for Precog.
-
-The work is currently divided into the following tickets:
-
-- Introduce a "group by" operator into the intermediate algebra
-- Refactor solve with simpler & saner semantics
-- Create a table representation based on Spark's RDD
-- Implement table ops in terms of Spark operations
-- TODO
- 
-# Developer Guide
+## Developer Guide
 
 A few landmarks:
 
@@ -146,13 +93,43 @@ the **muspelheim** project would be run from the **surtr** project
 
 ## Getting Started
 
-Step one: obtain [PaulP's
-script](https://github.com/paulp/sbt-extras/blob/master/sbt). At this
-point, you should be able to run `$ ./build-test.sh` as a sanity check,
-but this will take a long time. Instead, run `$ sbt`. Once it is up and
-running, run `test:compile`. This should take about 5-10 minutes. After
-this, run `ratatoskr/assembly`, followed by `test`. The build should be
-green once your machine stops burning.
+Step one: obtain [PaulP's script](https://github.com/paulp/sbt-extras/blob/master/sbt).
+At this point, ideally you would be able to run `./build-test.sh` and everything
+would be fine.  Unfortunately, at the present time, you have to jump through a
+few hoops in order to get all of the dependencies in order.
+
+First, you need to clone and build [blueeyes](https://github.com/jdegoes/blueeyes).
+This should be relatively painless.  Grab the repository and run `sbt publish-local`.
+After everything finishes, you should be able to just move on to the next ball of
+wax: Kafka.  Unfortunately, Kafka has yet to publish any public Maven artifacts,
+much less artifacts for precisely the version on which Precog is dependent.  At
+the current time, the best way to deal with this problem is to simply grab the
+[tarball of Ivy dependencies](https://dl.dropboxusercontent.com/u/1679797/kafka-stuff.tar.gz)
+and extract this file into your `~/.ivy2/cache/` directory.  Once this is done,
+you should be ready to go.
+
+Altogether, you need to run the following commands:
+
+    $ git clone git@github.com:jdegoes/blueeyes.git
+    $ cd blueeyes
+    $ sbt publish-local
+    $ cd ..
+    $ cd /tmp
+    $ wget https://dl.dropboxusercontent.com/u/1679797/kafka-stuff.tar.gz
+    $ tar xf kafka-stuff.tar.gz -C ~/.ivy2/cache/
+    $ cd -
+    $ cd platform
+    $ sbt
+    
+From here, you must run the following tasks in order:
+
+- `test:compile`
+- `ratatoskr/assembly`
+- `extract-data`
+- `test`
+
+The last one should take a fair amount of time, but when it completes (and everything
+is green), you can have a pretty solid assurance that you're up and running!
 
 In order to more easily navigate the codebase, it is highly recommended
 that you install [CTAGS](http://ctags.sourceforge.net/), if your editor
@@ -290,7 +267,60 @@ cannot just rewrite commits which they are now depending on.
 
 To summarize: rebase privately, merge publicly.
 
-# License
+## Roadmap
+
+### Phase 1: Simplified Deployment
+
+Precog was originally designed to be offered exclusively via the cloud in
+a multi-tenant offering. As such, it has made certain tradeoffs that make it
+much harder for individuals and casual users to install and maintain.
+
+In the current roadmap, Phase 1 involves simplifying Precog to the point where
+there are so few moving pieces, anyone can install and launch Precog, and keep
+Precog running without anything more than an occasional restart.
+
+The work is currently tracked in the [Simplified Precog](https://github.com/precog/platform/issues?milestone=1&state=open) 
+milestone and divided into the following tickets:
+
+- [Remove MongoDB dependency](https://github.com/precog/platform/issues/523)
+- [Remove Kafka dependency](https://github.com/precog/platform/issues/524)
+- [Remove Zookeeper dependency](https://github.com/precog/platform/issues/525)
+- [Separate ingest from query](https://github.com/precog/platform/issues/526)
+- [Simplify file system model](https://github.com/precog/platform/issues/527)
+- [Query directly from raw files](https://github.com/precog/platform/issues/528)
+- [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
+- [Merge and simplify auth / accounts](https://github.com/precog/platform/issues/530)
+- [Single process server](https://github.com/precog/platform/issues/531)
+ 
+Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
+of Precog closer into alignment with HDFS.
+
+### Phase 2: Support for Big Data
+
+Currently, Precog can only handle the amount of data that can reside on a single machine. 
+While there are many optimizations that still need to be made (such as support for
+indexes, type-specific columnar compression, etc.), a bigger win with more immediate
+impact will be making Precog "big data-ready", where it can compete head-to-head with Hive,
+Pig, and other analytics options for Hadoop.
+
+Spark is an in-memory computational framework that runs as a YARN application inside
+a Hadoop cluster. It can read from and write to the Hadoop file system (HDFS), and
+exposes a wide range of primitives for performing data processing. Several high-performance,
+scalable query systems have been built on Spark, such as Shark and BlinkDB. 
+
+Given that Spark's emphasis is on fast, in-memory computation, that it's written in Scala,
+and that it has already been used to implement several query languages, it seems an ideal target 
+for Precog.
+
+The work is currently divided into the following tickets:
+
+- Introduce a "group by" operator into the intermediate algebra
+- Refactor solve with simpler & saner semantics
+- Create a table representation based on Spark's RDD
+- Implement table ops in terms of Spark operations
+- TODO
+
+## License
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU Affero General Public License as published by
@@ -305,7 +335,7 @@ General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see \<<http://www.gnu.org/licenses/>\>.
 
-# Legalese
+## Legalese
 
 Copyright (C) 2010 - 2013 SlamData, Inc. All Rights Reserved. Precog is
 a registered trademark of SlamData, Inc, licensed to this open source
