@@ -93,13 +93,43 @@ the **muspelheim** project would be run from the **surtr** project
 
 ## Getting Started
 
-Step one: obtain [PaulP's
-script](https://github.com/paulp/sbt-extras/blob/master/sbt). At this
-point, you should be able to run `$ ./build-test.sh` as a sanity check,
-but this will take a long time. Instead, run `$ sbt`. Once it is up and
-running, run `test:compile`. This should take about 5-10 minutes. After
-this, run `ratatoskr/assembly`, followed by `test`. The build should be
-green once your machine stops burning.
+Step one: obtain [PaulP's script](https://github.com/paulp/sbt-extras/blob/master/sbt).
+At this point, ideally you would be able to run `./build-test.sh` and everything
+would be fine.  Unfortunately, at the present time, you have to jump through a
+few hoops in order to get all of the dependencies in order.
+
+First, you need to clone and build [blueeyes](https://github.com/jdegoes/blueeyes).
+This should be relatively painless.  Grab the repository and run `sbt publish-local`.
+After everything finishes, you should be able to just move on to the next ball of
+wax: Kafka.  Unfortunately, Kafka has yet to publish any public Maven artifacts,
+much less artifacts for precisely the version on which Precog is dependent.  At
+the current time, the best way to deal with this problem is to simply grab the
+[tarball of Ivy dependencies](https://dl.dropboxusercontent.com/u/1679797/kafka-stuff.tar.gz)
+and extract this file into your `~/.ivy2/cache/` directory.  Once this is done,
+you should be ready to go.
+
+Altogether, you need to run the following commands:
+
+    $ git clone git@github.com:jdegoes/blueeyes.git
+    $ cd blueeyes
+    $ sbt publish-local
+    $ cd ..
+    $ cd /tmp
+    $ wget https://dl.dropboxusercontent.com/u/1679797/kafka-stuff.tar.gz
+    $ tar xf kafka-stuff.tar.gz -C ~/.ivy2/cache/
+    $ cd -
+    $ cd platform
+    $ sbt
+    
+From here, you must run the following tasks in order:
+
+- `test:compile`
+- `ratatoskr/assembly`
+- `extract-data`
+- `test`
+
+The last one should take a fair amount of time, but when it completes (and everything
+is green), you can have a pretty solid assurance that you're up and running!
 
 In order to more easily navigate the codebase, it is highly recommended
 that you install [CTAGS](http://ctags.sourceforge.net/), if your editor
