@@ -233,7 +233,7 @@ needed.
 
 The reason for this policy is to encourage collaboration and avoid merge
 conflicts. Rewriting history is a lovely Git trick, but it is extremely
-distruptive to others if you rewrite history out from under their feet.
+disruptive to others if you rewrite history out from under their feet.
 Thus, you should only ever rebase commits which are *local* to your
 machine. Once a commit has been pushed on a non-`wip/` branch, you no
 longer control that commit and you cannot rewrite it.
@@ -291,6 +291,7 @@ milestone and divided into the following tickets:
 - [Conversion from raw files to NihDB file format](https://github.com/precog/platform/issues/529)
 - [Merge and simplify auth / accounts](https://github.com/precog/platform/issues/530)
 - [Single process server](https://github.com/precog/platform/issues/531)
+- [Finalize cached queries support](https://github.com/precog/platform/issues/541)
  
 Many of these tickets indirectly contribute to Phase 2, by bringing the foundations 
 of Precog closer into alignment with HDFS.
@@ -319,6 +320,11 @@ The work is currently divided into the following tickets:
 - Create a table representation based on Spark's RDD
 - Implement table ops in terms of Spark operations
 - TODO
+
+### Alternate Front-Ends
+
+Support for dynamically-typed, multi-dimensional SQL ("SQL for heterogeneous JSON"), 
+and possibly other query interfaces such as JSONiq and UNQL.
 
 ## License
 
